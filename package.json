@@ -1,0 +1,26 @@
+{
+  "name": "shall",
+  "private": true,
+  "version": "0.0.1",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build:schema": "bun run --filter @shall/schema build",
+    "build:daemon": "bun run --filter @shall/daemon build",
+    "dev:daemon": "bun run --filter @shall/daemon dev",
+    "dev:web": "bun run --filter @shall/web dev",
+    "dev": "node scripts/dev.mjs",
+    "build": "bun run build:schema && bun run build:daemon && bun run --filter @shall/web build",
+    "typecheck": "bun run build:schema && bun run build:daemon && bun run --filter @shall/web typecheck",
+    "shall": "node apps/daemon/dist/cli.js"
+  },
+  "devDependencies": {
+    "@types/node": "latest",
+    "typescript": "latest"
+  },
+  "engines": {
+    "node": ">=22.5.0"
+  }
+}

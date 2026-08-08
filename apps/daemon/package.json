@@ -1,0 +1,39 @@
+{
+  "name": "@shall/daemon",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "exports": {
+    "./router": {
+      "types": "./dist/server/router.d.ts",
+      "default": "./dist/server/router.js"
+    }
+  },
+  "bin": {
+    "shall": "./dist/cli.js"
+  },
+  "scripts": {
+    "dev": "NODE_ENV=development tsx watch src/daemon.ts",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "start": "NODE_ENV=production node dist/daemon.js"
+  },
+  "dependencies": {
+    "@hono/node-server": "latest",
+    "@hono/trpc-server": "latest",
+    "@shall/schema": "workspace:*",
+    "@trpc/server": "latest",
+    "drizzle-orm": "latest",
+    "hono": "latest",
+    "http-proxy": "latest",
+    "ulid": "latest",
+    "zod": "latest"
+  },
+  "devDependencies": {
+    "@types/http-proxy": "latest",
+    "tsx": "latest"
+  },
+  "engines": {
+    "node": ">=22.5.0"
+  }
+}
