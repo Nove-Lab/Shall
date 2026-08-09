@@ -1,20 +1,81 @@
 :root {
+  /* Home screen (pre-project) keeps its own cream surface. */
   color: #24231f;
   background: #faf9f5;
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
   font-synthesis: none;
+
+  /* Direction A tokens — used by the project shell (Control / Spec planes). */
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+
+  --t-10: 10px;
+  --t-11: 11px;
+  --t-12: 12px;
+  --t-13: 13px;
+
+  --lh-body: 1.5;
+  --tr-caps: 0.09em;
+  --tr-caps-tight: 0.06em;
+
+  --s-1: 2px;
+  --s-2: 4px;
+  --s-3: 6px;
+  --s-4: 8px;
+  --s-5: 12px;
+  --s-6: 16px;
+  --s-7: 24px;
+  --s-8: 32px;
+  --s-9: 48px;
+
+  --n-000: #ffffff;
+  --n-050: #f6f6f4;
+  --n-100: #f0f1ee;
+  --n-200: #e2e3df;
+  --n-300: #c9cbc5;
+  --n-400: #a4a9ad;
+  --n-500: #797f84;
+  --n-700: #494e52;
+  --n-900: #17191a;
+
+  --bg-page: var(--n-050);
+  --bg-panel: var(--n-000);
+  --bg-sunk: var(--n-100);
+  --rule: var(--n-200);
+  --rule-strong: var(--n-300);
+  --ink-0: var(--n-900);
+  --ink-1: var(--n-700);
+  --ink-2: var(--n-500);
+
+  --signal: #1b46c2;
+  --signal-ink: #12329a;
+  --signal-wash: #eef1fb;
+
+  --rail-bg: var(--n-900);
+  --rail-control: #24272a;
+  --rail-rule: #34383b;
+  --rail-divider: var(--n-700);
+  --rail-ink: var(--n-000);
+  --rail-ink-2: var(--n-400);
+  --rail-ink-3: var(--n-500);
 }
 
 * {
   box-sizing: border-box;
 }
 
+html,
+body,
+#root {
+  height: 100%;
+}
+
 body {
   margin: 0;
   min-width: 320px;
-  min-height: 100vh;
+  min-height: 100%;
   background: #faf9f5;
 }
 
@@ -30,6 +91,8 @@ button {
 button:disabled {
   cursor: default;
 }
+
+/* --- Home / project picker ------------------------------------------------ */
 
 .shell {
   width: min(680px, calc(100% - 40px));
@@ -261,18 +324,6 @@ h2 {
   bottom: 20px;
 }
 
-.project-screen {
-  min-height: 70vh;
-}
-
-.project-screen h1 {
-  margin-top: 64px;
-}
-
-.back-button {
-  margin-left: -4px;
-}
-
 @media (max-width: 520px) {
   .shell {
     padding-top: 40px;
@@ -282,5 +333,354 @@ h2 {
     align-items: flex-start;
     flex-direction: column;
     margin-bottom: 48px;
+  }
+}
+
+/* --- Project shell · Direction A instrument chrome ------------------------ */
+
+.screen {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  color: var(--ink-0);
+  background: var(--bg-page);
+  font-family: var(--font-sans);
+  font-size: var(--t-13);
+  line-height: var(--lh-body);
+}
+
+.rail {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  height: 44px;
+  padding: 0 20px;
+  background: var(--rail-bg);
+  border-bottom: 1px solid var(--rail-rule);
+}
+
+.rail__group {
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+}
+
+.rail__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  border: 0;
+  padding: 0;
+  background: transparent;
+}
+
+.rail__mark {
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid var(--rail-ink);
+  background: var(--signal);
+}
+
+.rail__wordmark {
+  color: var(--rail-ink);
+  font-family: var(--font-mono);
+  font-size: var(--t-12);
+  letter-spacing: var(--tr-caps-tight);
+  text-transform: uppercase;
+}
+
+.rail__divider {
+  width: 1px;
+  height: 18px;
+  background: var(--rail-divider);
+}
+
+.rail__switcher {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-4);
+  border: 1px solid var(--rail-divider);
+  padding: var(--s-2) var(--s-4);
+  color: var(--rail-ink);
+  background: var(--rail-control);
+  font-family: var(--font-sans);
+  font-size: var(--t-12);
+}
+
+.rail__switcher-name {
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rail__switcher-hint {
+  color: var(--rail-ink-2);
+  font-family: var(--font-mono);
+  font-size: var(--t-10);
+  letter-spacing: var(--tr-caps);
+  text-transform: uppercase;
+}
+
+.planes {
+  display: flex;
+  flex: none;
+  align-items: stretch;
+  height: 38px;
+  background: var(--rail-bg);
+}
+
+.planes__tab {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  border: 0;
+  padding: 0 var(--s-6);
+  color: var(--n-400);
+  background: transparent;
+  font-family: var(--font-mono);
+  font-size: var(--t-12);
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.planes__tab:hover {
+  color: var(--n-000);
+  background: var(--rail-control);
+}
+
+.planes__tab--active,
+.planes__tab--active:hover {
+  color: var(--ink-0);
+  background: var(--n-050);
+}
+
+.planes__marker {
+  width: 7px;
+  height: 7px;
+  border: 1px solid currentColor;
+}
+
+.planes__tab--active .planes__marker {
+  border-color: var(--signal);
+  background: var(--signal);
+}
+
+/* --- Control plane · highlight 2×2 ---------------------------------------- */
+
+.control {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--bg-page);
+}
+
+.control__toolbar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 14px;
+  height: 34px;
+  padding: 0 20px;
+  background: var(--n-000);
+  border-bottom: 1px solid var(--rule-strong);
+}
+
+.control__mode {
+  display: flex;
+  flex: none;
+  align-items: stretch;
+  height: 22px;
+  border: 1px solid var(--rule-strong);
+}
+
+.control__mode-item {
+  display: flex;
+  align-items: center;
+  padding: 0 9px;
+  color: var(--ink-1);
+  font-family: var(--font-mono);
+  font-size: var(--t-10);
+  letter-spacing: var(--tr-caps);
+  text-transform: uppercase;
+}
+
+.control__mode-item--active {
+  color: var(--n-000);
+  background: var(--ink-0);
+  font-weight: 600;
+}
+
+.control__mode-item--disabled {
+  border-left: 1px solid var(--rule-strong);
+  color: var(--n-400);
+}
+
+.control__toolbar-copy {
+  color: var(--ink-2);
+  font-size: var(--t-12);
+  white-space: nowrap;
+}
+
+.control__toolbar-spacer {
+  flex: 1 1 auto;
+}
+
+.control__annunciator {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 7px;
+  border-left: 2px dotted var(--signal);
+  padding: 4px 8px;
+  color: var(--signal-ink);
+  background: var(--signal-wash);
+  font-family: var(--font-mono);
+  font-size: var(--t-10);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.control__grid {
+  display: grid;
+  flex: 1 1 auto;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 16px;
+  min-height: 0;
+  padding: 16px;
+  background: var(--bg-page);
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid var(--rule-strong);
+  background: var(--bg-panel);
+}
+
+.panel__head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 10px;
+  height: 38px;
+  padding: 0 12px;
+  background: var(--bg-sunk);
+  border-bottom: 1px solid var(--rule-strong);
+}
+
+.panel__numeral {
+  color: var(--signal);
+  font-family: var(--font-mono);
+  font-size: var(--t-12);
+}
+
+.panel__title {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--t-12);
+  font-weight: 600;
+  letter-spacing: var(--tr-caps);
+  text-transform: uppercase;
+}
+
+.panel__body {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* --- Spec plane ----------------------------------------------------------- */
+
+.subbar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--s-5);
+  height: 36px;
+  padding: 0 var(--s-5);
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--rule-strong);
+}
+
+.subbar__label {
+  color: var(--ink-1);
+  font-family: var(--font-mono);
+  font-size: var(--t-11);
+  letter-spacing: var(--tr-caps);
+  text-transform: uppercase;
+}
+
+.segmented {
+  display: flex;
+  border: 1px solid var(--rule-strong);
+}
+
+.segmented__item {
+  border: 0;
+  padding: var(--s-2) var(--s-5);
+  color: var(--ink-2);
+  background: transparent;
+  font-family: var(--font-mono);
+  font-size: var(--t-11);
+}
+
+.segmented__item--active {
+  color: var(--n-000);
+  background: var(--signal);
+}
+
+.spec {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.spec__body {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.spec__canvas {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  background: var(--bg-page);
+}
+
+.spec__canvas--grid {
+  background: var(--n-000);
+}
+
+.spec__canvas .react-flow {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+@media (max-width: 900px) {
+  .control__grid {
+    grid-template-columns: 1fr;
+    grid-template-rows: none;
+    overflow: auto;
+  }
+
+  .panel {
+    min-height: 220px;
+  }
+
+  .control__toolbar-copy {
+    display: none;
   }
 }

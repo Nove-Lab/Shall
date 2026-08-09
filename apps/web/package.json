@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@trpc/client": "latest",
+    "@xyflow/react": "^12.11.2",
     "react": "latest",
     "react-dom": "latest"
   },
