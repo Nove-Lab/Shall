@@ -1,19 +1,44 @@
 import { mkdir, readdir, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { getProjectShallPath, pathExists } from "./project-files.js";
+import {
+  getProjectMetadataPath,
+  getProjectShallPath,
+  pathExists,
+} from "./project-files.js";
+import { isShallHomePath } from "./shall-home.js";
+
+/**
+ * What a folder's `.shall` directory turns out to be:
+ * - `project` — a real project, with metadata to open
+ * - `root` — Shall's own home (`~/.shall`), which is not openable
+ * - `none` — no `.shall`, or one with nothing in it
+ */
+export type ShallFolderKind = "none" | "project" | "root";
 
 export interface DirectoryEntry {
   name: string;
   path: string;
-  hasShall: boolean;
+  shall: ShallFolderKind;
 }
 
 export interface BrowseResult {
   path: string;
   parent: string | null;
-  hasShall: boolean;
+  shall: ShallFolderKind;
   directories: DirectoryEntry[];
+}
+
+export async function classifyShallFolder(
+  directoryPath: string,
+): Promise<ShallFolderKind> {
+  const shallPath = getProjectShallPath(directoryPath);
+  if (isShallHomePath(shallPath)) {
+    return "root";
+  }
+  return (await pathExists(getProjectMetadataPath(directoryPath)))
+    ? "project"
+    : "none";
 }
 
 export async function browseDirectories(
@@ -36,7 +61,7 @@ export async function browseDirectories(
       return {
         name: entry.name,
         path: entryPath,
-        hasShall: await pathExists(getProjectShallPath(entryPath)),
+        shall: await classifyShallFolder(entryPath),
       };
     }),
   );
@@ -45,7 +70,7 @@ export async function browseDirectories(
   return {
     path: directoryPath,
     parent: parentPath === directoryPath ? null : parentPath,
-    hasShall: await pathExists(getProjectShallPath(directoryPath)),
+    shall: await classifyShallFolder(directoryPath),
     directories,
   };
 }

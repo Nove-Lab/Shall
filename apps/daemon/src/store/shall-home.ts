@@ -23,6 +23,15 @@ export function getShallHome(): ShallHome {
   };
 }
 
+/**
+ * True for `~/.shall` itself. Shall's own home uses the same `.shall` name as a
+ * project's, so the folder holding it looks like a project until this is
+ * checked.
+ */
+export function isShallHomePath(candidate: string): boolean {
+  return path.resolve(candidate) === getShallHome().root;
+}
+
 async function exists(filePath: string): Promise<boolean> {
   try {
     await access(filePath);

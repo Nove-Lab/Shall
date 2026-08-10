@@ -4,13 +4,6 @@ import { FolderOpen, Trash2 } from "lucide-react";
 import { api } from "@/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/EmptyState";
 import { ProjectPicker } from "@/components/ProjectPicker";
@@ -68,15 +61,15 @@ export function HomeScreen() {
     }
   }
 
-  async function choose(path: string, hasShall: boolean) {
-    if (!hasShall && !window.confirm("Initialize this folder as a Shall project?")) {
+  async function choose(path: string, isProject: boolean) {
+    if (!isProject && !window.confirm("Initialize this folder as a Shall project?")) {
       return;
     }
 
     setBusy(true);
     setError(null);
     try {
-      const project = hasShall
+      const project = isProject
         ? await api.projects.open.mutate({ path })
         : await api.projects.create.mutate({ path });
       setPickerOpen(false);
@@ -119,65 +112,57 @@ export function HomeScreen() {
           Open Project
         </Button>
 
-        {/* Card supplies its own symmetric padding and slot gap, so nothing
-            here hand-rolls spacing around the title. */}
-        <Card>
-          <CardHeader>
-            <CardTitle role="heading" aria-level={2}>
-              Recent projects
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="px-0">
-            {loading ? (
-              <div className="space-y-3 px-(--card-spacing)">
-                <Skeleton className="h-10 w-full" />
-                <Skeleton className="h-10 w-full" />
-              </div>
-            ) : projects.length === 0 ? (
-              <EmptyState message="No projects yet — open a folder to get started" />
-            ) : (
-              <ul>
-                {projects.map((project, index) => (
-                  <li key={project.id}>
-                    {index > 0 ? <Separator /> : null}
-                    <div className="flex items-center gap-3 px-(--card-spacing) py-3">
-                      <button
-                        type="button"
-                        className="min-w-0 flex-1 text-left disabled:opacity-50"
-                        disabled={!project.exists}
-                        // Goes through `open` rather than straight to the id:
-                        // that validates the folder and bumps recency.
-                        onClick={() =>
-                          project.exists ? void open(project.path) : undefined
-                        }
+        {/* No box: the list sits on the page. The row's own hover fill is the
+            only thing that separates one entry from the next, and `-mx-2`
+            keeps the text aligned with the title while that fill runs wider. */}
+        <div className="space-y-3">
+          <h2 className="text-sm font-medium">Recent projects</h2>
+          {loading ? (
+            <div className="space-y-2">
+              <Skeleton className="h-9 w-full" />
+              <Skeleton className="h-9 w-full" />
+            </div>
+          ) : projects.length === 0 ? (
+            <EmptyState message="No projects yet — open a folder to get started" />
+          ) : (
+            <ul className="-mx-2">
+              {projects.map((project) => (
+                <li key={project.id} className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    className="hover:bg-accent hover:text-accent-foreground focus-visible:ring-ring flex min-w-0 flex-1 items-baseline gap-4 rounded-md px-2 py-2 text-left transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:opacity-50 disabled:hover:bg-transparent"
+                    disabled={!project.exists}
+                    // Goes through `open` rather than straight to the id:
+                    // that validates the folder and bumps recency.
+                    onClick={() =>
+                      project.exists ? void open(project.path) : undefined
+                    }
+                  >
+                    <span className="truncate text-sm font-medium">
+                      {project.name}
+                    </span>
+                    <span className="text-muted-foreground ml-auto min-w-0 truncate font-mono text-xs">
+                      {project.path}
+                    </span>
+                  </button>
+                  {project.exists ? null : (
+                    <>
+                      <Badge variant="destructive">Folder not found</Badge>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label={`Remove ${project.name}`}
+                        onClick={() => void remove(project.id)}
                       >
-                        <span className="block truncate text-sm font-medium">
-                          {project.name}
-                        </span>
-                        <span className="text-muted-foreground block truncate font-mono text-xs">
-                          {project.path}
-                        </span>
-                      </button>
-                      {project.exists ? null : (
-                        <>
-                          <Badge variant="destructive">Folder not found</Badge>
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            aria-label={`Remove ${project.name}`}
-                            onClick={() => void remove(project.id)}
-                          >
-                            <Trash2 />
-                          </Button>
-                        </>
-                      )}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
+                        <Trash2 />
+                      </Button>
+                    </>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
 
         {error && !pickerOpen ? (
           <p className="text-destructive text-sm">{error}</p>
@@ -189,7 +174,7 @@ export function HomeScreen() {
         busy={busy}
         actionError={pickerOpen ? error : null}
         onOpenChange={setPickerOpen}
-        onChoose={(path, hasShall) => void choose(path, hasShall)}
+        onChoose={(path, isProject) => void choose(path, isProject)}
       />
     </main>
   );

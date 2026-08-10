@@ -7,11 +7,13 @@ import {
 import type { RecentProject, RegistryProject } from "./types.js";
 import {
   assertDirectory,
+  getProjectMetadataPath,
   getProjectShallPath,
   pathExists,
   readProjectMetadata,
   writeProjectFiles,
 } from "../store/project-files.js";
+import { isShallHomePath } from "../store/shall-home.js";
 import {
   readRegistry,
   removeRegistryProject,
@@ -35,11 +37,33 @@ export async function createProject(
   return project;
 }
 
+/**
+ * Shall's own home is `~/.shall`, the same name a project uses, so the folder
+ * holding it reads as a project until this rejects it.
+ */
+async function assertOpenable(absolutePath: string): Promise<void> {
+  const shallPath = getProjectShallPath(absolutePath);
+  if (isShallHomePath(shallPath)) {
+    throw new Error(
+      `${shallPath} is Shall's own home, not a project. Choose a project folder instead.`,
+    );
+  }
+  if (!(await pathExists(shallPath))) {
+    throw new Error(`Not a Shall project: ${absolutePath}`);
+  }
+  if (!(await pathExists(getProjectMetadataPath(absolutePath)))) {
+    throw new Error(
+      `${absolutePath} has a .shall folder but no project.json, so it is not a Shall project.`,
+    );
+  }
+}
+
 export async function openProject(
   projectPath: string,
 ): Promise<RegistryProject> {
   const absolutePath = normalizeProjectPath(projectPath);
   await assertDirectory(absolutePath);
+  await assertOpenable(absolutePath);
   const metadata = await readProjectMetadata(absolutePath);
   if (!isProjectMetadata(metadata)) {
     throw new Error(`Invalid Shall project: ${absolutePath}`);

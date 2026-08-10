@@ -20,7 +20,8 @@ interface ProjectPickerProps {
   busy: boolean;
   actionError: string | null;
   onOpenChange: (open: boolean) => void;
-  onChoose: (path: string, hasShall: boolean) => void;
+  /** `isProject` decides whether the folder is opened or initialized. */
+  onChoose: (path: string, isProject: boolean) => void;
 }
 
 export function ProjectPicker({
@@ -34,6 +35,7 @@ export function ProjectPicker({
   const [error, setError] = useState<string | null>(null);
   const [creatingFolder, setCreatingFolder] = useState(false);
   const [folderName, setFolderName] = useState("");
+  const isShallRoot = location?.shall === "root";
 
   async function load(path?: string) {
     setError(null);
@@ -150,8 +152,10 @@ export function ProjectPicker({
                     <span className="min-w-0 flex-1 truncate">
                       {directory.name}
                     </span>
-                    {directory.hasShall ? (
+                    {directory.shall === "project" ? (
                       <Badge variant="secondary">Shall project</Badge>
+                    ) : directory.shall === "root" ? (
+                      <Badge variant="outline">Shall root</Badge>
                     ) : null}
                   </button>
                 </li>
@@ -162,13 +166,20 @@ export function ProjectPicker({
 
         {error || actionError ? (
           <p className="text-destructive text-sm">{error || actionError}</p>
+        ) : isShallRoot ? (
+          <p className="text-muted-foreground text-sm">
+            Shall's own <span className="font-mono">.shall</span> home, not a
+            project. Pick another folder.
+          </p>
         ) : null}
 
         <DialogFooter>
           <Button
-            disabled={!location || busy}
+            disabled={!location || busy || isShallRoot}
             onClick={() =>
-              location ? onChoose(location.path, location.hasShall) : undefined
+              location
+                ? onChoose(location.path, location.shall === "project")
+                : undefined
             }
           >
             {busy ? "Opening…" : "Select This Folder"}

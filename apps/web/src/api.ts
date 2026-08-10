@@ -9,16 +9,19 @@ export const api = createTRPCClient<AppRouter>({
   ],
 });
 
+/** `root` is Shall's own `~/.shall`, which looks like a project but is not one. */
+export type ShallFolderKind = "none" | "project" | "root";
+
 export interface DirectoryEntry {
   name: string;
   path: string;
-  hasShall: boolean;
+  shall: ShallFolderKind;
 }
 
 export interface BrowseResult {
   path: string;
   parent: string | null;
-  hasShall: boolean;
+  shall: ShallFolderKind;
   directories: DirectoryEntry[];
 }
 
