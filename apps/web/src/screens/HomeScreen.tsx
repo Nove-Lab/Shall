@@ -4,7 +4,12 @@ import { FolderOpen, Trash2 } from "lucide-react";
 import { api } from "@/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/EmptyState";
@@ -114,13 +119,17 @@ export function HomeScreen() {
           Open Project
         </Button>
 
+        {/* Card supplies its own symmetric padding and slot gap, so nothing
+            here hand-rolls spacing around the title. */}
         <Card>
-          <CardContent className="p-0">
-            <h2 className="px-6 pt-6 pb-3 text-sm font-medium">
+          <CardHeader>
+            <CardTitle role="heading" aria-level={2}>
               Recent projects
-            </h2>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-0">
             {loading ? (
-              <div className="space-y-3 px-6 pb-6">
+              <div className="space-y-3 px-(--card-spacing)">
                 <Skeleton className="h-10 w-full" />
                 <Skeleton className="h-10 w-full" />
               </div>
@@ -131,7 +140,7 @@ export function HomeScreen() {
                 {projects.map((project, index) => (
                   <li key={project.id}>
                     {index > 0 ? <Separator /> : null}
-                    <div className="flex items-center gap-3 px-6 py-3">
+                    <div className="flex items-center gap-3 px-(--card-spacing) py-3">
                       <button
                         type="button"
                         className="min-w-0 flex-1 text-left disabled:opacity-50"
