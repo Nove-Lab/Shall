@@ -1,21 +1,33 @@
 import { useEffect, useState } from "react";
+import { ChevronUp, Folder, FolderPlus } from "lucide-react";
+import { browse, makeDirectory, type BrowseResult } from "@/api";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
-  browse,
-  makeDirectory,
-  type BrowseResult,
-} from "../api";
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { EmptyState } from "@/components/EmptyState";
 
 interface ProjectPickerProps {
+  open: boolean;
   busy: boolean;
   actionError: string | null;
-  onCancel: () => void;
+  onOpenChange: (open: boolean) => void;
   onChoose: (path: string, hasShall: boolean) => void;
 }
 
 export function ProjectPicker({
+  open,
   busy,
   actionError,
-  onCancel,
+  onOpenChange,
   onChoose,
 }: ProjectPickerProps) {
   const [location, setLocation] = useState<BrowseResult | null>(null);
@@ -29,14 +41,18 @@ export function ProjectPicker({
       setLocation(await browse(path));
     } catch (loadError) {
       setError(
-        loadError instanceof Error ? loadError.message : "Could not browse folder",
+        loadError instanceof Error
+          ? loadError.message
+          : "Could not browse folder",
       );
     }
   }
 
   useEffect(() => {
-    void load();
-  }, []);
+    if (open) {
+      void load();
+    }
+  }, [open]);
 
   async function createFolder() {
     if (!location || !folderName.trim()) {
@@ -58,105 +74,107 @@ export function ProjectPicker({
   }
 
   return (
-    <div className="modal-backdrop" role="presentation">
-      <section
-        aria-labelledby="picker-title"
-        aria-modal="true"
-        className="picker"
-        role="dialog"
-      >
-        <header className="picker-header">
-          <div>
-            <h2 id="picker-title">Open Project</h2>
-            <p className="path-label">{location?.path || "Loading…"}</p>
-          </div>
-          <button className="text-button" type="button" onClick={onCancel}>
-            Close
-          </button>
-        </header>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Open Project</DialogTitle>
+          <DialogDescription className="truncate font-mono">
+            {location?.path ?? "Loading…"}
+          </DialogDescription>
+        </DialogHeader>
 
-        <div className="picker-toolbar">
-          <button
-            className="secondary-button"
-            type="button"
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
             disabled={!location?.parent || busy}
             onClick={() => void load(location?.parent ?? undefined)}
           >
+            <ChevronUp />
             Up
-          </button>
-          <button
-            className="secondary-button"
-            type="button"
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
             disabled={busy}
             onClick={() => setCreatingFolder(true)}
           >
+            <FolderPlus />
             New Folder
-          </button>
+          </Button>
         </div>
 
-        {creatingFolder && (
+        {creatingFolder ? (
           <form
-            className="new-folder-form"
+            className="flex items-center gap-2"
             onSubmit={(event) => {
               event.preventDefault();
               void createFolder();
             }}
           >
-            <input
+            <Input
               autoFocus
               aria-label="New folder name"
               placeholder="Folder name"
               value={folderName}
               onChange={(event) => setFolderName(event.target.value)}
             />
-            <button className="secondary-button" type="submit">
+            <Button type="submit" variant="outline" size="sm">
               Create
-            </button>
-            <button
-              className="text-button"
+            </Button>
+            <Button
               type="button"
+              variant="ghost"
+              size="sm"
               onClick={() => setCreatingFolder(false)}
             >
               Cancel
-            </button>
+            </Button>
           </form>
-        )}
+        ) : null}
 
-        <div className="directory-list">
-          {location?.directories.map((directory) => (
-            <button
-              className="directory-row"
-              key={directory.path}
-              type="button"
-              disabled={busy}
-              onClick={() => void load(directory.path)}
-            >
-              <span>{directory.name}</span>
-              {directory.hasShall && <small>Shall project</small>}
-            </button>
-          ))}
-          {location && location.directories.length === 0 && (
-            <p className="muted">No folders here</p>
+        <ScrollArea className="h-64 rounded-md border">
+          {location && location.directories.length === 0 ? (
+            <EmptyState message="No folders here" />
+          ) : (
+            <ul className="p-1">
+              {location?.directories.map((directory) => (
+                <li key={directory.path}>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    className="hover:bg-accent flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm disabled:opacity-50"
+                    onClick={() => void load(directory.path)}
+                  >
+                    <Folder className="text-muted-foreground size-4 shrink-0" />
+                    <span className="min-w-0 flex-1 truncate">
+                      {directory.name}
+                    </span>
+                    {directory.hasShall ? (
+                      <Badge variant="secondary">Shall project</Badge>
+                    ) : null}
+                  </button>
+                </li>
+              ))}
+            </ul>
           )}
-        </div>
+        </ScrollArea>
 
-        {(error || actionError) && (
-          <p className="error-message">{error || actionError}</p>
-        )}
+        {error || actionError ? (
+          <p className="text-destructive text-sm">{error || actionError}</p>
+        ) : null}
 
-        <footer className="picker-footer">
-          <button
-            className="primary-button"
-            type="button"
+        <DialogFooter>
+          <Button
             disabled={!location || busy}
             onClick={() =>
-              location && onChoose(location.path, location.hasShall)
+              location ? onChoose(location.path, location.hasShall) : undefined
             }
           >
             {busy ? "Opening…" : "Select This Folder"}
-          </button>
-        </footer>
-      </section>
-    </div>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -31,11 +31,34 @@ export function getProjectShallPath(projectPath: string): string {
   return path.join(projectPath, ".shall");
 }
 
+export function getProjectMetadataPath(projectPath: string): string {
+  return path.join(getProjectShallPath(projectPath), "project.json");
+}
+
+export function getProjectDatabasePath(projectPath: string): string {
+  return path.join(getProjectShallPath(projectPath), "shall.db");
+}
+
 export async function readProjectMetadata(
   projectPath: string,
 ): Promise<unknown> {
-  const metadataPath = path.join(getProjectShallPath(projectPath), "project.json");
-  return JSON.parse(await readFile(metadataPath, "utf8")) as unknown;
+  return JSON.parse(
+    await readFile(getProjectMetadataPath(projectPath), "utf8"),
+  ) as unknown;
+}
+
+export async function writeProjectMetadata(
+  projectPath: string,
+  metadata: ProjectMetadata,
+): Promise<void> {
+  const metadataPath = getProjectMetadataPath(projectPath);
+  const temporaryPath = `${metadataPath}.${process.pid}.tmp`;
+  await writeFile(
+    temporaryPath,
+    `${JSON.stringify(metadata, null, 2)}\n`,
+    "utf8",
+  );
+  await rename(temporaryPath, metadataPath);
 }
 
 export async function writeProjectFiles(

@@ -50,6 +50,24 @@ export async function openProject(
   return project;
 }
 
+/**
+ * Resolves the id in `/p/:projectId` to a project. Returns null rather than
+ * throwing so the SPA can fall back to the picker on a stale link.
+ */
+export async function getProject(id: string): Promise<RegistryProject | null> {
+  const registry = await readRegistry();
+  const entry = registry.projects.find((project) => project.id === id);
+  if (!entry || !(await pathExists(entry.path))) {
+    return null;
+  }
+
+  // project.json is the source of truth for the name; the registry can lag.
+  const metadata = await readProjectMetadata(entry.path).catch(() => null);
+  return isProjectMetadata(metadata)
+    ? toRegistryProject(entry.path, metadata)
+    : entry;
+}
+
 export async function listRecentProjects(): Promise<RecentProject[]> {
   const registry = await readRegistry();
   return Promise.all(

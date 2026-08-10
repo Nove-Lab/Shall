@@ -1,0 +1,30 @@
+/* React Flow chrome mapped onto shadcn/ui theme tokens — no raw colour values. */
+.spec-canvas {
+  --xy-background-color: var(--card);
+  --xy-background-pattern-dots-color: var(--border);
+  --xy-edge-stroke: var(--border);
+  --xy-edge-stroke-selected: var(--primary);
+  --xy-edge-stroke-width: 1.5;
+  --xy-edge-label-background-color: var(--card);
+  --xy-edge-label-color: var(--muted-foreground);
+  --xy-handle-background-color: var(--primary);
+  --xy-handle-border-color: var(--card);
+  --xy-controls-button-background-color: var(--card);
+  --xy-controls-button-background-color-hover: var(--accent);
+  --xy-controls-button-color: var(--foreground);
+  --xy-controls-button-color-hover: var(--accent-foreground);
+  --xy-controls-button-border-color: var(--border);
+  --xy-controls-box-shadow: none;
+  --xy-attribution-background-color: transparent;
+}
+
+.spec-canvas .react-flow__edge-text {
+  fill: var(--muted-foreground);
+  font-size: var(--text-xs);
+}
+
+.spec-canvas .react-flow__controls {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}

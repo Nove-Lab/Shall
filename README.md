@@ -1,7 +1,32 @@
 # Shall
 
 Shall is a local, spec-driven control plane for AI coding agents. This M0
-contains only project initialization, opening, and recent-project persistence.
+contains project initialization, opening and recent-project persistence, plus
+the shell the planes will fill: Control plane panels, the Spec plane canvas and
+Settings. Everything that needs a spec graph is still empty — the surfaces are
+there, the records are not.
+
+## Routes
+
+Everything inside a project is scoped by its id, so a link is enough to put
+someone on the same panel — there is no hidden "current project" state.
+
+```
+/                                Project picker
+/p/:projectId/control            Overview — four panels
+/p/:projectId/control/:panelId   Panel detail
+/p/:projectId/spec               Spec plane canvas
+/p/:projectId/settings           Settings
+```
+
+`panelId` ∈ `review-queue | task-board | activity-feed | vitals`.
+
+Settings edits real files: the daemon port lives in `~/.shall/config.json` and
+the display name in `<project>/.shall/project.json`. Everything else on that
+screen is a read-only fact shown next to the file it comes from.
+
+The UI is built with shadcn/ui on Tailwind v4; `apps/web/components.json` is the
+registry config, so `npx shadcn add <component>` works from `apps/web`.
 
 ## Development
 

@@ -34,6 +34,20 @@ export async function upsertRegistryProject(
   await writeJsonAtomic(home.registryPath, { projects });
 }
 
+/** Renames in place: unlike an upsert, this does not bump recency. */
+export async function renameRegistryProject(
+  id: string,
+  name: string,
+): Promise<void> {
+  const home = await ensureShallHome();
+  const registry = await readRegistry();
+  await writeJsonAtomic(home.registryPath, {
+    projects: registry.projects.map((project) =>
+      project.id === id ? { ...project, name } : project,
+    ),
+  });
+}
+
 export async function removeRegistryProject(id: string): Promise<void> {
   const home = await ensureShallHome();
   const registry = await readRegistry();

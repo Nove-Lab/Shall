@@ -9,10 +9,22 @@
     "typecheck": "tsc -b --pretty false"
   },
   "dependencies": {
+    "@base-ui/react": "^1.7.0",
+    "@fontsource-variable/geist": "^5.3.0",
+    "@tailwindcss/vite": "^4.3.3",
     "@trpc/client": "latest",
     "@xyflow/react": "^12.11.2",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^1.31.0",
     "react": "latest",
-    "react-dom": "latest"
+    "react-dom": "latest",
+    "react-resizable-panels": "^4.12.2",
+    "react-router": "^8.3.0",
+    "shadcn": "^4.16.2",
+    "tailwind-merge": "^3.6.0",
+    "tailwindcss": "^4.3.3",
+    "tw-animate-css": "^1.4.0"
   },
   "devDependencies": {
     "@shall/daemon": "workspace:*",

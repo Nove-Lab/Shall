@@ -26,3 +26,24 @@ export interface Registry {
 export interface RecentProject extends RegistryProject {
   exists: boolean;
 }
+
+/** Everything the Settings screen shows for `~/.shall`. */
+export interface GlobalSettings {
+  /** The only writable key in config.json today. */
+  port: number;
+  homePath: string;
+  configPath: string;
+  registryPath: string;
+  projectCount: number;
+}
+
+/** Everything the Settings screen shows for `<project>/.shall`. */
+export interface ProjectSettings {
+  id: string;
+  /** The only writable key in project.json today. */
+  name: string;
+  path: string;
+  schemaVersion: number;
+  shallPath: string;
+  databasePath: string;
+}
