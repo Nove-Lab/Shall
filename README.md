@@ -2,9 +2,9 @@
 
 Shall is a local, spec-driven control plane for AI coding agents. This M0
 contains project initialization, opening and recent-project persistence, plus
-the shell the planes will fill: Control plane panels, the Spec plane canvas and
-Settings. Everything that needs a spec graph is still empty — the surfaces are
-there, the records are not.
+the shell the planes fill: Control plane panels, the Spec plane canvas and
+Settings. The Spec plane holds real nodes now; the Control plane panels are
+still empty — those surfaces are there, the records are not.
 
 ## Routes
 
@@ -20,6 +20,18 @@ someone on the same panel — there is no hidden "current project" state.
 ```
 
 `panelId` ∈ `review-queue | task-board | activity-feed | vitals`.
+
+## Spec plane
+
+A node is a row of the project's `nodes` table: a `type` and a JSON `attrs`
+object, plus an id and a creation time the editor cannot reach. **Add node**
+opens the detail pane to write one, clicking a node on the canvas opens the
+same pane to read it, and **Edit** turns that pane back into the form with
+**Delete** beside **Save**. Nothing stores a node's position, so the canvas
+lays nodes out in creation order and they cannot be dragged.
+
+Two things above the canvas are still seats rather than features: edges have
+no UI, and the grid/graph toggle renders the graph either way.
 
 Settings edits real files: the daemon port lives in `~/.shall/config.json` and
 the display name in `<project>/.shall/project.json`. Everything else on that

@@ -151,7 +151,7 @@ export function ShellLayout() {
             the Switch project button's job, and only its job. */}
         <Link
           to={`${base}/control`}
-          className="text-sm font-semibold tracking-tight"
+          className="text-base font-semibold tracking-tight"
         >
           Shall
         </Link>

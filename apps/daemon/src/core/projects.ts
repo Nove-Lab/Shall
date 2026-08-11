@@ -75,6 +75,22 @@ export async function openProject(
 }
 
 /**
+ * The registry entry behind `/p/:projectId`, for the surfaces that cannot
+ * carry on without one — settings and the spec graph both write to files the
+ * registry is what points at.
+ */
+export async function requireRegistryProject(
+  id: string,
+): Promise<RegistryProject> {
+  const registry = await readRegistry();
+  const entry = registry.projects.find((project) => project.id === id);
+  if (!entry) {
+    throw new Error(`Unknown project: ${id}`);
+  }
+  return entry;
+}
+
+/**
  * Resolves the id in `/p/:projectId` to a project. Returns null rather than
  * throwing so the SPA can fall back to the picker on a stale link.
  */

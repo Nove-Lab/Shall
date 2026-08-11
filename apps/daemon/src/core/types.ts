@@ -13,6 +13,15 @@ export interface ProjectMetadata {
   schemaVersion: 1;
 }
 
+/** A row of a project's `nodes` table — the Spec plane's whole record. */
+export interface SpecNode {
+  id: string;
+  type: string;
+  /** A JSON object, stored as text. */
+  attrs: string;
+  createdAt: number;
+}
+
 export interface RegistryProject {
   id: string;
   path: string;

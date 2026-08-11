@@ -1,5 +1,6 @@
 import { isProjectMetadata } from "./project-model.js";
-import type { GlobalSettings, ProjectSettings, RegistryProject } from "./types.js";
+import { requireRegistryProject } from "./projects.js";
+import type { GlobalSettings, ProjectSettings } from "./types.js";
 import {
   getProjectDatabasePath,
   getProjectShallPath,
@@ -43,15 +44,6 @@ export async function updateGlobalSettings(input: {
 /* -------------------------------------------------------------------------- */
 /* <project>/.shall                                                            */
 /* -------------------------------------------------------------------------- */
-
-async function requireRegistryProject(id: string): Promise<RegistryProject> {
-  const registry = await readRegistry();
-  const entry = registry.projects.find((project) => project.id === id);
-  if (!entry) {
-    throw new Error(`Unknown project: ${id}`);
-  }
-  return entry;
-}
 
 export async function readProjectSettings(
   id: string,
