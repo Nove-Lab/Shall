@@ -15,7 +15,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { EmptyState } from "@/components/EmptyState";
-import { PANELS } from "@/data/panels";
+import { PANELS } from "./panels";
 import { useProject } from "@/project-context";
 
 export function ControlOverview() {

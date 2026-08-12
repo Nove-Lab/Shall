@@ -1,0 +1,43 @@
+{
+  "name": "@shall/core",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "exports": {
+    "./graph": {
+      "types": "./dist/graph/index.d.ts",
+      "default": "./dist/graph/index.js"
+    },
+    "./store": {
+      "types": "./dist/store/index.d.ts",
+      "default": "./dist/store/index.js"
+    },
+    "./arith": {
+      "types": "./dist/arith/index.d.ts",
+      "default": "./dist/arith/index.js"
+    },
+    "./serialize": {
+      "types": "./dist/serialize/index.d.ts",
+      "default": "./dist/serialize/index.js"
+    },
+    "./exchange": {
+      "types": "./dist/exchange/index.d.ts",
+      "default": "./dist/exchange/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "store/migrations"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "generate": "drizzle-kit generate"
+  },
+  "dependencies": {
+    "drizzle-orm": "latest"
+  },
+  "devDependencies": {
+    "drizzle-kit": "latest"
+  }
+}

@@ -15,7 +15,7 @@ import { useProject } from "@/project-context";
 import { NodePanel, type NodePanelMode } from "./NodePanel";
 import { SpecGraph } from "./SpecGraph";
 import type { SpecNode, SpecNodeValues } from "./spec-node";
-import "@/spec.css";
+import "./spec.css";
 
 /** Closed, writing a new node, or sitting on one the graph already has. */
 type PanelState =

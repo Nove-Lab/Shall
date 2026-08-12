@@ -6,6 +6,21 @@ the shell the planes fill: Control plane panels, the Spec plane canvas and
 Settings. The Spec plane holds real nodes now; the Control plane panels are
 still empty — those surfaces are there, the records are not.
 
+## Layout
+
+The folders are the modules in [`ARCHITECTURE.md`](./ARCHITECTURE.md), one for
+one.
+
+```
+core/       graph store arith serialize exchange   — no host underneath
+daemon/     http service host                      — the only process with a DB
+apps/web/   control spec settings shell home       — the localhost screen
+client/cli/                                        — the `shall` command
+```
+
+`core/arith`, `core/serialize` and `core/exchange` are empty frames: the
+sessions, the mirror files and the judgement arithmetic are not written yet.
+
 ## Routes
 
 Everything inside a project is scoped by its id, so a link is enough to put
@@ -62,7 +77,7 @@ bun run dev --host
 
 ```bash
 bun run build
-cd apps/daemon
+cd client/cli
 bun link
 shall
 ```

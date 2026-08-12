@@ -17,7 +17,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { EmptyState } from "@/components/EmptyState";
-import { panelById } from "@/data/panels";
+import { panelById } from "./panels";
 import { useProject } from "@/project-context";
 
 export function PanelDetail() {

@@ -33,8 +33,8 @@ import {
 } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PANELS } from "@/data/panels";
-import type { PanelId } from "@/data/panels";
+import { PANELS } from "@/control/panels";
+import type { PanelId } from "@/control/panels";
 import { useIsNarrow } from "@/hooks/use-narrow";
 import { ProjectProvider } from "@/project-context";
 import type { Project } from "@/project-context";

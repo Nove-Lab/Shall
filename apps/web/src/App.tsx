@@ -1,7 +1,7 @@
 import { Navigate, Route, Routes } from "react-router";
 import { ControlOverview } from "@/control/ControlOverview";
 import { PanelDetail } from "@/control/PanelDetail";
-import { HomeScreen } from "@/screens/HomeScreen";
+import { HomeScreen } from "@/home/HomeScreen";
 import { SettingsScreen } from "@/settings/SettingsScreen";
 import { ControlLayout } from "@/shell/ControlLayout";
 import { ShellLayout } from "@/shell/ShellLayout";

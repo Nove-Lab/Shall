@@ -33,7 +33,9 @@ async function runToCompletion(command, args) {
   }
 }
 
-await runToCompletion("bun", ["run", "build:schema"]);
+// The daemon runs from source under tsx, but web reads the daemon's router
+// types out of dist, and the daemon reads core out of dist.
+await runToCompletion("bun", ["run", "build:core"]);
 await runToCompletion("bun", ["run", "build:daemon"]);
 
 const detached = process.platform !== "win32";

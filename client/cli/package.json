@@ -1,0 +1,19 @@
+{
+  "name": "@shall/cli",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "bin": {
+    "shall": "./dist/main.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@shall/daemon": "workspace:*"
+  },
+  "engines": {
+    "node": ">=22.5.0"
+  }
+}
