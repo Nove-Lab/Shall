@@ -1,12 +1,17 @@
-import { asc, eq } from "drizzle-orm";
+import { asc, eq, or } from "drizzle-orm";
 import type { SpecNode, SpecNodeValues } from "../graph/index.js";
 import { withProjectDatabase } from "./database.js";
-import { nodes } from "./schema.js";
+import { edges, nodes } from "./schema.js";
 
-/** Creation order is the graph's only order — no position is stored. */
+/**
+ * Id order, because the id carries the node's type prefix and a sequence — so
+ * reading the list in id order groups a type together and walks each type in
+ * the order it was numbered. That is the order a person reads the graph in,
+ * and the order the canvas lays the cards out by.
+ */
 export async function listNodes(databasePath: string): Promise<SpecNode[]> {
   return withProjectDatabase(databasePath, async (database) =>
-    database.select().from(nodes).orderBy(asc(nodes.createdAt), asc(nodes.id)),
+    database.select().from(nodes).orderBy(asc(nodes.id)),
   );
 }
 
@@ -41,21 +46,36 @@ export async function updateNode(
   });
 }
 
+/**
+ * False when the id is gone. The node's incident edges go with it: an edge
+ * whose endpoint no longer exists is not a relation, it is a dangling
+ * reference, and there is no state of the database in which one should exist.
+ * Cascading here rather than in the caller means no caller can forget.
+ *
+ * The look-up and both deletes are one transaction, so the half-state — a node
+ * that has lost its edges but is still there — is never a state anything else
+ * can read or a crash can leave behind.
+ */
 export async function deleteNode(
   databasePath: string,
   id: string,
 ): Promise<boolean> {
-  return withProjectDatabase(databasePath, async (database) => {
-    const [existing] = await database
-      .select({ id: nodes.id })
-      .from(nodes)
-      .where(eq(nodes.id, id))
-      .limit(1);
-    if (!existing) {
-      return false;
-    }
+  return withProjectDatabase(databasePath, async (database) =>
+    database.transaction(async (transaction) => {
+      const [existing] = await transaction
+        .select({ id: nodes.id })
+        .from(nodes)
+        .where(eq(nodes.id, id))
+        .limit(1);
+      if (!existing) {
+        return false;
+      }
 
-    await database.delete(nodes).where(eq(nodes.id, id));
-    return true;
-  });
+      await transaction
+        .delete(edges)
+        .where(or(eq(edges.fromId, id), eq(edges.toId, id)));
+      await transaction.delete(nodes).where(eq(nodes.id, id));
+      return true;
+    }),
+  );
 }

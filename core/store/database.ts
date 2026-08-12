@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
@@ -78,17 +79,47 @@ export async function initializeProjectDatabase(
  * shall.db is git-ignored, so a project cloned from a repo arrives with a
  * project.json and no database at all. The first read of a project brings its
  * database up to date; the rest of the daemon run trusts it.
+ *
+ * What is remembered is the migration itself and not the fact that one
+ * finished, so a caller that arrives while one is running joins it instead of
+ * starting a second. Remembering only the finished fact let two reads of a
+ * fresh project — the pair a screen makes when it asks for nodes and edges at
+ * once — both find nothing recorded, both migrate, and the slower one fail on
+ * a table the faster one had just created.
  */
-const migrated = new Set<string>();
+const migrations = new Map<string, Promise<void>>();
 
-export async function withProjectDatabase<T>(
+/**
+ * The database file is derived and git-ignored, so it can go away under a
+ * running daemon — a `git clean`, a branch switch, someone clearing the cache.
+ * node:sqlite would then quietly make an empty file with no tables in it, and
+ * every later call for that project would fail on a missing table until the
+ * daemon restarted. So the memo only counts while the file it was taken from is
+ * still there, and a migration that fails is forgotten rather than remembered
+ * as done, so the next caller retries it.
+ */
+async function migrateOnce(databasePath: string): Promise<void> {
+  let pending = migrations.get(databasePath);
+  if (!pending || !existsSync(databasePath)) {
+    pending = initializeProjectDatabase(databasePath);
+    migrations.set(databasePath, pending);
+  }
+
+  try {
+    await pending;
+  } catch (error) {
+    if (migrations.get(databasePath) === pending) {
+      migrations.delete(databasePath);
+    }
+    throw error;
+  }
+}
+
+async function openAndRun<T>(
   databasePath: string,
   run: (database: ProjectDatabase) => Promise<T>,
 ): Promise<T> {
-  if (!migrated.has(databasePath)) {
-    await initializeProjectDatabase(databasePath);
-    migrated.add(databasePath);
-  }
+  await migrateOnce(databasePath);
 
   const sqlite = new DatabaseSync(databasePath);
   try {
@@ -97,4 +128,35 @@ export async function withProjectDatabase<T>(
   } finally {
     sqlite.close();
   }
+}
+
+/** The tail of the queue for each database, so the next call can join it. */
+const queues = new Map<string, Promise<unknown>>();
+
+/**
+ * One call at a time per database, because a call is the unit of work and
+ * sqlite gives its write lock to one connection at a time.
+ *
+ * A single statement never needed this: node:sqlite runs it synchronously, so
+ * it is over before anything else can start. A transaction is a different
+ * animal — the awaits between its statements are gaps another call would slip
+ * into, and a second connection meeting the held lock does not wait its turn,
+ * it fails on the spot with "database is locked". Queuing removes the gaps
+ * rather than teaching every caller to retry, and it is what the architecture
+ * already claims: the daemon is the single writer of this file.
+ *
+ * Nothing inside `run` may call back in here — the queue would be waiting on
+ * itself. Store functions take the database they were handed instead.
+ */
+export async function withProjectDatabase<T>(
+  databasePath: string,
+  run: (database: ProjectDatabase) => Promise<T>,
+): Promise<T> {
+  const ahead = queues.get(databasePath) ?? Promise.resolve();
+  // A call that failed is still a call that finished, so the queue moves on.
+  const turn = ahead
+    .catch(() => undefined)
+    .then(() => openAndRun(databasePath, run));
+  queues.set(databasePath, turn);
+  return turn;
 }

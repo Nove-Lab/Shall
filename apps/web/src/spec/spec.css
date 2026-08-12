@@ -1,14 +1,26 @@
 /* React Flow chrome mapped onto shadcn/ui theme tokens — no raw colour values. */
 .spec-canvas {
   --xy-background-color: var(--card);
-  --xy-background-pattern-dots-color: var(--border);
+  /* The pattern's own variable, and not `--xy-background-pattern-dots-color`:
+     that name is nobody's. 12.11.2 fills the dots from `-props` (what
+     `<Background color>` writes), then from this, then from its own `#91919a`
+     — so the line this replaces set a property no rule reads and the dots were
+     the library's grey on a themed canvas. */
+  --xy-background-pattern-color: var(--border);
   --xy-edge-stroke: var(--border);
   --xy-edge-stroke-selected: var(--primary);
   --xy-edge-stroke-width: 1.5;
   --xy-edge-label-background-color: var(--card);
   --xy-edge-label-color: var(--muted-foreground);
-  --xy-handle-background-color: var(--primary);
-  --xy-handle-border-color: var(--card);
+  /* The line drawn while a relation is being dragged. Its vendor fallback is a
+     raw grey in both themes, and the class that paints it is the library's own,
+     so this variable is the only way to put the drag preview on a token. */
+  --xy-connectionline-stroke: var(--primary);
+  --xy-connectionline-stroke-width: 1.5;
+  /* No `--xy-handle-*` here. Every handle on this canvas is the whole card and
+     is forced to `opacity: 0` — there is no dot to aim at — so a fill and a
+     border mapped onto tokens were two lines that could not paint a pixel.
+     They belong back here the day a handle is drawn. */
   --xy-controls-button-background-color: var(--card);
   --xy-controls-button-background-color-hover: var(--accent);
   --xy-controls-button-color: var(--foreground);

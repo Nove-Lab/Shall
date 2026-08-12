@@ -1,3 +1,4 @@
+import { missing } from "./errors.js";
 import {
   createProjectMetadata,
   isProjectMetadata,
@@ -85,7 +86,7 @@ export async function requireRegistryProject(
   const registry = await readRegistry();
   const entry = registry.projects.find((project) => project.id === id);
   if (!entry) {
-    throw new Error(`Unknown project: ${id}`);
+    throw missing(`Unknown project: ${id}`);
   }
   return entry;
 }

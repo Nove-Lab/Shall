@@ -1,64 +1,25 @@
-/** A row of the project's `nodes` table — the Spec plane's whole record. */
-export interface SpecNode {
-  id: string;
-  type: string;
-  /** A JSON object, stored as text. */
-  attrs: string;
-  createdAt: number;
-}
+/**
+ * THE SHAPE OF A NODE AND OF AN EDGE IS THE CANON'S, NOT THIS APP'S.
+ *
+ * This file used to declare its own `SpecNode`, and a second declaration of a
+ * stored row is a second thing to keep in step with the database — it was
+ * already out of step, still spelling an `attrs` JSON blob that the columns
+ * `shortName`, `name` and `content` replaced. The re-export stays so that the
+ * Spec plane's modules keep one import for the row they draw, but the type is
+ * `@shall/core/graph`'s and there is nowhere here for it to drift.
+ *
+ * What is left below is the one thing that IS this surface's: how a stored
+ * instant is written for a person to read.
+ */
+export type { SpecEdge, SpecNode } from "@shall/core/graph";
 
-/** The two columns a person fills in; the rest is the node's identity. */
-export interface SpecNodeValues {
-  type: string;
-  attrs: string;
-}
-
-/** What an empty attrs field starts as, in the editor and on a new node. */
-export const EMPTY_ATTRS = "{}";
-
-/** Stored compact, shown indented wherever a person reads or edits it. */
-export function formatAttrs(attrs: string): string {
-  try {
-    return JSON.stringify(JSON.parse(attrs) as unknown, null, 2);
-  } catch {
-    return attrs;
-  }
-}
-
-/** The reason attrs cannot be saved, or null when it can. */
-export function attrsProblem(attrs: string): string | null {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(attrs);
-  } catch {
-    return "Attributes must be valid JSON.";
-  }
-
-  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-    return "Attributes must be a JSON object.";
-  }
-  return null;
-}
-
-/** All a node card can say about its attrs without opening the panel. */
-export function describeAttrs(attrs: string): string {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(attrs);
-  } catch {
-    return "Unreadable attributes";
-  }
-
-  const count =
-    typeof parsed === "object" && parsed !== null
-      ? Object.keys(parsed).length
-      : 0;
-  if (count === 0) {
-    return "No attributes";
-  }
-  return count === 1 ? "1 attribute" : `${count} attributes`;
-}
-
+/**
+ * A stored `createdAt` in the reader's own locale and time zone.
+ *
+ * It is deliberately not stable across machines, which is why it is here and not
+ * in the pure `view/` folder: everything there must draw the same picture
+ * everywhere, and this is the opposite promise.
+ */
 export function formatCreatedAt(createdAt: number): string {
   return new Date(createdAt).toLocaleString();
 }

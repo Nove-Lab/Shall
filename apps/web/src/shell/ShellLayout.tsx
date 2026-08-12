@@ -17,7 +17,7 @@ import {
   Shuffle,
 } from "lucide-react";
 import { api } from "@/api";
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import {
   Sidebar,
@@ -36,6 +36,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PANELS } from "@/control/panels";
 import type { PanelId } from "@/control/panels";
 import { useIsNarrow } from "@/hooks/use-narrow";
+import { cn } from "@/lib/utils";
 import { ProjectProvider } from "@/project-context";
 import type { Project } from "@/project-context";
 
@@ -166,24 +167,36 @@ export function ShellLayout() {
         ) : (
           <Skeleton className="h-4 w-56" />
         )}
-        <Button
-          render={<Link to="/" />}
-          variant="outline"
-          size="sm"
-          className="shrink-0"
+        {/* THESE TWO NAVIGATE, SO THEY ARE LINKS WEARING THE BUTTON'S LOOK.
+            `<Button render={<Link/>}>` renders an `<a>` out of Base UI's button
+            primitive, which defaults `nativeButton` to true and said so twice
+            on every mount of the shell — the only console errors the app
+            produced. The two ways out of that are `nativeButton={false}`, which
+            quiets the warning by putting `role="button"` on something that is
+            a link and reads as one to a screen reader, and `buttonVariants`,
+            which is what the button exports for exactly this case: the anchor
+            stays an anchor, keeps its middle-click and its context menu, and
+            only borrows the styling. */}
+        <Link
+          to="/"
+          className={cn(
+            buttonVariants({ variant: "outline", size: "sm" }),
+            "shrink-0",
+          )}
         >
           <Shuffle />
           Switch project
-        </Button>
-        <Button
-          render={<Link to={`${base}/settings`} />}
-          variant="outline"
-          size="sm"
-          className="ml-auto shrink-0"
+        </Link>
+        <Link
+          to={`${base}/settings`}
+          className={cn(
+            buttonVariants({ variant: "outline", size: "sm" }),
+            "ml-auto shrink-0",
+          )}
         >
           <Settings />
           Settings
-        </Button>
+        </Link>
       </header>
 
       {/* Row 2 — plane switch. This underline is the only "you are here"

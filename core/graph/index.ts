@@ -1,8 +1,36 @@
 /**
  * core/graph — the grammar of the spec graph.
  *
- * Types only. Nothing here reads a database, a file, or a clock; every other
- * core module is written against these shapes.
+ * The canon's node types, their ids, the edges that may join them, and the
+ * shapes every other core module is written against. It carries data now and
+ * not only types, but it still reads nothing: no database, no file, no clock,
+ * so it is as safe in a browser bundle as it is in the daemon.
  */
+export {
+  BAND_ORDER,
+  NODE_TYPES,
+  SATELLITE_BAND,
+  bandOf,
+  columnsInOrder,
+  isNodeType,
+  layerOf,
+  nodeTypeEntry,
+  typesInBand,
+} from "./canon.js";
+export type { Band, NodeTypeEntry, NodeTypeName } from "./canon.js";
+export {
+  ID_SEQUENCE_MAX,
+  ID_SEQUENCE_WIDTH,
+  formatNodeId,
+  idPrefixFor,
+  nextIdSuggestion,
+} from "./ids.js";
+export {
+  EDGE_GRAMMAR,
+  EDGE_TYPE_NAMES,
+  isPermittedTriple,
+  permittedEdgeTypes,
+} from "./grammar.js";
+export type { EdgeTriple } from "./grammar.js";
 export type { SpecNode, SpecNodeValues } from "./node.js";
 export type { SpecEdge } from "./edge.js";

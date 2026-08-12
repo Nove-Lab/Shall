@@ -11,6 +11,7 @@
   "dependencies": {
     "@base-ui/react": "^1.7.0",
     "@fontsource-variable/geist": "^5.3.0",
+    "@shall/core": "workspace:*",
     "@tailwindcss/vite": "^4.3.3",
     "@trpc/client": "latest",
     "@xyflow/react": "^12.11.2",
