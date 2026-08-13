@@ -39,6 +39,7 @@ import { useProject } from "@/project-context";
 import { NodePanel, type NodeDraft, type NodePanelMode } from "./NodePanel";
 import { SpecGraph, type MenuTarget } from "./SpecGraph";
 import type { SpecEdge, SpecNode } from "./spec-node";
+import { attributesToSend } from "./view/attributes";
 import "./spec.css";
 
 /**
@@ -374,11 +375,18 @@ export function SpecPlane() {
   /**
    * A save, in whichever of its two shapes this mode can send.
    *
-   * A create carries all five fields; an edit carries the three that can change,
-   * because the daemon will not move a node's type or its id — the id is what
-   * every relation names, and the type is what decides which relations are
+   * A create carries the identity fields as well; an edit carries only what can
+   * change, because the daemon will not move a node's type or its id — the id is
+   * what every relation names, and the type is what decides which relations are
    * grammatical at all. `NodeDraft` is one shape for both, so the panel does not
    * have to know which of the two it is filling.
+   *
+   * BOTH DOORS ARE HANDED THE TYPE'S WHOLE ROSTER AND NOTHING ELSE, which is
+   * what `attributesToSend` is for: the write door overwrites the map entire, so
+   * a slot left out would be a slot cleared, and a slot from a type the draft
+   * used to be aimed at would be refused by a name the person cannot see on
+   * screen. The edit branch reads the type off the draft for the same reason it
+   * is safe to: an edit cannot move it, so `draft.type` is the stored row's own.
    */
   async function submitNode(draft: NodeDraft) {
     if (panel.mode === "edit") {
@@ -387,7 +395,7 @@ export function SpecPlane() {
         id: panel.id,
         shortName: draft.shortName,
         name: draft.name,
-        content: draft.content,
+        attributes: attributesToSend(draft.type, draft.attributes),
       });
       await load();
       setPanel({ mode: "view", id: updated.id });
@@ -400,7 +408,7 @@ export function SpecPlane() {
       id: draft.id,
       shortName: draft.shortName,
       name: draft.name,
-      content: draft.content,
+      attributes: attributesToSend(draft.type, draft.attributes),
     });
     await load();
     setPanel({ mode: "view", id: created.id });

@@ -3,8 +3,8 @@
  *
  * This file used to declare its own `SpecNode`, and a second declaration of a
  * stored row is a second thing to keep in step with the database — it was
- * already out of step, still spelling an `attrs` JSON blob that the columns
- * `shortName`, `name` and `content` replaced. The re-export stays so that the
+ * already out of step, still spelling an `attrs` JSON blob that the row's
+ * named columns replaced. The re-export stays so that the
  * Spec plane's modules keep one import for the row they draw, but the type is
  * `@shall/core/graph`'s and there is nowhere here for it to drift.
  *

@@ -7,9 +7,11 @@ import {
 import { Pencil, Trash2, X } from "lucide-react";
 import {
   BAND_ORDER,
+  attributesFor,
   bandOf,
   columnsInOrder,
   nextIdSuggestion,
+  type AttributeDescriptor,
   type Band,
   type NodeTypeEntry,
   type SpecNode,
@@ -37,6 +39,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { formatTimestamp } from "./spec-node";
+import { displayedValue, unfilledRequired } from "./view/attributes";
 
 export type NodePanelMode = "create" | "view" | "edit";
 
@@ -77,18 +80,118 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 }
 
 /**
+ * ONE ATTRIBUTE'S CONTROL, AND THE KIND CHOOSES IT — `line` a one-line box,
+ * `prose` a several-line one, `choice` the vocabulary as a dropdown. The kind is
+ * not a styling hint: the database holds a CHECK per kind, so a control that
+ * offered the wrong shape would be offering a save that cannot land.
+ *
+ * ENTER SAVES FROM A `line` AND NOT FROM A `prose`, for the reason the id box
+ * has always saved on Enter and the body box never has: a return key inside
+ * prose is a paragraph break somebody meant to type.
+ *
+ * ONLY AN OPTIONAL `choice` OFFERS "None". A dropdown is the one control a
+ * person cannot empty by hand — there is no backspace in it — so without that
+ * row an optional choice is a decision that can be made once and never unmade.
+ * A required one has no such row because emptying it is not a state the type
+ * allows, and offering it would be offering a save the door refuses.
+ *
+ * THE `""` ⇄ `null` CONVERSION IS THIS BOUNDARY'S. The draft holds strings and
+ * only strings, because that is what the wire carries and what the roster's
+ * other two kinds are; Base UI spells "nothing selected" as `null`. The two meet
+ * here, in one expression each way, rather than putting a second empty value
+ * into the draft for every reader downstream to know about.
+ */
+function AttributeField({
+  descriptor,
+  value,
+  onChange,
+  onEnter,
+}: {
+  descriptor: AttributeDescriptor;
+  value: string;
+  onChange: (value: string) => void;
+  onEnter: (event: KeyboardEvent<HTMLInputElement>) => void;
+}) {
+  const controlId = `node-attribute-${descriptor.name}`;
+  return (
+    <div className="grid gap-2">
+      <Label htmlFor={controlId}>
+        {/* One flex item, not two: the Label's own `gap-2` would otherwise
+            push the marker half a rem off the word it belongs to. */}
+        <span>
+          {descriptor.label}
+          {descriptor.required ? (
+            <span className="text-destructive"> *</span>
+          ) : null}
+        </span>
+      </Label>
+      {descriptor.kind === "choice" ? (
+        <Select
+          value={value === "" ? null : value}
+          /* The vocabulary again, as data: it is what makes the trigger read
+             `External System` rather than the `external_system` it stores.
+             Without it Base UI has only the raw value to show. */
+          items={descriptor.values ?? []}
+          onValueChange={(next) => onChange(next ?? "")}
+        >
+          <SelectTrigger id={controlId} className="w-full">
+            {/* The label above already names the field, so the placeholder says
+                only that nothing has been picked — and says it without an
+                article, which "Choose a Actor Type" would get wrong. */}
+            <SelectValue placeholder="Choose one" />
+          </SelectTrigger>
+          <SelectContent alignItemWithTrigger={false}>
+            {descriptor.required ? null : (
+              <SelectItem value={null}>None</SelectItem>
+            )}
+            {(descriptor.values ?? []).map((choice) => (
+              <SelectItem key={choice.value} value={choice.value}>
+                {choice.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      ) : descriptor.kind === "prose" ? (
+        <Textarea
+          id={controlId}
+          rows={6}
+          className="text-sm"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+        />
+      ) : (
+        <Input
+          id={controlId}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          onKeyDown={onEnter}
+        />
+      )}
+      {descriptor.hint ? (
+        <p className="text-muted-foreground text-xs">{descriptor.hint}</p>
+      ) : null}
+    </div>
+  );
+}
+
+/**
  * What a save carries.
  *
  * `type` and `id` are the node's identity and only a create can choose them; an
  * edit sends the node's own back unchanged and the daemon ignores them, so both
  * modes hand the caller one shape rather than two.
+ *
+ * `attributes` IS THE DRAFT AS IT STANDS, keyed by column name, and it may hold
+ * columns the type on screen does not carry — see the re-aim effect for why it
+ * is allowed to. Narrowing it to the type's roster is `attributesToSend`'s job
+ * and the caller's, one step before the wire.
  */
 export interface NodeDraft {
   type: string;
   id: string;
   shortName: string;
   name: string;
-  content: string;
+  attributes: Record<string, string>;
 }
 
 interface NodePanelProps {
@@ -110,7 +213,8 @@ interface NodePanelProps {
 
 /**
  * The node inspector: one docked pane for all three states, because a node
- * being written, read and rewritten is the same five fields each time.
+ * being written, read and rewritten is the same form each time — the four
+ * identity fields, and under them whatever the chosen type carries.
  */
 export function NodePanel({
   mode,
@@ -128,7 +232,15 @@ export function NodePanel({
   const [id, setId] = useState("");
   const [shortName, setShortName] = useState("");
   const [name, setName] = useState("");
-  const [content, setContent] = useState("");
+  /**
+   * EVERY ATTRIBUTE OF EVERY TYPE IN ONE MAP, keyed by the column name the wire
+   * uses. Not a `useState` per attribute: which attributes exist is the chosen
+   * type's answer and it changes while the form stands open, and hooks cannot be
+   * called conditionally. Not a map per type either — the whole point of keying
+   * by column is that `statement` typed under one type is the same `statement`
+   * under the next one that carries it.
+   */
+  const [attributes, setAttributes] = useState<Record<string, string>>({});
   /**
    * Whether the id on screen is the person's own rather than the suggestion.
    * Once it is theirs it stays theirs until the form is refilled — including
@@ -158,7 +270,10 @@ export function NodePanel({
       setId(node.id);
       setShortName(node.shortName);
       setName(node.name);
-      setContent(node.content);
+      // The stored map holds the filled slots only, so an optional cell nobody
+      // wrote is an absent key here and its control reads it as the empty box it
+      // is. Nothing has to invent a `""` for it.
+      setAttributes(node.attributes);
       return;
     }
 
@@ -167,7 +282,7 @@ export function NodePanel({
     setId(nextIdSuggestion(startingType, existingIds));
     setShortName("");
     setName("");
-    setContent("");
+    setAttributes({});
   }, [mode, nodeId]);
 
   /**
@@ -179,10 +294,16 @@ export function NodePanel({
    * asked for first. The counter is what makes the second ask a second ask.
    *
    * IT RE-AIMS AND IT DOES NOT CLEAR. Remounting on a `key` would say this in
-   * one word and throw away a half-typed draft; the three prose fields mean the
-   * same thing on all twenty-three types, so there is nothing about a new type
-   * that makes what someone already wrote wrong. Only the type moves, and the
-   * id with it under the same touch rule the dropdown uses.
+   * one word and throw away a half-typed draft. What survives the move is
+   * decided by the draft's own shape: it is keyed by COLUMN name, so a value
+   * stays under the name it was typed against and reappears in the form
+   * whenever the new type carries that column too — a `statement` written for a
+   * Requirement is there for a Finding, because it is the same column and means
+   * the same thing on both. A value whose column the new type does not carry
+   * stays in the draft, out of sight, and is never sent: `attributesToSend`
+   * names this type's roster and nothing else. So a change of type can leave a
+   * field on screen behind, but it cannot smuggle one to the daemon. Only the
+   * type moves, and the id with it under the same touch rule the dropdown uses.
    *
    * A REQUEST THAT NAMES NO TYPE LEAVES THE FIELD ALONE: the toolbar's Add node
    * has no column and therefore no opinion, and resetting the dropdown there
@@ -205,6 +326,23 @@ export function NodePanel({
       setId(nextIdSuggestion(next, existingIds));
     }
   }
+
+  /** One box's text into the draft, under the column name it belongs to. */
+  function setAttribute(attribute: string, value: string) {
+    setAttributes((current) => ({ ...current, [attribute]: value }));
+  }
+
+  /**
+   * WHAT THE FORM ASKS FOR, DERIVED EVERY RENDER RATHER THAN STORED.
+   *
+   * It is a function of the type in the dropdown — the roster is a compiled
+   * import, so the answer is on hand the instant the type changes — and a copy
+   * kept in state would be a second thing to move when the dropdown moves.
+   * Empty covers the two cases that have no roster: no type chosen yet, and a
+   * type outside the canon, which only a stored row from another version could
+   * carry and which the write door refuses by name.
+   */
+  const descriptors = attributesFor(type) ?? [];
 
   const trimmedId = id.trim();
 
@@ -234,14 +372,18 @@ export function NodePanel({
    */
   const showIdProblem = idProblem !== null && (idTouched || trimmedId !== "");
 
-  // All five fields are required and the daemon refuses a blank one by name, so
-  // the button stays off until they are all there.
+  // The four identity fields are required of every node, and the type decides
+  // which of its own slots are required on top of them — a Term needs a
+  // Definition, a Question needs a State. The daemon refuses a blank one by
+  // name and its emptiness rule is the one `unfilledRequired` runs, so the
+  // button is off exactly when a save would be refused. An optional slot left
+  // empty is not missing, it is empty, and it holds nothing up.
   const canSave =
     type.trim() !== "" &&
     trimmedId !== "" &&
     shortName.trim() !== "" &&
     name.trim() !== "" &&
-    content.trim() !== "" &&
+    unfilledRequired(descriptors, attributes).length === 0 &&
     idProblem === null;
 
   async function save() {
@@ -254,13 +396,15 @@ export function NodePanel({
     try {
       // Trimmed on the way out because the daemon trims before it stores: what
       // is sent is then what lands, and the panel is not showing one string
-      // while the table holds another.
+      // while the table holds another. The attributes are handed over whole and
+      // trimmed one step later, where they are also narrowed to the type's own
+      // roster — see `attributesToSend`.
       await onSubmit({
         type: type.trim(),
         id: trimmedId,
         shortName: shortName.trim(),
         name: name.trim(),
-        content: content.trim(),
+        attributes,
       });
     } catch (saveError) {
       setError(
@@ -290,7 +434,7 @@ export function NodePanel({
     }
   }
 
-  /** Enter saves from a one-line field. The content box keeps its newlines. */
+  /** Enter saves from a one-line field. A prose box keeps its newlines. */
   function saveOnEnter(event: KeyboardEvent<HTMLInputElement>) {
     if (event.key === "Enter") {
       event.preventDefault();
@@ -332,16 +476,45 @@ export function NodePanel({
             <Field label="Name">
               <span className="text-sm">{node.name}</span>
             </Field>
-            <Field label="Content">
-              {/* The body is prose somebody wrote in a box with a return key,
-                  so the breaks they put in it are part of what they wrote. */}
-              <p className="text-sm whitespace-pre-wrap">{node.content}</p>
-            </Field>
-            {/* UPDATED IS METADATA AND NOT A SIXTH FIELD, which is worth
-                recording because a node is asked to have five. The daemon sets
-                it and no form offers it — the create form is exactly the five
-                that were asked for — so it is shown for the same reason a
-                file's date is shown beside its name. It is the modified instant
+            {/* THE ROSTER IS THE READING ORDER, not the map's. `attributes` is
+                a plain object and its keys arrive in whatever order the daemon
+                built them; the roster is the order the type was authored in and
+                the order the form stacked its boxes in, so a node reads the way
+                it was written.
+
+                AN EMPTY OPTIONAL SLOT IS SHOWN AND NOT SKIPPED. A row that
+                disappears when it is empty makes a person wonder whether the
+                type has it at all; the dash says "this type carries a
+                Benchmark, and this node has none", which is the answer they
+                came for. It cannot be a required slot: the door refuses those
+                empty, so a blank one here would be a row the database does not
+                hold. */}
+            {(attributesFor(node.type) ?? []).map((descriptor) => {
+              const value = node.attributes[descriptor.name];
+              return (
+                <Field key={descriptor.name} label={descriptor.label}>
+                  {value === undefined ? (
+                    <span className="text-muted-foreground text-sm">—</span>
+                  ) : descriptor.kind === "prose" ? (
+                    /* Prose is what somebody wrote in a box with a return key,
+                       so the breaks they put in it are part of what they
+                       wrote. */
+                    <p className="text-sm whitespace-pre-wrap">{value}</p>
+                  ) : (
+                    /* A choice reads as its English label; a line as itself. */
+                    <span className="text-sm">
+                      {displayedValue(descriptor, value)}
+                    </span>
+                  )}
+                </Field>
+              );
+            })}
+            {/* UPDATED IS METADATA AND NOT AN ATTRIBUTE, which is worth
+                recording because the rows above it are exactly what the type
+                carries. The daemon sets it and no form offers it — the create
+                form is exactly what was asked for — so it is shown for the same
+                reason a file's date is shown beside its name. It is the
+                modified instant
                 and not the created one for that same reason: what a person
                 wants from a date beside a document is how current what they are
                 reading is, and on a node that has been edited the creation
@@ -442,16 +615,20 @@ export function NodePanel({
               />
             </div>
 
-            <div className="grid gap-2">
-              <Label htmlFor="node-content">Content</Label>
-              <Textarea
-                id="node-content"
-                rows={8}
-                className="min-h-32 text-sm"
-                value={content}
-                onChange={(event) => setContent(event.target.value)}
+            {/* THE TYPE'S OWN FIELDS, IN THE ORDER ITS ROSTER AUTHORS THEM, and
+                the same list in create and in edit — an edit cannot move the
+                type, so the two forms are asking for the same thing. Before a
+                type is chosen there are none of them, which is the honest shape
+                for "which fields" being a question the type answers. */}
+            {descriptors.map((descriptor) => (
+              <AttributeField
+                key={descriptor.name}
+                descriptor={descriptor}
+                value={attributes[descriptor.name] ?? ""}
+                onChange={(value) => setAttribute(descriptor.name, value)}
+                onEnter={saveOnEnter}
               />
-            </div>
+            ))}
 
             {mode === "edit" && node ? (
               <Field label="Updated">
