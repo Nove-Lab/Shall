@@ -22,6 +22,13 @@
       "when": 1786597903774,
       "tag": "0002_node_updated_at",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1786632581468,
+      "tag": "0003_node_attributes",
+      "breakpoints": true
     }
   ]
 }

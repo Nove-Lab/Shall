@@ -48,12 +48,28 @@ function connect(sqlite: DatabaseSync): ProjectDatabase {
   return drizzle(callback);
 }
 
+/**
+ * Foreign keys are stated rather than inherited. node:sqlite turns them on for
+ * a new connection and plain SQLite leaves them off, so a default is a promise
+ * made by whichever driver happens to open the file — and the edges' endpoint
+ * cascade is a rule of the schema, not of the driver.
+ *
+ * It is set here, before anything opens a transaction, because SQLite ignores
+ * the pragma inside one. That is also why no migration can toggle it: the
+ * migrator runs every pending file in a single transaction.
+ */
+function open(databasePath: string): DatabaseSync {
+  const sqlite = new DatabaseSync(databasePath);
+  sqlite.exec("PRAGMA journal_mode = WAL;");
+  sqlite.exec("PRAGMA foreign_keys = ON;");
+  return sqlite;
+}
+
 export async function initializeProjectDatabase(
   databasePath: string,
 ): Promise<void> {
-  const sqlite = new DatabaseSync(databasePath);
+  const sqlite = open(databasePath);
   try {
-    sqlite.exec("PRAGMA journal_mode = WAL;");
     await migrate(
       connect(sqlite),
       async (queries) => {
@@ -121,9 +137,8 @@ async function openAndRun<T>(
 ): Promise<T> {
   await migrateOnce(databasePath);
 
-  const sqlite = new DatabaseSync(databasePath);
+  const sqlite = open(databasePath);
   try {
-    sqlite.exec("PRAGMA journal_mode = WAL;");
     return await run(connect(sqlite));
   } finally {
     sqlite.close();

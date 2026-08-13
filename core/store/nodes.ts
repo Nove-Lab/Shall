@@ -1,7 +1,50 @@
 import { asc, eq, or } from "drizzle-orm";
+import {
+  ATTRIBUTE_COLUMN_NAMES,
+  type AttributeColumnName,
+} from "../graph/attributes.js";
 import type { SpecNode, SpecNodeValues } from "../graph/index.js";
 import { withProjectDatabase } from "./database.js";
 import { edges, nodes } from "./schema.js";
+
+type NodeRow = typeof nodes.$inferSelect;
+
+/**
+ * Every attribute cell, named — not only the ones the caller filled. A write is
+ * a whole map, so a name the map omits has to be written as NULL rather than
+ * left as it was, and naming all 53 is what makes an update clear a cell.
+ *
+ * A key the roster does not know is dropped here without a word. The daemon
+ * refuses one with a sentence long before this; a second refusal in the store
+ * would have no one to say it to.
+ */
+function attributeCells(
+  attributes: Record<string, string>,
+): Record<AttributeColumnName, string | null> {
+  return Object.fromEntries(
+    ATTRIBUTE_COLUMN_NAMES.map((column) => [column, attributes[column] ?? null]),
+  ) as Record<AttributeColumnName, string | null>;
+}
+
+/** The inverse: a NULL cell is an absent key, never `""`. */
+function rowToSpecNode(row: NodeRow): SpecNode {
+  const attributes: Record<string, string> = {};
+  for (const column of ATTRIBUTE_COLUMN_NAMES) {
+    const cell = row[column];
+    if (cell !== null) {
+      attributes[column] = cell;
+    }
+  }
+  return {
+    id: row.id,
+    type: row.type,
+    shortName: row.shortName,
+    name: row.name,
+    attributes,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+}
 
 /**
  * Id order, because the id carries the node's type prefix and a sequence — so
@@ -10,9 +53,25 @@ import { edges, nodes } from "./schema.js";
  * and the order the canvas lays the cards out by.
  */
 export async function listNodes(databasePath: string): Promise<SpecNode[]> {
-  return withProjectDatabase(databasePath, async (database) =>
-    database.select().from(nodes).orderBy(asc(nodes.id)),
-  );
+  return withProjectDatabase(databasePath, async (database) => {
+    const rows = await database.select().from(nodes).orderBy(asc(nodes.id));
+    return rows.map(rowToSpecNode);
+  });
+}
+
+/** Null when the id is gone — the look-up a write door does to learn a node's type. */
+export async function getNode(
+  databasePath: string,
+  id: string,
+): Promise<SpecNode | null> {
+  return withProjectDatabase(databasePath, async (database) => {
+    const [row] = await database
+      .select()
+      .from(nodes)
+      .where(eq(nodes.id, id))
+      .limit(1);
+    return row ? rowToSpecNode(row) : null;
+  });
 }
 
 export async function insertNode(
@@ -20,8 +79,19 @@ export async function insertNode(
   node: SpecNode,
 ): Promise<SpecNode> {
   return withProjectDatabase(databasePath, async (database) => {
-    await database.insert(nodes).values(node);
-    return node;
+    const row = {
+      id: node.id,
+      type: node.type,
+      shortName: node.shortName,
+      name: node.name,
+      createdAt: node.createdAt,
+      updatedAt: node.updatedAt,
+      ...attributeCells(node.attributes),
+    };
+    await database.insert(nodes).values(row);
+    // Read back through the same mapping a select goes through, so both write
+    // doors return the stored shape — never a key the roster does not know.
+    return rowToSpecNode(row);
   });
 }
 
@@ -50,9 +120,17 @@ export async function updateNode(
       return null;
     }
 
-    const written = { ...values, updatedAt };
+    // Every column the write touches is named, so the merged row below is the
+    // row the update just wrote — read back through the same mapping a select
+    // goes through, rather than assembled by hand a second way.
+    const written = {
+      shortName: values.shortName,
+      name: values.name,
+      updatedAt,
+      ...attributeCells(values.attributes),
+    };
     await database.update(nodes).set(written).where(eq(nodes.id, id));
-    return { ...existing, ...written };
+    return rowToSpecNode({ ...existing, ...written });
   });
 }
 

@@ -9,6 +9,7 @@ export { initializeProjectDatabase } from "./database.js";
 export { deleteEdge, insertEdge, listEdges } from "./edges.js";
 export {
   deleteNode,
+  getNode,
   insertNode,
   listNodes,
   updateNode,
