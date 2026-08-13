@@ -399,7 +399,16 @@ export function ColumnHeaderNode({ data }: NodeProps<ColumnNode>) {
 export function BandNodeBlock({ data }: NodeProps<BandNode>) {
   return (
     <div
-      className="border-t-muted-foreground/50"
+      className={cn(
+        /* A RULE DIVIDES TWO BANDS, so the first band has nothing above it to be
+           divided from and draws none — the board opens on its content the same
+           way it ends on it, with no line closing either end. The pixel is still
+           RESERVED rather than dropped: every band's insides are laid out against
+           its own top rule, and a band that reclaimed that pixel would carry its
+           label and its columns one pixel higher than the three below it. So the
+           width stays and only the ink goes. */
+        data.ruled ? "border-t-muted-foreground/50" : "border-t-transparent",
+      )}
       style={{ width: data.width, height: data.height, borderTopWidth: RULE }}
     >
       <span

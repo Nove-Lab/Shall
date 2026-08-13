@@ -82,6 +82,16 @@ export type BandNodeData = {
   readonly band: Band;
   readonly width: number;
   readonly height: number;
+  /**
+   * Whether this band draws the rule across its top.
+   *
+   * A rule separates two bands, so the first one has nothing to separate itself
+   * from and draws none — the board opens on content and ends on content, with
+   * no line closing either end. It is decided here rather than in the component
+   * because which band is first is a fact about the layout, and the component's
+   * job is only to draw what it is handed.
+   */
+  readonly ruled: boolean;
 };
 
 export type LaneNodeData = {
@@ -334,13 +344,18 @@ export type CardPiece = {
 export function furniturePieces(layout: Layout): FurniturePiece[] {
   const pieces: FurniturePiece[] = [];
 
-  for (const band of layout.bands) {
+  for (const [index, band] of layout.bands.entries()) {
     pieces.push({
       id: `band:${band.band}`,
       type: "band",
       position: { x: band.x, y: band.y },
       measured: { width: band.width, height: band.height },
-      data: { band: band.band, width: band.width, height: band.height },
+      data: {
+        band: band.band,
+        width: band.width,
+        height: band.height,
+        ruled: index > 0,
+      },
       draggable: false,
       selectable: false,
       connectable: false,
