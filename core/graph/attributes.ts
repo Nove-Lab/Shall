@@ -70,6 +70,14 @@ interface ColumnDefinition {
   readonly hint?: string;
 }
 
+/**
+ * The per-value byte cap, 256 KiB — the previous system's measurement trigger
+ * for blob storage. Held once: the schema's shape CHECKs and the daemon's
+ * write door both read this number, and a cap spelled in two places is two
+ * caps.
+ */
+export const TEXT_BYTE_CAP = 262144;
+
 /** The comma-separated authoring convention, carried to a form as a hint and nothing more. */
 const COMMA_SEPARATED = "comma-separated";
 

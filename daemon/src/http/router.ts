@@ -95,6 +95,13 @@ export const appRouter = t.router({
   // service already answers it and does so in words a person can read; asking
   // twice only meant the person got zod's issue array instead of the sentence
   // written for them.
+  //
+  // `attributes` is the same bargain one level down: this says the map is names
+  // to text, and nothing more. WHICH names a type carries, which of them it
+  // requires and which values a `choice` admits are the roster's answers, and
+  // the service gives them in a sentence that can name the type — which a schema
+  // written per type could not do without a second copy of the roster living
+  // here.
   spec: t.router({
     nodes: procedure
       .input(z.object({ projectId: z.string().min(1) }))
@@ -107,7 +114,7 @@ export const appRouter = t.router({
           id: z.string(),
           shortName: z.string(),
           name: z.string(),
-          content: z.string(),
+          attributes: z.record(z.string(), z.string()),
         }),
       )
       .mutation(({ input }) => createSpecNode(input)),
@@ -118,7 +125,7 @@ export const appRouter = t.router({
           id: z.string(),
           shortName: z.string(),
           name: z.string(),
-          content: z.string(),
+          attributes: z.record(z.string(), z.string()),
         }),
       )
       .mutation(({ input }) => updateSpecNode(input)),

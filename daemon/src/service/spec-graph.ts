@@ -1,12 +1,9 @@
 import type { SpecEdge, SpecNode } from "@shall/core/graph";
-import {
-  isNodeType,
-  isPermittedTriple,
-  permittedEdgeTypes,
-} from "@shall/core/graph";
+import { isPermittedTriple, permittedEdgeTypes } from "@shall/core/graph";
 import {
   deleteEdge,
   deleteNode,
+  getNode,
   insertEdge,
   insertNode,
   listEdges,
@@ -15,6 +12,7 @@ import {
 } from "@shall/core/store";
 import { ulid } from "ulid";
 import { conflict, invalid, missing } from "./errors.js";
+import { trimmedText, validateAttributes } from "./node-attributes.js";
 import { requireRegistryProject } from "./projects.js";
 import {
   getProjectDatabasePath,
@@ -36,33 +34,27 @@ async function databaseFor(projectId: string): Promise<string> {
 }
 
 /**
- * Every field of a node is required, so a blank one is refused by name instead
- * of being stored as an empty string a reader would have to interpret. The
- * trimmed value is what gets written, so the stored bytes are what the panel
- * showed rather than whatever whitespace came with the paste.
+ * A field of the node itself — its id, its type, the two names — every one of
+ * which must carry something, so a blank one is refused by name instead of being
+ * stored as an empty string a reader would have to interpret.
  *
- * NUL is refused outright, because it is the one character sqlite will take and
- * not give back: the full bytes go in, the read stops at the NUL, and what comes
- * out is a shorter string than what went in. A row written that way holds text
- * no screen can show and, if the NUL is in an id, an id nothing can address.
- *
- * A lone surrogate is refused for the same reason and one more. Sqlite stores it
- * as U+FFFD, so the value read back is not the value written — and since a write
- * answers with what it was handed rather than with what landed, the screen would
- * be told a node it does not have. No keyboard or paste makes one; it takes a
- * client that wrote the escape itself, which is exactly the caller who should be
- * told rather than quietly corrected.
+ * The trim and the two characters sqlite would not hand back are
+ * `trimmedText`'s, and are written down there: the attributes need the same
+ * treatment without the same answer to emptiness, and one rule applied at one
+ * door and forgotten at the next is the defect this repository already knows.
  */
 function requireText(label: string, value: string): string {
-  const trimmed = value.trim();
+  const trimmed = trimmedText(label, value);
   if (trimmed.length === 0) {
     throw invalid(`${label} is required.`);
   }
-  if (trimmed.includes("\0")) {
-    throw invalid(`${label} cannot contain a NUL character.`);
-  }
-  if (/\p{Surrogate}/u.test(trimmed)) {
-    throw invalid(`${label} is not well-formed text.`);
+  // These fields are one line of identity each, and an id travels furthest —
+  // into every edge that names it and every address that reaches it — so a
+  // control character here is refused, as the previous system's ids were
+  // hardened by a migration of their own. NUL never reaches this test;
+  // `trimmedText` refuses it above with the more exact sentence.
+  if (/\p{Cc}/u.test(trimmed)) {
+    throw invalid(`${label} cannot contain a control character.`);
   }
   return trimmed;
 }
@@ -75,6 +67,12 @@ export async function listSpecNodes(projectId: string): Promise<SpecNode[]> {
  * The id comes from the person. The client offers `nextIdSuggestion`, but they
  * may type over it, so this is the only place that can settle whether the thing
  * being written is a node the canon knows and an id nothing else has taken.
+ *
+ * The type is settled by the roster look-up rather than by a canon test of its
+ * own: `validateAttributes` has to make it anyway — there is no roster to judge
+ * a name against without it — and asking twice is how two sentences about one
+ * fact come to disagree. It runs before the id is looked at because a node of no
+ * type is not a node, whatever id it was given.
  */
 export async function createSpecNode(input: {
   projectId: string;
@@ -82,12 +80,10 @@ export async function createSpecNode(input: {
   id: string;
   shortName: string;
   name: string;
-  content: string;
+  attributes: Record<string, string>;
 }): Promise<SpecNode> {
   const type = requireText("A node type", input.type);
-  if (!isNodeType(type)) {
-    throw invalid(`Unknown node type: ${type}`);
-  }
+  const attributes = validateAttributes(type, input.attributes);
 
   const id = requireText("An id", input.id);
   const databasePath = await databaseFor(input.projectId);
@@ -108,7 +104,7 @@ export async function createSpecNode(input: {
     type,
     shortName: requireText("A short name", input.shortName),
     name: requireText("A name", input.name),
-    content: requireText("Content", input.content),
+    attributes,
     createdAt: now,
     updatedAt: now,
   };
@@ -119,27 +115,41 @@ export async function createSpecNode(input: {
  * id, type and createdAt are the node's identity, so an edit cannot reach them.
  * updatedAt it cannot reach either, but for the opposite reason: the edit is
  * what moves it, and the daemon is where the clock is.
+ *
+ * THE STORED NODE IS READ BEFORE ANYTHING IS JUDGED, because an edit names no
+ * type and the attributes cannot be judged without one — `priority` is a real
+ * column that a Requirement carries and a Term does not, and only the row knows
+ * which of the two this id is. The read is also what turns a vanished id into a
+ * sentence before a write is attempted rather than after.
  */
 export async function updateSpecNode(input: {
   projectId: string;
   id: string;
   shortName: string;
   name: string;
-  content: string;
+  attributes: Record<string, string>;
 }): Promise<SpecNode> {
   const id = requireText("An id", input.id);
+  const databasePath = await databaseFor(input.projectId);
+
+  const stored = await getNode(databasePath, id);
+  if (!stored) {
+    throw missing(`Unknown node: ${id}`);
+  }
+
+  // Attributes are judged before the names, because the create door judges
+  // them first too — the same mistake should meet the same first sentence at
+  // either door, and this door only had to wait for the read to learn the type.
+  const attributes = validateAttributes(stored.type, input.attributes);
   const values = {
     shortName: requireText("A short name", input.shortName),
     name: requireText("A name", input.name),
-    content: requireText("Content", input.content),
+    attributes,
   };
 
-  const node = await updateNode(
-    await databaseFor(input.projectId),
-    id,
-    values,
-    Date.now(),
-  );
+  const node = await updateNode(databasePath, id, values, Date.now());
+  // Gone between the read and the write. The same sentence answers it, because
+  // it is the same fact arriving a moment later.
   if (!node) {
     throw missing(`Unknown node: ${id}`);
   }

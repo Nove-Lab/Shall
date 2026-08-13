@@ -12,6 +12,7 @@ import {
   ATTRIBUTE_COLUMN_NAMES,
   kindOf,
   requiredAttributeNames,
+  TEXT_BYTE_CAP,
   typesCarrying,
   vocabularyOf,
   type AttributeColumnName,
@@ -42,8 +43,6 @@ import { NODE_TYPES } from "../graph/canon.js";
  * promised.
  */
 
-/** The per-value byte cap, 256 KiB — the previous system's measurement trigger for blob storage. */
-const TEXT_BYTE_CAP = 262144;
 
 /**
  * The 53 attribute columns, every one nullable: a column is filled on the types

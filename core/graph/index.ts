@@ -25,6 +25,7 @@ export {
   attributesFor,
   kindOf,
   requiredAttributeNames,
+  TEXT_BYTE_CAP,
   typesCarrying,
   vocabularyOf,
 } from "./attributes.js";
