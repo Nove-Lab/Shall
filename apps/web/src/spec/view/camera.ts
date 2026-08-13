@@ -6,14 +6,20 @@ import type { ColumnHeader, Layout, Placement } from "./layout";
  *
  * It sits beside `layout.ts` for the reason the layout does: the effects that
  * call it are React plumbing only a browser can run, and this is arithmetic
- * anything can state and check. Each behaviour here — where each view opens, how
- * far the grid may be scrolled, and whether a card you just authored has to be
- * revealed — was a defect found by hand in a browser, and none of them had a
- * witness that could be executed until it moved out of the component.
+ * anything can state and check. Each behaviour here — where the graph opens, and
+ * whether a card you just authored has to be revealed — was a defect found by
+ * hand in a browser, and neither had a witness that could be executed until it
+ * moved out of the component.
  *
- * NOTHING HERE IS JUDGEMENT. These are screen coordinates for React Flow's own
- * viewport: no filtering, no staleness, no opinion about the graph. The view
- * draws what the layout computed and this only says where to look.
+ * THE TWO VIEWS MOVE BY DIFFERENT MACHINERY AND ASK THE SAME QUESTIONS. The
+ * graph is a React Flow camera over an unbounded plane; the grid is a document
+ * of the board's own size that the browser scrolls. A scroll is a translation,
+ * so `scrolledViewport` states the one in the other's vocabulary and everything
+ * below is written once.
+ *
+ * NOTHING HERE IS JUDGEMENT. These are screen coordinates: no filtering, no
+ * staleness, no opinion about the graph. The view draws what the layout computed
+ * and this only says where to look.
  *
  * Pure: no React, no `@xyflow/react`, no DOM, no clock, no randomness, and no
  * iteration over an unordered collection.
@@ -26,7 +32,14 @@ export type Viewport = {
   readonly zoom: number;
 };
 
-/** The canvas's pixel size — what "off screen" and "undersized" are measured against. */
+/**
+ * How big the visible box is — what "off screen" is measured against, and what a
+ * reveal centres a card inside.
+ *
+ * In the graph it is React Flow's own pane. In the grid it is the scroll area's
+ * viewport, which is NOT the React Flow pane any more: that pane is now the whole
+ * board and is mostly outside the window.
+ */
 export type CanvasSize = { readonly width: number; readonly height: number };
 
 /**
@@ -40,16 +53,6 @@ export type CardGeometry = {
   readonly cardWidth: number;
   readonly cardHeight: number;
 };
-
-/**
- * The two world-space corners a viewport may not be moved outside — React
- * Flow's `translateExtent`, restated here so this module imports nothing but a
- * type from its neighbour.
- */
-export type Extent = readonly [
-  readonly [number, number],
-  readonly [number, number],
-];
 
 /**
  * THE ONE SCALE THIS SURFACE HAS. The grid is pinned to it — no zoom, no
@@ -79,21 +82,43 @@ export const ANCHOR_MARGIN = 24;
 /**
  * WHERE THE GRID OPENS: its own top-left corner, at the fixed scale.
  *
- * The grid is not a camera. Its scroll reference is the board's top-left
- * corner, so this is a constant rather than a function of the graph — an empty
- * project opens exactly where a full one does, and coming back from the graph
- * view returns here rather than inheriting wherever that view was panned to.
+ * The grid is not a camera. Its scroll reference is the board's top-left corner,
+ * so this is a constant rather than a function of the graph — an empty project
+ * opens exactly where a full one does, and coming back from the graph view
+ * returns here rather than inheriting wherever that view was panned to.
  *
  * It is a named export beside `openingViewport` rather than a branch inside it
- * so that each stays one claim that can be checked on its own.
+ * so that each stays one claim that can be checked on its own. It restates React
+ * Flow's own default viewport, and is passed anyway: which corner a view opens at
+ * is this module's answer to give, not a library default to inherit silently.
  */
 export function originViewport(): Viewport {
   return { x: 0, y: 0, zoom: READABLE_ZOOM };
 }
 
 /**
- * WHERE THE GRAPH OPENS — or `null`, which means NOT YET and never "no camera
- * needed".
+ * A SCROLLED DOCUMENT, RESTATED AS A VIEWPORT — the one place the grid's
+ * vocabulary meets the graph's.
+ *
+ * The grid is not a camera at all now: its board is a DOM element of the board's
+ * own size and the browser scrolls it. That is a translation and nothing else —
+ * the board's origin is drawn at `-scrollLeft, -scrollTop` on screen, at the one
+ * scale this surface has — so a scroll offset IS a viewport, and `revealNeeded`
+ * below is one function answering for both views instead of two that can drift.
+ *
+ * It is stated here rather than inline in the effect that reads the element,
+ * because the equivalence is arithmetic and the element is not.
+ */
+export function scrolledViewport(
+  scrollLeft: number,
+  scrollTop: number,
+): Viewport {
+  return { x: -scrollLeft, y: -scrollTop, zoom: READABLE_ZOOM };
+}
+
+/**
+ * WHERE THE GRAPH OPENS — or `null`, which is a layout with no columns to
+ * anchor against and nothing on screen to look at.
  *
  * THE ANCHOR IS THE LEFTMOST COLUMN HEADER, IN BOTH AXES. That header sits
  * `ANCHOR_MARGIN` in from the canvas's left edge and `ANCHOR_MARGIN` down from
@@ -117,21 +142,20 @@ export function originViewport(): Viewport {
  * Intent or further right opens with its first node off screen to the right.
  * That is the rule working, not failing.
  *
- * `null` MEANS NOT YET, AND THE CALLER MUST STAY PENDING ON IT. The canvas is
- * measured after mount — React Flow reports height 0 until it has — so a view
- * entered inside that window has nothing to aim at. A caller that treats `null`
- * as "done" spends its one-shot entry on a camera it never applied, and the
- * view opens at whatever the other one left behind.
+ * IT NO LONGER ASKS HOW BIG THE CANVAS IS, and the removal is worth recording
+ * because it used to be the caller's hardest case. This took a `canvasHeight`
+ * and answered `null` below a measured pane, so the graph's camera had to be
+ * OWED across renders until React Flow reported a size. Nothing in the
+ * arithmetic ever used that number — the anchor is the header's own position —
+ * so the gate was a readiness question this function had no stake in, and it
+ * cost the caller a pair of refs and a retry. The answer is available before the
+ * first paint, which is what lets the view declare where it opens instead of
+ * correcting itself afterwards.
  *
  * TIES GO TO THE FIRST COLUMN IN LAYOUT ORDER (the comparison is strict), so
  * two headers at the same x cannot make the same graph open two ways.
  */
-export function openingViewport(
-  layout: Layout,
-  canvasHeight: number,
-): Viewport | null {
-  if (canvasHeight === 0) return null;
-
+export function openingViewport(layout: Layout): Viewport | null {
   let leftmost: ColumnHeader | undefined;
   for (const column of layout.columns) {
     if (leftmost === undefined || column.x < leftmost.x) leftmost = column;
@@ -146,43 +170,7 @@ export function openingViewport(
 }
 
 /**
- * WHAT THE BOARD MAY BE SCROLLED OVER — its own content, or the canvas,
- * whichever is larger on each axis. React Flow's `translateExtent`, computed
- * where it can be executed rather than only observed.
- *
- * THE `max()` IS LOAD-BEARING, and it is the whole reason this is not simply
- * the layout's size. d3-zoom's `constrain()` CENTRES an extent smaller than the
- * viewport, so a board narrower or shorter than the canvas does not merely fail
- * to clamp panning — it is yanked into the middle of the screen, away from the
- * top-left corner that is the scroll reference. Taking the larger of the two on
- * each axis keeps the extent at least viewport-sized, and the origin stays the
- * origin. This is the kind of line that gets "simplified" away and then costs a
- * day, so: do not drop the `max()`.
- *
- * Overflow is a scroll and not a cap. The content grows with the graph, and
- * there is deliberately no rule here of the shape "the board is never taller
- * than N".
- *
- * AN UNMEASURED CANVAS IS NOT A SMALL ONE, and this function cannot tell them
- * apart. React Flow reports width and height 0 until it has measured the pane,
- * and a `max()` against 0 is the bare layout — which d3 then centres, and never
- * re-constrains when the extent later grows, so the board opens translated by a
- * few hundred pixels and stays there. The caller answers that one, by handing
- * the library its unbounded pair until there is a real canvas; this function
- * answers only the geometry.
- */
-export function contentExtent(layout: Layout, canvas: CanvasSize): Extent {
-  return [
-    [0, 0],
-    [
-      Math.max(layout.width, canvas.width),
-      Math.max(layout.height, canvas.height),
-    ],
-  ];
-}
-
-/**
- * DOES THE CAMERA HAVE TO MOVE FOR THIS CARD TO BE SEEN?
+ * DOES ANYTHING HAVE TO MOVE FOR THIS CARD TO BE SEEN?
  *
  * Both layouts place a node by its TYPE, so a node authored from anywhere can
  * land columns away from wherever you happen to be looking — measured on the
@@ -193,6 +181,11 @@ export function contentExtent(layout: Layout, canvas: CanvasSize): Extent {
  * half by the canvas edge is a card you cannot read, and on a two-line card the
  * half you lose is as likely to be the short name as the id. Authoring into the
  * part of the canvas you are already looking at moves nothing.
+ *
+ * BOTH VIEWS ASK THIS, AND NEITHER HAS TO BE NAMED HERE. The graph hands in the
+ * camera it is looking through and its pane; the grid hands in
+ * `scrolledViewport(…)` and the size of the scroll area's viewport. The
+ * arithmetic cannot tell them apart, which is the point.
  */
 export function revealNeeded(
   placement: Placement,
@@ -211,55 +204,46 @@ export function revealNeeded(
 }
 
 /**
- * WHERE THE CAMERA MAY ACTUALLY BE CENTRED to show that card — and
- * `translateExtent` does not answer it. This function is the whole reason that
- * sentence needs saying.
+ * WHERE A CARD'S MIDDLE IS, in the board's own coordinates. What the graph view
+ * hands to `setCenter`, and what the grid's scroll offset is measured back from.
  *
- * THE LIBRARY ENFORCES `translateExtent` INSIDE d3-zoom's `constrain()`, WHICH
- * RUNS ON GESTURES. `setCenter` goes `panZoom.setViewport` -> `d3Zoom.transform`
- * and writes the transform straight through, skipping the constraint entirely.
- * So revealing a card near the grid's left or top edge would centre on it
- * anyway — painting blank space above and to the left of the origin that is the
- * grid's whole scroll reference — and then snap back on the next wheel event,
- * which is to say after anyone had already looked at it.
- *
- * THE CLAMP IS THE EXTENT READ BACK AS THE RANGE OF LEGAL CENTRES: half a
- * viewport in from each corner, in world units, hence the division by the zoom
- * the reveal is about to apply. It is pure arithmetic, so it is stated here
- * rather than inline in the effect, where nothing could execute it.
- *
- * The graph view hands in the library's own unbounded pair and gets its target
- * back untouched.
+ * IT USED TO CARRY A CLAMP AND NO LONGER NEEDS ONE, which is worth recording
+ * because the clamp was not decoration. The grid was panned by React Flow inside
+ * a `translateExtent`, and `setCenter` writes the transform straight through
+ * d3-zoom without its `constrain()` — so centring on a card near the board's own
+ * corner painted blank space outside the board and snapped back only on the next
+ * gesture. The grid is a scrolling document now: `scrollTo` is clamped to
+ * `[0, scrollWidth - clientWidth]` by the browser, and the graph is unbounded and
+ * never wanted a clamp in the first place. Nobody is left to hold in.
  */
-export function revealCenter(
+export function cardCenter(
   placement: Placement,
   geometry: CardGeometry,
-  extent: Extent,
-  canvas: CanvasSize,
-  zoom: number,
 ): { readonly x: number; readonly y: number } {
-  const halfWidth = canvas.width / (2 * zoom);
-  const halfHeight = canvas.height / (2 * zoom);
   return {
-    x: between(
-      placement.x + geometry.cardWidth / 2,
-      extent[0][0] + halfWidth,
-      extent[1][0] - halfWidth,
-    ),
-    y: between(
-      placement.y + geometry.cardHeight / 2,
-      extent[0][1] + halfHeight,
-      extent[1][1] - halfHeight,
-    ),
+    x: placement.x + geometry.cardWidth / 2,
+    y: placement.y + geometry.cardHeight / 2,
   };
 }
 
 /**
- * Held inside `[low, high]` — or the midpoint of the two when the range is
- * empty, which is an extent smaller than the viewport and is the same answer
- * d3-zoom gives that case.
+ * WHERE THE GRID'S SCROLL AREA HAS TO BE SCROLLED TO to put that card in the
+ * middle of what is visible — the document-shaped answer to the same ask
+ * `setCenter` serves in the graph.
+ *
+ * The result may be negative, or past the end of the board, and both are left
+ * alone: the browser holds a `scrollTo` inside the element's own scroll range,
+ * and the board element is floored at the viewport's size, so an out-of-range
+ * answer here is simply not applied. There is no second opinion to keep in sync.
  */
-function between(value: number, low: number, high: number): number {
-  if (high < low) return (low + high) / 2;
-  return Math.min(Math.max(value, low), high);
+export function revealScroll(
+  placement: Placement,
+  geometry: CardGeometry,
+  canvas: CanvasSize,
+): { readonly left: number; readonly top: number } {
+  const centre = cardCenter(placement, geometry);
+  return {
+    left: centre.x - canvas.width / 2,
+    top: centre.y - canvas.height / 2,
+  };
 }

@@ -40,3 +40,13 @@
   border-radius: var(--radius-md);
   overflow: hidden;
 }
+
+/* THE HOME BUTTON'S ICON, AND ONLY ICONS LIKE IT. The library paints every svg
+   inside a control button with `fill: currentColor` — its own zoom and fit-view
+   glyphs are solid shapes — and lucide draws in strokes on an svg whose own
+   `fill="none"` attribute a stylesheet rule outranks, so a `House` in there
+   renders as a filled silhouette. The exemption is written against lucide's own
+   class so that the library's three buttons keep the fill they need. */
+.spec-canvas .react-flow__controls-button svg.lucide {
+  fill: none;
+}

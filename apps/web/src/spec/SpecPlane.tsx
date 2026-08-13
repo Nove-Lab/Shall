@@ -154,7 +154,13 @@ export function SpecPlane() {
   const [edges, setEdges] = useState<SpecEdge[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [view, setView] = useState<"graph" | "grid">("graph");
+  /**
+   * THE PLANE OPENS ON THE GRID. It is the view that shows the whole canon at
+   * once — every type has a lane whether or not anything is in it — so arriving
+   * here answers "what can this hold" before "what is in it", and it is the one
+   * that reads at a glance on a project with three nodes in it.
+   */
+  const [view, setView] = useState<"graph" | "grid">("grid");
   const [panel, setPanel] = useState<PanelState>({ mode: "closed" });
   const [menuTarget, setMenuTarget] = useState<MenuTarget>(GUTTER);
   /**
@@ -377,9 +383,22 @@ export function SpecPlane() {
     setPanel({ mode: "closed" });
   }
 
+  /**
+   * WHAT IS SAID OVER THE CANVAS WHEN THERE IS NOTHING ON IT.
+   *
+   * THE EMPTY STATE IS THE GRAPH'S ALONE. The grid draws every column the canon
+   * has, ruled and empty, which already says the board is empty and says it in
+   * the place a person would go to fix it; a sentence floating over those lanes
+   * says it a second time and covers the columns while doing so. The graph has no
+   * such furniture — an empty one is a bare dot lattice — so there the message is
+   * the only thing that speaks.
+   *
+   * THE FAILURE IS BOTH VIEWS'. A canvas that could not be read is not empty, it
+   * is unknown, and neither view's furniture can say so.
+   */
   const overlay = loading ? null : loadError ? (
     <p className="text-destructive text-sm">{loadError}</p>
-  ) : nodes.length === 0 ? (
+  ) : nodes.length === 0 && view === "graph" ? (
     <EmptyState
       message="No spec nodes yet"
       hint="Add node puts the first one on the canvas"
