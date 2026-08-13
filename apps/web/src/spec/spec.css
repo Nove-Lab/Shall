@@ -1,12 +1,35 @@
 /* React Flow chrome mapped onto shadcn/ui theme tokens — no raw colour values. */
 .spec-canvas {
-  --xy-background-color: var(--card);
+  /* THE CANVAS DOES NOT PAINT ITSELF, the element under it does — see the
+     `bg-muted dark:bg-background` on the canvas wrapper in `SpecPlane`.
+
+     It used to paint `--card`, the same surface a node's card is drawn on, and
+     that is why the cards did not read as objects: a white card on a white
+     board is legible only by its hairline border. The board is now a step below
+     the cards in both themes, so a card sits ON something.
+
+     The reason the colour moved OUT of here is the grid. React Flow's own
+     container is sized to the BOARD in that view, so anything painted through
+     this variable stops where the board stops — which is the seam the band
+     grounds used to draw across the pane. Painting the wrapper instead covers
+     the whole pane, board or no board, and leaves nothing to notice. */
+  --xy-background-color: transparent;
   /* The pattern's own variable, and not `--xy-background-pattern-dots-color`:
      that name is nobody's. 12.11.2 fills the dots from `-props` (what
      `<Background color>` writes), then from this, then from its own `#91919a`
      — so the line this replaces set a property no rule reads and the dots were
      the library's grey on a themed canvas. */
-  --xy-background-pattern-color: var(--border);
+  /* AND THE DOTS MOVE WITH IT. They were `--border` on a white board, a step of
+     about 0.08 in lightness. The board is `--muted` now, and `--border` sits
+     close enough to it that the lattice all but vanished — so the dots join the
+     same ladder every other line on this canvas is stepped off, at the lightest
+     rung there is. 20% keeps the step they used to have rather than making them
+     louder: the lattice says the plane is pannable, and that is all it says. */
+  --xy-background-pattern-color: color-mix(
+    in oklab,
+    var(--muted-foreground) 20%,
+    transparent
+  );
   /* THE RELATION'S LINE, AT 60% OF `--muted-foreground` AND NO LONGER AT
      `--border`. A relation is content — it is half of what this canvas says —
      and `--border` is the theme's hairline for the edge of a panel: at

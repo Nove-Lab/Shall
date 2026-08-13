@@ -481,7 +481,33 @@ export function SpecPlane() {
                 loaded leads to a form whose save has nowhere to land. */}
             <ContextMenu disabled={loading || loadError !== null}>
               <ContextMenuTrigger
-                className="spec-canvas relative size-full"
+                /* THE BOARD IS A STEP BELOW THE CARDS, and this element is what
+                   paints it. A card is `--card`; if the board were too, a card
+                   would be legible only by its border and the graph would read
+                   as text floating on a page rather than as objects on a plane.
+
+                   THE TWO THEMES REACH THAT STEP FROM OPPOSITE SIDES, which is
+                   why there is a `dark:` here and not one token. In light,
+                   `--card` is white and `--background` is white with it, so the
+                   step down has to be `--muted`. In dark, `--muted` is LIGHTER
+                   than `--card` — it would put the board above the cards — and
+                   `--background` is the darker surface the theme already uses
+                   under raised things. Both are the theme's own tokens; the
+                   choice between them is which one is actually below `--card`.
+
+                   IT IS HALF A STEP AND NOT A WHOLE ONE. `--muted` outright was
+                   a shade further from the cards than the board wants to be —
+                   the point is to put the cards on something, not to make the
+                   board a second object. The opacity modifier composites the
+                   token over the `--card` this panel already paints, which
+                   lands exactly between the two, and is the theme's own way of
+                   asking for a lighter version of a colour rather than a new
+                   value invented for the occasion.
+
+                   It goes on the wrapper and not on the canvas because in the
+                   grid the canvas is only as big as the board — see the note in
+                   `spec.css`. */
+                className="spec-canvas bg-muted/50 dark:bg-background/50 relative size-full"
                 /* THE TARGET IS CLEARED ON THE WAY IN, IN THE CAPTURE PHASE, and
                    the phase is the whole point.
 
