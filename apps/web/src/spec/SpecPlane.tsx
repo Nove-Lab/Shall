@@ -507,7 +507,7 @@ export function SpecPlane() {
                    It goes on the wrapper and not on the canvas because in the
                    grid the canvas is only as big as the board — see the note in
                    `spec.css`. */
-                className="spec-canvas bg-muted/50 dark:bg-background/50 relative size-full"
+                className="spec-canvas bg-muted/30 dark:bg-background/30 relative size-full"
                 /* THE TARGET IS CLEARED ON THE WAY IN, IN THE CAPTURE PHASE, and
                    the phase is the whole point.
 
