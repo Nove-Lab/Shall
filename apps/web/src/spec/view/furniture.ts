@@ -1,4 +1,5 @@
 import type { SpecView } from "./edge-geometry";
+import type { Highlight } from "./highlight";
 import { GEOMETRY, type Layout } from "./layout";
 import type { Band, SpecNode } from "./model";
 
@@ -42,13 +43,29 @@ import type { Band, SpecNode } from "./model";
 /**
  * What one card is drawn from.
  *
- * `selected` is the whole of the card's state today: one node is open in the
- * panel, or none is. It is computed per render from the id the caller holds and
- * is never a stored field.
+ * THE CARD'S WHOLE STATE IS THREE BOOLEANS, AND THEY ARE THE SELECTION'S — the
+ * node the panel is open on, the nodes one hop from it, and everything else. All
+ * three are computed per render from the `Highlight` the caller holds and none is
+ * a stored field: no position, no state and no relation of this graph says
+ * anything about what is lit.
+ *
+ * EXACTLY ONE OF THEM IS TRUE WHILE SOMETHING IS SELECTED, and all three are
+ * false when nothing is — which is why the component can chain them and why
+ * "nothing selected" cannot arrive as a board where every card is dimmed.
+ *
+ * THEY ARE COMPUTED HERE AND NEVER IN THE COMPONENT. Membership in the
+ * neighbourhood is a rule (`view/highlight.ts` owns it), and a rule evaluated
+ * inside a React component is a rule nothing can execute without a browser. What
+ * crosses into the component is the answer, per card, already decided.
  */
 export type CardNodeData = {
   readonly node: SpecNode;
-  readonly selected: boolean;
+  /** The node that was clicked — one card on the board, or none. */
+  readonly picked: boolean;
+  /** One hop from the picked card, whichever way the relation points. */
+  readonly neighbour: boolean;
+  /** Outside the neighbourhood while something else is picked. Faded, never hidden. */
+  readonly dimmed: boolean;
   readonly width: number;
   readonly height: number;
 };
@@ -141,8 +158,8 @@ export function graphIdOfCard(canvasId: string): string | null {
  *
  * React Flow draws the edge layer and the node layer as siblings inside the
  * viewport's stacking context, edges first. A node at `z-index: 0` therefore
- * paints OVER every relation — and a band is an opaque rectangle covering the
- * entire laid-out area, so with the default z the relations were neither
+ * paints OVER every relation — and a band was once an opaque rectangle covering
+ * the entire laid-out area, so with the default z the relations were neither
  * visible nor clickable: hit-testing along an edge's path answered the band,
  * the counter said "8 relations", and the canvas showed none.
  *
@@ -152,15 +169,50 @@ export function graphIdOfCard(canvasId: string): string | null {
  * so they still pan and zoom with everything else instead of sinking behind the
  * canvas.
  *
- * THE LANE SITS BETWEEN THE BAND AND THE HEADER: above the band's opaque
- * ground, or the ruling is painted over, and below the relations, or the empty
- * grid hides the edges the band used to hide — the same defect arriving a
- * second time by a different door.
+ * THE BAND HAS SINCE LOST ITS GROUND AND THE TABLE STILL STANDS. It paints only
+ * a rule and a label now — the grid and the graph had to be one surface, and the
+ * wash was the seam — so it could no longer hide a relation by being opaque. The
+ * ORDER is what this table is for, not the opacity that made one entry urgent:
+ * the lane below still paints a ruling across the whole of every empty column,
+ * a header still paints a rule and a name, and either at `z: 0` would be drawn
+ * over the relations that cross it.
+ *
+ * THE LANE SITS BETWEEN THE BAND AND THE HEADER: above the band, so that a band
+ * which ever gets a ground again cannot paint over the ruling, and below the
+ * relations, or the empty grid hides the edges the band used to hide — the same
+ * defect arriving a second time by a different door.
  *
  * `card` is in the same table rather than in the component, because a stacking
  * order split across two files is a stacking order with no single reader.
+ *
+ * THE TWO RELATION ROWS ARE IN IT FOR THAT REASON AND NOT BECAUSE THIS FILE
+ * BUILDS A RELATION — it does not; `SpecGraph.tsx` does, and it reads them from
+ * here. `edge` is the number the library would have used anyway, written down
+ * so the order can be read in one place instead of inferred from a default.
+ * `litEdge` is the one entry that is a decision: a relation incident to the
+ * selection writes its NAME even where the route has no room for one, and a
+ * name drawn under a card is a name nobody can read — so the exception buys
+ * nothing unless the whole relation is lifted over the cards it crosses.
+ *
+ * ALL SIX RESOLVE IN ONE STACKING CONTEXT, which is the only reason the node
+ * rows and the relation rows are comparable at all. React Flow writes a node's
+ * z inline on `.react-flow__node` and an edge's inline on the `<svg>` it wraps
+ * that edge in; `.react-flow__edges` is positioned at `z-index: auto` and
+ * `.react-flow__nodes` is not positioned at all, so neither opens a context of
+ * its own and both sets are resolved against the viewport's — the element whose
+ * transform creates the one context on this canvas. Read in 12.11.2 rather than
+ * assumed, along with the other half: `getElevatedEdgeZIndex` hands `edge.zIndex`
+ * back untouched while `zIndexMode` is `basic` and neither end is a child node or
+ * a selected one, which is every relation this canvas draws.
  */
-export const Z = { band: -3, lane: -2, column: -1, card: 2 } as const;
+export const Z = {
+  band: -3,
+  lane: -2,
+  column: -1,
+  edge: 0,
+  card: 2,
+  litEdge: 3,
+} as const;
 
 /**
  * THE POINTER GOES THROUGH THE SCENERY, and the context menu depends on it.
@@ -387,10 +439,11 @@ export function furniturePieces(layout: Layout): FurniturePiece[] {
  *     it.
  *   · `measured` is what keeps the RELATIONS mounted across a rebuild. The
  *     library rebuilds an internal node whenever the object handed to it is not
- *     the object it holds — for a card that is every selection change, because
- *     `data` carries it — and on that arm it re-parses the handle bounds, whose
- *     first rule is that a node with no `measured` gets none so that it will be
- *     re-measured. A node with no handle bounds is not initialised, its edge
+ *     the object it holds — for a card that is every change of the highlight,
+ *     because `data` carries it, and the highlight moves on every click of a
+ *     card — and on that arm it re-parses the handle bounds, whose first rule is
+ *     that a node with no `measured` gets none so that it will be re-measured.
+ *     A node with no handle bounds is not initialised, its edge
  *     positions resolve to null, and the edge wrapper returns before any edge
  *     component runs: the WHOLE edge layer blanked for a painted frame on every
  *     click and healed itself once the observer caught up. Declaring it keeps
@@ -407,12 +460,23 @@ export function furniturePieces(layout: Layout): FurniturePiece[] {
  * A PLACEMENT WHOSE NODE IS NOT IN THE MAP IS SKIPPED rather than drawn from
  * nothing — the same answer the relation builder gives an endpoint it cannot
  * find.
+ *
+ * THE HIGHLIGHT ARRIVES WHOLE AND THERE IS NO `selectedId` BESIDE IT. It used to
+ * take the id, and the two together would be two sources of truth for one
+ * question: `highlight.selected` is that id, and a caller that could pass a
+ * different one would light a card the neighbourhood was not computed for. One
+ * argument, one answer — `NOTHING_SELECTED` is how a caller says nobody clicked.
+ *
+ * IT IS THE ONE INPUT `furniturePieces` DOES NOT TAKE, and that asymmetry is the
+ * point of having two builders: the scenery is a function of the layout alone and
+ * memoises on it, so a click rebuilds the cards and leaves all fifty bands, lanes
+ * and headers as the objects React Flow already holds.
  */
 export function cardPieces(
   layout: Layout,
   view: SpecView,
   byId: ReadonlyMap<string, SpecNode>,
-  selectedId: string | null,
+  highlight: Highlight,
 ): CardPiece[] {
   const geometry = view === "grid" ? GEOMETRY.grid : GEOMETRY.graph;
   const cards: CardPiece[] = [];
@@ -431,7 +495,17 @@ export function cardPieces(
       measured: { width: geometry.cardWidth, height: geometry.cardHeight },
       data: {
         node,
-        selected: selectedId === node.id,
+        // The three questions the highlight answers, asked once per card here so
+        // that no component has to know how membership is decided. `dimmed` is
+        // the complement of the neighbourhood and not of the two flags above it:
+        // with nothing selected there is nothing to be outside of, so a board at
+        // rest is drawn at full strength.
+        picked: highlight.selected === node.id,
+        neighbour:
+          highlight.selected !== null &&
+          highlight.selected !== node.id &&
+          highlight.nodes.has(node.id),
+        dimmed: highlight.selected !== null && !highlight.nodes.has(node.id),
         width: geometry.cardWidth,
         height: geometry.cardHeight,
       },

@@ -5,6 +5,7 @@ import {
   type EdgeMarkerType,
   type EdgeProps,
 } from "@xyflow/react";
+import { RECEDED } from "./canvas-nodes";
 import { stepPath, type LabelSlot, type RoutedPath } from "./view/edge-routing";
 
 /**
@@ -36,6 +37,19 @@ import { stepPath, type LabelSlot, type RoutedPath } from "./view/edge-routing";
 export type FloatingEdgeData = {
   readonly route: RoutedPath;
   readonly edgeType: string;
+  /**
+   * WHERE THIS RELATION STANDS IN THE ONE-HOP HIGHLIGHT: it touches the selected
+   * node, it is pushed back by somebody else's selection, or neither — which is
+   * every relation on a board with nothing selected.
+   *
+   * BOTH ARE LOOKUPS IN AN ANSWER `view/highlight.ts` ALREADY GAVE, not a second
+   * opinion about who is adjacent to what. Which relations are incident is
+   * decided once, by a pure function over the edge array, and travels here as two
+   * booleans for the same reason a card's three do: the component draws what it
+   * is handed and computes no membership of its own.
+   */
+  readonly incident: boolean;
+  readonly dimmed: boolean;
 };
 
 /**
@@ -66,16 +80,71 @@ export type FloatingEdge = Edge<FloatingEdgeData, "floating"> & {
  * canvas that is otherwise all tokens, and in the dark theme it was a solid mid
  * grey terminating a 10%-white hairline.
  *
- * `var(--border)` and not a value: it is the same token `spec.css` maps
- * `--xy-edge-stroke` onto, so the head and its line stay one colour through a
- * theme change rather than by coincidence.
+ * IT NAMES THE LINE'S OWN VARIABLE AND NOT THE TOKEN UNDER IT. This used to be
+ * `var(--border)` — the token `spec.css` happened to map `--xy-edge-stroke`
+ * onto — which made the head and its line one colour by two agreeing edits
+ * rather than by construction, and the first change to the edge's weight broke
+ * that agreement. `--xy-edge-stroke` is now a *derivation* of a token rather
+ * than a token, so restating it here would be restating an expression; naming
+ * the variable leaves one home for the answer. It resolves because the marker
+ * `<defs>` are rendered inside `.react-flow__edges`, which is inside the
+ * `.spec-canvas` element the variable is declared on.
  *
  * One object, shared by every edge: the library derives a marker's `<defs>` id
  * from its configuration, so identical markers cost one definition between them.
  */
 export const ARROW_END = {
   type: MarkerType.ArrowClosed,
-  color: "var(--border)",
+  color: "var(--xy-edge-stroke)",
+} as const;
+
+/**
+ * A RELATION THAT TOUCHES THE SELECTED NODE IS DRAWN IN THE ACCENT, line and
+ * head, and these two constants are the whole of that.
+ *
+ * `--primary` is the token the picked card's own border and ring already wear, so
+ * the lit lines read as belonging to the card they leave rather than as a third
+ * colour on the canvas. It is also what `spec.css` maps `--xy-edge-stroke-selected`
+ * onto — the same choice, made for the library's own selected state, which this
+ * board never enters because it holds no React Flow selection.
+ *
+ * THE HEAD NEEDS ITS OWN OBJECT AND CANNOT BE RECOLOURED BY THE COMPONENT. React
+ * Flow resolves an edge's marker into a `<defs>` entry from the marker's own
+ * configuration and writes the colour inline there, before any edge component
+ * runs — so a lit line whose `markerEnd` was still `ARROW_END` would arrive at
+ * its target in the resting grey. Two objects, two definitions in the document,
+ * and the canvas picks between them where it builds the edge.
+ *
+ * IT NAMES THE TOKEN AND NOT `--xy-edge-stroke-selected`, which is the mirror of
+ * the choice `ARROW_END` makes just above and not a departure from it. That
+ * variable is a mapping this canvas never reaches — the library sets the class
+ * behind it on its own selected edges, and this board holds no React Flow
+ * selection — so pointing at it would hang the lit relation off a line in
+ * `spec.css` that nothing else keeps honest. The accent is a theme token; the
+ * resting line is an expression over one, and each is named where it lives.
+ *
+ * IT IS DRAWN HEAVIER TOO, AND THE WEIGHT IS DERIVED RATHER THAN RE-CHOSEN.
+ * `--xy-edge-stroke-width` is the one home for how thick a relation is; a second
+ * number here would be a copy of it that drifts on the first edit, so the lit
+ * width is a `calc()` OVER that variable — half again, which at today's 1.5 is
+ * 2.25 — and follows it wherever it goes. The variable resolves for the same
+ * reason `ARROW_END`'s does: `spec.css` declares it on `.spec-canvas`, and every
+ * relation on this board is drawn inside that element.
+ *
+ * THE WEIGHT WAS NOT ALWAYS EARNED AND IS NOW, which is worth saying because the
+ * note here used to argue the other way. A lit relation is drawn OVER the cards
+ * rather than under them — `Z.litEdge` in `view/furniture.ts`, so that the name
+ * it is now allowed to write lands somewhere a person can read it — so its line
+ * crosses card faces on the way to its target, and against a `--card` ground at
+ * the resting hairline the accent alone was hard to follow across one. It is
+ * also the only line on a receded board meant to be traced end to end.
+ */
+const LIT_STROKE = "var(--primary)";
+const LIT_STROKE_WIDTH = "calc(var(--xy-edge-stroke-width) * 1.5)";
+
+export const ARROW_LIT = {
+  type: MarkerType.ArrowClosed,
+  color: LIT_STROKE,
 } as const;
 
 /**
@@ -96,6 +165,20 @@ export const ARROW_END = {
  * characters of a name. The line and the arrow are the half of the statement
  * only the canvas can make; the type is a right-click away, where the delete
  * item already names it in full.
+ *
+ * EXCEPT WHERE THE RELATION TOUCHES THE SELECTION, WHICH IS THE USER'S OWN
+ * EXCEPTION AND IS ASKED FOR IN THOSE WORDS. Clicking a card is asking what it
+ * touches, and "it touches that one somehow" is not the answer — the answer is
+ * the relation's name, and the handful of relations that reach one card are the
+ * one moment on this board when there are few enough names to draw them all
+ * whatever the room. So `labelFits` is not consulted for an incident relation:
+ * see `FloatingEdgePath` below, where the two are `||`-ed.
+ *
+ * TWO THINGS MAKE THAT TOLERABLE AND NEITHER IS OPTIONAL. The name has no plate
+ * under it, so an overrun covers the ink it crosses and not the picture; and the
+ * lit relation is lifted above the cards, so the name is not printed underneath
+ * one. Take either away and the exception writes an unreadable name over a
+ * readable card.
  */
 const LABEL_CHARACTER_WIDTH = 7;
 const LABEL_PADDING = 8;
@@ -105,16 +188,37 @@ function labelFits(slot: LabelSlot, text: string): boolean {
 }
 
 /**
- * How a route the router could not clear is drawn.
+ * THE TWO DASHES ON THIS CANVAS, WRITTEN TOGETHER BECAUSE THEY MUST NOT BE
+ * CONFUSABLE. One says something about the RELATION and the other says something
+ * about the DRAWING, so a reader who cannot tell them apart is being told a
+ * falsehood about the graph — which is the whole reason they share a paragraph
+ * rather than sitting at opposite ends of the file.
  *
- * `routeAroundCards` answers `fallback: true` with the bare line between the
- * endpoints and says in as many words that the line may cross a card, so it
- * must not be drawn as an ordinary relation. Today's two layouts cannot produce
- * one — it is latent, not live — and a dash is the cheapest way to keep the
- * canvas honest if one ever appears. Geometry rather than colour, so nothing
- * about it depends on the theme.
+ *   · `DOMAIN_DASH`, a long stroke with a wide gap — 8 on, 5 off. An
+ *     EXPLANATORY relation: one that sinks into the Domain band from outside it,
+ *     which the canvas draws quieter than the engineering ones. See
+ *     `sinksIntoDomain` in `view/model.ts` for why it is a band crossing and not
+ *     a list of edge types.
+ *   · `UNROUTED_DASH`, a tight stipple — 2 on, 3 off. A route the router could
+ *     NOT clear: `routeAroundCards` answers `fallback: true` with the bare line
+ *     between the endpoints and says in as many words that it may cross a card,
+ *     so it must not be drawn as an ordinary relation. Today's two layouts
+ *     cannot produce one — it is latent, not live — and this is the cheapest way
+ *     to keep the canvas honest if one ever appears.
+ *
+ * THEY READ APART AT A GLANCE AND NOT ONLY SIDE BY SIDE, which matters because
+ * you will almost never see both at once. The dash lengths are 8 against 2 and
+ * the pitches 13 against 5, so one is a line with gaps cut into it and the other
+ * is a row of dots — different KINDS of mark rather than two lengths of the same
+ * mark. `UNROUTED_DASH` was `4 3` before there was a second dash to be mistaken
+ * for; at that length it read as a styled line, which is exactly the wrong thing
+ * for a drawing defect to look like.
+ *
+ * Geometry rather than colour, so neither depends on the theme, and neither
+ * touches the weight or the ink the line is otherwise drawn in.
  */
-const UNROUTED_DASH = "4 3";
+export const DOMAIN_DASH = "8 5";
+const UNROUTED_DASH = "2 3";
 
 export function FloatingEdgePath({
   data,
@@ -122,7 +226,40 @@ export function FloatingEdgePath({
   markerEnd,
 }: EdgeProps<FloatingEdge>) {
   const { d, label } = stepPath(data.route.waypoints);
-  const named = labelFits(label, data.edgeType);
+  /**
+   * WHEN A RELATION WRITES ITS NAME — three clauses, and the selection decides
+   * two of them.
+   *
+   * AN INCIDENT RELATION IS NAMED UNCONDITIONALLY, and that is the user's own
+   * exception: `labelFits` is asked whether the route has room, and here it is
+   * not asked at all. The reasoning is in `labelFits` above, together with the
+   * two things that make an overrun tolerable — no plate under the name, and
+   * `Z.litEdge` over the cards. `labelFits` is CALLED and never restated: which
+   * routes have room is one rule with one home, and this line decides only
+   * whether that rule is the one that applies.
+   *
+   * A DIMMED RELATION LOSES ITS NAME, and it is the one place where this
+   * highlight takes something away rather than fading it.
+   *
+   * It is forced rather than chosen. `BaseEdge` draws the label as a SIBLING of
+   * the path — an `EdgeText` group of its own — so neither the class nor the
+   * style below reaches it: a faded line would keep a full-strength name over
+   * it. Twenty of them on a receded board would be the loudest thing on a canvas
+   * whose point is that the neighbourhood is the loud thing — and more so now
+   * that the name has no plate under it and is the darkest ink an unselected
+   * relation carries.
+   *
+   * NOTHING IS FABRICATED BY DROPPING IT. The relation is still drawn, still hit
+   * tested and still names itself in the context menu, exactly as it does for
+   * every route too short to hold a label — which is most of them.
+   *
+   * THE OTHER ORDER OF THE SAME TEST WOULD BE WRONG. `incident` and `dimmed` are
+   * built as complements of one another by the canvas, so no relation is both
+   * and the `||` cannot light a receded name; writing the exception as a third
+   * arm of the fade would say that it could.
+   */
+  const named =
+    data.incident || (!data.dimmed && labelFits(label, data.edgeType));
 
   return (
     /* It has to be `BaseEdge` and never a bare `<path>`. BaseEdge draws two
@@ -139,11 +276,33 @@ export function FloatingEdgePath({
       {...(named
         ? { label: data.edgeType, labelX: label.x, labelY: label.y }
         : {})}
-      style={
-        data.route.fallback
-          ? { ...style, strokeDasharray: UNROUTED_DASH }
-          : style
-      }
+      /* NO PLATE UNDER THE NAME. `EdgeText` renders its background `<rect>` only
+         when `labelShowBg` is true — it defaults to true — and that rect was an
+         opaque `--card` box wide enough to hide whatever the label happened to
+         be drawn over: a neighbouring card's face, another relation, a lane's
+         ruling. Off, the name sits on the canvas and the board shows through it.
+
+         THIS IS NOT THE SAME DECISION AS `labelFits` AND DOES NOT REPLACE IT. A
+         name is still only drawn where the route has room for one; what changes
+         is that having room no longer costs a rectangle of the picture. The two
+         together are the whole answer to "when may a relation write its name" —
+         when there is space, and even then without clearing any. */
+      labelShowBg={false}
+      /* THE FADE IS A CLASS AND THE ACCENT IS A STYLE, which is not a taste: the
+         path is an SVG element `BaseEdge` puts `className` and `style` on
+         alike, and each of the two goes where its value already lives. The fade
+         is a utility the card is drawn with too and is imported from it, so the
+         cards and the lines this selection pushes back recede together and
+         cannot drift apart. The accent is a token in a `stroke`, which no
+         utility can spell for a `<path>` the library owns the class of. */
+      {...(data.dimmed ? { className: RECEDED } : {})}
+      style={{
+        ...style,
+        ...(data.route.fallback ? { strokeDasharray: UNROUTED_DASH } : {}),
+        ...(data.incident
+          ? { stroke: LIT_STROKE, strokeWidth: LIT_STROKE_WIDTH }
+          : {}),
+      }}
       /* React Flow resolves the edge's marker object into a `url(#…)` of its
          own making and hands it back through the props; an edge component that
          does not forward it draws no arrowhead at all.

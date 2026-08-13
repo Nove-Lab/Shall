@@ -249,6 +249,39 @@ export function SpecPlane() {
   }
 
   /**
+   * A CLICK ON THE CANVAS'S BACKGROUND CLOSES A PANEL YOU WERE READING, AND ONLY
+   * ONE YOU WERE READING.
+   *
+   * A `view` panel holds nothing that is not already in the graph — it is the
+   * node the last click opened — so dismissing it costs the person one click to
+   * get back and is the ordinary way to put the board down. Closing it also
+   * clears the selection, because on this plane those are one fact: `selected` is
+   * derived from `panel` a few lines up, so a closed panel is a board with
+   * nothing lit and there is no second piece of state to keep in step.
+   *
+   * A `create` OR `edit` PANEL IS UNTOUCHED, AND THAT IS THE WHOLE POINT OF THE
+   * BRANCH. There is a draft in there — a type, an id, a name, a body someone is
+   * part way through typing — none of it stored anywhere yet, and a canvas click
+   * is trivially easy to make while reaching for the panel. The board this ports
+   * from cleared the panel unconditionally on a pane click, which is exactly the
+   * behaviour the requirement rules out: *"노드 패널 작성/수정시에는 이렇게 닫히면
+   * 안됨"*. A draft leaves through Cancel or through a save, both of which say so.
+   *
+   * `closed` FALLS THROUGH THE SAME BRANCH and closes nothing, which is the only
+   * honest answer for a click on an empty board.
+   *
+   * IT RETURNS `current` RATHER THAN A FRESH EQUAL OBJECT on the arms that decline:
+   * React bails out of a re-render when a setter is handed the state it already
+   * holds, so a click on the background while a form is open re-renders neither
+   * the form nor the canvas under it.
+   */
+  function closeReadPanel() {
+    setPanel((current) =>
+      current.mode === "view" ? { mode: "closed" } : current,
+    );
+  }
+
+  /**
    * A CONNECT GESTURE IS ANSWERED HERE AND NOT ON THE CANVAS. The canvas reports
    * two ids; which relations the canon permits between the types they carry, and
    * what to say when it permits none, is the grammar's answer and the grammar is
@@ -476,6 +509,7 @@ export function SpecPlane() {
                     edges={edges}
                     selectedId={selected?.id ?? null}
                     onSelect={(id) => setPanel({ mode: "view", id })}
+                    onBackgroundClick={closeReadPanel}
                     onConnect={beginConnect}
                     onContextTarget={setMenuTarget}
                   />

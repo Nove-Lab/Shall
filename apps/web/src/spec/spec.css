@@ -7,11 +7,41 @@
      — so the line this replaces set a property no rule reads and the dots were
      the library's grey on a themed canvas. */
   --xy-background-pattern-color: var(--border);
-  --xy-edge-stroke: var(--border);
+  /* THE RELATION'S LINE, AT 60% OF `--muted-foreground` AND NO LONGER AT
+     `--border`. A relation is content — it is half of what this canvas says —
+     and `--border` is the theme's hairline for the edge of a panel: at
+     `oklch(0.922)` on a `--card` surface it drew the relations fainter than the
+     library's OWN untokened default (`#b1b1b7`, about `oklch(0.76)`), which is
+     the measure that settles the light theme: 60% composites to `oklch(0.74)`
+     there, a shade past the vendor's grey and still a grey rather than the
+     text's ink. In dark the vendor default is no yardstick at all — a light
+     grey on a near-black card — so what settles it there is the step from the
+     surface, and 60% gives 0.32 in lightness where `--border` gave 0.10.
+
+     A DERIVATION AND NOT A NEW TOKEN. `color-mix(… , transparent)` is exactly
+     what a Tailwind `/60` compiles to; this file cannot write a utility, so it
+     writes the same expression. Mixed with `transparent` and not with `--card`
+     so the line composites correctly over whatever is behind it.
+
+     `ARROW_END` in `FloatingEdge.tsx` names THIS VARIABLE, so the head and the
+     line are one answer rather than two agreeing edits. */
+  --xy-edge-stroke: color-mix(in oklab, var(--muted-foreground) 60%, transparent);
   --xy-edge-stroke-selected: var(--primary);
   --xy-edge-stroke-width: 1.5;
-  --xy-edge-label-background-color: var(--card);
-  --xy-edge-label-color: var(--muted-foreground);
+  /* THE RELATION'S NAME, WITH NOTHING BEHIND IT. `--xy-edge-label-background-color`
+     used to sit here mapping the label's plate onto `--card`; the plate is gone
+     — `FloatingEdge.tsx` passes `labelShowBg={false}`, so the library renders no
+     `<rect>` at all — and a variable that paints no pixel is a line to delete,
+     the same call this file already made about `--xy-handle-*`.
+
+     WHICH MAKES THE INK LOAD-BEARING: the name now sits directly on the canvas,
+     over whatever the route runs past, and `--muted-foreground` was the faintest
+     text on the board while it still had an opaque plate to sit on — 4.7:1 in
+     light, where 4.5 is the floor for text this size. 70% of `--foreground` is
+     the same weight the column headers and the band names are drawn at: 7.6:1
+     in light and 8.8:1 in dark, against a card id at 19.8:1 and 17.2:1. Plainly
+     a step under the ids and plainly readable off the bare canvas. */
+  --xy-edge-label-color: color-mix(in oklab, var(--foreground) 70%, transparent);
   /* The line drawn while a relation is being dragged. Its vendor fallback is a
      raw grey in both themes, and the class that paints it is the library's own,
      so this variable is the only way to put the drag preview on a token. */
@@ -30,9 +60,25 @@
   --xy-attribution-background-color: transparent;
 }
 
+/* ONLY THE SIZE. The `fill` that used to be here restated `--xy-edge-label-color`
+   at a higher specificity than the library's own `.react-flow__edge-text` rule,
+   which reads that variable — so the variable above was dead and the label's
+   colour had two homes, one of which won silently. The library's rule is left to
+   do its job; this rule exists for the font size, which no variable of theirs
+   carries (their default is a flat 10px). */
 .spec-canvas .react-flow__edge-text {
-  fill: var(--muted-foreground);
   font-size: var(--text-xs);
+}
+
+/* A RELATION'S NAME IS NOT A TARGET, ONLY ITS LINE IS. The library gives the
+   label group its own pointer area so a label can be clicked, which is fine
+   while labels sit under the cards — but an incident relation is drawn above
+   them so its name stays readable, and that lifts the label's pointer area over
+   whatever card it crosses. A card that cannot be clicked because a word is
+   lying across it is a worse trade than a name that cannot be right-clicked, and
+   the line itself keeps the wide invisible stroke that opens the edge menu. */
+.spec-canvas .react-flow__edge-textwrapper {
+  pointer-events: none;
 }
 
 .spec-canvas .react-flow__controls {

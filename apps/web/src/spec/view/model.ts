@@ -30,6 +30,35 @@ export type {
 import type { Band, SpecNode } from "@shall/core/graph";
 
 /**
+ * DOES THIS RELATION SINK INTO DOMAIN FROM OUTSIDE IT — the predicate the canvas
+ * draws a dashed relation for.
+ *
+ * Domain is where the *explanatory* relations of every other band end up: a
+ * Requirement MENTIONS a Term, a DataSchema REPRESENTS a DomainEntity. Those
+ * lines say what something means, not how the work is built, so they are drawn
+ * quieter than the engineering ones — the user's own reason, and the reason the
+ * rule is written as a BAND CROSSING rather than as a list of edge types.
+ *
+ * THAT DISTINCTION IS THE POINT AND NOT A SHORTCUT. Naming MENTIONS and
+ * REPRESENTS would be a second roster to keep in step with the canon's, and it
+ * would answer wrongly the day a twenty-fourth type gets a relation into Domain.
+ * The crossing answers those two today, and it also answers the two that stay
+ * SOLID for the right reason rather than by omission: DENOTES runs Term →
+ * DomainEntity and RELATES_TO runs DomainEntity → DomainEntity, so both begin
+ * and end inside Domain and neither sinks into anything.
+ *
+ * IT TAKES BANDS AND NOT NODES, because a band is what the rule is about and
+ * because the caller already holds two: `bandOf` is where a node's band comes
+ * from, the layout calls it when it places a card, and `Placement.band` is that
+ * same answer — so the canvas needs no second lookup. A satellite therefore
+ * counts as the band it is presented in, and a Question pointing at a Term
+ * sinks into Domain like anything else outside it.
+ */
+export function sinksIntoDomain(sourceBand: Band, targetBand: Band): boolean {
+  return targetBand === "Domain" && sourceBand !== "Domain";
+}
+
+/**
  * How many nodes of one type stack vertically before that type's column widens —
  * one number per band, and this is the only place either number is written.
  *

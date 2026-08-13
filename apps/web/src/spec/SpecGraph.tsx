@@ -20,7 +20,13 @@ import { House } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { NODE_TYPES, type CanvasNode } from "./canvas-nodes";
 import { FloatingConnectionLine } from "./FloatingConnectionLine";
-import { ARROW_END, EDGE_TYPES, type FloatingEdge } from "./FloatingEdge";
+import {
+  ARROW_END,
+  ARROW_LIT,
+  DOMAIN_DASH,
+  EDGE_TYPES,
+  type FloatingEdge,
+} from "./FloatingEdge";
 import {
   READABLE_ZOOM,
   cardCenter,
@@ -31,13 +37,15 @@ import {
   scrolledViewport,
 } from "./view/camera";
 import { floatingEndpoints } from "./view/edge-geometry";
-import { routeAroundCards } from "./view/edge-routing";
+import { routeAroundCards, type RoutedPath } from "./view/edge-routing";
 import {
+  Z,
   cardNodeId,
   cardPieces,
   furniturePieces,
   graphIdOfCard,
 } from "./view/furniture";
+import { highlightFor } from "./view/highlight";
 import {
   GEOMETRY,
   graphLayout,
@@ -45,7 +53,7 @@ import {
   typeAtPoint,
   type Layout,
 } from "./view/layout";
-import type { SpecEdge, SpecNode } from "./view/model";
+import { sinksIntoDomain, type SpecEdge, type SpecNode } from "./view/model";
 
 /**
  * THE SPEC CANVAS: one React Flow instance, two layout functions.
@@ -79,8 +87,9 @@ import type { SpecEdge, SpecNode } from "./view/model";
  * THIS COMPONENT IS CONTROLLED AND STORES NOTHING. It holds no nodes, no edges
  * and no selection; React Flow's own selection machinery is left running but
  * never consulted, because `nodes` is passed without an `onNodesChange` and the
- * library drops its own changes on that path. What a card looks like is
- * `data.selected`, which is the caller's `selectedId` read per render.
+ * library drops its own changes on that path. What a card and a relation look
+ * like is the `Highlight` computed below from the caller's `selectedId`, read
+ * per render and stored nowhere.
  */
 
 /** What a right-click landed on. `nodeType` is `null` over no column at all. */
@@ -95,6 +104,16 @@ interface SpecGraphProps {
   edges: SpecEdge[];
   selectedId: string | null;
   onSelect: (id: string) => void;
+  /**
+   * A LEFT CLICK THAT LANDED ON NOTHING — the board's own ground, in either view.
+   *
+   * IT IS REPORTED AND NEVER ACTED ON HERE, like every other gesture on this
+   * canvas. What a click on nothing MEANS is the plane's: it holds the panel, and
+   * a panel with a half-written node in it must survive a stray click while a
+   * panel that is only being read must not. This component has no way to tell
+   * those two apart and no business knowing.
+   */
+  onBackgroundClick: () => void;
   onConnect: (sourceId: string, targetId: string) => void;
   onContextTarget: (target: MenuTarget) => void;
 }
@@ -138,6 +157,7 @@ export function SpecGraph({
   edges,
   selectedId,
   onSelect,
+  onBackgroundClick,
   onConnect,
   onContextTarget,
 }: SpecGraphProps) {
@@ -202,10 +222,28 @@ export function SpecGraph({
    */
   const furniture = useMemo(() => furniturePieces(layout), [layout]);
 
+  /**
+   * WHAT IS LIT: the selected node, the nodes one hop from it, and the relations
+   * between them — decided once here and read by both layers below.
+   *
+   * IT IS COMPUTED FROM THE RELATIONS AND NOT FROM THE CANVAS. `view/highlight.ts`
+   * walks the edge array the daemon returned; nothing asks React Flow what it
+   * believes is connected to what, so the rule survives a version of the library
+   * and can be executed without a browser.
+   *
+   * ONE MEMO FEEDS BOTH THE CARDS AND THE LINES, which is what keeps them
+   * agreeing: a card is a neighbour exactly when one of the lit relations reaches
+   * it, because both answers come out of the same pass over the same array.
+   */
+  const highlight = useMemo(
+    () => highlightFor(edges, selectedId),
+    [edges, selectedId],
+  );
+
   /** The cards, which are the same call plus the one thing that changes on a click. */
   const cards = useMemo(
-    () => cardPieces(layout, view, byId, selectedId),
-    [layout, view, byId, selectedId],
+    () => cardPieces(layout, view, byId, highlight),
+    [layout, view, byId, highlight],
   );
 
   const flowNodes = useMemo<CanvasNode[]>(
@@ -253,8 +291,24 @@ export function SpecGraph({
    *
    * An edge whose endpoint has no placement is skipped rather than drawn from
    * nowhere — the same answer `cardPieces` gives a placement with no node.
+   *
+   * THE HIGHLIGHT IS NOT A DEPENDENCY OF THIS MEMO, and the split below is what
+   * that buys. A click changes what a relation LOOKS like and never where it
+   * goes, while routing is the most expensive arithmetic on this screen — every
+   * relation against every card that is not one of its two ends. Keyed on the
+   * highlight as well, the whole board would be re-routed to change a colour.
+   *
+   * `dashed` RIDES ALONG HERE FOR THE SAME REASON, and it is the one thing on
+   * this tuple that is not geometry. Whether a relation sinks into Domain is a
+   * property of the RELATION and never of the selection, so it belongs on the
+   * side of the split a click does not re-run — and this is the only scope that
+   * holds both placements, which is where the two bands are. Computing it next
+   * door would mean looking both cards up a second time to learn something
+   * neither the click nor the camera can change.
    */
-  const flowEdges = useMemo<FloatingEdge[]>(() => {
+  const routed = useMemo<
+    { edge: SpecEdge; route: RoutedPath; dashed: boolean }[]
+  >(() => {
     const geometry = view === "grid" ? GEOMETRY.grid : GEOMETRY.graph;
     const placed = new Map(
       layout.placements.map((placement) => [placement.id, placement]),
@@ -269,7 +323,7 @@ export function SpecGraph({
       },
     }));
 
-    const built: FloatingEdge[] = [];
+    const built: { edge: SpecEdge; route: RoutedPath; dashed: boolean }[] = [];
     for (const edge of edges) {
       const source = placed.get(edge.fromId);
       const target = placed.get(edge.toId);
@@ -287,23 +341,101 @@ export function SpecGraph({
           .map((card) => card.box),
       });
 
+      /* WHAT IS DASHED IS A BAND CROSSING AND NOT A LIST OF EDGE TYPES. A
+         relation that ENDS in Domain having started outside it is explanatory —
+         it says what something means rather than how the work is built — so it
+         is drawn quieter than the engineering relations around it. MENTIONS into
+         Term and REPRESENTS into DomainEntity are the two the canon has today
+         and both dash; DENOTES and RELATES_TO stay solid because they begin and
+         end inside Domain and never cross into it. Naming those four here would
+         be a second roster to keep in step with the canon's, and it would answer
+         wrongly for the fifth. `sinksIntoDomain` holds the rule.
+
+         BOTH BANDS ARE ALREADY IN HAND: the layout calls `bandOf` when it places
+         a card, and `Placement.band` is that same answer, so this costs no
+         lookup. */
       built.push({
-        id: edge.id,
-        // The two cards as the CANVAS keys them: React Flow resolves these
-        // against its node lookup to find the handles an edge hangs off, and a
-        // relation whose ends it cannot find is not drawn at all.
-        source: cardNodeId(edge.fromId),
-        target: cardNodeId(edge.toId),
-        type: "floating",
-        // The relation's TYPE travels on `data` rather than in the library's own
-        // `label`: in this grammar a relation is its type and its direction, and
-        // a line carrying neither is half a statement.
-        data: { route, edgeType: edge.type },
-        markerEnd: ARROW_END,
+        edge,
+        route,
+        dashed: sinksIntoDomain(source.band, target.band),
       });
     }
     return built;
   }, [edges, layout, view]);
+
+  /**
+   * THE SAME RELATIONS, PAINTED FOR THIS SELECTION — the second half of the split
+   * above, and the only part a click re-runs.
+   *
+   * The three questions are asked of the `Highlight` and not of the graph: a
+   * relation is lit when the selection is one of its ends, pushed back when
+   * something else is selected and it is not, and at rest when nobody has
+   * clicked. The first is a lookup in a set `view/highlight.ts` built in one pass;
+   * the second is its complement, and it is a complement of INCIDENCE and not of
+   * the neighbourhood — the relation between two neighbours of the selected node,
+   * if the graph has one, joins two lit cards and is itself not part of the
+   * neighbourhood, which is the difference between one hop and two.
+   *
+   * THE ARROWHEAD IS PICKED HERE AND NOT IN THE COMPONENT because React Flow
+   * builds a marker's `<defs>` from the edge object's own `markerEnd` before any
+   * edge component runs — `FloatingEdge.tsx` carries both objects and the reason.
+   *
+   * SO IS THE Z, AND FOR THE SAME KIND OF REASON: it is a property of the edge
+   * OBJECT — the library reads it off the object and writes it onto the `<svg>`
+   * wrapper it puts around the whole edge — so a component that wanted to change
+   * it would be changing something rendered above it. `Z` in `view/furniture.ts`
+   * is the one table the whole paint order is read from, cards included, which is
+   * what makes `litEdge` above `card` a statement rather than two numbers that
+   * happen to compare the right way.
+   *
+   * AND THE LIFT IS WHAT MAKES THE LABEL EXCEPTION WORTH ANYTHING. An incident
+   * relation writes its name even where the route has no room — the user asked
+   * for exactly that — and `BaseEdge` draws that name inside the same `<svg>` as
+   * the line, so at the resting z it would be printed UNDER whichever card the
+   * route runs past. Lifted, the name is on top of the board and the transparent
+   * background lets the card show through it.
+   *
+   * THE DASH IS THE ONE THING PUT ON `style` RATHER THAN ON `data`, and that is
+   * the library's own division: `style` is written straight onto the `<path>`,
+   * which is where a `stroke-dasharray` has to land. It is handed over as the
+   * edge's own style rather than decided in the component so that the component
+   * keeps its one job — turning a route into a `d` — and so that the OTHER dash
+   * can outrank it there. A route the router could not clear is a defect in the
+   * drawing and wins over a statement about the graph; `FloatingEdgePath` spreads
+   * this style first and `UNROUTED_DASH` after it, which is that precedence
+   * written down.
+   */
+  const flowEdges = useMemo<FloatingEdge[]>(
+    () =>
+      routed.map(({ edge, route, dashed }) => {
+        const incident = highlight.edges.has(edge.id);
+        return {
+          id: edge.id,
+          // The two cards as the CANVAS keys them: React Flow resolves these
+          // against its node lookup to find the handles an edge hangs off, and a
+          // relation whose ends it cannot find is not drawn at all.
+          source: cardNodeId(edge.fromId),
+          target: cardNodeId(edge.toId),
+          type: "floating",
+          // The relation's TYPE travels on `data` rather than in the library's
+          // own `label`: in this grammar a relation is its type and its
+          // direction, and a line carrying neither is half a statement.
+          data: {
+            route,
+            edgeType: edge.type,
+            incident,
+            dimmed: highlight.selected !== null && !incident,
+          },
+          markerEnd: incident ? ARROW_LIT : ARROW_END,
+          zIndex: incident ? Z.litEdge : Z.edge,
+          // Spread rather than passed: `exactOptionalPropertyTypes` will not
+          // give `undefined` to an optional `style`, and "no style" and "an
+          // empty style" are different asks.
+          ...(dashed ? { style: { strokeDasharray: DOMAIN_DASH } } : {}),
+        };
+      }),
+    [routed, highlight],
+  );
 
   /**
    * WHERE THIS VIEW OPENS — DECLARED, NOT APPLIED AFTERWARDS.
@@ -556,6 +688,19 @@ export function SpecGraph({
         const id = graphIdOfCard(node.id);
         if (id !== null && byId.has(id)) onSelect(id);
       }}
+      /* A CLICK ON THE BOARD'S GROUND, WHICH IS THE LIBRARY'S OWN `pane` AND NOT
+         AN ELEMENT THIS FILE PUTS DOWN. It fires only when nothing above the pane
+         took the click, and the scenery is what makes that the right test: bands,
+         lanes and column headers all carry `pointerEvents: "none"` from
+         `view/furniture.ts`, so a click on a band's ground or on an empty ruled
+         slot falls through to the pane and counts as a click on nothing —
+         which is what a person means by it.
+
+         IT CANNOT FIRE AT THE END OF A CONNECT DRAG. `Pane`'s own click handler
+         swallows the event when a connection ended on it or is still in progress
+         (12.11.2), so releasing a relation over empty canvas does not read as a
+         click on the background. */
+      onPaneClick={onBackgroundClick}
       /* THE THREE CONTEXT HANDLERS ONLY REPORT. Each says what the pointer was
          over and returns; the menu is a shadcn ContextMenu wrapped around this
          canvas, and it opens on the SAME contextmenu event as it bubbles on up to
