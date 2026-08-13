@@ -101,6 +101,19 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
  * here, in one expression each way, rather than putting a second empty value
  * into the draft for every reader downstream to know about.
  */
+/**
+ * A label's text and its required marker as ONE flex item — as two children
+ * the Label's own `gap-2` would push the `*` half a rem off the word it marks.
+ */
+function RequiredLabel({ text }: { text: string }) {
+  return (
+    <span>
+      {text}
+      <span className="text-destructive"> *</span>
+    </span>
+  );
+}
+
 function AttributeField({
   descriptor,
   value,
@@ -116,14 +129,11 @@ function AttributeField({
   return (
     <div className="grid gap-2">
       <Label htmlFor={controlId}>
-        {/* One flex item, not two: the Label's own `gap-2` would otherwise
-            push the marker half a rem off the word it belongs to. */}
-        <span>
-          {descriptor.label}
-          {descriptor.required ? (
-            <span className="text-destructive"> *</span>
-          ) : null}
-        </span>
+        {descriptor.required ? (
+          <RequiredLabel text={descriptor.label} />
+        ) : (
+          descriptor.label
+        )}
       </Label>
       {descriptor.kind === "choice" ? (
         <Select
@@ -542,7 +552,9 @@ export function NodePanel({
             ) : (
               <>
                 <div className="grid gap-2">
-                  <Label htmlFor="node-type">Type</Label>
+                  <Label htmlFor="node-type">
+                    <RequiredLabel text="Type" />
+                  </Label>
                   <Select
                     value={type}
                     onValueChange={(value) => chooseType(value ?? "")}
@@ -571,7 +583,9 @@ export function NodePanel({
                 </div>
 
                 <div className="grid gap-2">
-                  <Label htmlFor="node-id">ID</Label>
+                  <Label htmlFor="node-id">
+                    <RequiredLabel text="ID" />
+                  </Label>
                   <Input
                     id="node-id"
                     className="font-mono"
@@ -595,7 +609,9 @@ export function NodePanel({
             )}
 
             <div className="grid gap-2">
-              <Label htmlFor="node-short-name">Short name</Label>
+              <Label htmlFor="node-short-name">
+                <RequiredLabel text="Short name" />
+              </Label>
               <Input
                 id="node-short-name"
                 autoFocus={mode === "edit"}
@@ -606,7 +622,9 @@ export function NodePanel({
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor="node-name">Name</Label>
+              <Label htmlFor="node-name">
+                <RequiredLabel text="Name" />
+              </Label>
               <Input
                 id="node-name"
                 value={name}
