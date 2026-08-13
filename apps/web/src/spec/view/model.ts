@@ -33,7 +33,7 @@ import type { Band, SpecNode } from "@shall/core/graph";
  * How many nodes of one type stack vertically before that type's column widens —
  * one number per band, and this is the only place either number is written.
  *
- * Past the cap a type grows *sideways*: an eleventh Requirement doubles the
+ * Past the cap a type grows *sideways*: a sixth Requirement doubles the
  * Requirement slot and pushes AcceptanceCriterion and everything right of it in
  * the Intent band across by one column pitch. It never pages and it never
  * truncates.
@@ -42,7 +42,14 @@ import type { Band, SpecNode } from "@shall/core/graph";
  * stay short, so the rest of the screen belongs to Intent, Plan and Execution.
  * The accepted cost is that a Domain band with many Terms grows very wide for a
  * band only three rows tall; the escape hatch is that changing the number below
- * is a one-line diff, so no other file and no test may restate 3 or 10.
+ * is a one-line diff, so no other file and no test may restate 3 or 5.
+ *
+ * FIVE, AND NOT TEN, FOR THE OTHER THREE. A band is as tall as its fullest
+ * column now — the canvas no longer hands the bands a share of itself — so the
+ * cap is what bounds how far one crowded type can push the three bands below it
+ * down the board. Ten rows of Requirement was 562px of Intent band before Plan's
+ * label appeared; five is a stack you can still read top to bottom on one
+ * screen, and the eleventh node is not lost, it is one column to the right.
  *
  * It is keyed by BAND and not by type: the cap is a property of the zone. There
  * is deliberately no per-type override.
@@ -53,9 +60,9 @@ import type { Band, SpecNode } from "@shall/core/graph";
  */
 export const STACK_CAP: Readonly<Record<Band, number>> = {
   Domain: 3,
-  Intent: 10,
-  Plan: 10,
-  Execution: 10,
+  Intent: 5,
+  Plan: 5,
+  Execution: 5,
 };
 
 /**

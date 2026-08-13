@@ -14,12 +14,12 @@
 export type { SpecEdge, SpecNode } from "@shall/core/graph";
 
 /**
- * A stored `createdAt` in the reader's own locale and time zone.
+ * A stored instant in the reader's own locale and time zone.
  *
  * It is deliberately not stable across machines, which is why it is here and not
  * in the pure `view/` folder: everything there must draw the same picture
  * everywhere, and this is the opposite promise.
  */
-export function formatCreatedAt(createdAt: number): string {
-  return new Date(createdAt).toLocaleString();
+export function formatTimestamp(timestamp: number): string {
+  return new Date(timestamp).toLocaleString();
 }

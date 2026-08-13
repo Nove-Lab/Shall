@@ -11,6 +11,10 @@ export const nodes = sqliteTable("nodes", {
   name: text("name").notNull(),
   content: text("content").notNull(),
   createdAt: integer("created_at").notNull(),
+  // The default is only here so `ADD COLUMN NOT NULL` is legal on a database
+  // that already has rows; every write names the stamp, so nothing that goes
+  // through this schema ever takes it.
+  updatedAt: integer("updated_at").notNull().default(0),
 });
 
 export const edges = sqliteTable("edges", {

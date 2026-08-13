@@ -126,35 +126,27 @@ export function SpecGraph({
     useReactFlow();
 
   /**
-   * THE CANVAS'S OWN PIXEL SIZE, WHICH IS WHERE THE LIBRARY KEEPS IT — and the
-   * grid's layout needs the height, because that is what the four bands share out
-   * so an empty grid fills the screen.
+   * THE CANVAS'S OWN PIXEL SIZE, WHICH IS WHERE THE LIBRARY KEEPS IT.
    *
    * Both are 0 until React Flow has measured the pane, which is a state this
    * component is in on its first frame and has to survive: `openingViewport`
    * answers `null` there, and the extent below stays unbounded rather than being
    * computed against a zero.
    *
-   * THE WIDTH IS DELIBERATELY NOT A LAYOUT INPUT. Opening the detail panel
-   * narrows this canvas by a few hundred pixels, and the board's width comes from
-   * its own columns, so the panel clips and scrolls the board instead of
-   * re-flowing it. The width is read here only for what is genuinely about the
-   * screen: how far the grid may be scrolled.
+   * NEITHER IS A LAYOUT INPUT. The board's width comes from its own columns and
+   * its height from its own bands, so opening the detail panel or resizing the
+   * window clips and scrolls the board instead of re-flowing it — and no window
+   * resize can rebuild a node object for a layout that cannot have changed. Both
+   * are read here only for what is genuinely about the screen: how far the board
+   * may be scrolled, where each view opens, and whether a card you just authored
+   * is off it.
    */
   const canvasWidth = useStore((state) => state.width);
   const canvasHeight = useStore((state) => state.height);
 
-  /**
-   * `graphLayout` does not read the canvas at all, so the height is a dependency
-   * of the GRID only. Passed unconditionally it would make every window resize in
-   * the graph view rebuild every node object for a layout that cannot have
-   * changed — and a rebuilt node is one React Flow re-measures.
-   */
-  const layoutHeight = view === "grid" ? canvasHeight : 0;
   const layout: Layout = useMemo(
-    () =>
-      view === "grid" ? gridLayout(nodes, layoutHeight) : graphLayout(nodes),
-    [view, nodes, layoutHeight],
+    () => (view === "grid" ? gridLayout(nodes) : graphLayout(nodes)),
+    [view, nodes],
   );
 
   const byId = useMemo(
@@ -163,8 +155,8 @@ export function SpecGraph({
   );
 
   /**
-   * THE SCENERY, MEMOISED ON EXACTLY WHAT IT IS A FUNCTION OF — `[layout, view]`,
-   * and the reason is a library fast path rather than a frame budget.
+   * THE SCENERY, MEMOISED ON EXACTLY WHAT IT IS A FUNCTION OF — the layout, and
+   * the reason is a library fast path rather than a frame budget.
    *
    * React Flow keeps an internal node verbatim when the object handed to it is
    * the same OBJECT it already holds, and rebuilds it when it is not — per node,
@@ -176,8 +168,11 @@ export function SpecGraph({
    * IT IS NOT AN ALTERNATIVE TO THE `measured` EACH PIECE DECLARES, and that
    * distinction is worked through in `view/furniture.ts`: the memo makes selection
    * cheap, the declaration makes the first paint correct.
+   *
+   * THE VIEW IS NOT A SECOND KEY, because the scenery is not a function of it: a
+   * new view is a new layout, and every piece's box is that layout's own number.
    */
-  const furniture = useMemo(() => furniturePieces(layout, view), [layout, view]);
+  const furniture = useMemo(() => furniturePieces(layout), [layout]);
 
   /** The cards, which are the same call plus the one thing that changes on a click. */
   const cards = useMemo(

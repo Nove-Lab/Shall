@@ -35,13 +35,27 @@ import { GEOMETRY } from "./view/layout";
  * A rule is one pixel, and a rule drawn inside a box the layout has already
  * measured has to be paid for out of that box.
  *
- * It is NOT in `GEOMETRY`. Nothing about where a card goes depends on it: the
- * band's rule is inside the band's own declared height and the lane's hairline
- * is inside a row's own pitch, so the layout never has to know. It is here
- * because two components draw a rule and then have to fit inside a number
- * somebody else chose, and one home beats two.
+ * IT USED TO BE A LOCAL CONSTANT HERE, on the grounds that nothing about where a
+ * card goes depended on it. That stopped being true when the grid's stack was
+ * given one symmetric gap: a card is spaced against the RULES above and below it
+ * now, so the hairline's own pixel is a term in `grid.rowGap` and in
+ * `grid.bandPadding`, and a rule drawn thicker than the layout believes would
+ * put every card in the grid nearer one of its two rules than the other. It
+ * lives in `GEOMETRY` for exactly the reason everything else there does, and is
+ * aliased here so the two components that paint a border read one name. The
+ * third rule on the canvas is the lane's, and it arrives on `data` from the same
+ * constant — see `LaneRunBlock`.
+ *
+ * IT IS THE BORDER'S OWN WIDTH AND NOT ONLY THE PADDING'S TERM. A Tailwind
+ * `border-t`/`border-b` writes 1px, which is this number today and is a second
+ * home for it tomorrow: the two would diverge on the first edit and the picture
+ * would be wrong with nothing to error — the band label a pixel off the column
+ * headers it shares a line with, in every band. So the width is declared from
+ * here and the class is dropped. Nothing about the border's LOOK is declared
+ * here: `*` carries `border-border` over preflight's `border: 0 solid`, so a
+ * width alone paints the theme's own hairline, and no colour is invented.
  */
-const RULE = 1;
+const RULE = GEOMETRY.ruleThickness;
 
 export type CardNode = Node<CardNodeData, "spec">;
 export type ColumnNode = Node<ColumnNodeData, "column">;
@@ -113,6 +127,13 @@ const WHOLE_CARD_HANDLE =
  * and the border. The padding is written as spacing rather than as an arbitrary
  * value so it stays on the same scale as everything else, but that sum is the
  * reason it is 1.25 and not 1.
+ *
+ * ITS OWN BORDER IS NOT ONE OF THE STACK'S RULES, which is why it is a plain
+ * `border` while the two below declare their width from `RULE`. A rule is a line
+ * the grid SPACES against — `ruleThickness` is a term of `rowGap` and of
+ * `bandPadding` — and this line is a term of the card's own 44, inside a box the
+ * layout declared and `border-box` keeps: draw it heavier and the card looks
+ * different and nothing on the board moves.
  *
  * THE ORDER OF THE TWO HANDLES IS THE WHOLE TRICK, and it is subtle enough to be
  * worth stating rather than preserving by luck:
@@ -192,16 +213,22 @@ export function SpecNodeCard({ data }: NodeProps<CardNode>) {
  * A TYPE'S COLUMN HEADER: its name, and how many nodes are under it.
  *
  * ITS HEIGHT IS `GEOMETRY.columnHeaderHeight` AND IS NOT LEFT TO THE CONTENT.
- * `grid.headerHeight` is literally `bandGap + this + rowGap`, so every card in
+ * `grid.headerHeight` is literally `bandGap + this + stackGap`, so every card in
  * the grid is placed by this number; a header that drew one pixel taller than
  * the layout reserved would push its label into the clearance above the band's
  * first row, in every band, with nothing to error. Declaring it here is what
  * makes the drawn header and the reserved header the same header.
  *
- * The 21 it is set to is this block's own arithmetic read forwards: a `text-xs`
- * label is a 16px line box, `pb-1` is 4, the rule is 1. Change the label's size
- * and this component's height does not change — `GEOMETRY` does, and the grid
- * moves with it.
+ * THE BOTTOM BORDER IS THE STACK'S FIRST RULE and not decoration on the label.
+ * The grid spaces its first card `stackGap` under it, exactly as it spaces every
+ * later card under the lane's own hairlines, so it is one of the terms
+ * `GEOMETRY.ruleThickness` accounts for and is drawn AT it — see `RULE` above for
+ * why that is a declared width and not a `border-b`.
+ *
+ * The 21 the height comes to is this block's own arithmetic read forwards: a
+ * `text-xs` label is a 16px line box, `pb-1` is 4, the rule is `RULE`. Change the
+ * label's size and this component's height does not change — `GEOMETRY` does, and
+ * the grid moves with it.
  *
  * The count is the only number on this canvas that is not a coordinate, so it is
  * set in the mono face to keep it from reading as part of the name.
@@ -209,8 +236,12 @@ export function SpecNodeCard({ data }: NodeProps<CardNode>) {
 export function ColumnHeaderNode({ data }: NodeProps<ColumnNode>) {
   return (
     <div
-      className="text-muted-foreground flex items-baseline justify-between gap-1.5 border-b pb-1 text-xs"
-      style={{ width: data.width, height: GEOMETRY.columnHeaderHeight }}
+      className="text-muted-foreground flex items-baseline justify-between gap-1.5 pb-1 text-xs"
+      style={{
+        width: data.width,
+        height: GEOMETRY.columnHeaderHeight,
+        borderBottomWidth: RULE,
+      }}
     >
       {/* `min-w-0` is what lets a long type name end in an ellipsis instead of
           pushing its count out of the slot: a flex child's `min-width` is
@@ -234,12 +265,16 @@ export function ColumnHeaderNode({ data }: NodeProps<ColumnNode>) {
  * declared height, so the padding above the label is `bandGap` less that rule.
  * It sits in the gutter — no column starts inside `bandGutter`, which is why
  * there is somewhere to put it at all.
+ *
+ * THAT SUBTRACTION IS WHY THE RULE IS DRAWN AT `RULE` and not at a `border-t`:
+ * the two terms have to be the same pixel or the label lands `bandGap` less the
+ * difference, a pixel off every column header on its line.
  */
 export function BandNodeBlock({ data }: NodeProps<BandNode>) {
   return (
     <div
-      className="bg-muted/30 border-t"
-      style={{ width: data.width, height: data.height }}
+      className="bg-muted/30"
+      style={{ width: data.width, height: data.height, borderTopWidth: RULE }}
     >
       <span
         className="text-muted-foreground block truncate text-xs"
@@ -257,8 +292,8 @@ export function BandNodeBlock({ data }: NodeProps<BandNode>) {
 }
 
 /**
- * THE EMPTY GRID, DRAWN: a ladder of hairlines one card wide, ruled at the foot
- * of each row slot, as many times as the band's cap allows.
+ * THE EMPTY GRID, DRAWN: a ladder of hairlines one card wide, ruled once per row
+ * slot, as many times as the band is tall.
  *
  * IT IS DELIBERATELY NOT A GRID OF OUTLINED BOXES. A box is a thing you click,
  * and there is nothing to click here — you author from the toolbar or from the
@@ -271,13 +306,19 @@ export function BandNodeBlock({ data }: NodeProps<BandNode>) {
  * an empty slot falls through to the pane rather than dying in a node lookup
  * with no graph id to find.
  *
- * The pitch and the card's height arrive on `data` because they live in
- * `GEOMETRY` and differ between the two views; `data.height` is the layout's own
- * number and is never recomputed here as `rows * rowPitch`, which would be a
- * second expression for the box the library was already told about.
+ * WHERE THE HAIRLINE SITS IS NOT THIS FILE'S TO DECIDE, and every number in the
+ * gradient below arrives on `data`. The rule is `stackGap` BELOW the foot of the
+ * card, not flush against it: the layout spaces a card the same distance from
+ * the rule above it as from the rule below it, and that gap is a term of the
+ * pitch the cards were placed at. Ruling flush — which is what this drew before,
+ * with the offset happening to equal the card's own height — left every card
+ * touching one rule and 5px from the other. `data.height` is the layout's own
+ * number too, and is never recomputed here as `rows * rowPitch`, which would be
+ * a second expression for the box the library was already told about.
  */
 export function LaneRunBlock({ data }: NodeProps<LaneNode>) {
-  const { cardHeight, rowPitch } = data;
+  const { ruleOffset, ruleThickness, rowPitch } = data;
+  const ruleEnd = ruleOffset + ruleThickness;
   return (
     <div
       style={{
@@ -288,10 +329,10 @@ export function LaneRunBlock({ data }: NodeProps<LaneNode>) {
         // than a value copied out of it.
         backgroundImage:
           `repeating-linear-gradient(to bottom,` +
-          ` transparent 0, transparent ${String(cardHeight)}px,` +
-          ` var(--border) ${String(cardHeight)}px,` +
-          ` var(--border) ${String(cardHeight + RULE)}px,` +
-          ` transparent ${String(cardHeight + RULE)}px,` +
+          ` transparent 0, transparent ${String(ruleOffset)}px,` +
+          ` var(--border) ${String(ruleOffset)}px,` +
+          ` var(--border) ${String(ruleEnd)}px,` +
+          ` transparent ${String(ruleEnd)}px,` +
           ` transparent ${String(rowPitch)}px)`,
       }}
     />

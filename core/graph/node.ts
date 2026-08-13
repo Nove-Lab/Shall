@@ -1,6 +1,11 @@
 /**
  * A node of the spec graph: a short name to read it by, a name, and the prose
  * body a person writes.
+ *
+ * The two instants are both stamps rather than fields — nothing on a form
+ * offers them, and core has no clock to make one, so whoever writes the row
+ * brings them. A node that has never been edited carries the same value twice:
+ * it was last modified when it was written.
  */
 export interface SpecNode {
   id: string;
@@ -9,6 +14,7 @@ export interface SpecNode {
   name: string;
   content: string;
   createdAt: number;
+  updatedAt: number;
 }
 
 /**

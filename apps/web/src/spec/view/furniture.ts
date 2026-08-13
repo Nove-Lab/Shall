@@ -80,13 +80,20 @@ export type LaneNodeData = {
    */
   readonly height: number;
   /**
-   * One row's worth of vertical space and how much of it a card fills; the
-   * hairline is ruled in the difference. Both come from `GEOMETRY` and are
-   * handed over rather than looked up, so the component never has to know
-   * which view it is drawing in.
+   * ONE CELL AND WHERE ITS HAIRLINE SITS IN IT: the pitch, how far down the
+   * cell the rule starts, and how thick it is drawn. All three are the
+   * LAYOUT'S — it is the module that spaced the card against the rule — and
+   * they are handed over rather than looked up, so the component draws the
+   * ruling the layout placed the cards against and cannot arrive at its own.
+   *
+   * The card's own height is deliberately NOT here any more. The rule used to
+   * be drawn flush at `cardHeight`, which made the card's box the offset by
+   * coincidence; it is `cardHeight + stackGap` now, and a component handed the
+   * card height would have to know the gap to find the rule.
    */
   readonly rowPitch: number;
-  readonly cardHeight: number;
+  readonly ruleOffset: number;
+  readonly ruleThickness: number;
 };
 
 /**
@@ -263,16 +270,16 @@ export type CardPiece = {
  * the column header's height is not set by this program at all — the drawn
  * block is as tall as its own line box, and `GEOMETRY.columnHeaderHeight` is
  * the copy of that arithmetic that the layout reserved space with.
+ *
+ * IT TAKES NO `view` ARGUMENT, and `cardPieces` below still does. The scenery
+ * is now entirely the layout's own numbers — a band's box, a lane's box AND
+ * its ruling, a header's slot width — while a card is drawn at the view's card
+ * size. The lane was the last piece that needed to know which view it was in,
+ * and it stopped needing to when its ruling moved onto `LaneRun`: only the grid
+ * rules lanes, so a `view === "grid" ? … : …` on that path was choosing between
+ * one real answer and one that could never be reached.
  */
-export function furniturePieces(
-  layout: Layout,
-  view: SpecView,
-): FurniturePiece[] {
-  // `layout.view` says the same thing; the argument is what the caller's memo
-  // key is cut on, and the two must agree — a grid layout drawn with the
-  // graph's geometry would put every lane's ruling out of step with its cards.
-  const geometry = view === "grid" ? GEOMETRY.grid : GEOMETRY.graph;
-  const rowPitch = geometry.cardHeight + geometry.rowGap;
+export function furniturePieces(layout: Layout): FurniturePiece[] {
   const pieces: FurniturePiece[] = [];
 
   for (const band of layout.bands) {
@@ -310,8 +317,9 @@ export function furniturePieces(
       data: {
         width: lane.width,
         height: lane.height,
-        rowPitch,
-        cardHeight: geometry.cardHeight,
+        rowPitch: lane.rowPitch,
+        ruleOffset: lane.ruleOffset,
+        ruleThickness: lane.ruleThickness,
       },
       draggable: false,
       selectable: false,

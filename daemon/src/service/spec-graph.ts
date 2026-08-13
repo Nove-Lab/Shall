@@ -100,18 +100,26 @@ export async function createSpecNode(input: {
     throw conflict(`${id} is already used by another node. Choose another id.`);
   }
 
+  // One reading of the clock for both stamps, so a node arrives saying it was
+  // last modified exactly when it was written rather than a millisecond later.
+  const now = Date.now();
   const node: SpecNode = {
     id,
     type,
     shortName: requireText("A short name", input.shortName),
     name: requireText("A name", input.name),
     content: requireText("Content", input.content),
-    createdAt: Date.now(),
+    createdAt: now,
+    updatedAt: now,
   };
   return insertNode(databasePath, node);
 }
 
-/** id, type and createdAt are the node's identity, so an edit cannot reach them. */
+/**
+ * id, type and createdAt are the node's identity, so an edit cannot reach them.
+ * updatedAt it cannot reach either, but for the opposite reason: the edit is
+ * what moves it, and the daemon is where the clock is.
+ */
 export async function updateSpecNode(input: {
   projectId: string;
   id: string;
@@ -126,7 +134,12 @@ export async function updateSpecNode(input: {
     content: requireText("Content", input.content),
   };
 
-  const node = await updateNode(await databaseFor(input.projectId), id, values);
+  const node = await updateNode(
+    await databaseFor(input.projectId),
+    id,
+    values,
+    Date.now(),
+  );
   if (!node) {
     throw missing(`Unknown node: ${id}`);
   }

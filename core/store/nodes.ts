@@ -25,11 +25,20 @@ export async function insertNode(
   });
 }
 
-/** Null when the id is gone, which is how a stale panel finds out. */
+/**
+ * Null when the id is gone, which is how a stale panel finds out.
+ *
+ * `updatedAt` is a parameter of its own rather than a field of `values` because
+ * it is not one: `SpecNodeValues` is the set a person can type, and no form
+ * offers a timestamp. Standing outside that set, it also cannot be forgotten —
+ * core has no clock, so the signature is what makes the caller produce the
+ * instant, and there is no way to write a node here and leave the stamp behind.
+ */
 export async function updateNode(
   databasePath: string,
   id: string,
   values: SpecNodeValues,
+  updatedAt: number,
 ): Promise<SpecNode | null> {
   return withProjectDatabase(databasePath, async (database) => {
     const [existing] = await database
@@ -41,8 +50,9 @@ export async function updateNode(
       return null;
     }
 
-    await database.update(nodes).set(values).where(eq(nodes.id, id));
-    return { ...existing, ...values };
+    const written = { ...values, updatedAt };
+    await database.update(nodes).set(written).where(eq(nodes.id, id));
+    return { ...existing, ...written };
   });
 }
 

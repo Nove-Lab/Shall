@@ -12,25 +12,29 @@ import {
 } from "./model";
 
 /**
- * Both Spec-plane layouts, as pure functions of `(band, type ordinal, id)` — and,
- * for the grid, of the canvas height.
+ * Both Spec-plane layouts, as pure functions of `(band, type ordinal, id)`.
  *
  * POSITIONS ARE NEVER STORED AND CARDS ARE NEVER DRAGGABLE. A moved card would
  * show a position the graph does not hold, so there is nowhere to keep one. What
- * that buys is a picture you can reason about and test: the same graph on the
- * same canvas is the same picture, every time. No heuristic to tune, no seed, no
- * layout cache to invalidate, and nothing computed here that could be persisted
- * by accident.
+ * that buys is a picture you can reason about and test: the same graph is the
+ * same picture, every time. No heuristic to tune, no seed, no layout cache to
+ * invalidate, and nothing computed here that could be persisted by accident.
  *
- * THE CANVAS HEIGHT IS AN ARGUMENT AND IT COSTS SOMETHING, so it is stated rather
- * than slipped in. The grid must fill the screen when it is empty, and "the
- * screen" is not a property of the graph. Two things it does not cost: the
- * positions are still deterministic and still unstored. One thing it does: they
- * are no longer stable under insertion — an eleventh Requirement shifts every
- * Intent column to its right by one pitch. That shift is the intended behaviour,
- * not a side effect.
+ * THE CANVAS IS NOT AN INPUT TO EITHER LAYOUT, in either axis. It used to be, in
+ * one: the grid divided the canvas HEIGHT between its four bands so that an empty
+ * board filled the screen. The cost was a board whose top strip was empty, a
+ * Domain band that claimed three rows before anything was authored into it, and
+ * a set of positions that moved when the window did. A band is now as tall as its
+ * own fullest column and no taller, which makes the whole picture a function of
+ * the graph alone — an empty band and a band with one card are the same height,
+ * and resizing the window moves nothing.
  *
- * THERE IS NO CANVAS *WIDTH*. The board's width is set by its content alone: the
+ * POSITIONS ARE STILL NOT STABLE UNDER INSERTION, and that is the intended
+ * behaviour rather than a side effect: a sixth Requirement shifts every Intent
+ * column to its right by one pitch, and a fourth card in any column pushes the
+ * bands below it down by one row pitch.
+ *
+ * THERE IS NO CANVAS *WIDTH* EITHER. The board's width is set by its content alone: the
  * widest band's columns at a fixed card width. Nothing here reads how wide the
  * viewport is, so opening or collapsing a side panel cannot re-flow the board —
  * it clips and scrolls. On a narrow screen the grid scrolls horizontally from
@@ -61,9 +65,10 @@ export interface ColumnHeader {
   x: number;
   /**
    * WHERE THE LABEL BLOCK IS DRAWN, which is not the band's top: in the grid it
-   * is `bandY + GEOMETRY.bandGap`, so the label has the same clear space above it
-   * that the band's last row has below it. `BandHeader.y` is the band's top and
-   * nothing else should be read as it.
+   * is `bandY + GEOMETRY.bandGap`, so the clear space between the band's own top
+   * rule and this label is the same 15 as between the band's closing rule and the
+   * next band's top rule. `BandHeader.y` is the band's top and nothing else should
+   * be read as it.
    *
    * IN THE GRAPH VIEW EVERY HEADER SITS ON ONE LINE AT 0 — not at `topPadding`,
    * even though that view's cards are placed at `topPadding + headerHeight + …`.
@@ -105,9 +110,17 @@ export interface BandHeader {
  * cell. A lane is card-wide, starts under its column header, and carries one
  * hairline at each row pitch.
  *
- * `rows` is capped at the band's stack cap, because past the cap a type grows
- * sideways: a lane drawn below the cap line would be a slot no node can ever
- * occupy. Surplus band height becomes the band's bottom padding instead.
+ * `rows` IS THE BAND'S ROW COUNT AND EVERY LANE IN A BAND HAS IT. The band is as
+ * tall as its fullest column, so a band whose busiest type holds four cards rules
+ * four cells under every one of its types, and an empty band rules exactly one
+ * under each. That count can never exceed the stack cap, because a fifth card in
+ * a five-capped band starts a sub-column rather than a fifth row — so no lane is
+ * ever ruled below a slot a node could reach.
+ *
+ * IT CARRIES ITS OWN RULING and does not leave the drawing side to re-derive it.
+ * `height`, `rowPitch` and `ruleOffset` are three views of the same arithmetic;
+ * computed here they agree by construction, and computed again next to the
+ * gradient they would agree only until someone edited one of them.
  */
 export interface LaneRun {
   /** Unique and stable across renders, for a keyed list. */
@@ -120,6 +133,12 @@ export interface LaneRun {
   /** `rows * rowPitch`, computed once here so the drawn box and the ruling agree. */
   height: number;
   rows: number;
+  /** One cell: a card, the gap under it, its rule, and the gap under that. */
+  rowPitch: number;
+  /** How far into a cell that cell's hairline starts — `cardHeight + stackGap`. */
+  ruleOffset: number;
+  /** How thick it is drawn. One pixel, and the layout has to know: see `GEOMETRY`. */
+  ruleThickness: number;
 }
 
 export interface Layout {
@@ -139,14 +158,35 @@ export interface Layout {
 }
 
 /**
- * The three numbers `grid.headerHeight` is computed from, hoisted out of the
- * object below only because an object literal cannot reference its own siblings.
- * Their published home is still `GEOMETRY`; nothing outside this file reads these
- * names.
+ * The numbers the grid's vertical arithmetic is computed from, hoisted out of
+ * the object below only because an object literal cannot reference its own
+ * siblings. Their published home is still `GEOMETRY`; nothing outside this file
+ * reads these names.
  */
 const BAND_GAP = 16;
-const GRID_ROW_GAP = 6;
-const COLUMN_HEADER_HEIGHT = 21;
+const STACK_GAP = 3;
+const RULE = 1;
+
+/**
+ * The column header block, written as the sum it is rather than as the 21 it
+ * comes to: a `text-xs` label is a 12px font in a 16px line box, the `pb-1`
+ * under it is 4, and the block ends in the rule that starts the stack.
+ *
+ * THAT LAST TERM IS `RULE` AND NOT A THIRD 1. The component draws that border at
+ * `GEOMETRY.ruleThickness`, and the block declares this height, so a rule drawn
+ * thicker has to make the block taller — `box-sizing` is `border-box`, so
+ * otherwise the extra pixel comes out of the label's own line box while the grid
+ * below goes on believing the old height.
+ */
+const COLUMN_HEADER_HEIGHT = 16 + 4 + RULE;
+
+/**
+ * The dead space between one card's bottom and the next card's top: a gap, the
+ * hairline that separates the two slots, and a second gap. It is DERIVED and
+ * never chosen, because the number anyone actually has an opinion about is
+ * `STACK_GAP` — see the symmetry derivation in `GEOMETRY`.
+ */
+const GRID_ROW_GAP = 2 * STACK_GAP + RULE;
 
 /**
  * The geometry, in one object.
@@ -175,8 +215,8 @@ const COLUMN_HEADER_HEIGHT = 21;
  *       + 1px bottom border   =  44
  *
  * Everything below that is a function of the card is recomputed from this 44 and
- * not carried over: the grid's row pitch is 50 (was 30 at a one-line card), a
- * full Domain stack is 203 tall (was 141 at that card and the 9px header this
+ * not carried over: the grid's row pitch is 51 (was 30 at a one-line card), a
+ * full Domain band is 205 tall (was 141 at that card and the 9px header this
  * repo does not draw), and the graph's row pitch is 62.
  *
  * CARD WIDTH 148 — the widest band is Intent (eight core types plus the three
@@ -190,52 +230,88 @@ const COLUMN_HEADER_HEIGHT = 21;
  * apparent card size: the graph needs room to route a relation between columns,
  * the grid wants density.
  *
- * A GRID BAND BREATHES THE SAME GAP TOP AND BOTTOM — call it G, `bandGap`, 16. The
- * two constants under it are derived from G rather than chosen beside it, because
- * the mistake this replaces was placing the column label at the band's own top:
- * the label then sat flush under the band's rule with nothing above it, while the
- * bottom carried `rowGap + bandPadding` of clear space. The label's height had
- * been counted as if it were padding.
+ * THE STACK'S ONE GAP, AND THE INVARIANT EVERY NUMBER BELOW EXISTS TO SATISFY:
  *
- * G is 16 because 16 is already the grid's breathing space in both other
- * directions — the lane between two columns (`grid.columnGap`) and the space above
- * the first band (`topPadding`). It is set *equal* to them and never computed
- * *from* `columnGap`, whose value is load-bearing for edge routing and has to stay
- * independently movable.
+ *     Everywhere in a stack, the gap between a rule and the card below it equals
+ *     the gap between a card and the rule below it. The column header's bottom
+ *     border is the stack's first rule and obeys the same gap. The rule closing
+ *     the stack obeys it too.
  *
- *     grid.headerHeight = ceil(G + columnHeaderHeight + rowGap)
- *                       = ceil(16 + 21 + 6) = 43
+ * Call that gap g — `grid.stackGap`, 3. A stack is then literally alternating:
+ * rule, g, card, g, rule, g, card, … from the header's border down to the rule
+ * that closes the last row. Before this, the lane's hairline was drawn flush
+ * against the bottom of each card and the whole 6px gap sat above the next one,
+ * so every card in the grid was 0px from the rule over it and 5 from the rule
+ * under it. Nothing errored; it just read as a list of cards hanging off rules
+ * rather than as ruled paper.
  *
- * taken to a whole pixel so that every card still lands on one. The `ceil` has
- * nothing to absorb at these three terms and is kept anyway: the header's height
- * is a line box, and a line box is a fraction the moment a font size or a line
- * height stops dividing evenly. With nothing to round away, the label-to-card
- * clearance is exactly `rowGap` — 6, and no longer the 6.5 the old fractional
- * header left. It is written as that expression and not as the literal 43, so
- * raising `columnHeaderHeight` moves the grid instead of leaving a hand-typed
- * number standing beside a paragraph that claims otherwise. None of its three
- * terms is the card height, so this number is unchanged by the two-line card —
- * recomputed, not copied.
+ * THE RULE'S OWN PIXEL IS A TERM, which is why `RULE` is in this file at all. A
+ * hairline is 1px of the pitch, and the invariant is about the gaps ON EITHER
+ * SIDE of it, so where a card goes now depends on how thick a rule is drawn. It
+ * used to be a private constant beside the component that paints it — correctly,
+ * while nothing about placement depended on it. That is no longer true, so it
+ * moved here and the component reads it back as `GEOMETRY.ruleThickness`.
  *
- *     grid.bandPadding  = G - rowGap = 10
+ *     grid.rowGap   = 2g + RULE = 7
+ *     grid.rowPitch = cardHeight + rowGap = 44 + 7 = 51
  *
- * so the clear space under a band's last row is `rowGap + bandPadding` = G again.
- * It sits inside `grid` because every term of it is the grid's; the graph view
- * carries its own.
+ * `rowGap` keeps its meaning exactly — the dead space between one card's bottom
+ * and the next card's top, which is what `cardHeight + rowGap` being the pitch
+ * has always meant — but it is now DERIVED from g rather than chosen, because g
+ * is the number the invariant is written in. g is 3 and not 2.5 because a card
+ * must land on a whole pixel: an exact 50px pitch needs a half-pixel gap on each
+ * side of the rule, so the pitch rounds to 51 and the board grows by one pixel
+ * per row. g = 2 would have squeezed instead, at 49.
  *
- * WHERE THE SYMMETRY IS EXACT AND WHERE IT IS ONLY IMPROVED, because "16 in every
- * band" is a promise the arithmetic does not keep. The bottom gap is
- * `rowGap + bandPadding + r`, where `r` is what the lane count's floor division
- * leaves over of the band's share. Domain's height *is* its cap-row height, so
- * r = 0 and its two gaps are exactly 16 and 16; a flexible band whose share
- * exceeds its content keeps the surplus at the bottom.
+ * A GRID BAND BREATHES THE SAME GAP TOP AND BOTTOM — call it G, `bandGap`, 16,
+ * and it is a different and larger gap than g on purpose: g separates two rows of
+ * one stack, G separates one band from the next. The two constants under it are
+ * derived from G rather than chosen beside it, because the mistake this replaces
+ * was placing the column label at the band's own top: the label then sat flush
+ * under the band's rule with nothing above it, while the bottom carried
+ * `rowGap + bandPadding` of clear space. The label's height had been counted as
+ * if it were padding.
+ *
+ * G is 16 because 16 is already the grid's breathing space sideways — the lane
+ * between two columns (`grid.columnGap`). It is set *equal* to it and never
+ * computed *from* it, because `columnGap`'s value is load-bearing for edge
+ * routing and has to stay independently movable.
+ *
+ *     grid.headerHeight = ceil(G + columnHeaderHeight + g)
+ *                       = ceil(16 + 21 + 3) = 40
+ *
+ * — the distance from a band's top to the top of its first card. Its last term is
+ * g and not `rowGap` because `columnHeaderHeight` ENDS IN THE HEADER'S OWN
+ * BORDER: that border is the stack's first rule, so what follows it is one gap,
+ * exactly as after every other rule. Taken to a whole pixel so that every card
+ * still lands on one; the `ceil` has nothing to absorb at these three terms and
+ * is kept anyway, because the header's height is a line box and a line box is a
+ * fraction the moment a font size or a line height stops dividing evenly. It is
+ * written as that expression and not as the literal 40, so raising
+ * `columnHeaderHeight` moves the grid instead of leaving a hand-typed number
+ * standing beside a paragraph that claims otherwise.
+ *
+ *     grid.bandPadding  = G - RULE - g = 12
+ *
+ * THE CLOSING RULE IS WHY THIS IS THREE TERMS AND NOT TWO. A band's last cell is
+ * a full pitch — it ends g BELOW its own closing rule, not at the card — so the
+ * clear space under that rule is `g + bandPadding`, and setting it to `G - RULE`
+ * makes it exactly the clear space under the band's own top border, which is what
+ * the label above sits below. Two hairlines, the same 15px of air under each.
+ *
+ * WHERE THE SYMMETRY IS EXACT: everywhere, now. It used to be a promise the
+ * arithmetic kept only in Domain, because a band was given a share of the canvas
+ * and whatever the row count's floor division left over was dumped at the bottom.
+ * Bands are content-sized, so there is no remainder to leave over and no band
+ * with a strip of nothing under its last ruled row.
  *
  * THE GRAPH VIEW'S `headerHeight: 30` IS NOT PART OF THAT DERIVATION. That view
- * spaces with its own gaps and draws no bands, and the symmetric-gap reasoning has
- * not been worked through for it. Its `bandPadding` is 10 as well, reached
- * independently: it is the clearance under the tallest column when the pannable
- * extent is computed, and deriving it from a grid constant would make the grid's
- * row gap a term in the graph's extent — a coupling neither view asked for.
+ * spaces with its own gaps, draws no bands and rules no lanes, so it has no
+ * `stackGap` — there is no rule there for a card to be spaced against. Its
+ * `bandPadding` is 10, reached independently: it is the clearance under the
+ * tallest column when the pannable extent is computed, and deriving it from a
+ * grid constant would make the grid's row gap a term in the graph's extent — a
+ * coupling neither view asked for.
  */
 export const GEOMETRY = {
   /**
@@ -249,15 +325,28 @@ export const GEOMETRY = {
     cardWidth: 148,
     cardHeight: 44,
     columnGap: 16,
+    /** The dead space between two stacked cards — `2 * stackGap + ruleThickness`. */
     rowGap: GRID_ROW_GAP,
-    headerHeight: Math.ceil(BAND_GAP + COLUMN_HEADER_HEIGHT + GRID_ROW_GAP),
-    /** Space below a band's last row, before the next band's rule. See the derivation above. */
-    bandPadding: BAND_GAP - GRID_ROW_GAP,
+    /** g — the one gap the stack is spaced with, on both sides of every rule. */
+    stackGap: STACK_GAP,
+    headerHeight: Math.ceil(BAND_GAP + COLUMN_HEADER_HEIGHT + STACK_GAP),
+    /** Space below a band's closing rule, before the next band's rule. See the derivation above. */
+    bandPadding: BAND_GAP - RULE - STACK_GAP,
+    /**
+     * NOTHING ABOVE THE FIRST BAND. The board's top edge is the Domain band's
+     * own top rule, which is what a scroll to the top of the grid now reaches;
+     * a strip of empty canvas above it read as a rendering slip rather than as
+     * breathing space, because the band below it supplies its own.
+     *
+     * It is written as a zero rather than dropped so that the decision is where
+     * a reader looks for it, beside the graph view's 16.
+     */
+    topPadding: 0,
   },
   /**
-   * The graph view's own gaps and its own bottom clearance. `headerHeight` and
-   * `bandPadding` are literals on purpose — see the note above on why the grid's
-   * derivation is not extended to a view that draws no bands.
+   * The graph view's own gaps, its own bottom clearance and its own top padding.
+   * `headerHeight` and `bandPadding` are literals on purpose — see the note above
+   * on why the grid's derivation is not extended to a view that draws no bands.
    */
   graph: {
     cardWidth: 148,
@@ -266,19 +355,28 @@ export const GEOMETRY = {
     rowGap: 18,
     headerHeight: 30,
     bandPadding: 10,
+    /**
+     * Space above this view's row of column headers — except that the headers
+     * themselves sit at y = 0 and only the CARDS reserve it. That is stated at
+     * `ColumnHeader.y`, and `openingViewport` depends on it.
+     */
+    topPadding: 16,
   },
   /**
    * The column header block's own height — label line, its padding and its rule.
    *
-   * It is load-bearing twice: `grid.headerHeight` above is literally
-   * `bandGap + this + rowGap`, so every card in the grid is placed by it, and the
-   * header component is sized from it rather than being left to size itself. That
-   * is the rule at the top of this object in its sharpest form — the drawn header
-   * and the reserved header must be the one number.
+   * It is load-bearing three times over: `grid.headerHeight` above is literally
+   * `bandGap + this + stackGap`, so every card in the grid is placed by it; the
+   * header component is sized from it rather than being left to size itself; and
+   * the 1px it ends in is the stack's FIRST RULE, which is why the term after it
+   * is one `stackGap` and not a whole row gap. That is the rule at the top of this
+   * object in its sharpest form — the drawn header and the reserved header must be
+   * the one number.
    *
-   * The 21 is what the header this repo draws actually occupies: a `text-xs`
-   * label, which is a 12px font in a 16px line box, plus `pb-1` — 4px — plus the
-   * 1px `border-b` under it.
+   * The 21 is what the header this repo draws actually occupies, and it is
+   * written as that block's own sum — a 16px `text-xs` line box, 4px of `pb-1`,
+   * and `ruleThickness` — so the header's rule and the grid's spacing move
+   * together instead of each holding a private 1.
    *
    * IT WAS 18.5 AND THAT NUMBER CAME FROM A STYLESHEET THIS REPO DOES NOT HAVE:
    * a 9px label at a 1.5 line height, a 13.5px line box the browser does not
@@ -297,8 +395,24 @@ export const GEOMETRY = {
   columnHeaderHeight: COLUMN_HEADER_HEIGHT,
   /** The left gutter the grid's band label sits in. No column starts inside it. */
   bandGutter: 104,
-  /** Space above the first band, and above the graph view's row of headers. */
-  topPadding: 16,
+  /**
+   * HOW THICK A HAIRLINE IS DRAWN — the band's top border, the column header's
+   * bottom border, and the lane's ruling, all one pixel.
+   *
+   * It is in `GEOMETRY` because the grid's symmetric spacing is defined around
+   * it: `grid.rowGap` is `2 * stackGap + this` and `grid.bandPadding` pays for
+   * the closing rule out of the band's own gap, so a rule drawn two pixels thick
+   * would leave every card in the grid one pixel nearer the rule under it than
+   * the rule over it.
+   *
+   * EVERY RULE ON THE CANVAS IS DRAWN AT THIS NUMBER and none of them at a
+   * stylesheet's own hairline: the band and the column header set a border width
+   * from `GEOMETRY.ruleThickness` where a Tailwind `border-t`/`border-b` would
+   * have hardcoded 1px beside it, and the lane reads it off its own `LaneRun`,
+   * which this file filled in from the same constant. `columnHeaderHeight` above
+   * counts it too, because that block ends in one.
+   */
+  ruleThickness: RULE,
   /** G — the grid band's one symmetric gap. `grid.headerHeight` and `grid.bandPadding` derive from it. */
   bandGap: BAND_GAP,
 } as const;
@@ -325,116 +439,20 @@ function bandOfEntry(entry: NodeTypeEntry): Band {
   return bandOf(entry.name) ?? SATELLITE_BAND;
 }
 
-/** How tall a grid band holding `rows` stacked cards is, column header and padding included. */
+/**
+ * HOW TALL A GRID BAND HOLDING `rows` STACKED CARDS IS, column header, ruling and
+ * padding included — and it is the band's whole height, not a floor under some
+ * share of the screen.
+ *
+ * There is no `MIN_BAND_HEIGHT` beside it any more and no canvas split above it.
+ * A band is asked for `max(1, rows)` rows, so the least it is ever given is one
+ * row — 40 + 51 + 12 = 103 — and an empty band is exactly as tall as a band
+ * holding one card. That is the whole of the rule the deleted floor used to
+ * state, minus the arithmetic that made it necessary.
+ */
 function bandHeightFor(rows: number): number {
   const { cardHeight, rowGap, headerHeight, bandPadding } = GEOMETRY.grid;
   return headerHeight + rows * (cardHeight + rowGap) + bandPadding;
-}
-
-/**
- * THE LEAST A BAND MAY BE GIVEN: its header, one row, and its bottom padding —
- * 43 + 50 + 10 = 103, and it is written as `bandHeightFor(1)` so that it stays
- * one row exactly when the card, the header or the padding moves.
- *
- * IT IS A DEVIATION FROM LEGACY, AND IT IS DELIBERATE. That board split the
- * canvas and let the flexible bands take whatever the split gave them, which on
- * a short canvas was less than one row: `gridLayout`'s lane count floors to 0,
- * and Intent, Plan and Execution drew as bare header strips over an empty board
- * while Domain — the band the split calls the smallest — took half the screen
- * for its two columns. The requirement is that an empty grid never looks
- * shrunken, so the floor wins and the board is allowed to exceed the canvas: the
- * grid then scrolls, and scrolling is honest where collapsing is not.
- *
- * WHAT IT COSTS, stated rather than hidden: below a canvas of 528 the four bands
- * no longer sum to the canvas height, so the board has a strip of its own below
- * the fold. Above 528 nothing here changes anything — every share is already
- * over the floor and the `max()` is the share.
- *
- * AND IT ONLY EVER REACHES AN EMPTY BAND, which is the narrowest way to say what
- * it does. `gridLayout` takes `max(bandHeightFor(fullest), share)`, and a band
- * holding even one node has a dense height of at least `bandHeightFor(1)` — this
- * same 103 — so it was already floored. The rule this adds is that a band with
- * nothing in it is given the row a band with one thing in it would have had.
- * Measured over both layouts, five node sets and twelve canvas heights: six
- * snapshot keys moved, all six the EMPTY grid under 528, and nothing in the graph
- * view, in any populated grid, or in `typeAtPoint`'s answers.
- */
-const MIN_BAND_HEIGHT = bandHeightFor(1);
-
-/**
- * HOW MUCH VERTICAL ROOM EACH BAND IS ALLOTTED — a function of the canvas height
- * alone, and never of what a sibling band contains.
- *
- * Domain is expected to be the smallest of the four and Intent, Plan and Execution
- * to hold about the same amount, so the screen is divided that way and the empty
- * grid fills it: Domain takes its own full-stack height — derived from the cap
- * table, so changing that cap moves this with it — and the other three split what
- * is left equally. The last of the three absorbs the rounding remainder, so on any
- * canvas tall enough to give each band a row the four fill it exactly instead of
- * leaving a sliver of page under the bottom one. On a canvas that is not, the
- * one-row floor below wins and the board overruns; see `MIN_BAND_HEIGHT`.
- *
- * THERE IS DELIBERATELY NO SECOND PASS. Redistributing share from siblings'
- * content — giving a full band more of the screen and a sparse one less — was
- * tried and rejected: authoring the seventh Intent node shrank Plan and Execution
- * and deleted drawn lanes in bands nothing had been authored into. With a plain
- * `max(dense, share)` per band, authoring in band b changes b's height and the y
- * of the bands below it, and nothing else at all.
- *
- * A CONSEQUENCE WORTH SAYING OUT LOUD: a band's dense height can never exceed its
- * own cap-row height, and Domain's share *is* its cap-row height — so the `max()`
- * always picks the share and the Domain band's HEIGHT is constant forever. Only
- * its WIDTH grows. That holds at any cap, not only at 3.
- *
- * NO BAND IS EVER GIVEN LESS THAN ONE ROW, and 528 is the canvas height at which
- * that promise starts costing something. Domain's share is fixed at
- * `bandHeightFor(STACK_CAP.Domain)` = 43 + 3 * 50 + 10 = 203 whatever the canvas
- * does, while a flexible band needs `MIN_BAND_HEIGHT` = 103 before `gridLayout`
- * can rule its first lane row. Three of those plus Domain plus `topPadding` is
- * 16 + 203 + 309 = 528. At or above that the split fills the canvas exactly and
- * the `max()` below never fires; under it every flexible band is lifted to 103
- * and the board overruns the canvas by the difference — 128px at a 400px canvas,
- * where the alternative was three header strips with no lanes under them and
- * Domain holding 50.8% of the board for its two columns.
- *
- * THAT NUMBER MOVES WITH THE CARD AND WITH THE HEADER. The same arithmetic at the
- * legacy one-line card and its 9px header (row pitch 30, Domain 141, one row 81)
- * put the threshold at 400, which is why the board this ports from could leave
- * the floor out and still rule a row on every screen anyone tried. The two-line
- * card raised it by 120px and the header this repo actually draws by a further 8,
- * so the case that was theoretical there is the common one here — a 500px canvas
- * is an ordinary window with a panel open.
- */
-function bandShares(
-  present: readonly Band[],
-  canvasHeight: number,
-): Readonly<Record<Band, number>> {
-  const domain = bandHeightFor(STACK_CAP.Domain);
-  const flexible = present.filter((band) => band !== "Domain");
-  const remaining = Math.max(
-    0,
-    canvasHeight -
-      GEOMETRY.topPadding -
-      (present.includes("Domain") ? domain : 0),
-  );
-  const each = flexible.length === 0 ? 0 : Math.floor(remaining / flexible.length);
-
-  // The `max()` is the one-row floor, applied to every band and not only to the
-  // flexible three: Domain's own share is `bandHeightFor(STACK_CAP.Domain)` and
-  // therefore already over it at any cap above zero, so this changes nothing
-  // there and makes the floor a property of the function rather than of three of
-  // its four answers.
-  const shares: Record<Band, number> = {
-    Domain: Math.max(MIN_BAND_HEIGHT, domain),
-    Intent: 0,
-    Plan: 0,
-    Execution: 0,
-  };
-  for (const [index, band] of flexible.entries()) {
-    const share = index === flexible.length - 1 ? remaining - each * index : each;
-    shares[band] = Math.max(MIN_BAND_HEIGHT, share);
-  }
-  return shares;
 }
 
 /**
@@ -445,26 +463,36 @@ function bandShares(
  * THE COLUMN CURSOR IS THE WHOLE ALGORITHM. A type's x is not `index * pitch`,
  * which would assume every column is one card wide; it is a running cursor per
  * band, advanced by each type's own slot width. That is what makes the widening
- * work — an eleventh Requirement doubles the Requirement slot and pushes
+ * work — a sixth Requirement doubles the Requirement slot and pushes
  * AcceptanceCriterion and everything right of it across by one pitch — and it is
  * BAND-LOCAL: widening Intent moves nothing in Domain, Plan or Execution, because
  * every band starts its own cursor at the same gutter.
  *
- * THE FILL IS COLUMN-MAJOR AND FILLS TO THE CAP. Eleven nodes at a cap of ten are
- * 10 + 1, never 6 + 5: a stack you are reading does not re-balance under you when
+ * THE FILL IS COLUMN-MAJOR AND FILLS TO THE CAP. Six nodes at a cap of five are
+ * 5 + 1, never 3 + 3: a stack you are reading does not re-balance under you when
  * you author into it.
+ *
+ * A BAND IS AS TALL AS ITS FULLEST COLUMN, and at least one row. Nothing here
+ * reads a canvas, so the four bands are stacked at their own heights from y = 0
+ * and the board is whatever that sums to — taller than the screen when the graph
+ * is full, which the grid scrolls, and 412 tall when it is empty, which is four
+ * bands of one row each.
  *
  * A TYPE WITH NO NODES KEEPS ITS COLUMN, ITS HEADER AND ITS LANE — `subcols` is at
  * least 1 at n = 0. An empty column means "this type has no nodes", which is a
  * fact worth drawing; the ruled lanes go over every column and never only over the
  * populated ones, or an absence stops being readable.
  */
-export function gridLayout(
-  nodes: readonly SpecNode[],
-  canvasHeight: number,
-): Layout {
-  const { cardWidth, cardHeight, columnGap, rowGap, headerHeight, bandPadding } =
-    GEOMETRY.grid;
+export function gridLayout(nodes: readonly SpecNode[]): Layout {
+  const {
+    cardWidth,
+    cardHeight,
+    columnGap,
+    rowGap,
+    stackGap,
+    headerHeight,
+    topPadding,
+  } = GEOMETRY.grid;
   const columnPitch = cardWidth + columnGap;
   const rowPitch = cardHeight + rowGap;
 
@@ -473,9 +501,7 @@ export function gridLayout(
   const bands: BandHeader[] = [];
   const lanes: LaneRun[] = [];
 
-  const shares = bandShares(BANDS_PRESENT, canvasHeight);
-
-  let y = GEOMETRY.topPadding;
+  let y = topPadding;
   let widest = 0;
 
   for (const band of BANDS_PRESENT) {
@@ -489,9 +515,9 @@ export function gridLayout(
       const subcols = Math.max(1, Math.ceil(ofType.length / cap));
       const slotWidth = subcols * cardWidth + (subcols - 1) * columnGap;
 
-      // `y + bandGap`, not `y`: the label block gets the same clear space above it
-      // that the band's last row gets below it. `ColumnHeader.y` is therefore the
-      // label's y and not the band's top.
+      // `y + bandGap`, not `y`: the label block gets the same clear space under
+      // the band's own rule that the band's closing rule gets under it.
+      // `ColumnHeader.y` is therefore the label's y and not the band's top.
       columns.push({
         type: entry.name,
         band,
@@ -517,18 +543,18 @@ export function gridLayout(
       cursor += slotWidth + columnGap;
     }
 
-    const height = Math.max(bandHeightFor(fullest), shares[band]);
+    // ONE ROW FOR AN EMPTY BAND, and the fullest column's rows for any other.
+    // `fullest` is already clamped to the cap by the loop above, so this can
+    // never ask for a row past the cap — a card past it starts a sub-column.
+    const rows = Math.max(1, fullest);
+    const height = bandHeightFor(rows);
     // `width` is patched below, once every band has been measured and the board's
     // own width is known — a band's strip spans the whole board, gutter included.
     bands.push({ band, label: band, x: 0, y, width: 0, height });
 
-    // The lanes fill the band's own height and stop at the cap: below it a drawn
-    // row would be a slot no node could reach, because the next node past the cap
-    // starts a sub-column instead.
-    const laneRows = Math.min(
-      cap,
-      Math.max(0, Math.floor((height - headerHeight - bandPadding) / rowPitch)),
-    );
+    // Every lane in the band is ruled to the band's own row count, so a column
+    // with nothing in it shows the same ruled cells as its busiest neighbour and
+    // the band has no unruled strip under its last row.
     for (const slot of slots) {
       for (let sub = 0; sub < slot.subcols; sub += 1) {
         lanes.push({
@@ -538,8 +564,11 @@ export function gridLayout(
           x: slot.x + sub * columnPitch,
           y: y + headerHeight,
           width: cardWidth,
-          height: laneRows * rowPitch,
-          rows: laneRows,
+          height: rows * rowPitch,
+          rows,
+          rowPitch,
+          ruleOffset: cardHeight + stackGap,
+          ruleThickness: GEOMETRY.ruleThickness,
         });
       }
     }
@@ -567,10 +596,23 @@ export function gridLayout(
  * by band and this view draws no bands, and a lane is a picture of the fixed slots
  * a grid has and a free canvas does not. This view pans and zooms, so a long
  * column is scrolled to rather than folded sideways.
+ *
+ * IT KEEPS ITS TOP PADDING WHERE THE GRID DROPPED ITS OWN. The grid's board now
+ * starts at its first band's rule; here the headers sit at y = 0 and the cards
+ * hang `topPadding` below them, which is the clearance `openingViewport` anchors
+ * against. The two views' paddings were one shared number and are now one each,
+ * so the grid's zero cannot travel.
  */
 export function graphLayout(nodes: readonly SpecNode[]): Layout {
-  const { cardWidth, cardHeight, columnGap, rowGap, headerHeight, bandPadding } =
-    GEOMETRY.graph;
+  const {
+    cardWidth,
+    cardHeight,
+    columnGap,
+    rowGap,
+    headerHeight,
+    bandPadding,
+    topPadding,
+  } = GEOMETRY.graph;
   const placements: Placement[] = [];
   const columns: ColumnHeader[] = [];
 
@@ -599,7 +641,7 @@ export function graphLayout(nodes: readonly SpecNode[]): Layout {
         type: entry.name,
         band,
         x,
-        y: GEOMETRY.topPadding + headerHeight + row * (cardHeight + rowGap),
+        y: topPadding + headerHeight + row * (cardHeight + rowGap),
       });
     }
     widest = Math.max(widest, x + cardWidth);
@@ -614,10 +656,7 @@ export function graphLayout(nodes: readonly SpecNode[]): Layout {
     lanes: [],
     width: widest + columnGap,
     height:
-      GEOMETRY.topPadding +
-      headerHeight +
-      tallest * (cardHeight + rowGap) +
-      bandPadding,
+      topPadding + headerHeight + tallest * (cardHeight + rowGap) + bandPadding,
   };
 }
 
@@ -643,12 +682,12 @@ export function graphLayout(nodes: readonly SpecNode[]): Layout {
  * pixel of a slot is the slot and the first pixel past it is the gap between two
  * columns and belongs to no type.
  *
- * THE REGION IS THE BAND, NOT THE DRAWN LANE. A band keeps its share of the canvas
- * whether or not it has rows to fill it — the lanes stop at the stack cap and the
- * surplus becomes bottom padding — so under a column's last ruled row there is a
- * strip with nothing drawn in it that is still inside the band, and a click there
- * answers that column's type. That is deliberate: the strip is inside the type's
- * own slot, and a node authored "here" does land in that column.
+ * THE REGION IS THE BAND, NOT THE DRAWN LANE. A band is its rows plus its header
+ * and its bottom padding, so between a band's closing rule and the next band's
+ * top there is a strip with nothing drawn in it that is still inside the band,
+ * and a click there answers that column's type. That is deliberate: the strip is
+ * inside the type's own slot, and a node authored "here" does land in that
+ * column.
  *
  * `null` MEANS NO PRE-SELECTION, and it is a decision rather than a gap. Over the
  * band gutter, past the last band, between two columns, or outside the board

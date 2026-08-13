@@ -36,7 +36,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { formatCreatedAt } from "./spec-node";
+import { formatTimestamp } from "./spec-node";
 
 export type NodePanelMode = "create" | "view" | "edit";
 
@@ -337,13 +337,18 @@ export function NodePanel({
                   so the breaks they put in it are part of what they wrote. */}
               <p className="text-sm whitespace-pre-wrap">{node.content}</p>
             </Field>
-            {/* CREATED IS METADATA AND NOT A SIXTH FIELD, which is worth
+            {/* UPDATED IS METADATA AND NOT A SIXTH FIELD, which is worth
                 recording because a node is asked to have five. The daemon sets
-                it, no form offers it and no edit can move it — the create form
-                is exactly the five that were asked for — so it is shown for the
-                same reason a file's date is shown beside its name. */}
-            <Field label="Created">
-              <span className="text-sm">{formatCreatedAt(node.createdAt)}</span>
+                it and no form offers it — the create form is exactly the five
+                that were asked for — so it is shown for the same reason a
+                file's date is shown beside its name. It is the modified instant
+                and not the created one for that same reason: what a person
+                wants from a date beside a document is how current what they are
+                reading is, and on a node that has been edited the creation
+                instant answers a different question. A node nobody has edited
+                shows the instant it was written, which is the true answer. */}
+            <Field label="Updated">
+              <span className="text-sm">{formatTimestamp(node.updatedAt)}</span>
             </Field>
           </div>
         ) : (
@@ -449,9 +454,9 @@ export function NodePanel({
             </div>
 
             {mode === "edit" && node ? (
-              <Field label="Created">
+              <Field label="Updated">
                 <span className="text-sm">
-                  {formatCreatedAt(node.createdAt)}
+                  {formatTimestamp(node.updatedAt)}
                 </span>
               </Field>
             ) : null}
