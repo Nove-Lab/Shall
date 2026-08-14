@@ -12,13 +12,16 @@ import {
 } from "node:fs/promises";
 import path from "node:path";
 import {
-  attributesFor,
+  BAND_FOLDERS,
+  bandFolderOf,
+  bandOfFolder,
   formatEdgeId,
   isNodeType,
   isPermittedTriple,
-  judgeAttributes,
+  judgeBody,
   judgeNodeId,
   judgeText,
+  nextIdSuggestion,
   parseEdgeId,
   type SpecEdge,
   type SpecNode,
@@ -26,6 +29,7 @@ import {
 } from "../graph/index.js";
 import {
   emitNodeFile,
+  emitScaffold,
   parseNodeFile,
   type NodeFileEdge,
   type NodeFileFields,
@@ -278,22 +282,37 @@ interface Discovery {
    * those questions wrongly rather than not at all.
    */
   readonly blind: ShutFolder[];
+  /**
+   * Type folders standing outside their place — the old flat layout at the top
+   * of `spec/`, or a type filed under the wrong band. Their files are refused
+   * at read and therefore never become candidates, WHICH MAKES THEM A HOLE OF
+   * THE SAME KIND AS A SHUT FOLDER: an id chosen while nodes are stranded
+   * there could collide with one of them the moment the folder moves to where
+   * its sentence points. A write refuses while one exists.
+   */
+  readonly misplaced: string[];
 }
 
 /**
- * Every `.md` under a type folder, and a sentence for every `.md` that is
- * somewhere else.
+ * Every `.md` under `spec/<band>/<Type>/`, and a sentence for every `.md` that
+ * is somewhere else.
  *
  * A markdown file in the wrong place is REFUSED RATHER THAN IGNORED. Silence
  * there would be the worst answer available: a person who wrote a node and put
  * it one folder too high would see it simply not appear, with nothing to read
  * and nothing to fix. Anything that is not a `.md` file is another matter — a
  * README, a `.gitkeep`, an editor's swap file — and passes without a word.
+ *
+ * A TYPE FOLDER AT THE TOP IS THE OLD LAYOUT, MET BY NAME. Every spec written
+ * before the bands moved in is one `git mv` from reading again, and the
+ * sentence says exactly where the folder goes — one sentence per folder, not
+ * one per file, because the fix is one move.
  */
 async function discover(specDir: string): Promise<Discovery> {
   const candidates: Candidate[] = [];
   const problems: FileProblem[] = [];
   const blind: ShutFolder[] = [];
+  const misplaced: string[] = [];
 
   const listing = await readDirectory(specDir);
   if (listing.problem !== null) {
@@ -302,40 +321,60 @@ async function discover(specDir: string): Promise<Discovery> {
       message: `The spec folder could not be listed: ${listing.problem}. Nothing under it is read.`,
     });
     blind.push({ folder: "The spec folder", because: listing.problem });
-    return { candidates, problems, blind };
+    return { candidates, problems, blind, misplaced };
   }
 
   for (const entry of listing.entries) {
     if (await isFolder(specDir, entry)) {
-      if (isNodeType(entry.name)) {
-        await collectNodes(specDir, entry.name, candidates, problems, blind);
-      } else {
-        await collectStrays(specDir, entry.name, entry.name, problems);
+      if (bandOfFolder(entry.name) !== null) {
+        await collectBand(
+          specDir,
+          entry.name,
+          candidates,
+          problems,
+          blind,
+          misplaced,
+        );
+        continue;
       }
+      if (isNodeType(entry.name)) {
+        misplaced.push(entry.name);
+        problems.push({
+          file: entry.name,
+          message: `${entry.name} sits at the top of the spec folder, but a type folder lives inside its band: ${bandFolderOf(entry.name)}/${entry.name}. Every node file inside it is left out until the folder moves.`,
+        });
+        continue;
+      }
+      await collectStrays(
+        specDir,
+        entry.name,
+        `${entry.name} is not one of spec's four band folders (${BAND_FOLDERS.join(", ")})`,
+        problems,
+      );
       continue;
     }
     if (entry.name.endsWith(MARKDOWN_SUFFIX)) {
       problems.push({
         file: entry.name,
-        message: `${entry.name} sits at the top of the spec folder, but a node file lives in the folder named after its type: <Type>/${entry.name}.`,
+        message: `${entry.name} sits at the top of the spec folder, but a node file lives at <band>/<Type>/${entry.name}.`,
       });
     }
   }
 
-  return { candidates, problems, blind };
+  return { candidates, problems, blind, misplaced };
 }
 
 /**
- * A TYPE FOLDER MAY BE A SYMBOLIC LINK. `readdir` answers with `lstat`
- * semantics, so a link pointing at a folder is not a directory to it — and a
- * `Term` that is a link would have been neither walked nor mentioned, which is
- * the silent disappearance the stray-file refusal below exists to prevent.
+ * A BAND OR TYPE FOLDER MAY BE A SYMBOLIC LINK. `readdir` answers with `lstat`
+ * semantics, so a link pointing at a folder is not a directory to it — and an
+ * `intent` that is a link would have been neither walked nor mentioned, which
+ * is the silent disappearance the stray-file refusal below exists to prevent.
  *
- * Only the top of the spec folder resolves links. `collectStrays` recurses and
- * would follow a link back to a folder above it forever; a node file has one
- * place to be, so nothing is lost by leaving the walk below to `lstat`.
+ * Only the two levels the layout names resolve links. `collectStrays` recurses
+ * and would follow a link back to a folder above it forever; a node file has
+ * one place to be, so nothing is lost by leaving the walk below to `lstat`.
  */
-async function isFolder(specDir: string, entry: Dirent): Promise<boolean> {
+async function isFolder(parent: string, entry: Dirent): Promise<boolean> {
   if (entry.isDirectory()) {
     return true;
   }
@@ -343,11 +382,67 @@ async function isFolder(specDir: string, entry: Dirent): Promise<boolean> {
     return false;
   }
   try {
-    return (await stat(path.join(specDir, entry.name))).isDirectory();
+    return (await stat(path.join(parent, entry.name))).isDirectory();
   } catch {
     // A link pointing at nothing is nothing, and the `.md` test below has the
     // next word about it.
     return false;
+  }
+}
+
+/**
+ * One band folder: the type folders that belong to this band are walked, and
+ * everything else is answered with the sentence that names the right place —
+ * including a type folder filed under the wrong band, which is real work
+ * (nodes somebody wrote) one move from reading again.
+ */
+async function collectBand(
+  specDir: string,
+  band: string,
+  candidates: Candidate[],
+  problems: FileProblem[],
+  blind: ShutFolder[],
+  misplaced: string[],
+): Promise<void> {
+  const listing = await readDirectory(path.join(specDir, band));
+  if (listing.problem !== null) {
+    problems.push({
+      file: band,
+      message: `${band} could not be listed: ${listing.problem}. Every node file inside it is left out.`,
+    });
+    blind.push({ folder: band, because: listing.problem });
+    return;
+  }
+  for (const entry of listing.entries) {
+    const relative = `${band}/${entry.name}`;
+    if (await isFolder(path.join(specDir, band), entry)) {
+      if (isNodeType(entry.name)) {
+        const home = bandFolderOf(entry.name);
+        if (home === band) {
+          await collectNodes(specDir, band, entry.name, candidates, problems, blind);
+        } else {
+          misplaced.push(relative);
+          problems.push({
+            file: relative,
+            message: `${relative} is a ${entry.name} folder in the wrong band — a ${entry.name} lives in ${home}/${entry.name}. Every node file inside it is left out until the folder moves.`,
+          });
+        }
+        continue;
+      }
+      await collectStrays(
+        specDir,
+        relative,
+        `${relative} is not one of the canon's node types`,
+        problems,
+      );
+      continue;
+    }
+    if (entry.name.endsWith(MARKDOWN_SUFFIX)) {
+      problems.push({
+        file: relative,
+        message: `${relative} sits outside a type folder, but a node file lives in the folder named after its type: ${band}/<Type>/${entry.name}.`,
+      });
+    }
   }
 }
 
@@ -358,18 +453,20 @@ async function isFolder(specDir: string, entry: Dirent): Promise<boolean> {
  */
 async function collectNodes(
   specDir: string,
+  band: string,
   type: string,
   candidates: Candidate[],
   problems: FileProblem[],
   blind: ShutFolder[],
 ): Promise<void> {
-  const listing = await readDirectory(path.join(specDir, type));
+  const relative = `${band}/${type}`;
+  const listing = await readDirectory(path.join(specDir, band, type));
   if (listing.problem !== null) {
     problems.push({
-      file: type,
-      message: `${type} could not be listed: ${listing.problem}. Every node file inside it is left out.`,
+      file: relative,
+      message: `${relative} could not be listed: ${listing.problem}. Every node file inside it is left out.`,
     });
-    blind.push({ folder: type, because: listing.problem });
+    blind.push({ folder: relative, because: listing.problem });
     return;
   }
   for (const entry of listing.entries) {
@@ -377,8 +474,8 @@ async function collectNodes(
       continue;
     }
     candidates.push({
-      file: `${type}/${entry.name}`,
-      absolutePath: path.join(specDir, type, entry.name),
+      file: `${relative}/${entry.name}`,
+      absolutePath: path.join(specDir, band, type, entry.name),
       type,
       id: entry.name.slice(0, -MARKDOWN_SUFFIX.length),
     });
@@ -388,12 +485,13 @@ async function collectNodes(
 /**
  * Walked to the bottom rather than one level deep, because the sentence names
  * the file and a file nested three folders down is exactly the one nobody would
- * otherwise find.
+ * otherwise find. `reason` is the clause about the folder at the top of the
+ * walk — what it is not — so every file inside answers with the same one fact.
  */
 async function collectStrays(
   specDir: string,
   relative: string,
-  folder: string,
+  reason: string,
   problems: FileProblem[],
 ): Promise<void> {
   const listing = await readDirectory(path.join(specDir, relative));
@@ -407,13 +505,13 @@ async function collectStrays(
   for (const entry of listing.entries) {
     const child = `${relative}/${entry.name}`;
     if (entry.isDirectory()) {
-      await collectStrays(specDir, child, folder, problems);
+      await collectStrays(specDir, child, reason, problems);
       continue;
     }
     if (entry.name.endsWith(MARKDOWN_SUFFIX)) {
       problems.push({
         file: child,
-        message: `${folder} is not one of the canon's node types, so ${child} is not read as a node. A node file lives in the folder named after its type.`,
+        message: `${reason}, so ${child} is not read as a node. A node file lives at <band>/<Type>/<id>.md.`,
       });
     }
   }
@@ -689,14 +787,13 @@ export async function loadGraph(specDir: string): Promise<SpecGraph> {
     // having been written when it was last modified.
     const stamp = Math.floor(reading.mtimeMs);
     // COPIED OUT OF THE CACHE AND NOT HANDED OUT OF IT. The parse behind
-    // `parsed` is kept for the next query, so a caller that wrote into the map
-    // it was given would be writing into every later answer — a graph that
-    // disagrees with the files, which is the one thing this module exists not to
-    // do. The spread above copies the node's own shell; the attributes are a map
-    // and need their own.
+    // `parsed` is kept for the next query, so a caller that wrote into the
+    // object it was given would be writing into every later answer — a graph
+    // that disagrees with the files, which is the one thing this module exists
+    // not to do. The spread copies the node whole: every field, the body
+    // included, is an immutable string.
     nodes.push({
       ...parsed,
-      attributes: { ...parsed.attributes },
       createdAt: stamp,
       updatedAt: stamp,
     });
@@ -831,11 +928,19 @@ async function writeNodeFile(
     throw new Error(`Emitted a ${type} file that cannot be read back: ${id}`);
   }
 
-  const directory = path.join(specDir, type);
+  const band = bandFolderOf(type);
+  if (band === null) {
+    // Unreachable for the same reason: `emitNodeFile` above already threw for a
+    // type outside the canon, and every canon type has a band.
+    throw new Error(`No band folder for node type: ${type}`);
+  }
+  const relative = `${band}/${type}/${fileName}`;
+  const directory = path.join(specDir, band, type);
   const target = path.join(directory, fileName);
   try {
-    // On demand, because git does not carry an empty folder: pre-creating all 23
-    // would put 23 folders in a person's working tree that no commit could keep.
+    // On demand, because git does not carry an empty folder: pre-creating every
+    // band and type would put twenty-seven folders in a person's working tree
+    // that no commit could keep.
     await mkdir(directory, { recursive: true });
     await writeBytes(target, text);
   } catch (error) {
@@ -845,14 +950,14 @@ async function writeNodeFile(
     // `conflict`, because the payload is fine and it is the folder that is in
     // the way.
     throw conflict(
-      `${type}/${fileName} could not be written: ${describeFailure(error)}.`,
+      `${relative} could not be written: ${describeFailure(error)}.`,
     );
   }
 
   // The writer knows what it wrote, so it drops the entry rather than leaving
   // the next stat to notice — which closes the same-millisecond window for
   // every write this module makes.
-  cacheFor(specDir).delete(`${type}/${fileName}`);
+  cacheFor(specDir).delete(relative);
 
   const stamp = Math.floor((await stat(target)).mtimeMs);
   return { ...parsed, createdAt: stamp, updatedAt: stamp };
@@ -888,6 +993,16 @@ async function discoverForWriting(specDir: string): Promise<Discovery> {
   if (shut !== undefined) {
     throw conflict(
       `${shut.folder} could not be listed: ${shut.because}. Nothing was written, because Shall cannot tell what this project holds while one of its folders is shut.`,
+    );
+  }
+  // A misplaced type folder is the same hole a shut one is, self-inflicted:
+  // its files are refused at read, so the ids they claim are invisible to the
+  // checks above — and an id handed out now would collide with one of them the
+  // moment the folder moves to where its own sentence points.
+  const stranded = discovery.misplaced[0];
+  if (stranded !== undefined) {
+    throw conflict(
+      `${stranded} is a type folder out of its place, and the ids inside it cannot be counted. Nothing was written — the read side names the folder's home, and the write is safe once it moves.`,
     );
   }
   return discovery;
@@ -941,20 +1056,19 @@ async function readNodeFile(
   return { node, edges: reading.edges };
 }
 
-/** The values a write door hands over, trimmed and judged as one node's worth. */
-function judgeFields(type: string, values: SpecNodeValues): NodeFileFields {
-  const judged = judgeAttributes(type, values.attributes);
-  const first = judged.problems[0];
-  if (first !== undefined) {
-    throw invalid(first);
-  }
-  // The two names are only trimmed here. Whether what is left is usable — empty,
-  // a NUL, a lone surrogate — is asked by the reader over the emitted bytes, so
-  // that one set of sentences answers for both doors and for the loader.
+/**
+ * The values a write door hands over, settled as the file would hold them: the
+ * names trimmed, the body's line endings and blank-line edges brought to the
+ * canonical form. SETTLED AND NOT JUDGED — whether what is left is usable
+ * (empty names, a NUL, the byte cap) is asked by the reader over the emitted
+ * bytes, so that one set of sentences answers for both doors and for the
+ * loader, and in the order a person reads a file: names first, body after.
+ */
+function settleFields(values: SpecNodeValues): NodeFileFields {
   return {
     shortName: judgeText("A short name", values.shortName).value,
     name: judgeText("A name", values.name).value,
-    attributes: judged.values,
+    body: judgeBody(values.body).value,
   };
 }
 
@@ -976,12 +1090,13 @@ export async function createNodeFile(
 ): Promise<SpecNode> {
   const root = path.resolve(specDir);
   return withSpecDir(root, async () => {
-    // Nothing further can be said without a roster — not which attributes are
-    // wrong, not what the file would look like — so this answer is alone.
-    if (attributesFor(type) === null) {
+    // Nothing further can be said about a type outside the canon — not which
+    // folder the file would live in, not what it would look like — so this
+    // answer is alone.
+    if (!isNodeType(type)) {
       throw invalid(`Unknown node type: ${type}`);
     }
-    const fields = judgeFields(type, values);
+    const fields = settleFields(values);
     const shape = judgeNodeId(id);
     if (shape !== null) {
       throw invalid(shape);
@@ -1005,6 +1120,78 @@ export async function createNodeFile(
   });
 }
 
+/** What a scaffold answered with: the id it chose, and the file, relative to the spec folder. */
+export interface ScaffoldedNode {
+  readonly id: string;
+  readonly file: string;
+}
+
+/**
+ * A starting file for one new node, written at the node's own path with the
+ * next free id as its name — the door behind `shall add-spec-node`.
+ *
+ * IT WRITES A FILE THAT REFUSES ITSELF, ON PURPOSE. The scaffold ships with
+ * both names blank, so until somebody fills it in the loader serves "A short
+ * name is required." over it instead of half a node — the same guidance loop a
+ * hand-copied template has always had. This is the one write in this module
+ * that skips the read-back invariant, because that invariant is about nodes
+ * and a scaffold is deliberately not one yet.
+ *
+ * THE ID MOVES PAST EVERYTHING TAKEN, in the suggestion's own way: one past
+ * the highest ordinal of the type's shape, so a deleted node's id is never
+ * reused — an edge left over from the old holder would otherwise attach to the
+ * new one without a word. An id that collides with a hand-written one in
+ * another case pushes the ask one further rather than writing a file two
+ * filesystems cannot keep apart.
+ */
+export async function scaffoldNodeFile(
+  specDir: string,
+  type: string,
+): Promise<ScaffoldedNode> {
+  const root = path.resolve(specDir);
+  return withSpecDir(root, async () => {
+    if (!isNodeType(type)) {
+      throw invalid(`Unknown node type: ${type}`);
+    }
+    const { candidates } = await discoverForWriting(root);
+
+    const taken = new Set(
+      candidates.map((candidate) => candidate.id.toLowerCase()),
+    );
+    const ids = candidates.map((candidate) => candidate.id);
+    let id = nextIdSuggestion(type, ids);
+    while (id !== "" && taken.has(id.toLowerCase())) {
+      // A case collision. The suggestion is now the highest id of its own
+      // shape, so pushing it into the list and asking again moves one past it.
+      ids.push(id);
+      id = nextIdSuggestion(type, ids);
+    }
+    if (id === "") {
+      throw conflict(
+        `Every ${type} id of the suggested shape is taken, so no name could be chosen. Write the file by hand with an id of your own.`,
+      );
+    }
+
+    const band = bandFolderOf(type);
+    if (band === null) {
+      // Unreachable: every canon type has a band, and the type was checked above.
+      throw new Error(`No band folder for node type: ${type}`);
+    }
+    const fileName = `${id}${MARKDOWN_SUFFIX}`;
+    const relative = `${band}/${type}/${fileName}`;
+    const directory = path.join(root, band, type);
+    try {
+      await mkdir(directory, { recursive: true });
+      await writeBytes(path.join(directory, fileName), emitScaffold(type));
+    } catch (error) {
+      throw conflict(
+        `${relative} could not be written: ${describeFailure(error)}.`,
+      );
+    }
+    return { id, file: relative };
+  });
+}
+
 /**
  * The node's values, replaced. Its type, its id and its relations are not the
  * edit's to reach: the first two are the path, and the edges are lines in this
@@ -1023,11 +1210,11 @@ export async function updateNodeFile(
       throw missing(`Unknown node: ${id}`);
     }
     // The disk is asked about before the payload is judged, because both
-    // questions are about what is there and a person who is told their statement
+    // questions are about what is there and a person who is told their body
     // is too long, then told the file was unreadable all along, has been sent
     // twice for one answer.
     const held = await readNodeFile(found);
-    const fields = judgeFields(found.type, values);
+    const fields = settleFields(values);
     return writeNodeFile(root, found.type, id, fields, held.edges);
   });
 }

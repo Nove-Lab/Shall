@@ -105,6 +105,34 @@ export function typesInBand(band: Band): readonly NodeTypeEntry[] {
 }
 
 /**
+ * The band as a FOLDER NAME — the level between `spec/` and the type folder,
+ * so two hundred nodes fan out over four drawers instead of twenty-three.
+ *
+ * Lowercase on purpose: the type folder beside it is canon-spelled and
+ * CamelCase, and the two reading differently is what keeps a path legible —
+ * `spec/intent/Requirement/R-0001.md` says which segment is whose at a glance.
+ *
+ * THIS PROMOTES THE BAND FROM A DRAWING CHOICE TO A STORAGE FACT. The
+ * satellites go where `bandOf` draws them (Intent), and moving that choice
+ * later would move committed files, so it is now as pinned as the prefixes
+ * above.
+ */
+export function bandFolderOf(type: string): string | null {
+  const band = bandOf(type);
+  return band === null ? null : band.toLowerCase();
+}
+
+/** The four folder names under `spec/`, in band order. */
+export const BAND_FOLDERS: readonly string[] = BAND_ORDER.map((band) =>
+  band.toLowerCase(),
+);
+
+/** The band a folder name spells, or null for a name that is not a band folder. */
+export function bandOfFolder(folder: string): Band | null {
+  return BAND_ORDER.find((band) => band.toLowerCase() === folder) ?? null;
+}
+
+/**
  * Every type, grouped by band and keeping canon order inside each band — the
  * column order of both Spec-plane views.
  *

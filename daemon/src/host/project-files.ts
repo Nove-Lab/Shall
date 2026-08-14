@@ -9,10 +9,10 @@ import {
   writeFile,
 } from "node:fs/promises";
 import path from "node:path";
-import { NODE_TYPES } from "@shall/core/graph";
+import { bandFolderOf, NODE_TYPES } from "@shall/core/graph";
 import { emitTemplate } from "@shall/core/serialize";
 import type { ProjectMetadata } from "../types.js";
-import { isShallHomePath } from "./shall-home.js";
+import { getShallHome, isShallHomePath } from "./shall-home.js";
 
 export async function pathExists(targetPath: string): Promise<boolean> {
   try {
@@ -38,12 +38,22 @@ export function getProjectMetadataPath(projectPath: string): string {
   return path.join(getProjectShallPath(projectPath), "project.json");
 }
 
-/** The spec graph itself: one folder per type, one committed file per node. */
+/** The spec graph itself: `<band>/<Type>/<id>.md`, one committed file per node. */
 export function getProjectSpecPath(projectPath: string): string {
   return path.join(getProjectShallPath(projectPath), "spec");
 }
 
-/** The 23 starting files, committed beside the spec they are copied into. */
+/**
+ * The 23 reference templates, regenerated under Shall's own home — one set for
+ * the machine, not one per project. A project carries its spec and nothing
+ * else; the starting shapes are Shall's to keep current, and a copy in every
+ * repository was a copy that went stale the day Shall was upgraded.
+ */
+export function getSharedTemplatesPath(): string {
+  return path.join(getShallHome().root, "templates");
+}
+
+/** Where an older Shall wrote its per-project copy — read only to remove it. */
 export function getProjectTemplatesPath(projectPath: string): string {
   return path.join(getProjectShallPath(projectPath), "templates");
 }
@@ -51,20 +61,24 @@ export function getProjectTemplatesPath(projectPath: string): string {
 /**
  * One node file's text, or null when nothing is there.
  *
- * `<Type>/<id>.md` is `core/store`'s layout and this is the only place the
- * daemon repeats it — `checkSpec` needs the BYTES of a file the loader already
- * read as a node, to say whether they are the bytes Shall would have written,
- * and the loader hands back nodes rather than text. A file that vanished
- * between the two reads is not an error: it is a node the next check will not
- * mention either.
+ * `<band>/<Type>/<id>.md` is `core/store`'s layout and this is the only place
+ * the daemon repeats it — `checkSpec` needs the BYTES of a file the loader
+ * already read as a node, to say whether they are the bytes Shall would have
+ * written, and the loader hands back nodes rather than text. A file that
+ * vanished between the two reads is not an error: it is a node the next check
+ * will not mention either.
  */
 export async function readSpecNodeFile(
   specPath: string,
   type: string,
   id: string,
 ): Promise<string | null> {
+  const band = bandFolderOf(type);
+  if (band === null) {
+    return null;
+  }
   try {
-    return await readFile(path.join(specPath, type, `${id}.md`), "utf8");
+    return await readFile(path.join(specPath, band, type, `${id}.md`), "utf8");
   } catch {
     return null;
   }
@@ -154,11 +168,9 @@ export async function writeProjectMetadata(
 /**
  * The 23 templates, WRITTEN ONLY WHERE THE BYTES DIFFER.
  *
- * `emitTemplate` is a pure function of the registry, so regenerating is
- * byte-idempotent and this can run on every open. Comparing first is what keeps
- * `git status` quiet: a project whose templates are current keeps their mtimes
- * and shows no change, and a Shall upgrade that widens a vocabulary shows up as
- * an ordinary diff a person can read and commit.
+ * `emitTemplate` is a pure function of the canon, so regenerating is
+ * byte-idempotent and this can run on every start and every open. Comparing
+ * first keeps the folder's mtimes quiet when there is nothing to do.
  */
 async function writeTemplatesInto(directory: string): Promise<void> {
   await mkdir(directory, { recursive: true });
@@ -171,14 +183,29 @@ async function writeTemplatesInto(directory: string): Promise<void> {
         return;
       }
       // Landed by rename like every other file Shall writes, so an agent
-      // copying a template never reads half of one.
+      // reading a template never reads half of one.
       await writeByRename(target, text);
     }),
   );
 }
 
-export async function writeTemplates(projectPath: string): Promise<void> {
-  await writeTemplatesInto(getProjectTemplatesPath(projectPath));
+/** The reference set under `~/.shall/templates`, brought current. */
+export async function writeSharedTemplates(): Promise<void> {
+  await writeTemplatesInto(getSharedTemplatesPath());
+}
+
+/**
+ * An older Shall committed a template set into every project, and a stale set
+ * is worse than none: an agent reading one would learn a format the daemon no
+ * longer writes. The folder is Shall's own generated output, so it is removed
+ * whole — the deletion shows up in `git status`, which is how the person hears
+ * that templates moved to `~/.shall/templates`.
+ */
+export async function removeProjectTemplates(projectPath: string): Promise<void> {
+  await rm(getProjectTemplatesPath(projectPath), {
+    recursive: true,
+    force: true,
+  });
 }
 
 /**
@@ -230,8 +257,10 @@ export async function writeProjectFiles(
       writeFile(path.join(temporaryPath, ".gitignore"), GITIGNORE, "utf8"),
       // Empty, and the first commit will not carry it. It is made anyway so
       // that a person who opens the folder sees where their nodes will go.
+      // The templates are not here: they are Shall's reference set under
+      // `~/.shall/templates`, and `shall add-spec-node` writes a node's
+      // starting file straight into the spec.
       mkdir(path.join(temporaryPath, "spec"), { recursive: false }),
-      writeTemplatesInto(path.join(temporaryPath, "templates")),
     ]);
     await rename(temporaryPath, shallPath);
   } catch (error) {

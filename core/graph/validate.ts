@@ -1,5 +1,3 @@
-import { attributesFor, TEXT_BYTE_CAP } from "./attributes.js";
-
 /**
  * The judgement itself, held once and read by everything that writes or reads a
  * spec file — the daemon's two write doors and the loader that parses a folder
@@ -13,10 +11,24 @@ import { attributesFor, TEXT_BYTE_CAP } from "./attributes.js";
  * PART OF THE CONTRACT: `problems[0]` is exactly the sentence the door used to
  * throw, and every rule below is written in the order a person can act on it.
  *
+ * WHAT IS JUDGED IS SMALL ON PURPOSE. The body of a node is the specification
+ * itself and it is free markdown — the graph does not read it, so nothing here
+ * has an opinion about its headings, its sections or its shape. What remains to
+ * judge is only what every text file owes its readers: characters that survive
+ * the trip through UTF-8 and git, and a size the tools can carry.
+ *
  * Nothing here reads a database, a file or a clock, so it is as safe in a
  * browser bundle as it is in the daemon — which is why the byte cap is measured
  * with `TextEncoder` and not with `Buffer`.
  */
+
+/**
+ * The per-value byte cap, 256 KiB — the previous system's measurement trigger
+ * for blob storage, kept as the one number that bounds what a single node may
+ * hold. Held once: the write doors and the loader both read it from here, and a
+ * cap spelled in two places is two caps.
+ */
+export const TEXT_BYTE_CAP = 262144;
 
 /** What `judgeText` found: the value as it would be stored, and what is wrong with it. */
 export interface TextJudgement {
@@ -24,10 +36,10 @@ export interface TextJudgement {
   readonly problem: string | null;
 }
 
-/** What `judgeAttributes` found: the filled slots, and every sentence against them. */
-export interface AttributeJudgement {
-  readonly values: Record<string, string>;
-  readonly problems: string[];
+/** What `judgeBody` found: the body as it would be stored, and every sentence against it. */
+export interface BodyJudgement {
+  readonly value: string;
+  readonly problems: readonly string[];
 }
 
 /**
@@ -48,9 +60,9 @@ export interface AttributeJudgement {
  * itself, which is exactly the caller who should be told rather than quietly
  * corrected.
  *
- * EMPTINESS IS NOT JUDGED HERE, because the two callers answer it differently: a
- * name that trims to nothing is a refusal, an optional attribute that trims to
- * nothing is a cell the person cleared. Each caller says which it is.
+ * EMPTINESS IS NOT JUDGED HERE, because the callers answer it differently: a
+ * name that trims to nothing is a refusal, a body that trims to nothing is a
+ * node with nothing to say yet. Each caller says which it is.
  */
 export function judgeText(label: string, value: string): TextJudgement {
   return judgeCharacters(label, value.trim());
@@ -58,8 +70,8 @@ export function judgeText(label: string, value: string): TextJudgement {
 
 /**
  * The two refusals above, asked of a value whose edges have already been settled
- * — because prose settles them differently from a line, and both still have to
- * answer for the characters a text file cannot carry.
+ * — because the body settles them differently from a one-line name, and both
+ * still have to answer for the characters a text file cannot carry.
  */
 function judgeCharacters(label: string, value: string): TextJudgement {
   if (value.includes("\0")) {
@@ -72,10 +84,11 @@ function judgeCharacters(label: string, value: string): TextJudgement {
 }
 
 /**
- * What a whole-value trim would do to prose, said as whole BLANK LINES instead.
+ * What a whole-value trim would do to the body, said as whole BLANK LINES
+ * instead.
  *
  * The difference is one line long and it is the difference between keeping a
- * person's markdown and breaking it. A section that opens with an indented code
+ * person's markdown and breaking it. A body that opens with an indented code
  * block is four spaces on every line; a trim takes them off the FIRST line only,
  * because that is where the value starts, and leaves them on the rest. What
  * comes back is not a dedented block — it is a paragraph with three indented
@@ -85,9 +98,9 @@ function judgeCharacters(label: string, value: string): TextJudgement {
  *
  * A line of nothing but spaces counts as blank, which is what an editor leaves
  * behind and what nobody means. And the edges are all this touches — a blank
- * line INSIDE prose is a paragraph break, and it stays.
+ * line INSIDE the body is a paragraph break, and it stays.
  */
-function trimProseEdges(value: string): string {
+function trimBodyEdges(value: string): string {
   const lines = value.split("\n");
   let first = 0;
   let past = lines.length;
@@ -101,178 +114,48 @@ function trimProseEdges(value: string): string {
 }
 
 /**
- * A prose value arrives from a browser textarea, a Windows editor or a git
- * checkout with `core.autocrlf` on, so its line endings are whatever that
- * machine uses. Canonical files are LF only, and a value judged as CRLF but
- * emitted as LF would make the file's own re-read differ from what was written
- * — the fixpoint would not hold. So the door settles the question before it
- * judges anything, and a CR never reaches a stored value.
+ * A body arrives from a browser textarea, a Windows editor or a git checkout
+ * with `core.autocrlf` on, so its line endings are whatever that machine uses.
+ * Canonical files are LF only, and a value judged as CRLF but emitted as LF
+ * would make the file's own re-read differ from what was written — the fixpoint
+ * would not hold. So the judgement settles the question before it judges
+ * anything, and a CR never reaches a stored value.
  */
 function normalizeLineEndings(value: string): string {
   return value.replace(/\r\n?/g, "\n");
 }
 
-/**
- * The one restriction on prose, which is otherwise opaque text: a line starting
- * with `## ` is how a spec file names its sections, so a value carrying one
- * would parse back as two attributes. The alternative was an escape convention,
- * which every hand and every agent editing these files would have to learn, and
- * which would cost emit its identity with the content it emits. `m` here is
- * JavaScript's own idea of a line start, which is slightly wider than a file's
- * — a door may be stricter than what reads it, never the reverse.
- */
-const PROSE_SECTION_HEADING = /^## /m;
-
-/** Held once: it carries no state, and the cap is asked about on every slot. */
+/** Held once: it carries no state, and the cap is asked about on every value. */
 const UTF8 = new TextEncoder();
 
 /**
- * What a write door does to a node's attributes, in ONE place — both doors and
- * the loader run this and none of them keeps a rule of its own.
+ * The body of a node, judged as the one free-text value it is — the same rule
+ * at both write doors and in the loader, so a body the panel can save is a body
+ * every reader accepts.
  *
- * WHAT ARRIVES IS THE WHOLE MAP, not a patch. The panel sends this type's entire
- * roster every time, so a name the map omits and a name it sends empty mean the
- * same thing — that slot is empty — and what comes back holds the FILLED ones
- * only. A name absent from the answer is a key the file does not write at all,
- * which is how an edit clears an optional cell.
+ * THERE IS NO SHAPE RULE, DELIBERATELY. The body is the specification and it
+ * belongs to whoever writes it: any heading, any fence, any table, a `---` line,
+ * a second `## Definition` or none at all. The templates suggest a shape and
+ * nothing enforces one. What is judged is only what no text file can carry —
+ * the NUL and the lone surrogate `judgeText` refuses — and the byte cap,
+ * measured in the bytes that reach the file, not in characters: one Korean
+ * syllable is three of them, and the cap is a cap on the file.
  *
- * THE ORDER THE CHECKS RUN IN IS THE ORDER A PERSON CAN ACT ON:
- *   · a name this type does not carry comes first, because every later answer
- *     would be about a field that is not there to be wrong;
- *   · then the trim and the two characters a text file cannot carry, so what
- *     the rest judges is what would actually be stored;
- *   · a value that trims to nothing is not a value — the optional slot is left
- *     empty, the required one is remembered;
- *   · every required slot left empty is said AT ONCE. A door that refuses a
- *     five-slot type one field at a time makes a person submit five times to
- *     learn five things, and each refusal reads like a different problem;
- *   · last the shape rules, which only a filled value can break.
- *
- * WHICH NAMES A REFUSAL USES IS NOT AN ACCIDENT. An unknown attribute is
- * something only a program can send — the panel offers this type's controls and
- * nothing else — so that sentence speaks in stored names, which is what the
- * caller wrote and what it must write instead. Everything after it is a field a
- * person is looking at, so those sentences use the label the person is reading.
- *
- * There is no second fence under this one any more. The 169 CHECKs of the old
- * schema are gone with the database they belonged to, and a markdown file will
- * hold whatever is written into it, so this is the only place that says no —
- * which is why the loader runs it again over every file it did not write.
+ * The edges are settled first — line endings to LF, leading and trailing blank
+ * lines dropped — so what is judged is exactly what would be stored, and a save
+ * that changed nothing writes the bytes it read.
  */
-export function judgeAttributes(
-  nodeType: string,
-  raw: Record<string, string>,
-): AttributeJudgement {
-  // A type outside the canon has no roster to judge against, and this is the
-  // look-up that finds out — on the create door where the caller named the type,
-  // on the edit door where the type came off the stored node, and at load where
-  // it came off the folder name. Nothing further can be said without a roster,
-  // so this answer is alone.
-  const descriptors = attributesFor(nodeType);
-  if (descriptors === null) {
-    return { values: {}, problems: [`Unknown node type: ${nodeType}`] };
-  }
-
+export function judgeBody(value: string): BodyJudgement {
+  const settled = trimBodyEdges(normalizeLineEndings(value));
   const problems: string[] = [];
-
-  // Named together with the type, because the type is the half a person needs:
-  // `priority` is a perfectly real column that a Requirement two rows away does
-  // carry. Every canon type carries at least one attribute, so there is no
-  // empty-tail sentence to write.
-  const carried = descriptors.map((descriptor) => descriptor.name);
-  const unknown = Object.keys(raw).filter((name) => !carried.includes(name));
-  if (unknown.length > 0) {
-    problems.push(
-      `A ${nodeType} does not carry ${unknown.join(", ")}. It carries ${carried.join(", ")} and nothing else.`,
-    );
+  const characters = judgeCharacters("The specification", settled);
+  if (characters.problem !== null) {
+    problems.push(characters.problem);
   }
-
-  const values: Record<string, string> = {};
-  const unfilled: string[] = [];
-  for (const descriptor of descriptors) {
-    const sent = raw[descriptor.name];
-    if (sent === undefined) {
-      if (descriptor.required) {
-        unfilled.push(descriptor.label);
-      }
-      continue;
-    }
-    // A line and a choice are one scalar each, so their edges are whitespace and
-    // nothing else. Prose is a document, and its first line's indentation is
-    // part of what it says.
-    const judged =
-      descriptor.kind === "prose"
-        ? judgeCharacters(
-            descriptor.label,
-            trimProseEdges(normalizeLineEndings(sent)),
-          )
-        : judgeText(descriptor.label, sent);
-    if (judged.problem !== null) {
-      // Filled, and unusable. It is not stored and it is not counted as empty:
-      // answering a NUL with "a Requirement requires Statement" as well would
-      // name one mistake twice and send the person to fill a field they filled.
-      problems.push(judged.problem);
-      continue;
-    }
-    if (judged.value === "") {
-      if (descriptor.required) {
-        unfilled.push(descriptor.label);
-      }
-      continue;
-    }
-    values[descriptor.name] = judged.value;
+  if (UTF8.encode(settled).length > TEXT_BYTE_CAP) {
+    problems.push("The specification cannot hold more than 256 KiB of text.");
   }
-
-  if (unfilled.length > 0) {
-    problems.push(`A ${nodeType} requires ${unfilled.join(", ")}.`);
-  }
-
-  // In roster order, so a person who filled two fields wrongly is told about the
-  // one nearer the top of the panel first.
-  for (const descriptor of descriptors) {
-    const value = values[descriptor.name];
-    if (value === undefined) {
-      continue;
-    }
-    // Wider than the line breaks a file can hold: U+2028 renders as two lines
-    // on every screen this value will ever be shown on, and a frontmatter
-    // scalar that is one line by construction is what lets the emitter skip
-    // YAML's block styles altogether.
-    if (
-      descriptor.kind === "line" &&
-      /[\n\r\u000B\u000C\u0085\u2028\u2029]/.test(value)
-    ) {
-      problems.push(
-        `${descriptor.label} is one line, so it cannot contain a line break.`,
-      );
-    }
-    if (descriptor.kind === "prose" && PROSE_SECTION_HEADING.test(value)) {
-      problems.push(
-        `${descriptor.label} cannot contain a line that begins with "## " — that is how a spec file names its sections.`,
-      );
-    }
-    // Measured in the bytes that reach the file, not in characters: one Korean
-    // syllable is three of them, and the cap is a cap on the file.
-    if (UTF8.encode(value).length > TEXT_BYTE_CAP) {
-      problems.push(
-        `${descriptor.label} cannot hold more than 256 KiB of text.`,
-      );
-    }
-    if (descriptor.kind === "choice") {
-      // A `choice` always carries its vocabulary; the fallback is what the
-      // optional key costs to read and never a live branch. The values are the
-      // stored spellings, which is what a caller has to send — the English
-      // labels belong to the screen.
-      const vocabulary = (descriptor.values ?? []).map((choice) => choice.value);
-      if (!vocabulary.includes(value)) {
-        problems.push(
-          `${descriptor.label} must be one of ${vocabulary.join(", ")}.`,
-        );
-      }
-    }
-  }
-
-  return { values, problems };
+  return { value: settled, problems };
 }
 
 /**

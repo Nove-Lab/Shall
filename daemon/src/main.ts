@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { getRequestListener } from "@hono/node-server";
 import httpProxy from "http-proxy";
 import { createApp } from "./http/app.js";
+import { writeSharedTemplates } from "./host/project-files.js";
 import {
   ensureShallHome,
   readConfig,
@@ -14,6 +15,10 @@ import {
 process.title = "shall";
 
 await ensureShallHome();
+// The machine's reference templates, brought current on every start — an agent
+// reads them from `~/.shall/templates` without ever opening a project in the
+// UI, so the daemon's start is the one moment that reliably precedes that.
+await writeSharedTemplates().catch(() => undefined);
 const config = await readConfig();
 const bindHost =
   process.env.SHALL_HOST === "0.0.0.0" ? "0.0.0.0" : "127.0.0.1";

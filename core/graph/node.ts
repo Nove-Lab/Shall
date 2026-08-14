@@ -1,14 +1,15 @@
 /**
- * A node of the spec graph: a short name to read it by, a name, and the typed
- * attributes its own type carries.
+ * A node of the spec graph: a short name to read it by, a name, and the body —
+ * the specification itself, as free markdown.
  *
- * `attributes` holds the FILLED ONES ONLY. An optional slot a person left alone
- * is an absent key, never an empty string — the file writes no such key at all
- * and the reader hands back only the ones it found — so a reader asks whether
- * the key is there and never compares against `""`. What the keys may be is
- * `attributesFor(type)`'s answer and nothing else; this shape is deliberately a
- * plain map so that core carries the roster in one file rather than in every
- * signature.
+ * `body` IS OPAQUE TEXT AND THE GRAPH DOES NOT READ IT. What a node says is the
+ * author's — a person's or an agent's — and Shall renders it back exactly as it
+ * was written. The structure the graph needs lives beside it, not inside it:
+ * the type is the folder, the id is the filename, the two names are frontmatter
+ * keys, and the relations are the `edges:` list. Everything the templates
+ * suggest about the body — the `## Definition` a Term usually opens with — is a
+ * starting shape, never a rule, so an empty body is a node with nothing to say
+ * yet and not a refusal.
  *
  * The two instants are both stamps rather than fields — nothing on a form offers
  * them, and core has no clock to make one, so whoever reads the file brings
@@ -23,7 +24,7 @@ export interface SpecNode {
   type: string;
   shortName: string;
   name: string;
-  attributes: Record<string, string>;
+  body: string;
   createdAt: number;
   updatedAt: number;
 }
@@ -37,15 +38,12 @@ export interface SpecNode {
  * leave incident edges the grammar no longer allows. A different type is a
  * different node.
  *
- * `attributes` OVERWRITES THE WHOLE MAP: a slot the map does not name is
- * cleared, not kept. This is safe only because the panel always sends the
- * type's entire roster, so an absent key means "the person emptied it" and
- * never "the caller had nothing to say about it". It is the opposite of the
- * per-key merge the previous system used, and the difference is invisible until
- * a caller sends a partial map, so no caller may send one.
+ * `body` REPLACES THE WHOLE BODY: the panel edits it as one text and sends it
+ * back as one text, so what arrives is the document as the author left it and
+ * never a patch to merge.
  */
 export interface SpecNodeValues {
   shortName: string;
   name: string;
-  attributes: Record<string, string>;
+  body: string;
 }

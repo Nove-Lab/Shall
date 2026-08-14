@@ -16,6 +16,7 @@ import {
   TEXT_BYTE_CAP,
   permittedEdgeTypes,
 } from "@shall/core/graph";
+import { emitScaffold } from "@shall/core/serialize";
 import { isRefusal, type Refusal } from "./errors.js";
 import { createProject, openProject } from "./projects.js";
 import { readProjectSettings } from "./settings.js";
@@ -27,6 +28,7 @@ import {
   listSpecNodes,
   removeSpecEdge,
   removeSpecNode,
+  scaffoldSpecNode,
   updateSpecNode,
 } from "./spec-graph.js";
 import type { RegistryProject } from "../types.js";
@@ -69,32 +71,42 @@ async function newProject(): Promise<RegistryProject> {
   return createProject(await mkdtemp(path.join(workspace, "project-")));
 }
 
-/** A Requirement with every required slot filled and nothing wrong with it. */
-const REQUIREMENT: Record<string, string> = {
-  statement: "The daemon refuses a malformed id.",
-  description: "Every door judges the id before it judges anything else.",
-  requirement_type: "functional",
-  priority: "high",
-};
+/**
+ * A specification written the way the template suggests — headings and prose.
+ * Nothing about the shape is required; these read as the template's starting
+ * shape because that is what most nodes will look like, not because a door
+ * asks for it.
+ */
+const REQUIREMENT_BODY = [
+  "## Statement",
+  "",
+  "The daemon refuses a malformed id.",
+  "",
+  "## Description",
+  "",
+  "Every door judges the id before it judges anything else.",
+].join("\n");
 
-const CRITERION: Record<string, string> = {
-  statement: "A malformed id is refused.",
-  description: "The refusal names the shape an id may take.",
-  evaluation_process: "Send one and read the sentence.",
-};
+const CRITERION_BODY = [
+  "## Statement",
+  "",
+  "A malformed id is refused.",
+  "",
+  "## Evaluation Process",
+  "",
+  "Send one and read the sentence.",
+].join("\n");
 
-const GOAL: Record<string, string> = {
-  statement: "The spec travels with the repository.",
-};
+const GOAL_BODY = "The spec travels with the repository.";
 
 function values(
   id: string,
-  attributes: Record<string, string>,
-): { shortName: string; name: string; attributes: Record<string, string> } {
+  body: string,
+): { shortName: string; name: string; body: string } {
   return {
     shortName: id.toLowerCase(),
     name: `The node called ${id}`,
-    attributes,
+    body,
   };
 }
 
@@ -102,13 +114,13 @@ async function node(
   project: RegistryProject,
   type: string,
   id: string,
-  attributes: Record<string, string>,
+  body: string,
 ): Promise<void> {
   await createSpecNode({
     projectId: project.id,
     type,
     id,
-    ...values(id, attributes),
+    ...values(id, body),
   });
 }
 
@@ -144,90 +156,24 @@ describe("the create door", () => {
         projectId: project.id,
         type: "Nope",
         id: "not a legal id",
-        ...values("R-0001", REQUIREMENT),
+        ...values("R-0001", REQUIREMENT_BODY),
       }),
       "invalid",
       "Unknown node type: Nope",
     );
   });
 
-  test("names every empty required slot at once", async () => {
+  test("refuses a specification over the byte cap, in the reader's sentence", async () => {
     const project = await newProject();
     await says(
       createSpecNode({
         projectId: project.id,
         type: "Requirement",
         id: "R-0001",
-        ...values("R-0001", {
-          ...REQUIREMENT,
-          statement: "",
-          description: "   ",
-        }),
+        ...values("R-0001", "a".repeat(TEXT_BYTE_CAP + 1)),
       }),
       "invalid",
-      "A Requirement requires Statement, Description.",
-    );
-  });
-
-  test("refuses an attribute the type does not carry, in stored names", async () => {
-    const project = await newProject();
-    await says(
-      createSpecNode({
-        projectId: project.id,
-        type: "Requirement",
-        id: "R-0001",
-        ...values("R-0001", { ...REQUIREMENT, definition: "a definition" }),
-      }),
-      "invalid",
-      "A Requirement does not carry definition. It carries statement, description, requirement_type, priority, rationale and nothing else.",
-    );
-  });
-
-  test("refuses a value outside a choice's vocabulary", async () => {
-    const project = await newProject();
-    await says(
-      createSpecNode({
-        projectId: project.id,
-        type: "Requirement",
-        id: "R-0001",
-        ...values("R-0001", { ...REQUIREMENT, priority: "urgent" }),
-      }),
-      "invalid",
-      "Priority must be one of high, medium, low.",
-    );
-  });
-
-  test("refuses a line break in a one-line value", async () => {
-    const project = await newProject();
-    await says(
-      createSpecNode({
-        projectId: project.id,
-        type: "Requirement",
-        id: "R-0001",
-        ...values("R-0001", {
-          ...REQUIREMENT,
-          statement: "The daemon refuses\na malformed id.",
-        }),
-      }),
-      "invalid",
-      "Statement is one line, so it cannot contain a line break.",
-    );
-  });
-
-  test("refuses more than the byte cap", async () => {
-    const project = await newProject();
-    await says(
-      createSpecNode({
-        projectId: project.id,
-        type: "Requirement",
-        id: "R-0001",
-        ...values("R-0001", {
-          ...REQUIREMENT,
-          statement: "a".repeat(TEXT_BYTE_CAP + 1),
-        }),
-      }),
-      "invalid",
-      "Statement cannot hold more than 256 KiB of text.",
+      "The specification cannot hold more than 256 KiB of text.",
     );
   });
 
@@ -238,7 +184,7 @@ describe("the create door", () => {
         projectId: project.id,
         type: "Requirement",
         id: "R 0001",
-        ...values("R-0001", REQUIREMENT),
+        ...values("R-0001", REQUIREMENT_BODY),
       }),
       "invalid",
       "An id uses letters, digits, dots, hyphens and underscores, starts with a letter or digit, and holds at most 64 characters.",
@@ -252,7 +198,7 @@ describe("the create door", () => {
         projectId: project.id,
         type: "Requirement",
         id: "   ",
-        ...values("R-0001", REQUIREMENT),
+        ...values("R-0001", REQUIREMENT_BODY),
       }),
       "invalid",
       "An id is required.",
@@ -261,13 +207,13 @@ describe("the create door", () => {
 
   test("refuses an id another node has taken", async () => {
     const project = await newProject();
-    await node(project, "Requirement", "R-0001", REQUIREMENT);
+    await node(project, "Requirement", "R-0001", REQUIREMENT_BODY);
     await says(
       createSpecNode({
         projectId: project.id,
         type: "Requirement",
         id: "R-0001",
-        ...values("R-0001", REQUIREMENT),
+        ...values("R-0001", REQUIREMENT_BODY),
       }),
       "conflict",
       "R-0001 is already used by another node. Choose another id.",
@@ -276,13 +222,13 @@ describe("the create door", () => {
 
   test("refuses an id that differs from a taken one only in case", async () => {
     const project = await newProject();
-    await node(project, "Requirement", "R-0001", REQUIREMENT);
+    await node(project, "Requirement", "R-0001", REQUIREMENT_BODY);
     await says(
       createSpecNode({
         projectId: project.id,
         type: "Requirement",
         id: "r-0001",
-        ...values("r-0001", REQUIREMENT),
+        ...values("r-0001", REQUIREMENT_BODY),
       }),
       "conflict",
       "r-0001 differs only in case from R-0001, and two such files cannot sit side by side on every filesystem. Choose another id.",
@@ -291,13 +237,13 @@ describe("the create door", () => {
 
   test("refuses an id taken by a node of another type, because an edge names a bare id", async () => {
     const project = await newProject();
-    await node(project, "Requirement", "X-0001", REQUIREMENT);
+    await node(project, "Requirement", "X-0001", REQUIREMENT_BODY);
     await says(
       createSpecNode({
         projectId: project.id,
         type: "Goal",
         id: "X-0001",
-        ...values("X-0001", GOAL),
+        ...values("X-0001", GOAL_BODY),
       }),
       "conflict",
       "X-0001 is already used by another node. Choose another id.",
@@ -306,7 +252,7 @@ describe("the create door", () => {
 
   test("answers the taken id before it answers a blank name, as it always did", async () => {
     const project = await newProject();
-    await node(project, "Requirement", "R-0001", REQUIREMENT);
+    await node(project, "Requirement", "R-0001", REQUIREMENT_BODY);
     await says(
       createSpecNode({
         projectId: project.id,
@@ -314,7 +260,7 @@ describe("the create door", () => {
         id: "R-0001",
         shortName: "  ",
         name: "The node called R-0001",
-        attributes: REQUIREMENT,
+        body: REQUIREMENT_BODY,
       }),
       "conflict",
       "R-0001 is already used by another node. Choose another id.",
@@ -330,7 +276,7 @@ describe("the create door", () => {
         id: "R-0001",
         shortName: "   ",
         name: "The node called R-0001",
-        attributes: REQUIREMENT,
+        body: REQUIREMENT_BODY,
       }),
       "invalid",
       "A short name is required.",
@@ -339,7 +285,7 @@ describe("the create door", () => {
 
   test("writes a file that reads back as the node it answered with", async () => {
     const project = await newProject();
-    await node(project, "Requirement", "R-0001", REQUIREMENT);
+    await node(project, "Requirement", "R-0001", REQUIREMENT_BODY);
     const nodes = await listSpecNodes(project.id);
     assert.deepEqual(
       nodes.map((entry) => [entry.id, entry.type, entry.shortName]),
@@ -347,10 +293,36 @@ describe("the create door", () => {
     );
     const [only] = nodes;
     assert.ok(only);
-    assert.deepEqual(only.attributes, REQUIREMENT);
+    assert.equal(only.body, REQUIREMENT_BODY);
     // The two stamps are the file's one mtime, so they arrive equal.
     assert.equal(only.createdAt, only.updatedAt);
     assert.ok(only.createdAt > 0);
+  });
+
+  test("takes a specification of any shape at all — the headings are a guide, not a rule", async () => {
+    const project = await newProject();
+    // Nothing the template suggests, and things the old format refused: a
+    // heading of its own invention, a horizontal rule, a fenced block holding
+    // fence-lookalikes. All of it is the author's markdown now, and all of it
+    // comes back byte for byte.
+    const freeform = [
+      "This requirement is best explained as a story, not as sections.",
+      "",
+      "---",
+      "",
+      "### What the daemon does",
+      "",
+      "```",
+      "## not a heading, and --- not a fence",
+      "```",
+    ].join("\n");
+    await node(project, "Requirement", "R-0001", freeform);
+    const [only] = await listSpecNodes(project.id);
+    assert.ok(only);
+    assert.equal(only.body, freeform);
+    const check = await checkSpec(project.path);
+    assert.deepEqual(check.problems, []);
+    assert.deepEqual(check.notes, []);
   });
 });
 
@@ -361,50 +333,64 @@ describe("the edit door", () => {
       updateSpecNode({
         projectId: project.id,
         id: "R-9999",
-        ...values("R-9999", REQUIREMENT),
+        ...values("R-9999", REQUIREMENT_BODY),
       }),
       "missing",
       "Unknown node: R-9999",
     );
   });
 
-  test("judges the attributes against the type the file states", async () => {
+  test("replaces the specification with whatever shape the edit brought", async () => {
     const project = await newProject();
-    await node(project, "Requirement", "R-0001", REQUIREMENT);
-    await says(
-      updateSpecNode({
-        projectId: project.id,
-        id: "R-0001",
-        ...values("R-0001", { ...REQUIREMENT, requirement_type: "other" }),
-      }),
-      "invalid",
-      "Requirement Type must be one of functional, non_functional.",
-    );
+    await node(project, "Requirement", "R-0001", REQUIREMENT_BODY);
+    const reshaped = "One paragraph, no headings — reshaped by hand.";
+    await updateSpecNode({
+      projectId: project.id,
+      id: "R-0001",
+      ...values("R-0001", reshaped),
+    });
+    const [only] = await listSpecNodes(project.id);
+    assert.ok(only);
+    assert.equal(only.body, reshaped);
   });
 
   test("refuses to save over a file somebody has edited into a state Shall cannot read", async () => {
     const project = await newProject();
-    await node(project, "Requirement", "R-0001", REQUIREMENT);
-    // A hand edit that drops the statement and the whole Description section:
-    // the file is still YAML and still a Requirement, and it is no longer a
-    // node. Saving the panel's copy over it would throw the edit away.
+    await node(project, "Requirement", "R-0001", REQUIREMENT_BODY);
+    // A hand edit that writes a key the frontmatter does not carry: the file
+    // is still YAML, and it is no longer a node. Saving the panel's copy over
+    // it would throw the edit away.
     await writeFile(
-      path.join(project.path, ".shall", "spec", "Requirement", "R-0001.md"),
-      "---\nshort_name: r-0001\nname: The node called R-0001\nrequirement_type: functional\npriority: high\n---\n",
+      path.join(
+        project.path,
+        ".shall",
+        "spec",
+        "intent",
+        "Requirement",
+        "R-0001.md",
+      ),
+      "---\nshort_name: r-0001\nname: The node called R-0001\npriority: high\n---\n",
       "utf8",
     );
     await says(
       updateSpecNode({
         projectId: project.id,
         id: "R-0001",
-        ...values("R-0001", REQUIREMENT),
+        ...values("R-0001", REQUIREMENT_BODY),
       }),
       "conflict",
-      "Requirement/R-0001.md has been edited into a state Shall cannot read — A Requirement requires Statement, Description. Nothing was written, so that edit is still there to fix.",
+      "intent/Requirement/R-0001.md has been edited into a state Shall cannot read — The frontmatter carries short_name, name and edges and nothing else — priority belongs in the body, below the closing fence. Nothing was written, so that edit is still there to fix.",
     );
     // Nothing was written: the edit is still there, exactly as it was left.
     const held = await readFile(
-      path.join(project.path, ".shall", "spec", "Requirement", "R-0001.md"),
+      path.join(
+        project.path,
+        ".shall",
+        "spec",
+        "intent",
+        "Requirement",
+        "R-0001.md",
+      ),
       "utf8",
     );
     assert.match(held, /^---\nshort_name: r-0001\n/);
@@ -412,8 +398,8 @@ describe("the edit door", () => {
 
   test("keeps the relations the edit never mentioned", async () => {
     const project = await newProject();
-    await node(project, "Requirement", "R-0001", REQUIREMENT);
-    await node(project, "AcceptanceCriterion", "AC-0001", CRITERION);
+    await node(project, "Requirement", "R-0001", REQUIREMENT_BODY);
+    await node(project, "AcceptanceCriterion", "AC-0001", CRITERION_BODY);
     await createSpecEdge({
       projectId: project.id,
       type: "HAS_CRITERION",
@@ -423,7 +409,7 @@ describe("the edit door", () => {
     await updateSpecNode({
       projectId: project.id,
       id: "R-0001",
-      ...values("R-0001", { ...REQUIREMENT, priority: "low" }),
+      ...values("R-0001", `${REQUIREMENT_BODY}\n\nEdited, relations unnamed.`),
     });
     assert.deepEqual(
       (await listSpecEdges(project.id)).map((edge) => edge.id),
@@ -444,8 +430,8 @@ describe("the remove door", () => {
 
   test("takes every relation that touches the node with it", async () => {
     const project = await newProject();
-    await node(project, "Requirement", "R-0001", REQUIREMENT);
-    await node(project, "AcceptanceCriterion", "AC-0001", CRITERION);
+    await node(project, "Requirement", "R-0001", REQUIREMENT_BODY);
+    await node(project, "AcceptanceCriterion", "AC-0001", CRITERION_BODY);
     await createSpecEdge({
       projectId: project.id,
       type: "HAS_CRITERION",
@@ -467,7 +453,7 @@ describe("the remove door", () => {
 describe("the edge doors", () => {
   test("refuse a source that is not there", async () => {
     const project = await newProject();
-    await node(project, "AcceptanceCriterion", "AC-0001", CRITERION);
+    await node(project, "AcceptanceCriterion", "AC-0001", CRITERION_BODY);
     await says(
       createSpecEdge({
         projectId: project.id,
@@ -482,7 +468,7 @@ describe("the edge doors", () => {
 
   test("refuse a relation from a node to itself", async () => {
     const project = await newProject();
-    await node(project, "Requirement", "R-0001", REQUIREMENT);
+    await node(project, "Requirement", "R-0001", REQUIREMENT_BODY);
     await says(
       createSpecEdge({
         projectId: project.id,
@@ -497,8 +483,8 @@ describe("the edge doors", () => {
 
   test("refuse a relation the canon does not have, and name the ones it does", async () => {
     const project = await newProject();
-    await node(project, "Requirement", "R-0001", REQUIREMENT);
-    await node(project, "AcceptanceCriterion", "AC-0001", CRITERION);
+    await node(project, "Requirement", "R-0001", REQUIREMENT_BODY);
+    await node(project, "AcceptanceCriterion", "AC-0001", CRITERION_BODY);
     await says(
       createSpecEdge({
         projectId: project.id,
@@ -513,8 +499,8 @@ describe("the edge doors", () => {
 
   test("name the reverse direction when the arrow was drawn from the wrong end", async () => {
     const project = await newProject();
-    await node(project, "Requirement", "R-0001", REQUIREMENT);
-    await node(project, "AcceptanceCriterion", "AC-0001", CRITERION);
+    await node(project, "Requirement", "R-0001", REQUIREMENT_BODY);
+    await node(project, "AcceptanceCriterion", "AC-0001", CRITERION_BODY);
     await says(
       createSpecEdge({
         projectId: project.id,
@@ -529,8 +515,8 @@ describe("the edge doors", () => {
 
   test("say nothing further when neither direction allows anything", async () => {
     const project = await newProject();
-    await node(project, "Goal", "G-0001", GOAL);
-    await node(project, "AcceptanceCriterion", "AC-0001", CRITERION);
+    await node(project, "Goal", "G-0001", GOAL_BODY);
+    await node(project, "AcceptanceCriterion", "AC-0001", CRITERION_BODY);
     await says(
       createSpecEdge({
         projectId: project.id,
@@ -564,8 +550,8 @@ describe("the edge doors", () => {
 
   test("refuse a second identical relation", async () => {
     const project = await newProject();
-    await node(project, "Requirement", "R-0001", REQUIREMENT);
-    await node(project, "AcceptanceCriterion", "AC-0001", CRITERION);
+    await node(project, "Requirement", "R-0001", REQUIREMENT_BODY);
+    await node(project, "AcceptanceCriterion", "AC-0001", CRITERION_BODY);
     const edge = await createSpecEdge({
       projectId: project.id,
       type: "HAS_CRITERION",
@@ -588,8 +574,8 @@ describe("the edge doors", () => {
 
   test("remove the relation the id names, and refuse one nothing answers to", async () => {
     const project = await newProject();
-    await node(project, "Requirement", "R-0001", REQUIREMENT);
-    await node(project, "AcceptanceCriterion", "AC-0001", CRITERION);
+    await node(project, "Requirement", "R-0001", REQUIREMENT_BODY);
+    await node(project, "AcceptanceCriterion", "AC-0001", CRITERION_BODY);
     await createSpecEdge({
       projectId: project.id,
       type: "HAS_CRITERION",
@@ -618,50 +604,52 @@ describe("the edge doors", () => {
 });
 
 describe("the project's own folder", () => {
-  test("is initialized with a spec folder, the 23 templates and an ignore rule", async () => {
+  test("is initialized with a spec folder and an ignore rule, and no template set", async () => {
     const project = await newProject();
     const shall = path.join(project.path, ".shall");
     await assert.doesNotReject(stat(path.join(shall, "spec")));
-    const templates = await readFile(
-      path.join(shall, "templates", "Requirement.md"),
-      "utf8",
-    );
-    assert.match(
-      templates,
-      /^---\n# Requirement — copy to \.\.\/spec\/Requirement\/<id>\.md and fill in\.\n/,
-    );
+    // The reference templates are the machine's, under `~/.shall/templates` —
+    // a project carries its spec and nothing of Shall's own.
+    await assert.rejects(stat(path.join(shall, "templates")));
     assert.equal(
       (await readFile(path.join(shall, ".gitignore"), "utf8")).includes("*.tmp"),
       true,
     );
   });
 
-  test("opens again without rewriting a template that is already current", async () => {
+  test("an open brings the machine's reference templates current", async () => {
     const project = await newProject();
-    const target = path.join(
-      project.path,
-      ".shall",
-      "templates",
-      "Requirement.md",
-    );
-    const before = await stat(target);
     await openProject(project.path);
-    const after = await stat(target);
-    assert.equal(after.mtimeMs, before.mtimeMs);
-  });
-
-  test("puts a template back when its bytes have drifted", async () => {
-    const project = await newProject();
-    const target = path.join(
-      project.path,
-      ".shall",
-      "templates",
-      "Requirement.md",
+    const target = path.join(home, ".shall", "templates", "Requirement.md");
+    const template = await readFile(target, "utf8");
+    assert.match(
+      template,
+      /^---\n# Requirement — the starting shape of a Requirement node\.\n/,
     );
-    const canonical = await readFile(target, "utf8");
+
+    // Current bytes are left alone, so the folder's mtimes stay quiet.
+    const before = await stat(target);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    await openProject(project.path);
+    assert.equal((await stat(target)).mtimeMs, before.mtimeMs);
+
+    // Drifted bytes are put back.
     await writeFile(target, "# emptied by hand\n", "utf8");
     await openProject(project.path);
-    assert.equal(await readFile(target, "utf8"), canonical);
+    assert.equal(await readFile(target, "utf8"), template);
+  });
+
+  test("an open removes the template set an older Shall committed here", async () => {
+    const project = await newProject();
+    const leftover = path.join(project.path, ".shall", "templates");
+    await mkdir(leftover, { recursive: true });
+    await writeFile(
+      path.join(leftover, "Requirement.md"),
+      "# written by an older Shall\n",
+      "utf8",
+    );
+    await openProject(project.path);
+    await assert.rejects(stat(leftover));
   });
 
   test(
@@ -674,36 +662,30 @@ describe("the project's own folder", () => {
     },
     async () => {
       // A checkout on a read-only mount, or one owned by somebody else.
-      // Regenerating the templates and making `spec/` are conveniences, not
+      // Making `spec/` and sweeping an old template set are conveniences, not
       // conditions of opening — reading a project must never require the right
       // to write to it, and a person who cannot be given their graph should at
       // least not be given an errno instead.
       const project = await newProject();
       const shall = path.join(project.path, ".shall");
-      const templates = path.join(shall, "templates");
-      const modes = [
-        [shall, (await stat(shall)).mode] as const,
-        [templates, (await stat(templates)).mode] as const,
-      ];
-      // Both halves of the regeneration have work to do: a spec folder that is
-      // not there (a clone of a project whose graph is empty carries none) and a
-      // template whose bytes have drifted.
+      // Both tidyings have work to do: a spec folder that is not there (a
+      // clone of a project whose graph is empty carries none) and an old
+      // template set that wants removing.
       await rm(path.join(shall, "spec"), { recursive: true });
+      const leftover = path.join(shall, "templates");
+      await mkdir(leftover, { recursive: true });
       await writeFile(
-        path.join(templates, "Requirement.md"),
-        "# drifted, so regeneration has work to do\n",
+        path.join(leftover, "Requirement.md"),
+        "# left by an older Shall\n",
         "utf8",
       );
-      for (const [target] of modes) {
-        await chmod(target, 0o555);
-      }
+      const mode = (await stat(shall)).mode;
+      await chmod(shall, 0o555);
       try {
         const opened = await openProject(project.path);
         assert.equal(opened.id, project.id);
       } finally {
-        for (const [target, mode] of modes) {
-          await chmod(target, mode);
-        }
+        await chmod(shall, mode);
       }
     },
   );
@@ -718,12 +700,86 @@ describe("the project's own folder", () => {
   });
 });
 
+describe("the scaffold door", () => {
+  test("writes a starting file at the node's own path and answers with it", async () => {
+    const project = await newProject();
+    // Case-insensitive on purpose: the command is typed by hand, and
+    // `--type requirement` means the one thing it can mean.
+    const scaffolded = await scaffoldSpecNode({
+      path: project.path,
+      type: "requirement",
+    });
+    assert.deepEqual(scaffolded, {
+      root: project.path,
+      type: "Requirement",
+      id: "R-0001",
+      file: ".shall/spec/intent/Requirement/R-0001.md",
+    });
+    assert.equal(
+      await readFile(path.join(project.path, scaffolded.file), "utf8"),
+      emitScaffold("Requirement"),
+    );
+
+    // Until somebody fills it in, the scaffold is a file the check names and
+    // the graph does not serve — the same guidance loop a hand-written file
+    // meets, in the same sentences.
+    const check = await checkSpec(project.path);
+    assert.equal(check.nodeCount, 0);
+    assert.deepEqual(
+      check.problems.map((problem) => [problem.file, problem.message]),
+      [
+        ["intent/Requirement/R-0001.md", "A short name is required."],
+        ["intent/Requirement/R-0001.md", "A name is required."],
+      ],
+    );
+  });
+
+  test("finds the project by walking up, like the check does", async () => {
+    const project = await newProject();
+    const deep = path.join(project.path, "src", "service");
+    await mkdir(deep, { recursive: true });
+    const scaffolded = await scaffoldSpecNode({ path: deep, type: "Term" });
+    assert.equal(scaffolded.root, project.path);
+    assert.equal(scaffolded.file, ".shall/spec/domain/Term/T-0001.md");
+  });
+
+  test("moves one past the ids already taken", async () => {
+    const project = await newProject();
+    await node(project, "Requirement", "R-0007", REQUIREMENT_BODY);
+    const scaffolded = await scaffoldSpecNode({
+      path: project.path,
+      type: "Requirement",
+    });
+    assert.equal(scaffolded.id, "R-0008");
+  });
+
+  test("refuses a type the canon does not have, and lists all twenty-three", async () => {
+    const project = await newProject();
+    await says(
+      scaffoldSpecNode({ path: project.path, type: "Widget" }),
+      "invalid",
+      `Unknown node type: Widget. The canon's types are ${NODE_TYPES.map(
+        (entry) => entry.name,
+      ).join(", ")}.`,
+    );
+  });
+
+  test("refuses a folder that is in no project", async () => {
+    const outside = await mkdtemp(path.join(workspace, "loose-"));
+    await says(
+      scaffoldSpecNode({ path: outside, type: "Term" }),
+      "missing",
+      `Not a Shall project: ${outside} — no folder here or above it holds a .shall/project.json.`,
+    );
+  });
+});
+
 describe("checkSpec", () => {
   test("finds the project by walking up, and needs no registry entry", async () => {
     // Built by hand, so nothing here has ever been opened in the UI — which is
     // the state a fresh clone arrives in.
     const root = await mkdtemp(path.join(workspace, "clone-"));
-    await mkdir(path.join(root, ".shall", "spec", "Requirement"), {
+    await mkdir(path.join(root, ".shall", "spec", "intent", "Requirement"), {
       recursive: true,
     });
     await writeFile(
@@ -732,15 +788,16 @@ describe("checkSpec", () => {
       "utf8",
     );
     await writeFile(
-      path.join(root, ".shall", "spec", "Requirement", "R-0001.md"),
+      path.join(root, ".shall", "spec", "intent", "Requirement", "R-0001.md"),
       [
         "---",
         "short_name: r-0001",
         "name: The node called R-0001",
-        "statement: The daemon refuses a malformed id.",
-        "requirement_type: functional",
-        "priority: high",
         "---",
+        "",
+        "## Statement",
+        "",
+        "The daemon refuses a malformed id.",
         "",
         "## Description",
         "",
@@ -771,8 +828,8 @@ describe("checkSpec", () => {
 
   test("separates what it refused from what it merely noticed", async () => {
     const project = await newProject();
-    await node(project, "Requirement", "R-0001", REQUIREMENT);
-    await node(project, "Requirement", "R-0002", REQUIREMENT);
+    await node(project, "Requirement", "R-0001", REQUIREMENT_BODY);
+    await node(project, "Requirement", "R-0002", REQUIREMENT_BODY);
 
     // Valid and not canonical: a comment a person left in the frontmatter,
     // which reads perfectly well and which the next save will rewrite away.
@@ -780,6 +837,7 @@ describe("checkSpec", () => {
       project.path,
       ".shall",
       "spec",
+      "intent",
       "Requirement",
       "R-0002.md",
     );
@@ -792,7 +850,14 @@ describe("checkSpec", () => {
 
     // Refused outright: not a spec file at all.
     await writeFile(
-      path.join(project.path, ".shall", "spec", "Requirement", "R-0009.md"),
+      path.join(
+        project.path,
+        ".shall",
+        "spec",
+        "intent",
+        "Requirement",
+        "R-0009.md",
+      ),
       "just some notes\n",
       "utf8",
     );
@@ -801,14 +866,14 @@ describe("checkSpec", () => {
     assert.equal(check.nodeCount, 2);
     assert.deepEqual(check.problems, [
       {
-        file: "Requirement/R-0009.md",
+        file: "intent/Requirement/R-0009.md",
         message:
           'R-0009.md does not begin with a "---" frontmatter block, so it cannot be read as a spec node.',
       },
     ]);
     assert.deepEqual(check.notes, [
       {
-        file: "Requirement/R-0002.md",
+        file: "intent/Requirement/R-0002.md",
         message:
           "R-0002.md is valid but not canonical — a save from the UI will rewrite it and drop comments and ordering.",
       },
@@ -817,8 +882,8 @@ describe("checkSpec", () => {
 
   test("a file the daemon wrote is canonical, so it draws no note", async () => {
     const project = await newProject();
-    await node(project, "Requirement", "R-0001", REQUIREMENT);
-    await node(project, "AcceptanceCriterion", "AC-0001", CRITERION);
+    await node(project, "Requirement", "R-0001", REQUIREMENT_BODY);
+    await node(project, "AcceptanceCriterion", "AC-0001", CRITERION_BODY);
     await createSpecEdge({
       projectId: project.id,
       type: "HAS_CRITERION",
@@ -836,11 +901,12 @@ describe("checkSpec", () => {
 describe("a hand edit the daemon never made", () => {
   test("is served without a restart, because every query reads the folder again", async () => {
     const project = await newProject();
-    await node(project, "Requirement", "R-0001", REQUIREMENT);
+    await node(project, "Requirement", "R-0001", REQUIREMENT_BODY);
     const target = path.join(
       project.path,
       ".shall",
       "spec",
+      "intent",
       "Requirement",
       "R-0001.md",
     );

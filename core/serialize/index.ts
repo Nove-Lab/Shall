@@ -19,7 +19,7 @@ export type { NodeFileEdge, NodeFileFields } from "./emit.js";
 export { emitScalar, isPlainSafe } from "./scalar.js";
 export { parseNodeFile } from "./parse.js";
 export type { NodeFileReading, ParsedNode } from "./parse.js";
-export { emitTemplate } from "./template.js";
+export { emitScaffold, emitTemplate } from "./template.js";
 
 /**
  * Whether these bytes are already exactly what Shall would write.

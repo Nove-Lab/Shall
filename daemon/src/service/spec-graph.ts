@@ -1,7 +1,11 @@
 import type { SpecEdge, SpecNode } from "@shall/core/graph";
 import {
+  bandFolderOf,
+  isNodeType,
   isPermittedTriple,
   judgeNodeId,
+  judgeText,
+  NODE_TYPES,
   permittedEdgeTypes,
 } from "@shall/core/graph";
 import { isCanonical } from "@shall/core/serialize";
@@ -13,10 +17,10 @@ import {
   isStoreRefusal,
   loadGraph,
   removeEdge,
+  scaffoldNodeFile,
   updateNodeFile,
 } from "@shall/core/store";
 import { Refusal, conflict, invalid, missing } from "./errors.js";
-import { trimmedText, validateAttributes } from "./node-attributes.js";
 import { requireRegistryProject } from "./projects.js";
 import {
   findProjectRootAbove,
@@ -68,18 +72,21 @@ async function served<T>(work: Promise<T>): Promise<T> {
  * name instead of being written as an empty string a reader would have to
  * interpret.
  *
- * The trim and the two characters no text file can carry are `trimmedText`'s,
- * and are written down there: the attributes need the same treatment without
+ * The trim and the two characters no text file can carry are `judgeText`'s,
+ * and are written down there in core: the body needs the same treatment without
  * the same answer to emptiness, and one rule applied at one door and forgotten
  * at the next is the defect this repository already knows.
  *
- * THE TWO NAMES ARE NOT JUDGED HERE ANY MORE. They are judged by the reader,
- * over the bytes the store is about to write, in these same sentences — which
- * is how a file the panel saved and a file a person hand-edited meet one
- * judgement rather than two that can drift.
+ * THE TWO NAMES AND THE BODY ARE NOT JUDGED HERE ANY MORE. They are judged by
+ * the reader, over the bytes the store is about to write, in these same
+ * sentences — which is how a file the panel saved and a file a person
+ * hand-edited meet one judgement rather than two that can drift.
  */
 function requireText(label: string, value: string): string {
-  const trimmed = trimmedText(label, value);
+  const { value: trimmed, problem } = judgeText(label, value);
+  if (problem !== null) {
+    throw invalid(problem);
+  }
   if (trimmed.length === 0) {
     throw invalid(`${label} is required.`);
   }
@@ -113,11 +120,9 @@ export async function listSpecNodes(projectId: string): Promise<SpecNode[]> {
  * may type over it, so this is the only place that can settle whether the thing
  * being written is a node the canon knows and an id nothing else has taken.
  *
- * The type is settled by the roster look-up rather than by a canon test of its
- * own: `validateAttributes` has to make it anyway — there is no roster to judge
- * a name against without it — and asking twice is how two sentences about one
- * fact come to disagree. It runs before the id is looked at because a node of no
- * type is not a node, whatever id it was given.
+ * The type is asked about first because a node of no type is not a node,
+ * whatever id it was given — the store refuses it too, in this same sentence,
+ * and the check here is for the ORDER a person meets the sentences in.
  *
  * THE ID IS A FILENAME NOW, so two things a database settled by itself are
  * settled here instead: that the id is a name every machine this repository is
@@ -125,8 +130,7 @@ export async function listSpecNodes(projectId: string): Promise<SpecNode[]> {
  * the store, which is the only place that can look and write in one turn — an
  * answer given here would be true until the write that made it false. The store
  * judges the values again for the same reason, over the bytes it is about to
- * write; it is the same function, so the two cannot disagree, and this call is
- * here for the ORDER a person meets the sentences in.
+ * write; it is the same function, so the two cannot disagree.
  */
 export async function createSpecNode(input: {
   projectId: string;
@@ -134,10 +138,12 @@ export async function createSpecNode(input: {
   id: string;
   shortName: string;
   name: string;
-  attributes: Record<string, string>;
+  body: string;
 }): Promise<SpecNode> {
   const type = requireText("A node type", input.type);
-  const attributes = validateAttributes(type, input.attributes);
+  if (!isNodeType(type)) {
+    throw invalid(`Unknown node type: ${type}`);
+  }
 
   const id = requireText("An id", input.id);
   const shape = judgeNodeId(id);
@@ -150,7 +156,7 @@ export async function createSpecNode(input: {
     createNodeFile(specDir, type, id, {
       shortName: input.shortName,
       name: input.name,
-      attributes,
+      body: input.body,
     }),
   );
 }
@@ -160,22 +166,19 @@ export async function createSpecNode(input: {
  * updatedAt it cannot reach either, but for the opposite reason: the edit is
  * what moves it, and the file's own mtime is what it now is.
  *
- * THE STORED NODE IS READ BEFORE ANYTHING IS JUDGED, because an edit names no
- * type and the attributes cannot be judged without one — `priority` is a real
- * column that a Requirement carries and a Term does not, and only the file knows
- * which of the two this id is. THE READ HAPPENS IN THE STORE and not here,
- * because it has to happen in the same turn as the write: a read from this side
- * would be a read another write could get between. It is also what turns a
- * vanished id into a sentence before a write is attempted rather than after, and
- * what refuses — rather than overwrites — a file somebody has edited into a
- * state Shall cannot read.
+ * THE STORED NODE IS READ BEFORE THE WRITE, IN THE STORE and not here, because
+ * it has to happen in the same turn as the write: a read from this side would
+ * be a read another write could get between. It is what turns a vanished id
+ * into a sentence before a write is attempted rather than after, and what
+ * refuses — rather than overwrites — a file somebody has edited into a state
+ * Shall cannot read.
  */
 export async function updateSpecNode(input: {
   projectId: string;
   id: string;
   shortName: string;
   name: string;
-  attributes: Record<string, string>;
+  body: string;
 }): Promise<SpecNode> {
   const id = requireText("An id", input.id);
   const specDir = await specDirFor(input.projectId);
@@ -184,7 +187,7 @@ export async function updateSpecNode(input: {
     updateNodeFile(specDir, id, {
       shortName: input.shortName,
       name: input.name,
-      attributes: input.attributes,
+      body: input.body,
     }),
   );
 }
@@ -308,6 +311,66 @@ export async function removeSpecEdge(input: {
   await served(removeEdge(await specDirFor(input.projectId), id));
 }
 
+/** What a scaffold answered with, in paths a caller standing anywhere can use. */
+export interface ScaffoldedSpec {
+  root: string;
+  type: string;
+  id: string;
+  /** Relative to the project root, `/`-separated. */
+  file: string;
+}
+
+/**
+ * A starting file for one new node, placed where it belongs — the procedure
+ * behind `shall add-spec-node --type <Type>`.
+ *
+ * IT TAKES A PATH AND NOT A PROJECT ID, like `checkSpec` and for the same
+ * reason: the caller is an agent standing in a checkout, and a checkout that
+ * had to be opened in the UI before a node could be scaffolded would make the
+ * command less portable than the repository it works in.
+ *
+ * THE TYPE IS RESOLVED CASE-INSENSITIVELY, because the command is typed by
+ * hand and `--type requirement` means the one thing it can mean. The refusal
+ * for a miss lists all twenty-three spellings: the caller cannot see a
+ * dropdown, so the sentence is the dropdown.
+ *
+ * The id, the band folder and the file's contents are the store's and the
+ * template's; this door only says which project and which type.
+ */
+export async function scaffoldSpecNode(input: {
+  path: string;
+  type: string;
+}): Promise<ScaffoldedSpec> {
+  const asked = requireText("A node type", input.type);
+  const type = NODE_TYPES.find(
+    (entry) => entry.name.toLowerCase() === asked.toLowerCase(),
+  )?.name;
+  if (type === undefined) {
+    throw invalid(
+      `Unknown node type: ${asked}. The canon's types are ${NODE_TYPES.map(
+        (entry) => entry.name,
+      ).join(", ")}.`,
+    );
+  }
+
+  const root = await findProjectRootAbove(input.path);
+  if (root === null) {
+    throw missing(
+      `Not a Shall project: ${input.path} — no folder here or above it holds a .shall/project.json.`,
+    );
+  }
+
+  const scaffolded = await served(
+    scaffoldNodeFile(getProjectSpecPath(root), type),
+  );
+  return {
+    root,
+    type,
+    id: scaffolded.id,
+    file: `.shall/spec/${scaffolded.file}`,
+  };
+}
+
 /** What a check found: how big the graph is, what it refused, and what it merely noticed. */
 export interface SpecCheck {
   root: string;
@@ -356,7 +419,9 @@ export async function checkSpec(startPath: string): Promise<SpecCheck> {
       continue;
     }
     notes.push({
-      file: `${node.type}/${node.id}.md`,
+      // The loader only serves canon types, so the band is always there; the
+      // fallback spelling keeps the compiler honest rather than a case alive.
+      file: `${bandFolderOf(node.type) ?? "?"}/${node.type}/${node.id}.md`,
       message: `${node.id}.md is valid but not canonical — a save from the UI will rewrite it and drop comments and ordering.`,
     });
   }

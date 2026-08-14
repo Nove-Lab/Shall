@@ -22,6 +22,7 @@ import {
   listSpecNodes,
   removeSpecEdge,
   removeSpecNode,
+  scaffoldSpecNode,
   updateSpecNode,
 } from "../service/spec-graph.js";
 
@@ -97,12 +98,10 @@ export const appRouter = t.router({
   // twice only meant the person got zod's issue array instead of the sentence
   // written for them.
   //
-  // `attributes` is the same bargain one level down: this says the map is names
-  // to text, and nothing more. WHICH names a type carries, which of them it
-  // requires and which values a `choice` admits are the roster's answers, and
-  // the service gives them in a sentence that can name the type — which a schema
-  // written per type could not do without a second copy of the roster living
-  // here.
+  // `body` is the same bargain writ large: it is the node's specification as
+  // one free markdown document, and the only judgements over it — the
+  // characters no text file can carry, the byte cap — are core's, served back
+  // as sentences. Its shape is nobody's to check, because it has none.
   spec: t.router({
     nodes: procedure
       .input(z.object({ projectId: z.string().min(1) }))
@@ -115,7 +114,7 @@ export const appRouter = t.router({
           id: z.string(),
           shortName: z.string(),
           name: z.string(),
-          attributes: z.record(z.string(), z.string()),
+          body: z.string(),
         }),
       )
       .mutation(({ input }) => createSpecNode(input)),
@@ -126,7 +125,7 @@ export const appRouter = t.router({
           id: z.string(),
           shortName: z.string(),
           name: z.string(),
-          attributes: z.record(z.string(), z.string()),
+          body: z.string(),
         }),
       )
       .mutation(({ input }) => updateSpecNode(input)),
@@ -155,14 +154,18 @@ export const appRouter = t.router({
         await removeSpecEdge(input);
         return { ok: true as const };
       }),
-    // The one procedure that names a PATH instead of a project, because it
-    // answers for a folder nobody has opened yet: a fresh clone is in no
-    // registry, and `shall check` has to work in it the moment it lands. The
-    // schema asks only that the path be a string — whether anything is there,
-    // and whether it is a Shall project at all, is the service's sentence.
+    // The two procedures that name a PATH instead of a project, because they
+    // answer for a folder nobody has opened yet: a fresh clone is in no
+    // registry, and `shall check` and `shall add-spec-node` have to work in it
+    // the moment it lands. The schemas ask only that the strings be strings —
+    // whether anything is there, whether it is a Shall project, and whether
+    // the type is one of the canon's are the service's sentences.
     check: procedure
       .input(z.object({ path: z.string().min(1) }))
       .query(({ input }) => checkSpec(input.path)),
+    scaffold: procedure
+      .input(z.object({ path: z.string().min(1), type: z.string() }))
+      .mutation(({ input }) => scaffoldSpecNode(input)),
   }),
 });
 

@@ -39,7 +39,6 @@ import { useProject } from "@/project-context";
 import { NodePanel, type NodeDraft, type NodePanelMode } from "./NodePanel";
 import { SpecGraph, type MenuTarget } from "./SpecGraph";
 import type { SpecEdge, SpecNode } from "./spec-node";
-import { attributesToSend } from "./view/attributes";
 import "./spec.css";
 
 /**
@@ -381,12 +380,9 @@ export function SpecPlane() {
    * grammatical at all. `NodeDraft` is one shape for both, so the panel does not
    * have to know which of the two it is filling.
    *
-   * BOTH DOORS ARE HANDED THE TYPE'S WHOLE ROSTER AND NOTHING ELSE, which is
-   * what `attributesToSend` is for: the write door overwrites the map entire, so
-   * a slot left out would be a slot cleared, and a slot from a type the draft
-   * used to be aimed at would be refused by a name the person cannot see on
-   * screen. The edit branch reads the type off the draft for the same reason it
-   * is safe to: an edit cannot move it, so `draft.type` is the stored row's own.
+   * THE BODY GOES AS THE PERSON LEFT IT. It is one free markdown document, and
+   * the daemon's door is where its edges are settled — a reshape here would be
+   * a second rule about the same text.
    */
   async function submitNode(draft: NodeDraft) {
     if (panel.mode === "edit") {
@@ -395,7 +391,7 @@ export function SpecPlane() {
         id: panel.id,
         shortName: draft.shortName,
         name: draft.name,
-        attributes: attributesToSend(draft.type, draft.attributes),
+        body: draft.body,
       });
       await load();
       setPanel({ mode: "view", id: updated.id });
@@ -408,7 +404,7 @@ export function SpecPlane() {
       id: draft.id,
       shortName: draft.shortName,
       name: draft.name,
-      attributes: attributesToSend(draft.type, draft.attributes),
+      body: draft.body,
     });
     await load();
     setPanel({ mode: "view", id: created.id });

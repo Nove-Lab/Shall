@@ -3,6 +3,7 @@
 import { execFile } from "node:child_process";
 import { spawn } from "node:child_process";
 import os from "node:os";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 // The CLI is a client, not a second reader of the host: `~/.shall` has one
@@ -180,6 +181,31 @@ async function init(url: string): Promise<void> {
   console.log(`${project.name} is a Shall project at ${project.path}.`);
 }
 
+/**
+ * `shall add-spec-node --type <Type>` — a starting file for one new node,
+ * written at the node's own path with the next free id as its name.
+ *
+ * ONE COMMAND FOR ALL TWENTY-THREE TYPES: the type is an argument and never a
+ * subcommand, so the canon can grow without this file learning a new word. The
+ * daemon resolves the spelling case-insensitively and refuses an unknown one
+ * with the full list, which is this command's `--help` for types.
+ *
+ * THE FIRST LINE OF OUTPUT IS THE PATH, ALONE. The caller is usually an agent
+ * that asked exactly this question — where do I write? — and a bare absolute
+ * path is the answer it can take without parsing prose. The sentence for a
+ * person follows on its own line.
+ */
+async function addSpecNode(url: string, type: string): Promise<void> {
+  const scaffolded = await connect(url).spec.scaffold.mutate({
+    path: process.cwd(),
+    type,
+  });
+  console.log(path.join(scaffolded.root, scaffolded.file));
+  console.log(
+    `A new ${scaffolded.type}, ${scaffolded.id} — fill it in, then shall check reads it back.`,
+  );
+}
+
 /** English that does not say "1 nodes". */
 function count(amount: number, one: string, many: string): string {
   return `${amount} ${amount === 1 ? one : many}`;
@@ -248,9 +274,35 @@ if (command === undefined || command === "--host") {
       process.exitCode = 1;
     }
   }
+} else if (command === "add-spec-node") {
+  // `--type <value>` and `--type=<value>` are the same ask; anything else is
+  // met with the one line that shows the shape.
+  const [first, second, ...extra] = rest;
+  const type =
+    extra.length > 0
+      ? null
+      : first === "--type" && second !== undefined
+        ? second
+        : first?.startsWith("--type=") && second === undefined
+          ? first.slice("--type=".length)
+          : null;
+  if (type === null || type === "") {
+    console.error(
+      "shall add-spec-node needs a type: shall add-spec-node --type Requirement",
+    );
+    process.exitCode = 1;
+  } else {
+    const url = await ensureDaemon(LOOPBACK);
+    try {
+      await addSpecNode(url, type);
+    } catch (error) {
+      console.error(sentenceOf(error));
+      process.exitCode = 1;
+    }
+  }
 } else {
   console.error(
-    `Unknown command: ${command} — shall opens the app, shall init makes this folder a Shall project, and shall check reads the spec files in it.`,
+    `Unknown command: ${command} — shall opens the app, shall init makes this folder a Shall project, shall check reads the spec files in it, and shall add-spec-node --type <Type> starts a new node file.`,
   );
   process.exitCode = 1;
 }

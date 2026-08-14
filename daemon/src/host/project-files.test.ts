@@ -1,14 +1,16 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readdir, readFile, stat } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { describe, test } from "node:test";
+import { before, describe, test } from "node:test";
 import { NODE_TYPES } from "@shall/core/graph";
 import { emitTemplate } from "@shall/core/serialize";
 import {
   getProjectTemplatesPath,
+  getSharedTemplatesPath,
+  removeProjectTemplates,
   writeProjectFiles,
-  writeTemplates,
+  writeSharedTemplates,
 } from "./project-files.js";
 
 /**
@@ -16,25 +18,33 @@ import {
  * everything: beside the target and moved onto it, so nothing ever reads half of
  * one.
  *
- * WHAT IS PINNED HERE IS THE RACE. `projects.open` regenerates all 23 templates
- * on a click of the picker, and two clicks, two tabs, or `shall init` running
- * while a browser opens the same folder are two of these overlapping — which is
- * exactly when a temporary name shared by both writers turns an ordinary open
- * into an `ENOENT` on a rename. It bites hardest on a fresh clone, where every
- * template has work to do.
+ * WHAT IS PINNED HERE IS THE RACE. The shared templates are regenerated on
+ * every daemon start and every open, and a start racing an open over
+ * `~/.shall/templates` is two of these overlapping — which is exactly when a
+ * temporary name shared by both writers turns an ordinary open into an `ENOENT`
+ * on a rename. It bites hardest on a fresh machine, where every template has
+ * work to do.
  */
+
+/** A fake `~`, so the templates these tests write are not the machine's. */
+before(async () => {
+  const home = await mkdtemp(path.join(os.tmpdir(), "shall-files-home-"));
+  // `getShallHome` reads `os.homedir()` on every call, which is `$HOME` on
+  // POSIX — so this redirects the shared folder without a seam that exists
+  // only for tests.
+  process.env.HOME = home;
+});
 
 async function newFolder(): Promise<string> {
   return mkdtemp(path.join(os.tmpdir(), "shall-files-"));
 }
 
-describe("the templates are regenerated safely", () => {
-  test("two writers over one folder both finish, and write the same 23 files", async () => {
+describe("the shared templates are regenerated safely", () => {
+  test("two writers over the shared folder both finish, and write the same 23 files", async () => {
     for (let attempt = 0; attempt < 5; attempt += 1) {
-      const folder = await newFolder();
       const settled = await Promise.allSettled([
-        writeTemplates(folder),
-        writeTemplates(folder),
+        writeSharedTemplates(),
+        writeSharedTemplates(),
       ]);
       assert.deepEqual(
         settled.map((result) => result.status),
@@ -46,7 +56,7 @@ describe("the templates are regenerated safely", () => {
           .join(" | "),
       );
 
-      const templates = getProjectTemplatesPath(folder);
+      const templates = getSharedTemplatesPath();
       const entries = await readdir(templates);
       assert.equal(entries.length, NODE_TYPES.length);
       // No `.tmp` survives a finished write, whichever of the two got there
@@ -66,19 +76,18 @@ describe("the templates are regenerated safely", () => {
   });
 
   test("a second pass over current templates writes nothing at all", async () => {
-    // The byte compare is what keeps `git status` quiet on every open, so a
-    // regeneration that rewrote identical bytes would show up in a person's
-    // working tree as 23 files they did not touch.
-    const folder = await newFolder();
-    await writeTemplates(folder);
-    const templates = getProjectTemplatesPath(folder);
+    // The byte compare is what keeps the folder's mtimes quiet on every start,
+    // so a regeneration that rewrote identical bytes would churn 23 files
+    // nobody touched.
+    await writeSharedTemplates();
+    const templates = getSharedTemplatesPath();
     const before = new Map<string, number>();
     for (const entry of await readdir(templates)) {
       before.set(entry, (await stat(path.join(templates, entry))).mtimeMs);
     }
 
     await new Promise((resolve) => setTimeout(resolve, 20));
-    await writeTemplates(folder);
+    await writeSharedTemplates();
 
     for (const [entry, stamp] of before) {
       assert.equal(
@@ -88,7 +97,9 @@ describe("the templates are regenerated safely", () => {
       );
     }
   });
+});
 
+describe("a project's own folder", () => {
   test("two initializations of one folder leave one whole project behind", async () => {
     // The loser's cleanup used to remove the winner's half-built folder, because
     // both had built it under the same temporary name.
@@ -110,12 +121,29 @@ describe("the templates are regenerated safely", () => {
         .join(" | "),
     );
 
+    // No `templates` here any more: the reference set is the machine's, under
+    // `~/.shall/templates`, and a node's starting file is written straight
+    // into the spec by `shall add-spec-node`.
     const shall = path.join(folder, ".shall");
     const entries = (await readdir(shall)).sort();
-    assert.deepEqual(entries, [".gitignore", "project.json", "spec", "templates"]);
-    assert.equal(
-      (await readdir(path.join(shall, "templates"))).length,
-      NODE_TYPES.length,
+    assert.deepEqual(entries, [".gitignore", "project.json", "spec"]);
+  });
+
+  test("a template set an older Shall committed into a project is removed whole", async () => {
+    const folder = await newFolder();
+    const templates = getProjectTemplatesPath(folder);
+    await mkdir(templates, { recursive: true });
+    await writeFile(
+      path.join(templates, "Requirement.md"),
+      "# left behind by an older Shall\n",
+      "utf8",
     );
+
+    await removeProjectTemplates(folder);
+    await assert.rejects(stat(templates));
+
+    // A project that never had one is a no-op, not an error — every open runs
+    // this, and most projects will have nothing to remove.
+    await removeProjectTemplates(folder);
   });
 });

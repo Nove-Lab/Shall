@@ -17,7 +17,13 @@ export {
   isStoreRefusal,
   loadGraph,
   removeEdge,
+  scaffoldNodeFile,
   StoreRefusal,
   updateNodeFile,
 } from "./file-store.js";
-export type { FileProblem, RefusalKind, SpecGraph } from "./file-store.js";
+export type {
+  FileProblem,
+  RefusalKind,
+  ScaffoldedNode,
+  SpecGraph,
+} from "./file-store.js";
