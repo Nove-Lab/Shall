@@ -1,5 +1,7 @@
+import { reviewGraph } from "@shall/core/arith";
 import type { SpecEdge, SpecNode } from "@shall/core/graph";
 import {
+  anchorPhrase,
   bandFolderOf,
   isNodeType,
   isPermittedTriple,
@@ -21,6 +23,7 @@ import {
   updateNodeFile,
 } from "@shall/core/store";
 import { Refusal, conflict, invalid, missing } from "./errors.js";
+import { makeSeal } from "../host/approval-key.js";
 import { requireRegistryProject } from "./projects.js";
 import {
   findProjectRootAbove,
@@ -30,19 +33,33 @@ import {
   readSpecNodeFile,
 } from "../host/project-files.js";
 
-async function specDirFor(projectId: string): Promise<string> {
+/**
+ * The project a `spec.*` procedure works in: its path on disk and its spec
+ * folder — exported because the review service needs both halves (git wants
+ * the project, the store wants the spec).
+ *
+ * The registry outlives the folder it points at — a project gets moved,
+ * deleted, or checked out somewhere else and the entry stays behind. It
+ * matters more now than it did: a spec folder that is not there is a graph
+ * with nothing in it, which is the right answer for a project whose graph is
+ * empty and a silent lie for one that was deleted. This is what tells the two
+ * apart, in the words the picker uses.
+ */
+export async function projectSpecFor(
+  projectId: string,
+): Promise<{ projectPath: string; specDir: string }> {
   const project = await requireRegistryProject(projectId);
-
-  // The registry outlives the folder it points at — a project gets moved,
-  // deleted, or checked out somewhere else and the entry stays behind. It
-  // matters more now than it did: a spec folder that is not there is a graph
-  // with nothing in it, which is the right answer for a project whose graph is
-  // empty and a silent lie for one that was deleted. This is what tells the two
-  // apart, in the words the picker uses.
   if (!(await pathExists(getProjectShallPath(project.path)))) {
     throw missing(`Not a Shall project: ${project.path}`);
   }
-  return getProjectSpecPath(project.path);
+  return {
+    projectPath: project.path,
+    specDir: getProjectSpecPath(project.path),
+  };
+}
+
+async function specDirFor(projectId: string): Promise<string> {
+  return (await projectSpecFor(projectId)).specDir;
 }
 
 /**
@@ -55,7 +72,7 @@ async function specDirFor(projectId: string): Promise<string> {
  * the loader would serve over that same file, and it is the same fact whichever
  * side of the write the person is standing on.
  */
-async function served<T>(work: Promise<T>): Promise<T> {
+export async function served<T>(work: Promise<T>): Promise<T> {
   try {
     return await work;
   } catch (error) {
@@ -433,21 +450,36 @@ export async function checkSpec(startPath: string): Promise<SpecCheck> {
   const specDir = getProjectSpecPath(root);
   const graph = await loadGraph(specDir);
 
-  // The gaps: every relation kept toward an id no file answers to, filed under
-  // the file that carries the line — that is where the fix happens, whether it
-  // is a restore of the target or a re-anchor of this node. The source of an
-  // edge is always a living node, because a refused file contributes no edges.
-  const living = new Set(graph.nodes.map((node) => node.id));
+  // The gaps: the graph's holes, computed by the same arithmetic the review
+  // serves — on a keyless seal, because the check never speaks of yellow and
+  // no key is needed to say where nothing stands. A missing id is filed under
+  // every file that names it, because those lines are where the fix happens —
+  // a restore of the target, or a re-anchor of the survivor; an orphan is
+  // filed under its own file. The source of an edge is always a living node,
+  // because a refused file contributes no edges.
   const typeById = new Map(graph.nodes.map((node) => [node.id, node.type]));
+  const fileFor = (id: string): string => {
+    const type = typeById.get(id) ?? "?";
+    return `${bandFolderOf(type) ?? "?"}/${type}/${id}.md`;
+  };
+  const review = reviewGraph(graph, makeSeal(null));
   const gaps: FileProblem[] = [];
-  for (const edge of graph.edges) {
-    if (living.has(edge.toId)) {
+  for (const entry of review.missing) {
+    for (const referrer of entry.referencedBy) {
+      gaps.push({
+        file: fileFor(referrer.fromId),
+        message: `${referrer.fromId} has a ${referrer.type} relation to ${entry.id}, and no file names ${entry.id}. The relation is kept as written, so writing or restoring ${entry.id} attaches it again.`,
+      });
+    }
+  }
+  for (const status of review.statuses) {
+    if (status.reason !== "orphan") {
       continue;
     }
-    const fromType = typeById.get(edge.fromId) ?? "?";
+    const type = typeById.get(status.id) ?? "?";
     gaps.push({
-      file: `${bandFolderOf(fromType) ?? "?"}/${fromType}/${edge.fromId}.md`,
-      message: `${edge.fromId} has a ${edge.type} relation to ${edge.toId}, and no file names ${edge.toId}. The relation is kept as written, so writing or restoring ${edge.toId} attaches it again.`,
+      file: fileFor(status.id),
+      message: `${status.id} is a ${type} with no live anchor — it is held to the graph by ${anchorPhrase(type) ?? "nothing the canon names"}, and none stands. Draw the relation, or remove the node.`,
     });
   }
   gaps.sort((a, b) => (a.file === b.file ? 0 : a.file < b.file ? -1 : 1));
