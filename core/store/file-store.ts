@@ -862,8 +862,8 @@ const queues = new Map<string, Promise<unknown>>();
  * One write at a time per spec folder, because a write is the unit of work and
  * several of them are read-modify-write over the same file.
  *
- * A single rename never needed this. A cascade is a different animal — the
- * awaits between reading a referrer and rewriting it are gaps another write
+ * A single rename never needed this. A read-modify-write is a different animal
+ * — the await between reading a file and rewriting it is a gap another write
  * would slip into, and two writes that both read the same file before either
  * rewrote it would leave the second one's version standing with the first one's
  * change gone. Queuing removes the gaps rather than teaching every caller to
@@ -1237,21 +1237,17 @@ export async function updateNodeFile(
 }
 
 /**
- * The node, and every relation that touches it.
+ * The node's own file, and not one byte of any other.
  *
- * OUTGOING RELATIONS GO WITH THE FILE, since that is the only place they were
- * written. INCOMING ONES ARE A CASCADE, and the cascade cannot be atomic: these
- * are several files, and no filesystem offers a way to move several of them at
- * once. The referrers are rewritten FIRST, so that the state a crash can leave
- * behind is "the relations are gone, the node is still there" — which reads
- * perfectly well and can be finished by asking again. The other order would
- * leave references to nothing — which the loader now keeps as dangling lines,
- * and the check names.
- *
- * A referrer that does not currently parse is LEFT ALONE rather than rewritten,
- * for the same reason the update door refuses to clobber one. Its line pointing
- * at the removed node stays where it is, a hole the check names until somebody
- * fixes it.
+ * A DELETION TOUCHES ONE FILE. The outgoing relations go with it, because they
+ * were lines in it; the incoming ones are lines in OTHER files, and those files
+ * are nobody's to edit but their author's. A machine that rewrote a neighbour
+ * would mint a change nobody intended — and under an approval regime, a yellow
+ * nobody asked for, which teaches people to approve without reading. The lines
+ * that point at the removed node stay exactly where they are: they are the
+ * history of the deletion and the address a restore comes back to, the loader
+ * keeps them, the check names them, and whoever re-anchors does it with
+ * intent.
  */
 export async function deleteNodeFile(
   specDir: string,
@@ -1265,45 +1261,12 @@ export async function deleteNodeFile(
       throw missing(`Unknown node: ${id}`);
     }
 
-    for (const candidate of candidates) {
-      if (candidate.file === target.file) {
-        continue;
-      }
-      const text = await readText(candidate.absolutePath);
-      // A referrer this module cannot READ is treated exactly as one it cannot
-      // PARSE: skipped, its dangling line left for the check to name. The
-      // alternative is what this loop used to do — throw part-way through, with
-      // some referrers already rewritten and the node still on disk, and tell
-      // the caller the delete failed while a relation had in fact been
-      // destroyed. Never abort between two rewrites.
-      if (text.kind !== "text") {
-        continue;
-      }
-      const reading = parseNodeFile(
-        candidate.type,
-        `${candidate.id}${MARKDOWN_SUFFIX}`,
-        text.text,
-      );
-      const node = reading.node;
-      if (node === undefined) {
-        continue;
-      }
-      const kept = reading.edges.filter((edge) => edge.toId !== id);
-      if (kept.length === reading.edges.length) {
-        continue;
-      }
-      await writeNodeFile(root, candidate.type, candidate.id, node, kept);
-    }
-
     try {
       await unlink(target.absolutePath);
     } catch (error) {
       // Removed by somebody else between the listing and now. The caller asked
       // for it to be gone and it is gone.
       if (!isAbsent(error)) {
-        // Anything else leaves the node where it is, and the referrers already
-        // rewritten — which is the state the cascade documents as consistent, so
-        // what is owed here is the sentence rather than a fault.
         throw conflict(
           `${target.file} could not be removed: ${describeFailure(error)}.`,
         );

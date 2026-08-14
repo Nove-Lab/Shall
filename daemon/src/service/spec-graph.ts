@@ -193,10 +193,11 @@ export async function updateSpecNode(input: {
 }
 
 /**
- * The node's file, and every relation that touches it: the outgoing ones go with
- * the file, because that is the only place they were written, and the incoming
- * ones are rewritten out of the files that hold them. The dialog's promise about
- * "every relation that touches it" is therefore still true.
+ * The node's own file, and not one byte of any other. The outgoing relations go
+ * with it, because they were lines in it; the incoming ones are lines in OTHER
+ * files, which stay exactly as their authors left them — the history of the
+ * deletion, and the address a restore comes back to. The dialog says so before
+ * the person confirms, and names how many lines are about to point at a hole.
  */
 export async function removeSpecNode(input: {
   projectId: string;

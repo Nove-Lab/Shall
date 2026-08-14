@@ -428,7 +428,7 @@ describe("the remove door", () => {
     );
   });
 
-  test("takes every relation that touches the node with it", async () => {
+  test("takes its own file and leaves the relation into it as history", async () => {
     const project = await newProject();
     await node(project, "Requirement", "R-0001", REQUIREMENT_BODY);
     await node(project, "AcceptanceCriterion", "AC-0001", CRITERION_BODY);
@@ -438,15 +438,33 @@ describe("the remove door", () => {
       fromId: "R-0001",
       toId: "AC-0001",
     });
+    const referrer = path.join(
+      project.path,
+      ".shall",
+      "spec",
+      "intent",
+      "Requirement",
+      "R-0001.md",
+    );
+    const before = await readFile(referrer, "utf8");
+
     await removeSpecNode({ projectId: project.id, id: "AC-0001" });
-    assert.deepEqual(await listSpecEdges(project.id), []);
+
+    // A deletion touches one file: the neighbour is byte-identical.
+    assert.equal(await readFile(referrer, "utf8"), before);
     assert.deepEqual(
       (await listSpecNodes(project.id)).map((entry) => entry.id),
       ["R-0001"],
     );
-    // The graph the panel draws is clean: the cascade left nothing dangling.
+    // The canvas gets no line to a box that is not there…
+    assert.deepEqual(await listSpecEdges(project.id), []);
+    // …and the check names the hole the kept line now points into.
     const check = await checkSpec(project.path);
     assert.deepEqual(check.problems, []);
+    assert.deepEqual(
+      check.gaps.map((gap) => gap.file),
+      ["intent/Requirement/R-0001.md"],
+    );
   });
 });
 
