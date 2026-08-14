@@ -22,6 +22,14 @@ export {
   typesInBand,
 } from "./canon.js";
 export type { Band, NodeTypeEntry, NodeTypeName } from "./canon.js";
+export {
+  ANCHOR_RULES,
+  anchorPhrase,
+  anchorsFor,
+  isColored,
+  isRootless,
+} from "./anchors.js";
+export type { AnchorDirection, AnchorEdge, AnchorRule } from "./anchors.js";
 export { sectionGuideFor } from "./guide.js";
 export type { SectionGuide } from "./guide.js";
 export {
