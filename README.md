@@ -22,10 +22,12 @@ client/cli/                                        — the `shall` command
 reader and the per-type starting files (the reference templates and the
 scaffolds `shall add-spec-node` writes). `core/store` is the folder around them —
 what a directory of markdown amounts to when it is read at once, and how a
-write lands. `core/arith` and `core/exchange` are still empty frames: the
-judgement arithmetic is not written, and `exchange` is a seat kept open rather
-than a plan — the session broker it was to hold is not being built, because git
-holds the history, the merges and the review it existed to provide.
+write lands. `core/arith` holds its first arithmetic now: the colour chain —
+red for an error to fix, yellow for a judgement still owed, green for both
+settled — computed from the graph on every read and stored nowhere.
+`core/exchange` stays an empty frame: the session broker it was to hold is not
+being built, because git holds the history, the merges and the review it
+existed to provide.
 
 ## Routes
 
@@ -72,6 +74,23 @@ are two layouts of the same nodes. A relation is drawn by dragging from one
 card to another and picking a type the canon allows between them, and removed
 from the context menu on the line.
 
+Every card outside the execution band carries a traffic light, computed on
+read: red is an error to fix (a file that will not read, a node no live anchor
+holds, an id that is referenced but gone), yellow is a judgement still owed (no
+approval yet, a tag this machine's key did not write, changed since it was
+approved), green is both settled. The node panel is where a judgement happens —
+a full read for a new node, a line diff against the approved version for a
+changed one, and for a deletion an agent proposed (a `deletionProposed:` block
+it writes into the file's frontmatter) the rationale, the impact and two
+buttons: approve the deletion or reject it. Approving writes an `approval:`
+block signed with the machine key at `~/.shall/key`; agents can imitate the
+block but not the tag, which is why green has exactly one manufacturer. The
+daemon never commits on its own — a **Commit spec** button appears when the
+project is a git repository and the spec folder has uncommitted changes, and
+makes one commit scoped to `.shall/spec`. A file deleted by hand shows up under
+the toolbar's problems dialog with a **Restore** button that brings it back
+from git history.
+
 Settings edits real files: the daemon port lives in `~/.shall/config.json` and
 the display name in `<project>/.shall/project.json`. Everything else on that
 screen is a read-only fact shown next to the file it comes from.
@@ -98,14 +117,22 @@ templates are not in the project any more: they are the machine's, regenerated
 under `~/.shall/templates/`, and a set an older Shall committed into a project
 is removed on the next open.
 
+Opening or creating a project also writes one deny rule into the project's
+`.claude/settings.json` — `Read(~/.shall/**)`, the approval key's home — and
+`shall init` runs `git init` when the folder is in no repository, because git
+is the spec's only restoration material.
+
 Three `shall` subcommands go on top of this: `shall init` to write that folder
 into the current directory, `shall check` to read the spec back and print what
-is wrong with it (one file and one sentence per line, exit 1 when a problem
-remains), and `shall add-spec-node --type <Type>` to start a new node — the
-daemon picks the next free id, writes the starting file at its own path, and
-the command prints that path on its first line so an agent knows exactly where
-to write. One command for all 23 types; the type argument is resolved
-case-insensitively.
+is wrong with it (one file and one sentence per line — problems that keep a
+file out of the graph, gaps where the graph does not hold together, and notes
+about non-canonical files; problems and gaps exit 1), and
+`shall add-spec-node --type <Type>` to start a new node — the daemon picks the
+next free id, writes the starting file at its own path, and the command prints
+that path on its first line so an agent knows exactly where to write. One
+command for all 23 types; the type argument is resolved case-insensitively.
+There is no `shall approve` and never will be: green is made by a person in
+the browser.
 
 ## Development
 
