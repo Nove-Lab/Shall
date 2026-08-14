@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useMemo,
   useState,
   type KeyboardEvent,
   type ReactNode,
@@ -7,12 +8,14 @@ import {
 import { Pencil, Trash2, X } from "lucide-react";
 import {
   BAND_ORDER,
+  anchorPhrase,
   bandOf,
   columnsInOrder,
   nextIdSuggestion,
   sectionGuideFor,
   type Band,
   type NodeTypeEntry,
+  type SpecEdge,
   type SpecNode,
 } from "@shall/core/graph";
 import { Badge } from "@/components/ui/badge";
@@ -38,7 +41,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { formatTimestamp } from "./spec-node";
+import {
+  deletionSentence,
+  impactSentence,
+  type ApprovedVersion,
+  type ReviewStatus,
+  type StatusReason,
+} from "./review";
+import { LineDiff, Referrers, StatusDot } from "./review-parts";
+import { formatStamp } from "./spec-node";
+import { lineDiff, wholeFile, type DiffRow } from "./view/diff";
 
 export type NodePanelMode = "create" | "view" | "edit";
 
@@ -67,6 +79,77 @@ const TYPE_GROUPS: readonly TypeGroup[] = BAND_ORDER.map((band) => ({
   band,
   types: columnsInOrder().filter((entry) => bandOf(entry.name) === band),
 }));
+
+/**
+ * WHAT A COLOUR MEANS AND WHAT TO DO ABOUT IT, in the panel's own words.
+ *
+ * THE DAEMON SENDS A REASON AND NEVER A SENTENCE, which is the division this
+ * function is: the verdict is arithmetic over the file and belongs to
+ * `core/arith`, and how it is said to a person belongs to the surface saying it.
+ * Every sentence names the node's own id or type where it can, because a person
+ * reading a docked panel beside a board of fifty cards should not have to check
+ * which one they are looking at.
+ *
+ * THREE REASONS RETURN NOTHING, AND THAT IS NOT A GAP. `missing` is an id with
+ * no node behind it, so there is no panel to open on it; `malformed` is a file
+ * that would not read, which never reaches `statuses` at all and is listed under
+ * Problems instead; `approved` is green, which draws one muted line and no box.
+ * They are spelled out rather than left to a `default` so that a fourth yellow —
+ * or a reason renamed in the canon — is a compile error here.
+ */
+function statusCopy(
+  status: ReviewStatus,
+  node: SpecNode,
+): { title: string; body: string } | null {
+  switch (status.reason) {
+    case "unapproved":
+      return {
+        title: "Not approved",
+        body: "Nobody has approved this node yet. The specification below is the whole of what approving it signs off.",
+      };
+    case "forged":
+      return {
+        title: "Approval could not be verified",
+        body: "This node claims an approval this machine's key did not write. Read it again and approve it yourself.",
+      };
+    case "changed":
+      return {
+        title: "Changed since it was approved",
+        body: "Someone edited this node after it was approved. The lines below are what moved.",
+      };
+    case "orphan": {
+      // WHAT WOULD ANCHOR IT IS THE CANON'S ANSWER AND NOT A LIST KEPT HERE:
+      // `anchorPhrase` reads the same grammar the connect dialog offers
+      // relations from. `null` is a type the canon anchors no other way, which
+      // no orphan can be — the guard says so honestly rather than by printing
+      // "anchored by null".
+      const phrase = anchorPhrase(node.type);
+      const opening = `No relation anchors ${node.id}, so it hangs off the graph and cannot be approved.`;
+      return {
+        title: "Nothing anchors this node",
+        body:
+          phrase === null
+            ? `${opening} Draw a relation into it from the node it belongs under.`
+            : `${opening} A ${node.type} is anchored by ${phrase}.`,
+      };
+    }
+    case "missing":
+    case "malformed":
+    case "approved":
+      return null;
+  }
+}
+
+/**
+ * THE THREE STATES APPROVING RESOLVES. An orphan is the one colour a signature
+ * cannot fix — the graph has to change first — so it gets the sentence and no
+ * button, and the daemon refuses it at the door either way.
+ */
+const APPROVABLE: ReadonlySet<StatusReason> = new Set<StatusReason>([
+  "unapproved",
+  "forged",
+  "changed",
+]);
 
 /** A row the panel shows but nothing in it can change. */
 function Field({ label, children }: { label: string; children: ReactNode }) {
@@ -134,11 +217,32 @@ interface NodePanelProps {
   presetType?: string;
   /** Which create request this is — see the re-aim effect below. */
   request: number;
+  /**
+   * THE DAEMON'S VERDICT ON THIS NODE, OR `null` FOR A NODE THAT HAS NONE.
+   *
+   * NULLABLE AND NEVER OPTIONAL, like everything else the plane hands down here:
+   * under `exactOptionalPropertyTypes` an absent prop and a prop holding nothing
+   * are different asks, and this is the second — the plane always knows, and
+   * `null` is one of the answers it knows. ABSENCE FROM THE REVIEW IS ITSELF THE
+   * RULE: the execution band has no colour, and this panel draws no section for
+   * it rather than working a band out for itself.
+   */
+  status: ReviewStatus | null;
+  /** The relations pointing AT this node — what a deletion would leave drawn to nothing. */
+  referrers: SpecEdge[];
   onClose: () => void;
   onEdit: () => void;
   onCancelEdit: () => void;
   onSubmit: (draft: NodeDraft) => Promise<void>;
   onDelete: () => Promise<void>;
+  /**
+   * The three review writes. Each REJECTS with the daemon's own sentence and is
+   * caught here, beside the button that sent it — the same contract `onSubmit`
+   * has, and the reason neither of them returns an error instead.
+   */
+  onApprove: () => Promise<void>;
+  onRejectDeletion: () => Promise<void>;
+  loadApprovedVersion: (id: string) => Promise<ApprovedVersion>;
 }
 
 /**
@@ -152,11 +256,16 @@ export function NodePanel({
   nodes,
   presetType,
   request,
+  status,
+  referrers,
   onClose,
   onEdit,
   onCancelEdit,
   onSubmit,
   onDelete,
+  onApprove,
+  onRejectDeletion,
+  loadApprovedVersion,
 }: NodePanelProps) {
   const [type, setType] = useState("");
   const [id, setId] = useState("");
@@ -180,6 +289,28 @@ export function NodePanel({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  /**
+   * THE REVIEW ACTIONS HAVE THEIR OWN BUSY FLAG AND THEIR OWN SENTENCE, and that
+   * is not tidiness. `busy` gates Save and Delete; a refused approve that took it
+   * would disable the editor over a write that changed nothing, and the daemon
+   * refuses an approve for reasons — an orphan, a proposal standing — that a
+   * person answers by EDITING the node. Same rule the plane's two dialogs follow.
+   */
+  const [reviewBusy, setReviewBusy] = useState(false);
+  const [reviewError, setReviewError] = useState<string | null>(null);
+  /**
+   * The approved version beside the current one, KEYED BY WHAT WAS ASKED FOR.
+   *
+   * The key is the node's id and its stamp together, so the answer to a question
+   * about another node — or about this node before the last save — is not shown
+   * as the answer to this one. See the guard below the fetch.
+   */
+  const [version, setVersion] = useState<{
+    key: string;
+    value: ApprovedVersion;
+  } | null>(null);
+  const [versionBusy, setVersionBusy] = useState(false);
+  const [versionError, setVersionError] = useState<string | null>(null);
 
   const existingIds = nodes.map((existing) => existing.id);
 
@@ -194,6 +325,15 @@ export function NodePanel({
     setConfirmingDelete(false);
     setIdTouched(false);
     setBodyTouched(false);
+    // The review half is refilled with the rest of the form, and for the same
+    // reason: a refusal, a busy flag or a fetched diff belongs to the node it
+    // was asked about, and a panel that moved to another node carrying any of
+    // them would be showing one node's answer over another node's file.
+    setReviewBusy(false);
+    setReviewError(null);
+    setVersion(null);
+    setVersionBusy(false);
+    setVersionError(null);
 
     if (node) {
       setType(node.type);
@@ -244,6 +384,98 @@ export function NodePanel({
       setBody(bodySkeleton(presetType));
     }
   }, [request]);
+
+  /**
+   * The colour's title and sentence, or `null` where this panel says nothing —
+   * green, which gets one muted line instead, and the reasons that cannot reach
+   * a panel at all. `statusCopy` carries the reasoning.
+   */
+  const statusText =
+    status === null || node === null ? null : statusCopy(status, node);
+
+  /**
+   * WHETHER THIS NODE HAS A COMPARISON TO SHOW, WHICH IS ALSO WHETHER ONE IS
+   * FETCHED. The approved version is a second file read out of git, so it is
+   * asked for only where it is drawn: on a node being READ, that the daemon
+   * calls `changed`, with no deletion standing over it — a proposal renders the
+   * status quiet, and a diff under a question about removing the node entirely
+   * is an answer to a question nobody asked.
+   *
+   * THE STAMP IS IN THE KEY, so saving this node asks again: the file moved, and
+   * the comparison drawn against the version before the save is stale the moment
+   * it lands.
+   */
+  const wantsDiff =
+    mode === "view" &&
+    node !== null &&
+    node.deletionProposed === undefined &&
+    status?.reason === "changed";
+  const diffKey =
+    wantsDiff && node !== null ? `${node.id}:${String(node.updatedAt)}` : null;
+
+  /**
+   * BOTH THE FLAG AND THE KEY GUARD, BECAUSE THEY GUARD DIFFERENT THINGS. `live`
+   * stops a setState after this panel has moved on — React's warning, and a
+   * refusal from a node nobody is looking at any more. The key guard below stops
+   * a SLOW answer that lands while the panel is on another node from being drawn
+   * as that node's diff, which no cleanup can prevent because the fetch that was
+   * cancelled is not the one that resolves last.
+   *
+   * The key is the only dependency: it carries the node and its stamp, which are
+   * the whole of what the request is made of.
+   */
+  useEffect(() => {
+    if (diffKey === null || node === null) {
+      return;
+    }
+    let live = true;
+    setVersionBusy(true);
+    setVersionError(null);
+    loadApprovedVersion(node.id)
+      .then((value) => {
+        if (live) {
+          setVersion({ key: diffKey, value });
+        }
+      })
+      .catch((fetchError: unknown) => {
+        if (live) {
+          setVersionError(
+            fetchError instanceof Error
+              ? fetchError.message
+              : "Could not read the approved version",
+          );
+        }
+      })
+      .finally(() => {
+        if (live) {
+          setVersionBusy(false);
+        }
+      });
+    return () => {
+      live = false;
+    };
+  }, [diffKey]);
+
+  /** The fetched pair, but only while it is the pair this panel is asking about. */
+  const shown =
+    version !== null && version.key === diffKey ? version.value : null;
+
+  /**
+   * WHAT MOVED, or `null` while there is nothing to compare yet.
+   *
+   * GIT NO LONGER HOLDING THE APPROVED VERSION IS NOT AN ERROR AND NOT AN EMPTY
+   * ANSWER. The file as it stands is still what the person came to read, so it is
+   * drawn as one unchanged block with a note above it saying why nothing is
+   * marked — see the render.
+   */
+  const rows = useMemo<DiffRow[] | null>(() => {
+    if (shown === null) {
+      return null;
+    }
+    return shown.approved === null
+      ? wholeFile(shown.current)
+      : lineDiff(shown.approved, shown.current);
+  }, [shown]);
 
   /** The dropdown owns the id and the skeleton while each is still a suggestion. */
   function chooseType(next: string) {
@@ -344,6 +576,55 @@ export function NodePanel({
     }
   }
 
+  /**
+   * The two review writes, which differ only in what they send and what they say
+   * when they are refused. Both leave the panel where it is: the plane refetches
+   * and the node under it is redrawn with whatever the write actually did.
+   */
+  async function approve() {
+    if (reviewBusy) {
+      return;
+    }
+
+    setReviewBusy(true);
+    setReviewError(null);
+    try {
+      await onApprove();
+    } catch (approveError) {
+      // The daemon's own sentence. It refuses an approve for reasons this panel
+      // cannot always know it should have hidden the button for — a node that
+      // turned orphan under another session, a proposal written since the last
+      // read — and its words are the ones that say which.
+      setReviewError(
+        approveError instanceof Error
+          ? approveError.message
+          : "Could not approve the node",
+      );
+    } finally {
+      setReviewBusy(false);
+    }
+  }
+
+  async function reject() {
+    if (reviewBusy) {
+      return;
+    }
+
+    setReviewBusy(true);
+    setReviewError(null);
+    try {
+      await onRejectDeletion();
+    } catch (rejectError) {
+      setReviewError(
+        rejectError instanceof Error
+          ? rejectError.message
+          : "Could not reject the deletion",
+      );
+    } finally {
+      setReviewBusy(false);
+    }
+  }
+
   /** Enter saves from a one-line field. A prose box keeps its newlines. */
   function saveOnEnter(event: KeyboardEvent<HTMLInputElement>) {
     if (event.key === "Enter") {
@@ -374,6 +655,145 @@ export function NodePanel({
       <div className="min-h-0 flex-1 overflow-y-auto p-4">
         {mode === "view" && node ? (
           <div className="grid gap-4">
+            {/* AN AGENT ASKING FOR THIS NODE TO GO, AT THE TOP OF THE PANEL AND
+                ABOVE THE FILE IT IS ABOUT. It is the one thing here that is a
+                QUESTION rather than a description, and a question answered at the
+                bottom of a long specification is a question people answer without
+                reading it.
+
+                THE RATIONALE IS SHOWN VERBATIM AND ITS LINE BREAKS ARE KEPT. It
+                is the agent's argument for the deletion and the whole of what the
+                person is deciding on; reflowing it would be this panel editing
+                evidence. It is deliberately not markdown — see `Markdown`'s note
+                on why the body is, and this is not a document.
+
+                BOTH ANSWERS ARE HERE AND NEITHER IS THE DEFAULT. Approving goes
+                through the same confirmation the destructive menu item does, so
+                the cascade is named once and in one wording wherever a node
+                leaves. */}
+            {node.deletionProposed === undefined ? null : (
+              <div className="border-destructive/40 grid gap-3 rounded-md border p-3">
+                <span className="text-sm font-medium">Deletion proposed</span>
+                <span className="text-muted-foreground text-xs">
+                  Proposed by {node.deletionProposed.by}
+                </span>
+                <p className="text-sm whitespace-pre-wrap">
+                  {node.deletionProposed.rationale}
+                </p>
+                {referrers.length === 0 ? null : (
+                  <div className="grid gap-2">
+                    <p className="text-sm">
+                      {impactSentence(node.id, referrers.length)}
+                    </p>
+                    <Referrers edges={referrers} />
+                  </div>
+                )}
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    disabled={reviewBusy}
+                    onClick={() => setConfirmingDelete(true)}
+                  >
+                    <Trash2 />
+                    Approve deletion
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={reviewBusy}
+                    onClick={() => void reject()}
+                  >
+                    {reviewBusy ? "Rejecting…" : "Reject"}
+                  </Button>
+                </div>
+                {reviewError ? (
+                  <p className="text-destructive text-sm">{reviewError}</p>
+                ) : null}
+              </div>
+            )}
+
+            {/* THE COLOUR, SAID IN WORDS. The square on the card is the whole of
+                what the board can show; this is where the same verdict gets its
+                sentence and, where there is one, the button that resolves it.
+
+                NO STATUS IS NO SECTION. A node the review does not mention is a
+                node outside the colour vocabulary — the execution band — and the
+                honest answer to "what colour is it" there is silence, not a
+                fourth colour meaning "not applicable". Nothing here works a band
+                out for itself.
+
+                GREEN IS ONE MUTED LINE AND NOT A BOX. A box is a thing to deal
+                with, and an approved node is the state everything else is trying
+                to reach: it says who signed it and when, at the weight of a
+                caption, and gets out of the way of the specification below.
+
+                WHILE A DELETION IS PROPOSED THE SECTION GOES QUIET — the dot and
+                the sentence, no Approve and no diff. There is exactly one
+                question open on this node then, it is the card above, and a
+                second button offering to sign off the very text somebody is
+                asking to remove would be two decisions in one pane. */}
+            {status === null ? null : status.color === "green" ? (
+              <div className="flex items-center gap-1.5">
+                <StatusDot color="green" />
+                <span className="text-muted-foreground text-sm">
+                  {node.approval === undefined
+                    ? "Approved"
+                    : `Approved by ${node.approval.by} · ${formatStamp(node.approval.at)}`}
+                </span>
+              </div>
+            ) : statusText === null ? null : (
+              <div className="grid gap-2 rounded-md border p-3">
+                <div className="flex items-center gap-1.5">
+                  <StatusDot color={status.color} />
+                  <span className="text-sm font-medium">
+                    {statusText.title}
+                  </span>
+                </div>
+                <p className="text-muted-foreground text-sm">
+                  {statusText.body}
+                </p>
+                {wantsDiff ? (
+                  <div className="grid gap-2">
+                    {versionBusy ? (
+                      <p className="text-muted-foreground text-sm">
+                        Reading the approved version…
+                      </p>
+                    ) : versionError !== null ? (
+                      <p className="text-destructive text-sm">{versionError}</p>
+                    ) : rows === null ? null : (
+                      <>
+                        {shown?.approved === null ? (
+                          <p className="text-muted-foreground text-sm">
+                            Git no longer holds the version this was approved at,
+                            so there is nothing to compare against. This is the
+                            file as it stands.
+                          </p>
+                        ) : null}
+                        <LineDiff rows={rows} />
+                      </>
+                    )}
+                  </div>
+                ) : null}
+                {node.deletionProposed === undefined &&
+                APPROVABLE.has(status.reason) ? (
+                  <div className="grid gap-2">
+                    <Button
+                      type="button"
+                      className="justify-self-start"
+                      disabled={reviewBusy}
+                      onClick={() => void approve()}
+                    >
+                      {reviewBusy ? "Approving…" : "Approve"}
+                    </Button>
+                    {reviewError ? (
+                      <p className="text-destructive text-sm">{reviewError}</p>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            )}
+
             <Field label="Type">
               <Badge variant="secondary">{node.type}</Badge>
             </Field>
@@ -411,7 +831,7 @@ export function NodePanel({
                 instant answers a different question. A node nobody has edited
                 shows the instant it was written, which is the true answer. */}
             <Field label="Updated">
-              <span className="text-sm">{formatTimestamp(node.updatedAt)}</span>
+              <span className="text-sm">{formatStamp(node.updatedAt)}</span>
             </Field>
           </div>
         ) : (
@@ -542,9 +962,7 @@ export function NodePanel({
 
             {mode === "edit" && node ? (
               <Field label="Updated">
-                <span className="text-sm">
-                  {formatTimestamp(node.updatedAt)}
-                </span>
+                <span className="text-sm">{formatStamp(node.updatedAt)}</span>
               </Field>
             ) : null}
           </div>
@@ -610,37 +1028,56 @@ export function NodePanel({
         )}
       </div>
 
-      <Dialog open={confirmingDelete} onOpenChange={setConfirmingDelete}>
-        <DialogContent showCloseButton={false}>
-          <DialogHeader>
-            <DialogTitle>Delete this node?</DialogTitle>
-            {/* The cascade is named because it is the part that is not on
-                screen: the card goes, and so does every relation drawn to it. */}
-            <DialogDescription>
-              <span className="font-medium">{node?.id}</span> and every relation
-              that touches it leave the graph. This cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={busy}
-              onClick={() => setConfirmingDelete(false)}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              disabled={busy}
-              onClick={() => void remove()}
-            >
-              {busy ? "Deleting…" : "Delete node"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* THE ONE CONFIRMATION, AND IT IS REACHED FROM TWO DOORS NOW: the Delete
+          button in the editor, and Approve deletion on a node an agent has asked
+          to remove. Both are the same act with the same consequences, so both
+          read the same sentence — `deletionSentence` is where it is written, and
+          the plane's own delete dialog reads it too.
+
+          IT IS MOUNTED ONLY WITH A NODE UNDER IT. The dialog's whole content is
+          about that node — its id, and what points at it — and neither door
+          exists in the create form, so there is nothing here to draw without one. */}
+      {node === null ? null : (
+        <Dialog open={confirmingDelete} onOpenChange={setConfirmingDelete}>
+          <DialogContent showCloseButton={false}>
+            <DialogHeader>
+              <DialogTitle>Delete this node?</DialogTitle>
+              {/* The cascade is named because it is the part that is not on
+                  screen: the card goes, and so does every relation drawn to it. */}
+              <DialogDescription>{deletionSentence(node.id)}</DialogDescription>
+            </DialogHeader>
+            {/* WHAT IS LEFT POINTING AT NOTHING, NAMED ROW BY ROW. The sentence
+                counts the relations and the list is those relations, so the
+                number is one a person can check against what is under it. */}
+            {referrers.length === 0 ? null : (
+              <div className="grid gap-2">
+                <p className="text-sm">
+                  {impactSentence(node.id, referrers.length)}
+                </p>
+                <Referrers edges={referrers} />
+              </div>
+            )}
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={busy}
+                onClick={() => setConfirmingDelete(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                disabled={busy}
+                onClick={() => void remove()}
+              >
+                {busy ? "Deleting…" : "Delete node"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }

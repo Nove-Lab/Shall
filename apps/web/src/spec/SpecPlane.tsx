@@ -1,12 +1,15 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ReactFlowProvider } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import {
   Eye,
+  GitCommitVertical,
   LayoutGrid,
   Pencil,
   Plus,
+  RotateCcw,
   Trash2,
+  TriangleAlert,
   Unlink,
   Waypoints,
 } from "lucide-react";
@@ -28,6 +31,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   ResizableHandle,
   ResizablePanel,
@@ -37,6 +42,17 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EmptyState } from "@/components/EmptyState";
 import { useProject } from "@/project-context";
 import { NodePanel, type NodeDraft, type NodePanelMode } from "./NodePanel";
+import {
+  deletionSentence,
+  impactSentence,
+  problemCount,
+  referrersOf,
+  signalsOf,
+  statusesById,
+  type GitStatus,
+  type ReviewReport,
+} from "./review";
+import { Referrers } from "./review-parts";
 import { SpecGraph, type MenuTarget } from "./SpecGraph";
 import type { SpecEdge, SpecNode } from "./spec-node";
 import "./spec.css";
@@ -175,33 +191,74 @@ export function SpecPlane() {
   const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  /**
+   * WHAT THE DAEMON SAYS ABOUT THE GRAPH, WHICH IS NOT PART OF THE GRAPH.
+   *
+   * The colours are recomputed on every read and stored nowhere, so they are
+   * fetched beside the nodes and the relations rather than derived from them:
+   * nothing on this plane can work out from a node's fields whether its approval
+   * verifies. `null` is "not read yet", which is why the board does not paint.
+   */
+  const [review, setReview] = useState<ReviewReport | null>(null);
+  const [gitStatus, setGitStatus] = useState<GitStatus | null>(null);
+  /** The commit dialog, with the pair every dialog on this plane keeps of its own. */
+  const [commitOpen, setCommitOpen] = useState(false);
+  const [commitMessage, setCommitMessage] = useState("");
+  const [commitBusy, setCommitBusy] = useState(false);
+  const [commitError, setCommitError] = useState<string | null>(null);
+  /**
+   * The Problems dialog, and the one write it offers. `restoringId` is which row
+   * is in flight rather than a bare flag — several restores in a row are the
+   * ordinary way through that list, so the dialog stays open and only the row
+   * being restored says so. The refusal carries its id for the same reason: it is
+   * drawn under the row that earned it.
+   */
+  const [problemsOpen, setProblemsOpen] = useState(false);
+  const [restoringId, setRestoringId] = useState<string | null>(null);
+  const [restoreError, setRestoreError] = useState<{
+    id: string;
+    message: string;
+  } | null>(null);
 
   /**
-   * The whole graph in one round trip, and the two halves land together.
+   * The whole board in one round trip, and every part of it lands together.
    *
    * `Promise.all` is not about latency here: set one at a time, there is a
    * render in between holding the new nodes against the old relations, and an
    * edge whose endpoint has not arrived yet is silently dropped by the canvas.
-   * React batches both setters inside this callback, so no render sees a mixed
-   * pair.
+   * React batches all four setters inside this callback, so no render sees a
+   * mixed board.
+   *
+   * THE REVIEW IS IN THE SAME ALL-OR-NOTHING AS THE GRAPH, and that is the one
+   * thing about this call worth arguing. A board whose colours failed to arrive
+   * is not a board with no colours — it is a board whose colours are unknown, and
+   * fifty cards drawn without a square say the opposite of that. So a review that
+   * will not read fails the whole load and the canvas says so in one sentence,
+   * rather than painting a graph nobody has told the truth about.
    */
   const load = useCallback(async () => {
-    const [nextNodes, nextEdges] = await Promise.all([
+    const [nextNodes, nextEdges, nextReview, nextGitStatus] = await Promise.all([
       api.spec.nodes.query({ projectId: project.id }),
       api.spec.edges.query({ projectId: project.id }),
+      api.spec.review.query({ projectId: project.id }),
+      api.spec.gitStatus.query({ projectId: project.id }),
     ]);
     setNodes(nextNodes);
     setEdges(nextEdges);
+    setReview(nextReview);
+    setGitStatus(nextGitStatus);
   }, [project.id]);
 
   useEffect(() => {
     setLoading(true);
     setLoadError(null);
-    // A dialog is about a node or a relation in the project being left, so it
-    // does not survive the move to another one.
+    // A dialog is about a node, a relation or a spec folder in the project being
+    // left, so it does not survive the move to another one.
     setPanel({ mode: "closed" });
     setConnect(null);
     setPendingDelete(null);
+    setCommitOpen(false);
+    setProblemsOpen(false);
     void load()
       .catch((error: unknown) =>
         setLoadError(
@@ -218,6 +275,38 @@ export function SpecPlane() {
       ? (nodes.find((node) => node.id === panel.id) ?? null)
       : null;
   const mode = detailMode(panel, selected);
+
+  /**
+   * THE COLOURS, AS ONE MAP, AND THE MEMO IS LOAD-BEARING. Every card on the
+   * canvas is built against this map: written inline it would be a new object on
+   * every render of this component, every card object would be new with it, and
+   * React Flow would take its per-node rebuild arm for a board on which nothing
+   * changed. `signalsOf` hands back one shared empty map before the first review
+   * lands, so even that case is identity-stable.
+   */
+  const signalById = useMemo(() => signalsOf(review), [review]);
+  /** The same answers keyed for the panel, which wants the reason rather than the colour. */
+  const statusById = useMemo(() => statusesById(review), [review]);
+  /** Missing nodes and unreadable files together — the button and the dialog count once. */
+  const problems = problemCount(review);
+  const selectedStatus =
+    selected === null ? null : (statusById.get(selected.id) ?? null);
+  /**
+   * What points at the node the panel is on, and at the node a confirmation is
+   * about. Two lists rather than one because they are two different questions:
+   * the panel is open on a node while a right-click asks to delete another.
+   */
+  const selectedReferrers = useMemo(
+    () => (selected === null ? [] : referrersOf(edges, selected.id)),
+    [edges, selected],
+  );
+  const pendingReferrers = useMemo(
+    () =>
+      pendingDelete === null || pendingDelete.kind !== "node"
+        ? []
+        : referrersOf(edges, pendingDelete.node.id),
+    [edges, pendingDelete],
+  );
 
   /**
    * The menu's target resolved against the graph as it stands this render, so
@@ -240,6 +329,16 @@ export function SpecPlane() {
    * that follows a closed panel starts again at 1, and the panel it is arriving
    * at was just refilled anyway.
    */
+  /**
+   * THE ONE WAY A NODE'S PANEL OPENS. A click on a card, the menu's Open, the
+   * node a save just wrote and the node an edit was cancelled on are all the same
+   * act, and a Review Queue that deep-links into this plane will be the same act
+   * again — one function to call rather than a fifth place spelling the state out.
+   */
+  function openNode(id: string) {
+    setPanel({ mode: "view", id });
+  }
+
   function openCreate(presetType: string | null) {
     setPanel((current) => ({
       mode: "create",
@@ -394,7 +493,7 @@ export function SpecPlane() {
         body: draft.body,
       });
       await load();
-      setPanel({ mode: "view", id: updated.id });
+      openNode(updated.id);
       return;
     }
 
@@ -407,17 +506,122 @@ export function SpecPlane() {
       body: draft.body,
     });
     await load();
-    setPanel({ mode: "view", id: created.id });
+    openNode(created.id);
   }
 
+  /**
+   * THE PANEL'S DELETE, WHICH IS NOW REACHED FROM BOTH OF ITS MODES. The editor's
+   * Delete button is one door; approving an agent's deletion proposal is the
+   * other, and that one is pressed while the node is being READ. The guard used
+   * to name `edit` alone, so the second door did nothing at all — no write, no
+   * refusal, no console line — which is why it names both.
+   */
   async function deleteNode() {
-    if (panel.mode !== "edit") {
+    if (panel.mode !== "edit" && panel.mode !== "view") {
       return;
     }
 
     await api.spec.removeNode.mutate({ projectId: project.id, id: panel.id });
     await load();
     setPanel({ mode: "closed" });
+  }
+
+  /**
+   * THE TWO REVIEW WRITES, AND THE REFUSAL IS DELIBERATELY NOT CAUGHT HERE. The
+   * daemon refuses an approve in sentences written for a person — a node nothing
+   * anchors, a proposal standing over it — and the place to read one is beside
+   * the button that sent it, so it is left to reject into the panel exactly as
+   * `submitNode` does. The `mode` guard is the type telling the truth: both
+   * buttons live in the view panel, which is a panel open on a node.
+   */
+  async function approveNode() {
+    if (panel.mode !== "view") {
+      return;
+    }
+
+    await api.spec.approve.mutate({ projectId: project.id, id: panel.id });
+    await load();
+  }
+
+  async function rejectDeletion() {
+    if (panel.mode !== "view") {
+      return;
+    }
+
+    await api.spec.rejectDeletion.mutate({
+      projectId: project.id,
+      id: panel.id,
+    });
+    await load();
+  }
+
+  /**
+   * The approved version of one node's file beside the current one, fetched by
+   * the panel when it has a diff to draw.
+   *
+   * IT IS PASSED DOWN AS A FUNCTION AND NOT FETCHED HERE, because it is the one
+   * read on this plane that is not part of the board: it is two whole files, it
+   * is wanted for one node at a time, and only while somebody is looking at a
+   * node the daemon calls `changed`. `useCallback` because the panel keys an
+   * effect on it — a new function per render would refetch on every keystroke in
+   * another field.
+   */
+  const loadApprovedVersion = useCallback(
+    (id: string) =>
+      api.spec.approvedVersion.query({ projectId: project.id, id }),
+    [project.id],
+  );
+
+  /**
+   * A FILE PUT BACK UNDER `.shall/spec`, AND THE DIALOG STAYS OPEN. A folder that
+   * lost one node usually lost several — a bad merge, a branch switched with work
+   * in the tree — and closing the list after each one would make the third
+   * restore a matter of finding the button again. Only the row being written says
+   * it is busy; the list itself is redrawn by `load()` and the entry that was
+   * restored simply is not in it any more.
+   */
+  async function restoreNode(id: string) {
+    if (restoringId !== null) {
+      return;
+    }
+
+    setRestoringId(id);
+    setRestoreError(null);
+    try {
+      await api.spec.restoreNode.mutate({ projectId: project.id, id });
+      await load();
+    } catch (error) {
+      setRestoreError({
+        id,
+        message:
+          error instanceof Error ? error.message : `Could not restore ${id}`,
+      });
+    } finally {
+      setRestoringId(null);
+    }
+  }
+
+  async function runCommit() {
+    const message = commitMessage.trim();
+    if (message === "" || commitBusy) {
+      return;
+    }
+
+    setCommitBusy(true);
+    setCommitError(null);
+    try {
+      await api.spec.commitSpec.mutate({ projectId: project.id, message });
+      // The board does not change, but whether there is anything left to commit
+      // does — and that is a button on this toolbar.
+      await load();
+      setCommitOpen(false);
+    } catch (error) {
+      setCommitError(
+        error instanceof Error ? error.message : "Could not commit the spec",
+      );
+    } finally {
+      setCommitBusy(false);
+    }
   }
 
   /**
@@ -463,15 +667,54 @@ export function SpecPlane() {
               </TabsTrigger>
             </TabsList>
           </Tabs>
-          {/* The toolbar points at no column, so it preselects no type. */}
-          <Button
-            className="ml-auto"
-            disabled={loading || loadError !== null}
-            onClick={() => openCreate(null)}
-          >
-            <Plus />
-            Add node
-          </Button>
+          {/* THE RIGHT-HAND GROUP, IN THE ORDER OF WHAT IT IS ABOUT: what is
+              wrong with the folder, what is uncommitted in it, and then the one
+              thing that adds to it. The first two are only there when they have
+              something to say — a Problems button reading "0 problems" and a
+              Commit button on a folder that is not a repository are both
+              furniture that never does anything. */}
+          <div className="ml-auto flex items-center gap-2">
+            {problems > 0 ? (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  // Every dialog on this plane opens clean: a refusal from the
+                  // last time it was open belongs to that visit.
+                  setRestoreError(null);
+                  setProblemsOpen(true);
+                }}
+              >
+                <TriangleAlert />
+                {problems === 1 ? "1 problem" : `${String(problems)} problems`}
+              </Button>
+            ) : null}
+            {/* A CLEAN TREE LEAVES THE BUTTON THERE AND OFF, which is the answer
+                to "is there anything to commit" — dropping it would make a
+                committed spec look like a project without git. */}
+            {gitStatus?.repo ? (
+              <Button
+                variant="outline"
+                disabled={!gitStatus.dirty || loading || loadError !== null}
+                onClick={() => {
+                  setCommitError(null);
+                  setCommitBusy(false);
+                  setCommitMessage("Update the spec graph");
+                  setCommitOpen(true);
+                }}
+              >
+                <GitCommitVertical />
+                Commit spec
+              </Button>
+            ) : null}
+            {/* The toolbar points at no column, so it preselects no type. */}
+            <Button
+              disabled={loading || loadError !== null}
+              onClick={() => openCreate(null)}
+            >
+              <Plus />
+              Add node
+            </Button>
+          </div>
         </div>
 
         <ResizablePanelGroup
@@ -537,8 +780,9 @@ export function SpecPlane() {
                     view={view}
                     nodes={nodes}
                     edges={edges}
+                    signalById={signalById}
                     selectedId={selected?.id ?? null}
-                    onSelect={(id) => setPanel({ mode: "view", id })}
+                    onSelect={openNode}
                     onBackgroundClick={closeReadPanel}
                     onConnect={beginConnect}
                     onContextTarget={setMenuTarget}
@@ -572,11 +816,7 @@ export function SpecPlane() {
                   </ContextMenuItem>
                 ) : menuNode ? (
                   <>
-                    <ContextMenuItem
-                      onClick={() =>
-                        setPanel({ mode: "view", id: menuNode.id })
-                      }
-                    >
+                    <ContextMenuItem onClick={() => openNode(menuNode.id)}>
                       <Eye />
                       Open
                     </ContextMenuItem>
@@ -630,6 +870,12 @@ export function SpecPlane() {
                   nodes={nodes}
                   request={panel.mode === "create" ? panel.request : 0}
                   {...presetProps(panel)}
+                  /* A NODE BEING WRITTEN HAS NO VERDICT AND NO REFERRERS, and
+                     `selectedStatus` is already null there — this says so at the
+                     call site as well, because "create" is the one mode where the
+                     panel is not about a node the daemon has ever seen. */
+                  status={mode === "create" ? null : selectedStatus}
+                  referrers={selectedReferrers}
                   onClose={() => setPanel({ mode: "closed" })}
                   onEdit={() => {
                     if (selected) {
@@ -638,11 +884,14 @@ export function SpecPlane() {
                   }}
                   onCancelEdit={() => {
                     if (selected) {
-                      setPanel({ mode: "view", id: selected.id });
+                      openNode(selected.id);
                     }
                   }}
                   onSubmit={submitNode}
                   onDelete={deleteNode}
+                  onApprove={approveNode}
+                  onRejectDeletion={rejectDeletion}
+                  loadApprovedVersion={loadApprovedVersion}
                 />
               </ResizablePanel>
             </>
@@ -720,16 +969,36 @@ export function SpecPlane() {
                   : "Delete this relation?"}
               </DialogTitle>
               {/* THE CASCADE IS NAMED because it is the part that is not on
-                  screen: the daemon takes every incident relation with the node,
-                  and finding that out afterwards is finding out too late. The
+                  screen: the daemon takes every relation that STARTS at the node
+                  with it, and leaves the ones that point AT it drawn to nothing.
+                  Finding either out afterwards is finding out too late. The
                   relation's own sentence says the opposite half for the same
-                  reason — what stays is what a person is afraid of losing. */}
+                  reason — what stays is what a person is afraid of losing.
+
+                  THE NODE'S HALF IS `deletionSentence` AND NOT A STRING HERE,
+                  because the panel asks the same question about the same act and
+                  two wordings of it would be two promises. */}
               <DialogDescription>
                 {pendingDelete.kind === "node"
-                  ? `${pendingDelete.node.id} and every relation that touches it leave the graph. This cannot be undone.`
+                  ? deletionSentence(pendingDelete.node.id)
                   : `The ${pendingDelete.edge.type} relation from ${pendingDelete.edge.fromId} to ${pendingDelete.edge.toId} leaves the graph. Both nodes stay.`}
               </DialogDescription>
             </DialogHeader>
+            {/* WHAT IS LEFT POINTING AT NOTHING, COUNTED AND THEN NAMED. It is
+                outside the description because the description is a `<p>` and
+                this is a list — and because a person deciding this reads the
+                sentence first and the rows only if the number surprises them. */}
+            {pendingDelete.kind === "node" && pendingReferrers.length > 0 ? (
+              <div className="grid gap-2">
+                <p className="text-sm">
+                  {impactSentence(
+                    pendingDelete.node.id,
+                    pendingReferrers.length,
+                  )}
+                </p>
+                <Referrers edges={pendingReferrers} />
+              </div>
+            ) : null}
             {deleteError ? (
               <p className="text-destructive text-sm">{deleteError}</p>
             ) : null}
@@ -758,6 +1027,166 @@ export function SpecPlane() {
           </DialogContent>
         </Dialog>
       )}
+
+      {/* ONE COMMIT FOR THE WHOLE SPEC FOLDER, WHICH IS WHAT THE SPEC IS. The
+          graph is files now: a node is a file, a relation is a line in one, and
+          a save writes whichever files that took. Offering to commit a node
+          would be offering a half of a change that has no meaning on its own —
+          the relation would go without the node it points at — so the unit here
+          is the folder, and the person supplies only the sentence. */}
+      {commitOpen ? (
+        <Dialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setCommitOpen(false);
+          }}
+        >
+          <DialogContent showCloseButton={false}>
+            <DialogHeader>
+              <DialogTitle>Commit the spec</DialogTitle>
+              {/* THE BRANCH IS NAMED BUT NOT CHOSEN. Which branch is checked out
+                  is which spec is on screen — the shell's header says which —
+                  and a dialog that offered to move it would be a git client
+                  growing inside a spec board. */}
+              <DialogDescription>
+                Everything under .shall/spec goes into one commit on the branch
+                you are on.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-2">
+              <Label htmlFor="commit-message">Message</Label>
+              {/* Prefilled rather than placeheld: the ordinary commit here says
+                  the ordinary thing, and a message nobody has to write is a
+                  message nobody skips the dialog to avoid writing. */}
+              <Input
+                id="commit-message"
+                autoFocus
+                value={commitMessage}
+                onChange={(event) => setCommitMessage(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    void runCommit();
+                  }
+                }}
+              />
+            </div>
+            {commitError ? (
+              <p className="text-destructive text-sm">{commitError}</p>
+            ) : null}
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={commitBusy}
+                onClick={() => setCommitOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                disabled={commitMessage.trim() === "" || commitBusy}
+                onClick={() => void runCommit()}
+              >
+                {commitBusy ? "Committing…" : "Commit"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      ) : null}
+
+      {/* WHAT IS IN THE FOLDER AND NOT ON THE BOARD. Both lists are files the
+          canvas cannot draw — one because the file is gone and something still
+          points at where it was, one because the file will not read — so neither
+          can be a card with a red square on it, and a board that simply did not
+          mention them would be smaller than the folder with nothing saying so.
+
+          IT IS THE ONE WIDTH OVERRIDE ON THIS PLANE. Every other dialog here is
+          the design system's `sm:max-w-sm`; this one lists file paths, which do
+          not wrap and do not fit. */}
+      {problemsOpen ? (
+        <Dialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setProblemsOpen(false);
+          }}
+        >
+          <DialogContent showCloseButton={false} className="sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Problems in the spec folder</DialogTitle>
+              <DialogDescription>
+                These files are in .shall/spec and not in the graph. Until they
+                read, the board is smaller than the folder.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid max-h-96 gap-4 overflow-y-auto">
+              {(review?.missing ?? []).length === 0 ? null : (
+                <div className="grid gap-3">
+                  <span className="text-sm font-medium">Missing nodes</span>
+                  {(review?.missing ?? []).map((entry) => (
+                    <div key={entry.id} className="grid gap-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="font-mono text-xs break-all">
+                          {entry.id}
+                        </span>
+                        {/* RESTORE IS THE ONLY WRITE IN THIS DIALOG, and it is
+                            offered per row because each missing id is its own
+                            file with its own history to be brought back from. */}
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={restoringId !== null}
+                          onClick={() => void restoreNode(entry.id)}
+                        >
+                          <RotateCcw />
+                          {restoringId === entry.id ? "Restoring…" : "Restore"}
+                        </Button>
+                      </div>
+                      <span className="text-muted-foreground text-xs">
+                        Referred to by
+                      </span>
+                      <Referrers edges={entry.referencedBy} />
+                      {restoreError?.id === entry.id ? (
+                        <p className="text-destructive text-sm">
+                          {restoreError.message}
+                        </p>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {(review?.broken ?? []).length === 0 ? null : (
+                <div className="grid gap-3">
+                  {/* NO ACTION ON THIS HALF, AND THAT IS THE HONEST OFFER. A file
+                      that will not parse is fixed in an editor by whoever can
+                      read the sentences against it; a button here could only
+                      guess at what was meant. */}
+                  <span className="text-sm font-medium">
+                    Files that will not read
+                  </span>
+                  {(review?.broken ?? []).map((entry) => (
+                    <div key={entry.file} className="grid gap-1">
+                      <span className="font-mono text-xs break-all">
+                        {entry.file}
+                      </span>
+                      {entry.problems.map((problem, index) => (
+                        <span
+                          key={index}
+                          className="text-muted-foreground text-xs"
+                        >
+                          {problem}
+                        </span>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <DialogFooter showCloseButton />
+          </DialogContent>
+        </Dialog>
+      ) : null}
     </main>
   );
 }

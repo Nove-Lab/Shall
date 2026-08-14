@@ -1,5 +1,6 @@
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import { cn } from "@/lib/utils";
+import { StatusDot } from "./review-parts";
 import type {
   BandNodeData,
   CardNodeData,
@@ -270,22 +271,25 @@ export function SpecNodeCard({ data }: NodeProps<CardNode>) {
         className={WHOLE_CARD_HANDLE}
       />
       <div className="flex items-center gap-1.5">
-        {/* THE TRAFFIC LIGHT'S SEAT, AND THE COLOUR IS A PLACEHOLDER.
-            Every card is green because nothing computes a signal yet: the
-            arithmetic that would decide one lives in `core/arith` and is not
-            written. The square is drawn anyway so the card's shape is settled
-            and the seat is reserved at its real size, and it is drawn in ONE
-            colour on purpose — a second colour is a verdict, and a verdict this
-            tree cannot reach is worse than no square at all.
+        {/* THE TRAFFIC LIGHT, AND THE ARITHMETIC HAS LANDED. The verdict is
+            `core/arith`'s, computed on every read of the graph and carried here
+            as a WORD on `data` — `view/furniture.ts` holds no paint — so what
+            this square shows is what the daemon said about this node and not
+            anything the canvas worked out for itself.
 
-            The colour is Tailwind's own `emerald-500`, not a token invented
-            here. A new token would be a design-system setting this feature
-            made up, and the rule for this work is that nothing is made up —
-            the theme itself reaches for the same palette the same way
-            (`--primary: var(--color-blue-600)`). When the arithmetic lands and
-            three states need naming, that is the moment a semantic token is
-            earned; today it would name a verdict nothing computes. */}
-        <span className="bg-emerald-500 size-2.25 shrink-0" />
+            THE THREE COLOURS ARE STILL TAILWIND PALETTE VALUES, for the reason
+            the placeholder gave: a traffic light is not a role the design system
+            names, and three tokens invented for it would be a design-system
+            setting this feature made up. They live in `SIGNAL_CLASS` beside the
+            component that paints them.
+
+            `null` DRAWS NOTHING, ON PURPOSE AND WITHOUT MOVING ANYTHING. The
+            execution band is outside the colour vocabulary — no verdict is the
+            true answer there, and a fourth colour meaning "not applicable" would
+            be a verdict — and the card's box is the layout's own declaration, so
+            the card with no square is exactly the size of the ones beside it and
+            nothing on the board moves. */}
+        {data.signal === null ? null : <StatusDot color={data.signal} />}
         <span className="truncate font-mono text-xs">{data.node.id}</span>
       </div>
       {/* THE SHORT NAME IS THE CARD'S OWN INK AT 70% AND NOT `--muted-foreground`.
