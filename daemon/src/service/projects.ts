@@ -17,6 +17,7 @@ import {
   writeProjectFiles,
   writeSharedTemplates,
 } from "../host/project-files.js";
+import { readGitBranch } from "../host/git.js";
 import { isShallHomePath } from "../host/shall-home.js";
 import {
   readRegistry,
@@ -129,6 +130,30 @@ export async function getProject(id: string): Promise<RegistryProject | null> {
   return isProjectMetadata(metadata)
     ? toRegistryProject(entry.path, metadata)
     : entry;
+}
+
+/**
+ * The branch the project's repository is on, or null when there is no
+ * repository — which the header answers by showing nothing, because "not a git
+ * project" is an ordinary state and not a gap.
+ *
+ * IT IS A SEPARATE QUESTION FROM THE PROJECT ITSELF, on purpose: a
+ * `RegistryProject` is a record this machine persists, and the branch is a
+ * live fact of the working tree that moves under every `git checkout`. Folding
+ * it into the registry answer would put a moving fact inside a stored shape.
+ * An unknown id answers null rather than a refusal for the same reason the
+ * picker tolerates a stale link: the header asking about a project that was
+ * just removed is a race, not a mistake.
+ */
+export async function getProjectGitBranch(
+  id: string,
+): Promise<{ branch: string | null }> {
+  const registry = await readRegistry();
+  const entry = registry.projects.find((project) => project.id === id);
+  if (!entry) {
+    return { branch: null };
+  }
+  return { branch: await readGitBranch(entry.path) };
 }
 
 export async function listRecentProjects(): Promise<RecentProject[]> {
