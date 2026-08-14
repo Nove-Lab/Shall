@@ -26,6 +26,15 @@ import {
   scaffoldSpecNode,
   updateSpecNode,
 } from "../service/spec-graph.js";
+import {
+  approveSpecNode,
+  commitSpec,
+  readApprovedVersion,
+  readSpecGitStatus,
+  rejectSpecDeletion,
+  restoreSpecNode,
+  reviewSpec,
+} from "../service/spec-review.js";
 
 const t = initTRPC.create();
 
@@ -173,6 +182,33 @@ export const appRouter = t.router({
     scaffold: procedure
       .input(z.object({ path: z.string().min(1), type: z.string() }))
       .mutation(({ input }) => scaffoldSpecNode(input)),
+    // The review surface: colours computed on read, and the doors that
+    // resolve them. `approve` is the one manufacturer of green, reached from
+    // the web UI alone — the agents' contract is file-only by architecture,
+    // and the guard is that convention plus the deny rule over the key; a
+    // local token belongs here the day the daemon has a caller it does not
+    // trust.
+    review: procedure
+      .input(z.object({ projectId: z.string().min(1) }))
+      .query(({ input }) => reviewSpec(input.projectId)),
+    approve: procedure
+      .input(z.object({ projectId: z.string().min(1), id: z.string() }))
+      .mutation(({ input }) => approveSpecNode(input)),
+    rejectDeletion: procedure
+      .input(z.object({ projectId: z.string().min(1), id: z.string() }))
+      .mutation(({ input }) => rejectSpecDeletion(input)),
+    approvedVersion: procedure
+      .input(z.object({ projectId: z.string().min(1), id: z.string() }))
+      .query(({ input }) => readApprovedVersion(input)),
+    restoreNode: procedure
+      .input(z.object({ projectId: z.string().min(1), id: z.string() }))
+      .mutation(({ input }) => restoreSpecNode(input)),
+    gitStatus: procedure
+      .input(z.object({ projectId: z.string().min(1) }))
+      .query(({ input }) => readSpecGitStatus(input.projectId)),
+    commitSpec: procedure
+      .input(z.object({ projectId: z.string().min(1), message: z.string() }))
+      .mutation(({ input }) => commitSpec(input)),
   }),
 });
 
