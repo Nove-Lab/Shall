@@ -4,6 +4,7 @@ import { isRefusal, type RefusalKind } from "../service/errors.js";
 import {
   createProject,
   getProject,
+  getProjectGitBranch,
   listRecentProjects,
   openProject,
   removeRecentProject,
@@ -62,6 +63,12 @@ export const appRouter = t.router({
     get: procedure
       .input(z.object({ id: z.string().min(1) }))
       .query(({ input }) => getProject(input.id)),
+    // A live fact of the working tree, asked separately from the project
+    // record it moves underneath — the header refetches it on focus, which is
+    // the moment a person comes back from the terminal that changed it.
+    gitBranch: procedure
+      .input(z.object({ id: z.string().min(1) }))
+      .query(({ input }) => getProjectGitBranch(input.id)),
     open: procedure
       .input(z.object({ path: z.string().min(1) }))
       .mutation(({ input }) => openProject(input.path)),

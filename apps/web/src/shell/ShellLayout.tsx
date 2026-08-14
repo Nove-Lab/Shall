@@ -10,6 +10,7 @@ import {
 import {
   Activity,
   ChartLine,
+  GitBranch,
   LayoutDashboard,
   ListChecks,
   ScrollText,
@@ -104,6 +105,14 @@ export function ShellLayout() {
 
   const [project, setProject] = useState<Project | null>(null);
   const [state, setState] = useState<LoadState>("loading");
+  /**
+   * The branch the project's repository is on — null while unknown and for a
+   * project that is not a repository, and the header shows nothing for both,
+   * because "not a git project" is an ordinary state and not a gap. The spec
+   * is committed files now, so which branch is checked out is which spec is
+   * on screen; that is why it earns a place beside the path.
+   */
+  const [branch, setBranch] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const found = await api.projects.get.query({ id: projectId });
@@ -119,6 +128,28 @@ export function ShellLayout() {
     setState("loading");
     void load().catch(() => setState("missing"));
   }, [load]);
+
+  // Asked on its own cadence: the branch moves under `git checkout` in some
+  // terminal, and coming back to this window is the moment that happens, so a
+  // focus is the refetch and there is no polling loop to keep warm.
+  useEffect(() => {
+    let alive = true;
+    const ask = () =>
+      void api.projects.gitBranch
+        .query({ id: projectId })
+        .then((answer) => {
+          if (alive) {
+            setBranch(answer.branch);
+          }
+        })
+        .catch(() => undefined);
+    ask();
+    window.addEventListener("focus", ask);
+    return () => {
+      alive = false;
+      window.removeEventListener("focus", ask);
+    };
+  }, [projectId]);
 
   const base = `/p/${encodeURIComponent(projectId)}`;
   const onControl = pathname.startsWith(`${base}/control`);
@@ -163,6 +194,24 @@ export function ShellLayout() {
             <span className="text-muted-foreground truncate font-mono text-xs">
               {project.path}
             </span>
+            {/* The branch is which spec is on screen, now that the spec is
+                committed files — shown only when there is a repository, and
+                kept whole (`shrink-0`) while the path beside it truncates.
+
+                DRAWN AS A BADGE WHOSE BASELINE IS ITS TEXT'S. A flex row takes
+                its baseline from its first item, and an icon has none — its
+                bottom edge stands in, which is what floated this label off the
+                path's baseline. So the row aligns its items by BASELINE (the
+                branch name participates, and the container inherits its
+                baseline) while the icon alone opts out with `self-center` to
+                sit mid-text. The badge box then hangs its padding around that
+                shared baseline, which is how a chip sits in a line of text. */}
+            {branch !== null ? (
+              <span className="text-muted-foreground bg-muted flex shrink-0 items-baseline gap-1 rounded-md border px-1.5 py-0.5 font-mono text-xs">
+                <GitBranch className="size-3 self-center" aria-hidden />
+                {branch}
+              </span>
+            ) : null}
           </span>
         ) : (
           <Skeleton className="h-4 w-56" />
