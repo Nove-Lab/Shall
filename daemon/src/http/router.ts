@@ -15,6 +15,7 @@ import {
   updateProjectSettings,
 } from "../service/settings.js";
 import {
+  checkSpec,
   createSpecEdge,
   createSpecNode,
   listSpecEdges,
@@ -85,10 +86,10 @@ export const appRouter = t.router({
       .input(z.object({ id: z.string().min(1), name: z.string().trim().min(1) }))
       .mutation(({ input }) => updateProjectSettings(input)),
   }),
-  // The spec graph lives in the project's own shall.db, so every call names the
-  // project it writes to. Which relations may exist is the canon grammar's
-  // answer, and it is settled in the service on the way in — the canvas decides
-  // what it offers, never what is allowed.
+  // The spec graph lives in the project's own `.shall/spec` folder, so every
+  // call names the project it writes to. Which relations may exist is the canon
+  // grammar's answer, and it is settled in the service on the way in — the
+  // canvas decides what it offers, never what is allowed.
   //
   // These schemas ask only that a field be a string. Whether its text is usable
   // — blank, whitespace, untrimmed — is the service's to answer, because the
@@ -154,6 +155,14 @@ export const appRouter = t.router({
         await removeSpecEdge(input);
         return { ok: true as const };
       }),
+    // The one procedure that names a PATH instead of a project, because it
+    // answers for a folder nobody has opened yet: a fresh clone is in no
+    // registry, and `shall check` has to work in it the moment it lands. The
+    // schema asks only that the path be a string — whether anything is there,
+    // and whether it is a Shall project at all, is the service's sentence.
+    check: procedure
+      .input(z.object({ path: z.string().min(1) }))
+      .query(({ input }) => checkSpec(input.path)),
   }),
 });
 

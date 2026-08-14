@@ -11,7 +11,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@shall/daemon": "workspace:*"
+    "@shall/daemon": "workspace:*",
+    "@trpc/client": "latest"
   },
   "engines": {
     "node": ">=22.5.0"

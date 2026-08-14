@@ -3,16 +3,20 @@
  * attributes its own type carries.
  *
  * `attributes` holds the FILLED ONES ONLY. An optional slot a person left alone
- * is an absent key, never an empty string — the store writes NULL for it and
- * omits it on the way back — so a reader asks whether the key is there and
- * never compares against `""`. What the keys may be is `attributesFor(type)`'s
- * answer and nothing else; this shape is deliberately a plain map so that core
- * carries the roster in one file rather than in every signature.
+ * is an absent key, never an empty string — the file writes no such key at all
+ * and the reader hands back only the ones it found — so a reader asks whether
+ * the key is there and never compares against `""`. What the keys may be is
+ * `attributesFor(type)`'s answer and nothing else; this shape is deliberately a
+ * plain map so that core carries the roster in one file rather than in every
+ * signature.
  *
- * The two instants are both stamps rather than fields — nothing on a form
- * offers them, and core has no clock to make one, so whoever writes the row
- * brings them. A node that has never been edited carries the same value twice:
- * it was last modified when it was written.
+ * The two instants are both stamps rather than fields — nothing on a form offers
+ * them, and core has no clock to make one, so whoever reads the file brings
+ * them. They are the file's own mtime, twice: a file has one modification time
+ * and no birth time worth trusting, so a node reads as having been written when
+ * it was last modified. That is also why a relation added to this node moves its
+ * stamp — the relation is a line in this node's file, and writing the line
+ * writes the file.
  */
 export interface SpecNode {
   id: string;
