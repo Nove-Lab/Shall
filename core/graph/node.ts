@@ -19,6 +19,35 @@
  * stamp — the relation is a line in this node's file, and writing the line
  * writes the file.
  */
+/**
+ * A human's signature over one node, written by the daemon on the web approve
+ * action and by nothing else. `hash` is `sha256:<hex>` over the node's payload
+ * — its own `type/id` line, then its canonical file without this block — and
+ * `tag` is `hmac:<hex>`, the HMAC-SHA256 of that hash string under this
+ * machine's key at `~/.shall/key`. An agent can copy the shape but not the
+ * tag, which is the whole of what makes green a state only a person can make.
+ */
+export interface NodeApproval {
+  readonly hash: string;
+  readonly tag: string;
+  /** The username of whoever pressed approve. */
+  readonly by: string;
+  /** ISO 8601, the daemon's clock at the moment of the write. */
+  readonly at: string;
+}
+
+/**
+ * An agent asking for this node to go, written by the agent into the file
+ * itself — the one deletion path an agent has. The block is inside the
+ * approval payload, so writing it un-matches the hash and the node turns
+ * yellow with nobody else lifting a finger; a person then approves the
+ * deletion or rejects it in the panel.
+ */
+export interface NodeDeletionProposal {
+  readonly by: string;
+  readonly rationale: string;
+}
+
 export interface SpecNode {
   id: string;
   type: string;
@@ -27,6 +56,14 @@ export interface SpecNode {
   body: string;
   createdAt: number;
   updatedAt: number;
+  /**
+   * The two machine blocks, in a file that is otherwise the author's. A person
+   * edits neither by hand, and every ordinary save carries both over
+   * untouched. The explicit `| undefined` is what lets a caller build a node
+   * with `{ approval: maybe }` under `exactOptionalPropertyTypes`.
+   */
+  approval?: NodeApproval | undefined;
+  deletionProposed?: NodeDeletionProposal | undefined;
 }
 
 /**

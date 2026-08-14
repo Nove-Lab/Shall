@@ -7,7 +7,7 @@ import {
   sectionGuideFor,
   type SpecEdge,
 } from "../graph/index.js";
-import { emitNodeFile } from "./emit.js";
+import { approvalPayload, emitNodeFile } from "./emit.js";
 import { parseNodeFile } from "./parse.js";
 import { emitScalar, isPlainSafe } from "./scalar.js";
 import { emitScaffold, emitTemplate } from "./template.js";
@@ -1179,12 +1179,12 @@ edges:
         `name: Checkout succeeds with a saved card\n${keys}`,
       );
     assert.deepEqual(problemsOf("Scenario", "SC-0001.md", withKeys("priority: high")), [
-      "The frontmatter carries short_name, name and edges and nothing else — priority belongs in the body, below the closing fence.",
+      "The frontmatter carries short_name, name, edges, deletionProposed and approval and nothing else — priority belongs in the body, below the closing fence.",
     ]);
     assert.deepEqual(
       problemsOf("Scenario", "SC-0001.md", withKeys("priority: high\nscenario_type: main")),
       [
-        "The frontmatter carries short_name, name and edges and nothing else — priority and scenario_type belong in the body, below the closing fence.",
+        "The frontmatter carries short_name, name, edges, deletionProposed and approval and nothing else — priority and scenario_type belong in the body, below the closing fence.",
       ],
     );
     assert.deepEqual(
@@ -1194,7 +1194,7 @@ edges:
         withKeys("priority: high\nscenario_type: main\nsteps: One step."),
       ),
       [
-        "The frontmatter carries short_name, name and edges and nothing else — priority, scenario_type, steps belong in the body, below the closing fence.",
+        "The frontmatter carries short_name, name, edges, deletionProposed and approval and nothing else — priority, scenario_type, steps belong in the body, below the closing fence.",
       ],
     );
   });
@@ -1211,7 +1211,7 @@ edges:
         "---\nshort_name: cart\nname: Cart\ndefinition: A basket of items.\n---\n",
       ),
       [
-        "The frontmatter carries short_name, name and edges and nothing else — definition belongs in the body, below the closing fence.",
+        "The frontmatter carries short_name, name, edges, deletionProposed and approval and nothing else — definition belongs in the body, below the closing fence.",
       ],
     );
   });
@@ -1230,7 +1230,7 @@ edges:
         ),
       ),
       [
-        "The frontmatter carries short_name, name and edges and nothing else — __proto__ belongs in the body, below the closing fence.",
+        "The frontmatter carries short_name, name, edges, deletionProposed and approval and nothing else — __proto__ belongs in the body, below the closing fence.",
       ],
     );
   });
@@ -1248,7 +1248,7 @@ edges:
       [
         "A spec file does not carry id — the filename is the id.",
         "A spec file does not carry type — the folder is the type.",
-        "The frontmatter carries short_name, name and edges and nothing else — priority belongs in the body, below the closing fence.",
+        "The frontmatter carries short_name, name, edges, deletionProposed and approval and nothing else — priority belongs in the body, below the closing fence.",
       ],
     );
   });
@@ -1739,5 +1739,213 @@ name:                  # required · one line
 
   test("refuses a type the canon does not have, loudly", () => {
     assert.throws(() => emitScaffold("Sandwich"), /Unknown node type: Sandwich/);
+  });
+});
+
+/**
+ * THE TWO MACHINE BLOCKS. A file is otherwise the author's; `deletionProposed`
+ * is the one thing an agent writes above the fence, and `approval` is the one
+ * thing the daemon does. What is pinned here is the block grammar — exact
+ * tuples, text only, one line each — the canonical order they are written in,
+ * and the payload an approval signs, which is the file WITHOUT the signature
+ * and WITH the node's own address, because those two choices are the whole of
+ * what makes a signature worth the name.
+ */
+const SIGNED = `---
+short_name: cart-total
+name: The cart shows a total
+edges:
+  - type: HAS_CRITERION
+    to: AC-0001
+deletionProposed:
+  by: session-7
+  rationale: Superseded by R-0007.
+approval:
+  hash: sha256:9f2b
+  tag: hmac:41ac
+  by: yjshin
+  at: "2026-08-15T09:12:33.412Z"
+---
+
+## Statement
+
+The cart shows a total.
+`;
+
+describe("the two machine blocks", () => {
+  test("an approval block reads back as the four strings it carries", () => {
+    const reading = parseNodeFile("Requirement", "R-0001.md", SIGNED);
+    assert.deepEqual(reading.problems, []);
+    assert.deepEqual(reading.node?.approval, {
+      hash: "sha256:9f2b",
+      tag: "hmac:41ac",
+      by: "yjshin",
+      // Quoted in the file because it opens like a date, and a string here
+      // because the reader is pinned to the core schema either way.
+      at: "2026-08-15T09:12:33.412Z",
+    });
+  });
+
+  test("a deletion proposal reads back as the two strings it carries", () => {
+    const reading = parseNodeFile("Requirement", "R-0001.md", SIGNED);
+    assert.deepEqual(reading.node?.deletionProposed, {
+      by: "session-7",
+      rationale: "Superseded by R-0007.",
+    });
+  });
+
+  test("the blocks are written after the edges, in one order, and the file is a fixpoint", () => {
+    const reading = parseNodeFile("Requirement", "R-0001.md", SIGNED);
+    assert.ok(reading.node !== undefined);
+    assert.equal(
+      emitNodeFile(reading.node.type, reading.node, reading.edges, reading.node),
+      SIGNED,
+    );
+    assert.equal(isCanonical("Requirement", "R-0001.md", SIGNED), true);
+  });
+
+  test("a node without a block has no key for it, in the object as in the file", () => {
+    const written = emitNodeFile("Requirement", REQUIREMENT_NODE, []);
+    assert.equal(written.includes("approval"), false);
+    assert.equal(written.includes("deletionProposed"), false);
+    const reading = parseNodeFile("Requirement", "R-0001.md", written);
+    assert.ok(reading.node !== undefined);
+    assert.equal("approval" in reading.node, false);
+    assert.equal("deletionProposed" in reading.node, false);
+  });
+
+  test("a block written with nothing under it is a block that is not there", () => {
+    // The same rule every key already has: a bare `approval:` is what clearing
+    // one by hand leaves behind, and it reads as absence — valid, and brought
+    // canonical by the next save rather than refused.
+    const bare = SIGNED
+      .replace("deletionProposed:\n  by: session-7\n  rationale: Superseded by R-0007.\n", "deletionProposed:\n")
+      .replace("approval:\n  hash: sha256:9f2b\n  tag: hmac:41ac\n  by: yjshin\n  at: \"2026-08-15T09:12:33.412Z\"\n", "approval:\n");
+    const reading = parseNodeFile("Requirement", "R-0001.md", bare);
+    assert.deepEqual(reading.problems, []);
+    assert.ok(reading.node !== undefined);
+    assert.equal("approval" in reading.node, false);
+    assert.equal("deletionProposed" in reading.node, false);
+    assert.equal(isCanonical("Requirement", "R-0001.md", bare), false);
+  });
+
+  test("an approval missing a key is one sentence about the block, not four about its fields", () => {
+    const short = SIGNED.replace("  at: \"2026-08-15T09:12:33.412Z\"\n", "");
+    const reading = parseNodeFile("Requirement", "R-0001.md", short);
+    assert.deepEqual(reading.problems, [
+      "The approval block is a map of exactly hash, tag, by and at, each of them text.",
+    ]);
+  });
+
+  test("a key the block does not carry is refused with the block, not with the frontmatter", () => {
+    const wide = SIGNED.replace(
+      "  by: yjshin\n",
+      "  by: yjshin\n  note: looks fine\n",
+    );
+    const reading = parseNodeFile("Requirement", "R-0001.md", wide);
+    assert.deepEqual(reading.problems, [
+      "The approval block is a map of exactly hash, tag, by and at, each of them text.",
+    ]);
+  });
+
+  test("a value in a block that is not text is the block's own sentence", () => {
+    const numbered = SIGNED.replace(
+      "  rationale: Superseded by R-0007.\n",
+      "  rationale: 3\n",
+    );
+    const reading = parseNodeFile("Requirement", "R-0001.md", numbered);
+    assert.deepEqual(reading.problems, [
+      "The deletionProposed block is a map of exactly by and rationale, each of them text.",
+    ]);
+  });
+
+  test("a rationale that runs over two lines is refused, because a block value is one line", () => {
+    const paragraphs = SIGNED.replace(
+      "  rationale: Superseded by R-0007.\n",
+      "  rationale: |\n    Superseded by R-0007.\n    And by R-0008.\n",
+    );
+    const reading = parseNodeFile("Requirement", "R-0001.md", paragraphs);
+    assert.deepEqual(reading.problems, [
+      "A deletion rationale cannot contain a control character.",
+    ]);
+  });
+
+  test("a blank block value is refused by name", () => {
+    const blank = SIGNED.replace(
+      "  rationale: Superseded by R-0007.\n",
+      '  rationale: ""\n',
+    );
+    const reading = parseNodeFile("Requirement", "R-0001.md", blank);
+    assert.deepEqual(reading.problems, ["A deletion rationale is required."]);
+  });
+
+  test("every corpus value survives a whole file as a rationale", () => {
+    // The read-back door parses what the emitter wrote, so a rationale the
+    // scalar rule cannot round-trip would refuse an approve or a proposal at
+    // write time — this is that door's guard, run over the whole corpus. The
+    // comparison is against the TRIMMED value, because a block value is
+    // identity-judged on the way in.
+    for (const entry of SCALARS) {
+      const value = entry.value.trim();
+      if (value === "" || /\p{Cc}/u.test(value)) {
+        continue;
+      }
+      const written = emitNodeFile("Requirement", REQUIREMENT_NODE, [], {
+        deletionProposed: { by: "session-7", rationale: value },
+      });
+      const reading = parseNodeFile("Requirement", "R-0001.md", written);
+      assert.deepEqual(reading.problems, [], JSON.stringify(entry.value));
+      assert.equal(
+        reading.node?.deletionProposed?.rationale,
+        value,
+        JSON.stringify(entry.value),
+      );
+      assert.equal(isCanonical("Requirement", "R-0001.md", written), true);
+    }
+  });
+
+  test("the payload leaves the approval out and keeps everything else", () => {
+    const reading = parseNodeFile("Requirement", "R-0001.md", SIGNED);
+    assert.ok(reading.node !== undefined);
+    const payload = approvalPayload(
+      "Requirement",
+      "R-0001",
+      reading.node,
+      reading.edges,
+      reading.node,
+    );
+    assert.equal(payload.includes("approval:"), false);
+    assert.equal(payload.includes("deletionProposed:"), true);
+    // The property a person can verify by hand: the payload is this very file
+    // with the approval's five lines deleted and the address line prepended.
+    assert.equal(
+      payload,
+      `Requirement/R-0001\n${SIGNED.replace(
+        'approval:\n  hash: sha256:9f2b\n  tag: hmac:41ac\n  by: yjshin\n  at: "2026-08-15T09:12:33.412Z"\n',
+        "",
+      )}`,
+    );
+  });
+
+  test("the payload names the node's own path, so an approved file copied to another id verifies nowhere", () => {
+    const reading = parseNodeFile("Requirement", "R-0001.md", SIGNED);
+    assert.ok(reading.node !== undefined);
+    const here = approvalPayload(
+      "Requirement",
+      "R-0001",
+      reading.node,
+      reading.edges,
+      reading.node,
+    );
+    const there = approvalPayload(
+      "Requirement",
+      "R-0009",
+      reading.node,
+      reading.edges,
+      reading.node,
+    );
+    assert.ok(here.startsWith("Requirement/R-0001\n"));
+    assert.notEqual(here, there);
+    assert.equal(here.slice(here.indexOf("\n")), there.slice(there.indexOf("\n")));
   });
 });
