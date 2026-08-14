@@ -1588,7 +1588,7 @@ describe("the scaffold door starts a node without pretending it is one", () => {
   });
 });
 
-describe("deleting a node takes its relations with it", () => {
+describe("deleting a node touches its own file and nothing else", () => {
   const requirementValues = {
     shortName: "r",
     name: "R",
@@ -1600,7 +1600,7 @@ describe("deleting a node takes its relations with it", () => {
     body: "## Statement\n\nThe thing happened.\n\n## Evaluation Process\n\nRun it and look.",
   };
 
-  test("the referrers are rewritten first and the folder loads clean after", async () => {
+  test("the referrers keep their lines, byte for byte", async () => {
     const specDir = await makeSpecDir();
     await createNodeFile(specDir, "Requirement", "R-0001", requirementValues);
     await createNodeFile(specDir, "Requirement", "R-0002", requirementValues);
@@ -1608,9 +1608,30 @@ describe("deleting a node takes its relations with it", () => {
     await addEdge(specDir, { fromId: "R-0001", type: "HAS_CRITERION", toId: "AC-0001" });
     await addEdge(specDir, { fromId: "R-0002", type: "HAS_CRITERION", toId: "AC-0001" });
     await addEdge(specDir, { fromId: "R-0001", type: "DEPENDS_ON", toId: "R-0002" });
+    const before = {
+      first: await readFile(path.join(specDir, "intent/Requirement/R-0001.md"), "utf8"),
+      second: await readFile(path.join(specDir, "intent/Requirement/R-0002.md"), "utf8"),
+    };
 
     await deleteNodeFile(specDir, "AC-0001");
 
+    // A deletion touches one file: the target is gone, and its neighbours are
+    // the bytes they were — a machine that rewrote them would mint a change
+    // nobody intended.
+    assert.deepEqual(
+      await readdir(path.join(specDir, "intent", "AcceptanceCriterion")),
+      [],
+    );
+    assert.equal(
+      await readFile(path.join(specDir, "intent/Requirement/R-0001.md"), "utf8"),
+      before.first,
+    );
+    assert.equal(
+      await readFile(path.join(specDir, "intent/Requirement/R-0002.md"), "utf8"),
+      before.second,
+    );
+
+    // The lines that pointed at it are history now, and the loader keeps them.
     const graph = await loadGraph(specDir);
     assert.deepEqual(messages(graph.problems), []);
     assert.deepEqual(
@@ -1619,67 +1640,18 @@ describe("deleting a node takes its relations with it", () => {
     );
     assert.deepEqual(
       graph.edges.map((edge) => edge.id),
-      ["R-0001 DEPENDS_ON R-0002"],
+      [
+        "R-0001 DEPENDS_ON R-0002",
+        "R-0001 HAS_CRITERION AC-0001",
+        "R-0002 HAS_CRITERION AC-0001",
+      ],
     );
-    // The emptied node's own file is gone, and so is the folder's only mention
-    // of it — a rewritten referrer carries no `edges:` key it does not need,
-    // and its body is the one it was written with.
-    const text = await readFile(path.join(specDir, "intent/Requirement/R-0002.md"), "utf8");
-    assert.ok(!text.includes("edges:"), text);
-    assert.ok(text.endsWith(`\n${requirementValues.body}\n`), text);
-    assert.ok(isCanonical("Requirement", "R-0002.md", text));
   });
 
-  test("a referrer nobody can read is left alone, and its reference drops at load", async () => {
-    const specDir = await makeSpecDir();
-    await createNodeFile(specDir, "Goal", "G-0001", {
-      shortName: "g",
-      name: "G",
-      body: "## Statement\n\nThe thing is worth doing.",
-    });
-    await createNodeFile(specDir, "Question", "Q-0001", {
-      shortName: "q",
-      name: "Q",
-      body: "## Question\n\nWhy?\n\n## State\n\nOpen",
-    });
-    await addEdge(specDir, { fromId: "G-0001", type: "RAISES", toId: "Q-0001" });
-
-    // Somebody is mid-edit on the referrer when the target is deleted: the
-    // statement has been pulled back up above the fence, where nothing carries
-    // it.
-    const broken = `---
-short_name: g
-name: G
-statement: The thing is worth doing.
-edges:
-  - type: RAISES
-    to: Q-0001
----
-`;
-    await place(specDir, "intent/Goal/G-0001.md", broken);
-
-    await deleteNodeFile(specDir, "Q-0001");
-    assert.equal(
-      await readFile(path.join(specDir, "intent/Goal/G-0001.md"), "utf8"),
-      broken,
-    );
-
-    const graph = await loadGraph(specDir);
-    assert.deepEqual(graph.nodes, []);
-    assert.deepEqual(messages(graph.problems), [
-      "The frontmatter carries short_name, name and edges and nothing else — statement belongs in the body, below the closing fence.",
-    ]);
-  });
-
-  /**
-   * A REFERRER THAT CANNOT BE READ IS SKIPPED, NEVER THROWN OVER. The cascade
-   * used to abort part-way with a raw errno: one referrer already rewritten, the
-   * node still on disk, and the caller told the delete failed while a relation
-   * had in fact been destroyed — and the retry failing the same way. Skipping is
-   * what it already does with a referrer that will not parse, and the load-time
-   * dangling drop is the backstop under both.
-   */
-  test("a referrer whose bytes are not text does not stop the cascade", async () => {
+  test("a neighbour in any state is never even opened", async () => {
+    // One of the referrers is not UTF-8 — mid-crash, mid-edit, who knows. The
+    // old cascade had to decide what to do about a file like that; this door
+    // has nothing to decide, because it opens no file but its target's.
     const specDir = await makeSpecDir();
     await createNodeFile(specDir, "AcceptanceCriterion", "AC-0001", criterionValues);
     for (const id of ["R-0001", "R-0002", "R-0003"]) {
@@ -1695,83 +1667,29 @@ edges:
       middle,
       Buffer.concat([await readFile(middle), Buffer.from([0xe9])]),
     );
+    const before = new Map<string, Buffer>();
+    for (const id of ["R-0001", "R-0002", "R-0003"]) {
+      before.set(
+        id,
+        await readFile(path.join(specDir, "intent", "Requirement", `${id}.md`)),
+      );
+    }
 
     await deleteNodeFile(specDir, "AC-0001");
 
-    // The two readable referrers lost the relation and the file is gone, which
-    // is the whole of what was asked for.
-    assert.equal(
-      (await readFile(path.join(specDir, "intent", "Requirement", "R-0001.md"), "utf8")).includes(
-        "AC-0001",
-      ),
-      false,
-    );
-    assert.equal(
-      (await readFile(path.join(specDir, "intent", "Requirement", "R-0003.md"), "utf8")).includes(
-        "AC-0001",
-      ),
-      false,
-    );
-    assert.deepEqual(await readdir(path.join(specDir, "intent", "AcceptanceCriterion")), []);
-
-    const graph = await loadGraph(specDir);
     assert.deepEqual(
-      graph.nodes.map((node) => node.id),
-      ["R-0001", "R-0003"],
+      await readdir(path.join(specDir, "intent", "AcceptanceCriterion")),
+      [],
     );
-    assert.deepEqual(messages(graph.problems), [
-      "R-0002.md could not be read: it is not valid UTF-8 text. Only this file is left out.",
-    ]);
+    for (const [id, bytes] of before) {
+      assert.deepEqual(
+        await readFile(path.join(specDir, "intent", "Requirement", `${id}.md`)),
+        bytes,
+        id,
+      );
+    }
   });
 
-  test(
-    "a referrer nobody may open does not stop the cascade either",
-    { skip: SHUT_MEANS_SHUT },
-    async () => {
-      const specDir = await makeSpecDir();
-      await createNodeFile(specDir, "Goal", "G-0001", {
-        shortName: "g",
-        name: "G",
-        body: "## Statement\n\nThe thing is worth doing.",
-      });
-      await createNodeFile(specDir, "Goal", "G-0002", {
-        shortName: "g2",
-        name: "G2",
-        body: "## Statement\n\nThe other thing is worth doing.",
-      });
-      await createNodeFile(specDir, "Question", "Q-0001", {
-        shortName: "q",
-        name: "Q",
-        body: "## Question\n\nWhy?\n\n## State\n\nOpen",
-      });
-      await addEdge(specDir, { fromId: "G-0001", type: "RAISES", toId: "Q-0001" });
-      await addEdge(specDir, { fromId: "G-0002", type: "RAISES", toId: "Q-0001" });
-
-      await whileShut(path.join(specDir, "intent", "Goal", "G-0001.md"), () =>
-        deleteNodeFile(specDir, "Q-0001"),
-      );
-
-      assert.deepEqual(await readdir(path.join(specDir, "intent", "Question")), []);
-      assert.equal(
-        (await readFile(path.join(specDir, "intent", "Goal", "G-0002.md"), "utf8")).includes(
-          "Q-0001",
-        ),
-        false,
-      );
-      // The one that could not be opened kept its line, and the loader keeps
-      // the relation with it — the hole it points into is the check's to name.
-      const graph = await loadGraph(specDir);
-      assert.deepEqual(
-        graph.nodes.map((node) => node.id),
-        ["G-0001", "G-0002"],
-      );
-      assert.deepEqual(
-        graph.edges.map((edge) => edge.id),
-        ["G-0001 RAISES Q-0001"],
-      );
-      assert.deepEqual(messages(graph.problems), []);
-    },
-  );
 });
 
 describe("writes go through the queue one at a time", () => {
