@@ -28,6 +28,7 @@ import {
   type SpecNodeValues,
 } from "../graph/index.js";
 import {
+  approvalPayload,
   blocksOf,
   emitNodeFile,
   emitScaffold,
@@ -181,7 +182,7 @@ function isAbsent(error: unknown): boolean {
  * has gone wrong, and inventing a soothing English phrase for it would tell the
  * person less than the four letters their operating system already documents.
  */
-function describeFailure(error: unknown): string {
+export function describeFailure(error: unknown): string {
   const code = (error as { code?: unknown } | null)?.code;
   switch (code) {
     case "EACCES":
@@ -1250,6 +1251,154 @@ export async function updateNodeFile(
       held.edges,
       blocksOf(held.node),
     );
+  });
+}
+
+/**
+ * What signs an approval. Core has no clock, no username and no key, so all
+ * four arrive from the daemon; what core contributes is the payload and the
+ * moment — see the door below for why the moment matters.
+ */
+export interface ApprovalSigner {
+  readonly hash: (payload: string) => string;
+  readonly sign: (hash: string) => string;
+  readonly by: string;
+  readonly at: string;
+}
+
+/**
+ * A person's approval, written into the node's file.
+ *
+ * IT READS, SIGNS AND WRITES IN ONE QUEUE TURN, and that is the whole reason
+ * this is a store door rather than daemon code: a hash computed on the other
+ * side of the queue would be a hash of what the file said a moment ago, and a
+ * save landing in between would mint an approval born already stale — signed
+ * bytes nobody ever saw together on disk.
+ *
+ * A deletion proposal, if one is standing, rides through untouched. Whether an
+ * approval OVER a proposal makes sense is the service's question; this door
+ * only promises that what lands is the file it read plus one signature.
+ */
+export async function approveNodeFile(
+  specDir: string,
+  id: string,
+  signer: ApprovalSigner,
+): Promise<SpecNode> {
+  const root = path.resolve(specDir);
+  return withSpecDir(root, async () => {
+    const { candidates } = await discoverForWriting(root);
+    const found = locate(candidates, id);
+    if (found === undefined) {
+      throw missing(`Unknown node: ${id}`);
+    }
+    const held = await readNodeFile(found);
+    const payload = approvalPayload(
+      found.type,
+      id,
+      held.node,
+      held.edges,
+      blocksOf(held.node),
+    );
+    const hash = signer.hash(payload);
+    return writeNodeFile(root, found.type, id, held.node, held.edges, {
+      approval: { hash, tag: signer.sign(hash), by: signer.by, at: signer.at },
+      deletionProposed: held.node.deletionProposed,
+    });
+  });
+}
+
+/**
+ * The proposal taken back out, and nothing else in the file moved. The
+ * proposal sat inside the approval's payload, so on a node whose only change
+ * WAS the proposal, stripping it makes the standing signature fit again — the
+ * rejection restores green without a second write.
+ */
+export async function clearDeletionProposal(
+  specDir: string,
+  id: string,
+): Promise<SpecNode> {
+  const root = path.resolve(specDir);
+  return withSpecDir(root, async () => {
+    const { candidates } = await discoverForWriting(root);
+    const found = locate(candidates, id);
+    if (found === undefined) {
+      throw missing(`Unknown node: ${id}`);
+    }
+    const held = await readNodeFile(found);
+    if (held.node.deletionProposed === undefined) {
+      throw invalid(`${id} carries no proposed deletion, so there is nothing to reject.`);
+    }
+    return writeNodeFile(root, found.type, id, held.node, held.edges, {
+      approval: held.node.approval,
+    });
+  });
+}
+
+/**
+ * The whole file replaced — values, relations and blocks together — for the
+ * one caller with the right to do that: a rejection putting the approved
+ * version back. An ordinary edit reaches three fields and carries the rest;
+ * this door is handed the rest, because what it writes is not an edit but a
+ * return to bytes a person already signed.
+ */
+export async function revertNodeFile(
+  specDir: string,
+  id: string,
+  values: SpecNodeValues,
+  edges: readonly NodeFileEdge[],
+  blocks: NodeFileBlocks,
+): Promise<SpecNode> {
+  const root = path.resolve(specDir);
+  return withSpecDir(root, async () => {
+    const { candidates } = await discoverForWriting(root);
+    const found = locate(candidates, id);
+    if (found === undefined) {
+      throw missing(`Unknown node: ${id}`);
+    }
+    return writeNodeFile(root, found.type, id, settleFields(values), edges, blocks);
+  });
+}
+
+/**
+ * A whole node written back where it belongs — the far end of a restore, whose
+ * near end is git. The daemon reads the bytes out of history, parses them, and
+ * hands the parts through this door so the write is a write like any other:
+ * queued, judged at read-back, landed by rename. Nothing here touches git.
+ */
+export async function restoreNodeFile(
+  specDir: string,
+  type: string,
+  id: string,
+  values: SpecNodeValues,
+  edges: readonly NodeFileEdge[],
+  blocks: NodeFileBlocks,
+): Promise<SpecNode> {
+  const root = path.resolve(specDir);
+  return withSpecDir(root, async () => {
+    if (!isNodeType(type)) {
+      throw invalid(`Unknown node type: ${type}`);
+    }
+    const { candidates } = await discoverForWriting(root);
+    const lowered = id.toLowerCase();
+    const standing = candidates.find(
+      (candidate) => candidate.id.toLowerCase() === lowered,
+    );
+    if (standing !== undefined) {
+      if (standing.id !== id) {
+        throw conflict(
+          `${id} differs only in case from ${standing.id}, and two such files cannot sit side by side on every filesystem. Nothing was restored.`,
+        );
+      }
+      if (standing.type !== type) {
+        throw conflict(
+          `${id} is on disk as a ${standing.type} at ${standing.file}, so the ${type} git holds cannot be restored under that id.`,
+        );
+      }
+      throw conflict(
+        `${id} is already on disk at ${standing.file}, so there is nothing to restore.`,
+      );
+    }
+    return writeNodeFile(root, type, id, settleFields(values), edges, blocks);
   });
 }
 
