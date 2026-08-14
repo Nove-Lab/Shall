@@ -5,10 +5,19 @@ import {
   judgeBody,
   judgeNodeId,
   judgeText,
+  type NodeApproval,
+  type NodeDeletionProposal,
   type SpecEdge,
   type SpecNode,
 } from "../graph/index.js";
-import { EDGES_KEY, FENCE, NAME_KEY, SHORT_NAME_KEY } from "./emit.js";
+import {
+  APPROVAL_KEY,
+  DELETION_PROPOSED_KEY,
+  EDGES_KEY,
+  FENCE,
+  NAME_KEY,
+  SHORT_NAME_KEY,
+} from "./emit.js";
 
 /**
  * A file back into a node — lenient about how it was written, exact about what
@@ -58,6 +67,44 @@ const MARKDOWN_SUFFIX = ".md";
 
 /** Refused wholesale rather than per-key: it is one rule about one list. */
 const EDGE_SHAPE = "Every entry under edges is a map of exactly type and to.";
+
+/**
+ * The machine blocks, refused whole for the same reason the edges list is: a
+ * stranger key inside one, a key missing from one and a value that is not text
+ * are one rule about one block, said once. What the VALUES may hold is judged
+ * per field further down, in sentences a person can act on by name.
+ */
+const APPROVAL_SHAPE =
+  "The approval block is a map of exactly hash, tag, by and at, each of them text.";
+const DELETION_SHAPE =
+  "The deletionProposed block is a map of exactly by and rationale, each of them text.";
+
+/**
+ * A block as the strings it claims to be, or null when its shape is not the
+ * exact tuple asked for. Every named key must be present as text and no other
+ * key may stand beside them — the length check plus the per-key check is both
+ * halves of that at once.
+ */
+function readStringMap(
+  value: unknown,
+  keys: readonly string[],
+): Record<string, string> | null {
+  if (!isMap(value)) {
+    return null;
+  }
+  if (Object.keys(value).length !== keys.length) {
+    return null;
+  }
+  const held: Record<string, string> = {};
+  for (const key of keys) {
+    const field = value[key];
+    if (typeof field !== "string") {
+      return null;
+    }
+    held[key] = field;
+  }
+  return held;
+}
 
 /**
  * THE PARSE CONTRACT, IN ONE PLACE. What the `yaml` package accepts is part of
@@ -260,10 +307,12 @@ export function parseNodeFile(
 
   let shortName = "";
   let name = "";
+  let approval: NodeApproval | undefined;
+  let deletionProposed: NodeDeletionProposal | undefined;
   // The keys the format does not carry, said once as one list: the rule is one
-  // rule — the frontmatter holds the graph's three facts and the body holds
-  // everything else — and five sentences about five keys would read as five
-  // rules.
+  // rule — the frontmatter holds the graph's three facts and the two machine
+  // blocks, and the body holds everything else — and six sentences about six
+  // keys would read as six rules.
   const strays: string[] = [];
   for (const [key, value] of Object.entries(carried)) {
     if (key === EDGES_KEY) {
@@ -281,6 +330,43 @@ export function parseNodeFile(
     // what the templates ship as, and what a person leaves behind when they
     // clear a cell by hand.
     if (value === null || value === undefined) {
+      continue;
+    }
+    if (key === DELETION_PROPOSED_KEY) {
+      const held = readStringMap(value, ["by", "rationale"]);
+      if (held === null) {
+        problems.push(DELETION_SHAPE);
+        continue;
+      }
+      // The identity judgement is what keeps a block value to one line — a
+      // rationale that wants paragraphs belongs in the body of the node it is
+      // asking to remove.
+      const by = judgeIdentity("A proposing session", held["by"] ?? "");
+      const rationale = judgeIdentity(
+        "A deletion rationale",
+        held["rationale"] ?? "",
+      );
+      problems.push(...by.problems, ...rationale.problems);
+      deletionProposed = { by: by.value, rationale: rationale.value };
+      continue;
+    }
+    if (key === APPROVAL_KEY) {
+      const held = readStringMap(value, ["hash", "tag", "by", "at"]);
+      if (held === null) {
+        problems.push(APPROVAL_SHAPE);
+        continue;
+      }
+      const hash = judgeIdentity("An approval hash", held["hash"] ?? "");
+      const tag = judgeIdentity("An approval tag", held["tag"] ?? "");
+      const by = judgeIdentity("An approver", held["by"] ?? "");
+      const at = judgeIdentity("An approval instant", held["at"] ?? "");
+      problems.push(
+        ...hash.problems,
+        ...tag.problems,
+        ...by.problems,
+        ...at.problems,
+      );
+      approval = { hash: hash.value, tag: tag.value, by: by.value, at: at.value };
       continue;
     }
     if (key !== SHORT_NAME_KEY && key !== NAME_KEY) {
@@ -309,7 +395,7 @@ export function parseNodeFile(
   }
   if (strays.length > 0) {
     problems.push(
-      `The frontmatter carries ${SHORT_NAME_KEY}, ${NAME_KEY} and ${EDGES_KEY} and nothing else — ${namesPhrase(strays)} ${strays.length === 1 ? "belongs" : "belong"} in the body, below the closing fence.`,
+      `The frontmatter carries ${SHORT_NAME_KEY}, ${NAME_KEY}, ${EDGES_KEY}, ${DELETION_PROPOSED_KEY} and ${APPROVAL_KEY} and nothing else — ${namesPhrase(strays)} ${strays.length === 1 ? "belongs" : "belong"} in the body, below the closing fence.`,
     );
   }
 
@@ -403,6 +489,10 @@ export function parseNodeFile(
       shortName: judgedShortName.value,
       name: judgedName.value,
       body: judgedBody.value,
+      // Spread in rather than assigned, so a node without a block has no key
+      // for it either — one spelling of absence, here as in the file.
+      ...(approval !== undefined ? { approval } : {}),
+      ...(deletionProposed !== undefined ? { deletionProposed } : {}),
     },
     edges,
     problems,

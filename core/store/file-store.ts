@@ -28,9 +28,11 @@ import {
   type SpecNodeValues,
 } from "../graph/index.js";
 import {
+  blocksOf,
   emitNodeFile,
   emitScaffold,
   parseNodeFile,
+  type NodeFileBlocks,
   type NodeFileEdge,
   type NodeFileFields,
   type NodeFileReading,
@@ -928,9 +930,12 @@ async function writeNodeFile(
   id: string,
   fields: NodeFileFields,
   edges: readonly NodeFileEdge[],
+  // Required and never defaulted, so the compiler walks every caller: a door
+  // that forgot the blocks would silently strip a node's approval on save.
+  blocks: NodeFileBlocks,
 ): Promise<SpecNode> {
   const fileName = `${id}${MARKDOWN_SUFFIX}`;
-  const text = emitNodeFile(type, fields, edges);
+  const text = emitNodeFile(type, fields, edges, blocks);
 
   const reading = parseNodeFile(type, fileName, text);
   const first = reading.problems[0];
@@ -1133,7 +1138,9 @@ export async function createNodeFile(
       );
     }
 
-    return writeNodeFile(root, type, id, fields, edges);
+    // A new node carries no machine block: nobody has approved what nobody
+    // has read, and nothing proposes the deletion of what was just made.
+    return writeNodeFile(root, type, id, fields, edges, {});
   });
 }
 
@@ -1232,7 +1239,17 @@ export async function updateNodeFile(
     // twice for one answer.
     const held = await readNodeFile(found);
     const fields = settleFields(values);
-    return writeNodeFile(root, found.type, id, fields, held.edges);
+    // The blocks ride along like the edges do: lines in this file the edit did
+    // not receive and therefore does not touch. The changed content un-matches
+    // an approval's hash by itself — that is arithmetic, not this door's job.
+    return writeNodeFile(
+      root,
+      found.type,
+      id,
+      fields,
+      held.edges,
+      blocksOf(held.node),
+    );
   });
 }
 
@@ -1317,10 +1334,14 @@ export async function addEdge(
 
     // A relation from a node to itself is refused by the reader over the bytes
     // below, in the sentence the create door uses for it.
-    await writeNodeFile(root, from.type, from.id, held.node, [
-      ...held.edges,
-      { type: edge.type, toId: edge.toId },
-    ]);
+    await writeNodeFile(
+      root,
+      from.type,
+      from.id,
+      held.node,
+      [...held.edges, { type: edge.type, toId: edge.toId }],
+      blocksOf(held.node),
+    );
     return {
       id: formatEdgeId(edge.fromId, edge.type, edge.toId),
       type: edge.type,
@@ -1364,6 +1385,13 @@ export async function removeEdge(
       throw missing(`Unknown edge: ${edgeId}`);
     }
 
-    await writeNodeFile(root, from.type, from.id, held.node, kept);
+    await writeNodeFile(
+      root,
+      from.type,
+      from.id,
+      held.node,
+      kept,
+      blocksOf(held.node),
+    );
   });
 }

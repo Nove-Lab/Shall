@@ -14,8 +14,15 @@ import { parseNodeFile } from "./parse.js";
  * what makes `git diff` mean what it says and two people's identical edits
  * merge without a conflict.
  */
-export { emitNodeFile, FENCE } from "./emit.js";
-export type { NodeFileEdge, NodeFileFields } from "./emit.js";
+export {
+  APPROVAL_KEY,
+  approvalPayload,
+  blocksOf,
+  DELETION_PROPOSED_KEY,
+  emitNodeFile,
+  FENCE,
+} from "./emit.js";
+export type { NodeFileBlocks, NodeFileEdge, NodeFileFields } from "./emit.js";
 export { emitScalar, isPlainSafe } from "./scalar.js";
 export { parseNodeFile } from "./parse.js";
 export type { NodeFileReading, ParsedNode } from "./parse.js";
@@ -42,5 +49,9 @@ export function isCanonical(
   if (reading.node === undefined) {
     return false;
   }
-  return emitNodeFile(type, reading.node, reading.edges) === text;
+  // The parse is passed as the blocks too — `ParsedNode` satisfies the shape —
+  // so an approved file is compared against the whole of what a save would
+  // write. Left out, every approved file would read as "valid but not
+  // canonical" and the next save would silently strip its signature.
+  return emitNodeFile(type, reading.node, reading.edges, reading.node) === text;
 }

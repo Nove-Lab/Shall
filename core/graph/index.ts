@@ -38,7 +38,12 @@ export {
   permittedEdgeTypes,
 } from "./grammar.js";
 export type { EdgeTriple } from "./grammar.js";
-export type { SpecNode, SpecNodeValues } from "./node.js";
+export type {
+  NodeApproval,
+  NodeDeletionProposal,
+  SpecNode,
+  SpecNodeValues,
+} from "./node.js";
 export { formatEdgeId, parseEdgeId } from "./edge.js";
 export type { SpecEdge } from "./edge.js";
 export { judgeBody, judgeNodeId, judgeText, TEXT_BYTE_CAP } from "./validate.js";

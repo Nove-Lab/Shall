@@ -302,7 +302,7 @@ describe("the loader's problem matrix", () => {
       at: "intent/Requirement/R-0001.md",
       text: "---\nshort_name: a\nname: n\npriority: high\n---\n\n## Statement\n\ns\n",
       sentence:
-        "The frontmatter carries short_name, name and edges and nothing else — priority belongs in the body, below the closing fence.",
+        "The frontmatter carries short_name, name, edges, deletionProposed and approval and nothing else — priority belongs in the body, below the closing fence.",
     },
     {
       // Said once as one list, because it is one rule: two sentences about two
@@ -311,7 +311,7 @@ describe("the loader's problem matrix", () => {
       at: "intent/Requirement/R-0001.md",
       text: "---\nshort_name: a\nname: n\nstatement: s\npriority: high\n---\n",
       sentence:
-        "The frontmatter carries short_name, name and edges and nothing else — statement and priority belong in the body, below the closing fence.",
+        "The frontmatter carries short_name, name, edges, deletionProposed and approval and nothing else — statement and priority belong in the body, below the closing fence.",
     },
     {
       why: "an edges entry that is not a map of exactly type and to",
@@ -1346,7 +1346,7 @@ Because a cart is not an order.
     assert.deepEqual(await refusal(() => updateNodeFile(specDir, "R-0001", values)), {
       kind: "conflict",
       message:
-        "intent/Requirement/R-0001.md has been edited into a state Shall cannot read — The frontmatter carries short_name, name and edges and nothing else — statement belongs in the body, below the closing fence. Nothing was written, so that edit is still there to fix.",
+        "intent/Requirement/R-0001.md has been edited into a state Shall cannot read — The frontmatter carries short_name, name, edges, deletionProposed and approval and nothing else — statement belongs in the body, below the closing fence. Nothing was written, so that edit is still there to fix.",
     });
     assert.equal(
       await readFile(path.join(specDir, "intent/Requirement/R-0001.md"), "utf8"),

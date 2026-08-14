@@ -379,7 +379,7 @@ describe("the edit door", () => {
         ...values("R-0001", REQUIREMENT_BODY),
       }),
       "conflict",
-      "intent/Requirement/R-0001.md has been edited into a state Shall cannot read — The frontmatter carries short_name, name and edges and nothing else — priority belongs in the body, below the closing fence. Nothing was written, so that edit is still there to fix.",
+      "intent/Requirement/R-0001.md has been edited into a state Shall cannot read — The frontmatter carries short_name, name, edges, deletionProposed and approval and nothing else — priority belongs in the body, below the closing fence. Nothing was written, so that edit is still there to fix.",
     );
     // Nothing was written: the edit is still there, exactly as it was left.
     const held = await readFile(
