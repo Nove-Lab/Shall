@@ -894,7 +894,63 @@ describe("checkSpec", () => {
     assert.equal(check.nodeCount, 2);
     assert.equal(check.edgeCount, 1);
     assert.deepEqual(check.problems, []);
+    assert.deepEqual(check.gaps, []);
     assert.deepEqual(check.notes, []);
+  });
+
+  test("a relation to an id nothing answers to is a gap, and the relation stays in the file", async () => {
+    const project = await newProject();
+    await node(project, "Requirement", "R-0001", REQUIREMENT_BODY);
+    await node(project, "AcceptanceCriterion", "AC-0001", CRITERION_BODY);
+    await createSpecEdge({
+      projectId: project.id,
+      type: "HAS_CRITERION",
+      fromId: "R-0001",
+      toId: "AC-0001",
+    });
+    // The target's file goes the way no door sanctions — by hand.
+    await rm(
+      path.join(
+        project.path,
+        ".shall",
+        "spec",
+        "intent",
+        "AcceptanceCriterion",
+        "AC-0001.md",
+      ),
+    );
+
+    const check = await checkSpec(project.path);
+    // The node is still in the count and the relation is not: a gap costs the
+    // graph its holding-together, never a file.
+    assert.equal(check.nodeCount, 1);
+    assert.equal(check.edgeCount, 0);
+    assert.deepEqual(check.problems, []);
+    assert.deepEqual(check.gaps, [
+      {
+        file: "intent/Requirement/R-0001.md",
+        message:
+          "R-0001 has a HAS_CRITERION relation to AC-0001, and no file names AC-0001. The relation is kept as written, so writing or restoring AC-0001 attaches it again.",
+      },
+    ]);
+    // The line is still in the source file, exactly as it was written.
+    assert.ok(
+      (
+        await readFile(
+          path.join(
+            project.path,
+            ".shall",
+            "spec",
+            "intent",
+            "Requirement",
+            "R-0001.md",
+          ),
+          "utf8",
+        )
+      ).includes("to: AC-0001"),
+    );
+    // The canvas is not asked to draw a line to a box that is not there.
+    assert.deepEqual(await listSpecEdges(project.id), []);
   });
 });
 

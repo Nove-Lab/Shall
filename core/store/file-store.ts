@@ -64,11 +64,30 @@ export interface FileProblem {
   readonly message: string;
 }
 
+/**
+ * A file that sits where a node belongs and would not read as one, with its
+ * place attached. Its sentences repeat in `problems` — that list is for a
+ * person reading the folder — and this is the structured half, kept so a
+ * caller judging the whole graph can say which id and type a broken file was
+ * claiming without re-deriving them from the path, which is this module's
+ * knowledge and nobody else's.
+ */
+export interface RefusedFile {
+  /** Relative to `specDir`, `/`-separated. */
+  readonly file: string;
+  /** From the folder name — what the file claims to be, whatever is inside. */
+  readonly type: string;
+  /** From the filename stem. */
+  readonly id: string;
+  readonly problems: readonly string[];
+}
+
 /** The whole folder, read: what loaded, and what did not. */
 export interface SpecGraph {
   nodes: SpecNode[];
   edges: SpecEdge[];
   problems: FileProblem[];
+  refused: RefusedFile[];
 }
 
 /**
@@ -675,11 +694,17 @@ async function readCandidates(
 /**
  * The whole folder as a graph.
  *
- * FOUR STAGES, AND THE ORDER IS THE POINT. Each file is read alone; then ids are
- * settled, because until they are there is no telling which node an edge names;
- * then the canon's grammar, which needs the TARGET's type and so cannot be
- * judged inside one file; and last the targets that are not there, which is the
- * only judgement that costs an edge instead of a file.
+ * THREE STAGES, AND THE ORDER IS THE POINT. Each file is read alone; then ids
+ * are settled, because until they are there is no telling which node an edge
+ * names; then the canon's grammar, which needs the TARGET's type and so cannot
+ * be judged inside one file.
+ *
+ * A TARGET THAT IS NOT THERE IS NOT JUDGED AT ALL. A relation to an id no file
+ * answers to is kept exactly as written: the line is the history of a deletion
+ * and the clue for the re-anchor, and it is what makes restoring the missing
+ * file heal the graph by itself. Whether the hole matters — and to whom — is
+ * arithmetic over the loaded graph, never a fault of the file that kept faith
+ * with what it saw.
  *
  * A FILE WITH ANY PROBLEM IS LEFT OUT WHOLE — its node and its edges together.
  * Half a node is a worse answer than none: a panel that shows a Requirement with
@@ -762,17 +787,17 @@ export async function loadGraph(specDir: string): Promise<SpecGraph> {
     }
   }
 
-  const surviving = new Set<string>();
-  for (const reading of readings) {
-    if (reading.problems.length === 0) {
-      surviving.add(reading.candidate.id);
-    }
-  }
-
   const nodes: SpecNode[] = [];
   const edges: SpecEdge[] = [];
+  const refused: RefusedFile[] = [];
   for (const reading of readings) {
     if (reading.problems.length > 0) {
+      refused.push({
+        file: reading.candidate.file,
+        type: reading.candidate.type,
+        id: reading.candidate.id,
+        problems: [...reading.problems],
+      });
       continue;
     }
     const parsed = reading.reading.node;
@@ -799,17 +824,8 @@ export async function loadGraph(specDir: string): Promise<SpecGraph> {
     });
 
     for (const edge of reading.reading.edges) {
-      // A DANGLING EDGE COSTS ONLY ITSELF. This is the deliberate backstop for
-      // the delete cascade, which cannot be atomic across files: if the daemon
-      // dies between rewriting the referrers and removing the node, or if a
-      // merge brings back a reference to something deleted on the other branch,
-      // the graph stays readable and says what it dropped.
-      if (!surviving.has(edge.toId)) {
-        reading.problems.push(
-          `${edge.fromId} has a ${edge.type} relation to ${edge.toId}, and no file names ${edge.toId}. The relation is dropped and the rest of the node is kept.`,
-        );
-        continue;
-      }
+      // Kept whether or not the target is there — see the header. What the
+      // canvas can draw of it is the daemon's editing, not this module's.
       edges.push({ ...edge });
     }
   }
@@ -834,8 +850,9 @@ export async function loadGraph(specDir: string): Promise<SpecGraph> {
       compare(a.toId, b.toId),
   );
   problems.sort((a, b) => compare(a.file, b.file));
+  refused.sort((a, b) => compare(a.file, b.file));
 
-  return { nodes, edges, problems };
+  return { nodes, edges, problems, refused };
 }
 
 /** The tail of the queue for each spec folder, so the next write can join it. */
@@ -1228,12 +1245,13 @@ export async function updateNodeFile(
  * once. The referrers are rewritten FIRST, so that the state a crash can leave
  * behind is "the relations are gone, the node is still there" — which reads
  * perfectly well and can be finished by asking again. The other order would
- * leave references to nothing, and the loader's dangling-edge drop is the
- * backstop under both.
+ * leave references to nothing — which the loader now keeps as dangling lines,
+ * and the check names.
  *
  * A referrer that does not currently parse is LEFT ALONE rather than rewritten,
- * for the same reason the update door refuses to clobber one. Its reference to
- * the removed node is dropped at load, with a sentence, until somebody fixes it.
+ * for the same reason the update door refuses to clobber one. Its line pointing
+ * at the removed node stays where it is, a hole the check names until somebody
+ * fixes it.
  */
 export async function deleteNodeFile(
   specDir: string,
@@ -1253,7 +1271,7 @@ export async function deleteNodeFile(
       }
       const text = await readText(candidate.absolutePath);
       // A referrer this module cannot READ is treated exactly as one it cannot
-      // PARSE: skipped, and left to the load-time dangling-edge drop. The
+      // PARSE: skipped, its dangling line left for the check to name. The
       // alternative is what this loop used to do — throw part-way through, with
       // some referrers already rewritten and the node still on disk, and tell
       // the caller the delete failed while a relation had in fact been

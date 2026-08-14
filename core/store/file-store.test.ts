@@ -168,7 +168,7 @@ describe("loadGraph reads a folder", () => {
   test("a folder that is not there is a graph with nothing in it", async () => {
     const specDir = await makeSpecDir();
     const graph = await loadGraph(specDir);
-    assert.deepEqual(graph, { nodes: [], edges: [], problems: [] });
+    assert.deepEqual(graph, { nodes: [], edges: [], problems: [], refused: [] });
   });
 
   test("nodes come back in id order with the file's mtime for both stamps", async () => {
@@ -671,7 +671,11 @@ describe("the loader's cross-file judgements", () => {
     ]);
   });
 
-  test("a target nothing names drops that relation and keeps the node", async () => {
+  test("a target nothing names keeps the relation and says nothing", async () => {
+    // The line is the history of a deletion and the clue for a re-anchor, so
+    // it is kept exactly as written — restoring T-0009 attaches it again with
+    // nobody editing this file. The hole it points into is the check's to
+    // name, never a fault of the file that kept faith with what it saw.
     const specDir = await makeSpecDir();
     await place(
       specDir,
@@ -690,10 +694,30 @@ describe("the loader's cross-file judgements", () => {
     );
     assert.deepEqual(
       graph.edges.map((edge) => edge.id),
-      ["R-0001 HAS_CRITERION AC-0001"],
+      ["R-0001 HAS_CRITERION AC-0001", "R-0001 MENTIONS T-0009"],
     );
-    assert.deepEqual(messages(graph.problems), [
-      "R-0001 has a MENTIONS relation to T-0009, and no file names T-0009. The relation is dropped and the rest of the node is kept.",
+    assert.deepEqual(messages(graph.problems), []);
+  });
+
+  test("a refused file is also answered whole, with its place attached", async () => {
+    // The sentences repeat in `problems` for a person reading the folder;
+    // `refused` is the structured half, so a caller judging the graph knows
+    // which id and type the broken file was claiming without re-deriving them
+    // from the path.
+    const specDir = await makeSpecDir();
+    await place(specDir, "intent/Requirement/R-0001.md", "just some notes\n");
+
+    const graph = await loadGraph(specDir);
+    assert.deepEqual(graph.nodes, []);
+    assert.deepEqual(graph.refused, [
+      {
+        file: "intent/Requirement/R-0001.md",
+        type: "Requirement",
+        id: "R-0001",
+        problems: [
+          'R-0001.md does not begin with a "---" frontmatter block, so it cannot be read as a spec node.',
+        ],
+      },
     ]);
   });
 
@@ -1734,16 +1758,18 @@ edges:
         ),
         false,
       );
-      // The one that could not be opened kept its line, and the loader says so
-      // and drops the relation rather than the node.
+      // The one that could not be opened kept its line, and the loader keeps
+      // the relation with it — the hole it points into is the check's to name.
       const graph = await loadGraph(specDir);
       assert.deepEqual(
         graph.nodes.map((node) => node.id),
         ["G-0001", "G-0002"],
       );
-      assert.deepEqual(messages(graph.problems), [
-        "G-0001 has a RAISES relation to Q-0001, and no file names Q-0001. The relation is dropped and the rest of the node is kept.",
-      ]);
+      assert.deepEqual(
+        graph.edges.map((edge) => edge.id),
+        ["G-0001 RAISES Q-0001"],
+      );
+      assert.deepEqual(messages(graph.problems), []);
     },
   );
 });
