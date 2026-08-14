@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Markdown } from "@/components/ui/markdown";
 import {
   Select,
   SelectContent,
@@ -506,10 +507,11 @@ export function NodePanel({
                   {value === undefined ? (
                     <span className="text-muted-foreground text-sm">—</span>
                   ) : descriptor.kind === "prose" ? (
-                    /* Prose is what somebody wrote in a box with a return key,
-                       so the breaks they put in it are part of what they
-                       wrote. */
-                    <p className="text-sm whitespace-pre-wrap">{value}</p>
+                    /* Prose is the body of a section in the node's own file, so
+                       it is read as the markdown it is. The form below still
+                       edits the characters — this is the reading side only, and
+                       what it draws is what `.shall/spec` holds. */
+                    <Markdown>{value}</Markdown>
                   ) : (
                     /* A choice reads as its English label; a line as itself. */
                     <span className="text-sm">
