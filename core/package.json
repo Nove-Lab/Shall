@@ -31,7 +31,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --import tsx --test graph/*.test.ts serialize/*.test.ts store/*.test.ts"
+    "test": "node --import tsx --test arith/*.test.ts graph/*.test.ts serialize/*.test.ts store/*.test.ts"
   },
   "dependencies": {
     "yaml": "2.9.0"

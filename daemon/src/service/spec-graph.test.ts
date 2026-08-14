@@ -430,31 +430,31 @@ describe("the remove door", () => {
 
   test("takes its own file and leaves the relation into it as history", async () => {
     const project = await newProject();
-    await node(project, "Requirement", "R-0001", REQUIREMENT_BODY);
-    await node(project, "AcceptanceCriterion", "AC-0001", CRITERION_BODY);
+    await node(project, "Goal", "G-0001", GOAL_BODY);
+    await node(project, "Question", "Q-0001", "## Question\n\nWhy?");
     await createSpecEdge({
       projectId: project.id,
-      type: "HAS_CRITERION",
-      fromId: "R-0001",
-      toId: "AC-0001",
+      type: "RAISES",
+      fromId: "G-0001",
+      toId: "Q-0001",
     });
     const referrer = path.join(
       project.path,
       ".shall",
       "spec",
       "intent",
-      "Requirement",
-      "R-0001.md",
+      "Goal",
+      "G-0001.md",
     );
     const before = await readFile(referrer, "utf8");
 
-    await removeSpecNode({ projectId: project.id, id: "AC-0001" });
+    await removeSpecNode({ projectId: project.id, id: "Q-0001" });
 
     // A deletion touches one file: the neighbour is byte-identical.
     assert.equal(await readFile(referrer, "utf8"), before);
     assert.deepEqual(
       (await listSpecNodes(project.id)).map((entry) => entry.id),
-      ["R-0001"],
+      ["G-0001"],
     );
     // The canvas gets no line to a box that is not there…
     assert.deepEqual(await listSpecEdges(project.id), []);
@@ -463,7 +463,7 @@ describe("the remove door", () => {
     assert.deepEqual(check.problems, []);
     assert.deepEqual(
       check.gaps.map((gap) => gap.file),
-      ["intent/Requirement/R-0001.md"],
+      ["intent/Goal/G-0001.md"],
     );
   });
 });
@@ -912,30 +912,24 @@ describe("checkSpec", () => {
     assert.equal(check.nodeCount, 2);
     assert.equal(check.edgeCount, 1);
     assert.deepEqual(check.problems, []);
-    assert.deepEqual(check.gaps, []);
     assert.deepEqual(check.notes, []);
   });
 
   test("a relation to an id nothing answers to is a gap, and the relation stays in the file", async () => {
+    // A Goal, because it is rootless: what this test watches is the missing
+    // target alone, with no orphan sentence of the source's own muddying it.
     const project = await newProject();
-    await node(project, "Requirement", "R-0001", REQUIREMENT_BODY);
-    await node(project, "AcceptanceCriterion", "AC-0001", CRITERION_BODY);
+    await node(project, "Goal", "G-0001", GOAL_BODY);
+    await node(project, "Question", "Q-0001", "## Question\n\nWhy?");
     await createSpecEdge({
       projectId: project.id,
-      type: "HAS_CRITERION",
-      fromId: "R-0001",
-      toId: "AC-0001",
+      type: "RAISES",
+      fromId: "G-0001",
+      toId: "Q-0001",
     });
     // The target's file goes the way no door sanctions — by hand.
     await rm(
-      path.join(
-        project.path,
-        ".shall",
-        "spec",
-        "intent",
-        "AcceptanceCriterion",
-        "AC-0001.md",
-      ),
+      path.join(project.path, ".shall", "spec", "intent", "Question", "Q-0001.md"),
     );
 
     const check = await checkSpec(project.path);
@@ -946,29 +940,42 @@ describe("checkSpec", () => {
     assert.deepEqual(check.problems, []);
     assert.deepEqual(check.gaps, [
       {
-        file: "intent/Requirement/R-0001.md",
+        file: "intent/Goal/G-0001.md",
         message:
-          "R-0001 has a HAS_CRITERION relation to AC-0001, and no file names AC-0001. The relation is kept as written, so writing or restoring AC-0001 attaches it again.",
+          "G-0001 has a RAISES relation to Q-0001, and no file names Q-0001. The relation is kept as written, so writing or restoring Q-0001 attaches it again.",
       },
     ]);
     // The line is still in the source file, exactly as it was written.
     assert.ok(
       (
         await readFile(
-          path.join(
-            project.path,
-            ".shall",
-            "spec",
-            "intent",
-            "Requirement",
-            "R-0001.md",
-          ),
+          path.join(project.path, ".shall", "spec", "intent", "Goal", "G-0001.md"),
           "utf8",
         )
-      ).includes("to: AC-0001"),
+      ).includes("to: Q-0001"),
     );
     // The canvas is not asked to draw a line to a box that is not there.
     assert.deepEqual(await listSpecEdges(project.id), []);
+  });
+
+  test("a node no live anchor reaches is a gap the check names", async () => {
+    const project = await newProject();
+    await node(project, "Requirement", "R-0001", REQUIREMENT_BODY);
+
+    const check = await checkSpec(project.path);
+    // A gap and not a problem: the node is in the count, the file is fine,
+    // and the graph does not hold until something reaches it. This is
+    // deliberate pressure on a spec mid-authoring — the chain bottoms out at
+    // a Goal, and the check fails until it does.
+    assert.equal(check.nodeCount, 1);
+    assert.deepEqual(check.problems, []);
+    assert.deepEqual(check.gaps, [
+      {
+        file: "intent/Requirement/R-0001.md",
+        message:
+          "R-0001 is a Requirement with no live anchor — it is held to the graph by a REQUIRES relation into it, and none stands. Draw the relation, or remove the node.",
+      },
+    ]);
   });
 });
 
