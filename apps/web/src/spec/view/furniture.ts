@@ -41,6 +41,21 @@ import type { Band, SpecNode } from "./model";
  */
 
 /**
+ * THE DAEMON'S VERDICT ON ONE NODE, AS A WORD.
+ *
+ * THE CARD CARRIES THE WORD AND NEVER A PAINT CLASS, which is this folder's rule
+ * arriving at the review surface: no colour travels as data, so `bg-red-500`
+ * would be exactly the hex-in-a-pure-module the note at the top of this file
+ * rules out. The class map lives in `review-parts.tsx`, next to the components
+ * that paint, and `view/` stays paint-free.
+ *
+ * It is the same three words `core/arith/color.ts` decides between, and
+ * `signalsOf` in `spec/review.ts` is the one line where the two unions are made
+ * to agree.
+ */
+export type Signal = "red" | "yellow" | "green";
+
+/**
  * What one card is drawn from.
  *
  * THE CARD'S WHOLE STATE IS THREE BOOLEANS, AND THEY ARE THE SELECTION'S — the
@@ -60,6 +75,16 @@ import type { Band, SpecNode } from "./model";
  */
 export type CardNodeData = {
   readonly node: SpecNode;
+  /**
+   * The verdict the card's square wears, and `null` for a node that has none.
+   *
+   * REQUIRED AND NULLABLE, never optional: under `exactOptionalPropertyTypes` an
+   * absent field and a field holding nothing are different asks, and this is the
+   * second — every card answers the question, and `null` is one of the answers.
+   * The execution band is outside the colour vocabulary altogether, so its cards
+   * draw no dot at all.
+   */
+  readonly signal: Signal | null;
   /** The node that was clicked — one card on the board, or none. */
   readonly picked: boolean;
   /** One hop from the picked card, whichever way the relation points. */
@@ -482,15 +507,18 @@ export function furniturePieces(layout: Layout): FurniturePiece[] {
  * different one would light a card the neighbourhood was not computed for. One
  * argument, one answer — `NOTHING_SELECTED` is how a caller says nobody clicked.
  *
- * IT IS THE ONE INPUT `furniturePieces` DOES NOT TAKE, and that asymmetry is the
- * point of having two builders: the scenery is a function of the layout alone and
- * memoises on it, so a click rebuilds the cards and leaves all fifty bands, lanes
- * and headers as the objects React Flow already holds.
+ * NEITHER IT NOR THE SIGNAL MAP REACHES `furniturePieces`, and that asymmetry is
+ * the point of having two builders: the scenery is a function of the layout alone
+ * and memoises on it, so a click — or a refetched review — rebuilds the cards and
+ * leaves all fifty bands, lanes and headers as the objects React Flow already
+ * holds. Both arrive as maps the caller memoises for the same reason the layout
+ * is memoised: a new map is fifty new card objects.
  */
 export function cardPieces(
   layout: Layout,
   view: SpecView,
   byId: ReadonlyMap<string, SpecNode>,
+  signalById: ReadonlyMap<string, Signal>,
   highlight: Highlight,
 ): CardPiece[] {
   const geometry = view === "grid" ? GEOMETRY.grid : GEOMETRY.graph;
@@ -510,6 +538,10 @@ export function cardPieces(
       measured: { width: geometry.cardWidth, height: geometry.cardHeight },
       data: {
         node,
+        // A NODE WITH NO ENTRY HAS NO VERDICT, and that is the review's own
+        // answer rather than a gap in it: nothing here decides which band a node
+        // is in, so a card the daemon did not colour draws no square.
+        signal: signalById.get(node.id) ?? null,
         // The three questions the highlight answers, asked once per card here so
         // that no component has to know how membership is decided. `dimmed` is
         // the complement of the neighbourhood and not of the two flags above it:

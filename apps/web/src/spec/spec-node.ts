@@ -19,7 +19,17 @@ export type { SpecEdge, SpecNode } from "@shall/core/graph";
  * It is deliberately not stable across machines, which is why it is here and not
  * in the pure `view/` folder: everything there must draw the same picture
  * everywhere, and this is the opposite promise.
+ *
+ * IT TAKES EITHER SPELLING OF AN INSTANT, because the two the daemon serves are
+ * both moments to whoever is reading them: a file's mtime is a number, an
+ * approval's `at` is ISO 8601, and one function is all the rule there is.
+ *
+ * A DATE THAT WILL NOT PARSE IS PRINTED AS THE TEXT IT WAS. `toLocaleString` on
+ * an unparseable value says "Invalid Date", which tells the reader nothing and
+ * hides the one thing that would: what the file actually holds. A stamp somebody
+ * can check against the file is worth more than a sentence saying it is broken.
  */
-export function formatTimestamp(timestamp: number): string {
-  return new Date(timestamp).toLocaleString();
+export function formatStamp(at: number | string): string {
+  const date = new Date(at);
+  return Number.isNaN(date.getTime()) ? String(at) : date.toLocaleString();
 }

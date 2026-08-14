@@ -44,6 +44,7 @@ import {
   cardPieces,
   furniturePieces,
   graphIdOfCard,
+  type Signal,
 } from "./view/furniture";
 import { highlightFor } from "./view/highlight";
 import {
@@ -102,6 +103,16 @@ interface SpecGraphProps {
   view: "grid" | "graph";
   nodes: SpecNode[];
   edges: SpecEdge[];
+  /**
+   * The daemon's verdict per node, for the square on each card. A node with no
+   * entry has none and draws none — see `cardPieces`.
+   *
+   * IT ARRIVES MEMOISED FROM THE PLANE, which is not a preference: it is a
+   * dependency of the `cards` memo below, so a map rebuilt on every render of the
+   * plane would rebuild every card object and take React Flow's per-node rebuild
+   * arm for a board nothing changed on.
+   */
+  signalById: ReadonlyMap<string, Signal>;
   selectedId: string | null;
   onSelect: (id: string) => void;
   /**
@@ -155,6 +166,7 @@ export function SpecGraph({
   view,
   nodes,
   edges,
+  signalById,
   selectedId,
   onSelect,
   onBackgroundClick,
@@ -240,10 +252,10 @@ export function SpecGraph({
     [edges, selectedId],
   );
 
-  /** The cards, which are the same call plus the one thing that changes on a click. */
+  /** The cards, which are the same call plus the two things a click or a refetch moves. */
   const cards = useMemo(
-    () => cardPieces(layout, view, byId, highlight),
-    [layout, view, byId, highlight],
+    () => cardPieces(layout, view, byId, signalById, highlight),
+    [layout, view, byId, signalById, highlight],
   );
 
   const flowNodes = useMemo<CanvasNode[]>(
