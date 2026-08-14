@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash, createHmac } from "node:crypto";
 import {
   chmod,
   mkdir,
@@ -15,14 +16,24 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, describe, test } from "node:test";
 import { TEXT_BYTE_CAP } from "../graph/index.js";
-import { emitScaffold, isCanonical } from "../serialize/index.js";
+import {
+  approvalPayload,
+  blocksOf,
+  emitNodeFile,
+  emitScaffold,
+  isCanonical,
+} from "../serialize/index.js";
 import {
   addEdge,
+  approveNodeFile,
+  clearDeletionProposal,
   createNodeFile,
   deleteNodeFile,
   isStoreRefusal,
   loadGraph,
   removeEdge,
+  restoreNodeFile,
+  revertNodeFile,
   scaffoldNodeFile,
   updateNodeFile,
   type FileProblem,
@@ -1755,6 +1766,319 @@ describe("writes go through the queue one at a time", () => {
     assert.deepEqual(
       graph.nodes.map((node) => node.id),
       ["G-0001", "G-0002"],
+    );
+  });
+});
+
+/**
+ * THE APPROVAL DOOR SIGNS WHAT IT WRITES. The signer is the daemon's — core
+ * has no key — so these tests bring their own, a real HMAC over a test secret,
+ * because the claims here are about WHAT is signed and WHEN: the payload of
+ * the bytes that land, computed inside the same queue turn that lands them.
+ */
+describe("the approval door", () => {
+  const signer = {
+    hash: (payload: string) =>
+      `sha256:${createHash("sha256").update(payload, "utf8").digest("hex")}`,
+    sign: (hash: string) =>
+      `hmac:${createHmac("sha256", "a-test-key").update(hash, "utf8").digest("hex")}`,
+    by: "tester",
+    at: "2026-08-15T00:00:00.000Z",
+  };
+  const requirementValues = {
+    shortName: "r",
+    name: "R",
+    body: "## Statement\n\nThe system shall do the thing.",
+  };
+  const criterionValues = {
+    shortName: "ac",
+    name: "AC",
+    body: "## Statement\n\nThe thing happened.",
+  };
+
+  test("signs the file it is about to write, so the hash is the hash of what lands", async () => {
+    const specDir = await makeSpecDir();
+    await createNodeFile(specDir, "Requirement", "R-0001", requirementValues);
+    await createNodeFile(specDir, "AcceptanceCriterion", "AC-0001", criterionValues);
+    await addEdge(specDir, { fromId: "R-0001", type: "HAS_CRITERION", toId: "AC-0001" });
+
+    const approved = await approveNodeFile(specDir, "R-0001", signer);
+    assert.equal(approved.approval?.by, "tester");
+    assert.equal(approved.approval?.at, "2026-08-15T00:00:00.000Z");
+
+    // The file on disk is canonical, and its own bytes are what the hash fits:
+    // recomputing the payload from the loaded graph lands on the stored hash.
+    const text = await readFile(
+      path.join(specDir, "intent/Requirement/R-0001.md"),
+      "utf8",
+    );
+    assert.ok(isCanonical("Requirement", "R-0001.md", text));
+    const graph = await loadGraph(specDir);
+    const node = graph.nodes.find((entry) => entry.id === "R-0001");
+    assert.ok(node !== undefined && node.approval !== undefined);
+    const payload = approvalPayload(
+      "Requirement",
+      "R-0001",
+      node,
+      graph.edges.filter((edge) => edge.fromId === "R-0001"),
+      blocksOf(node),
+    );
+    assert.equal(node.approval.hash, signer.hash(payload));
+    assert.equal(node.approval.tag, signer.sign(node.approval.hash));
+  });
+
+  test("a second approval overwrites the block rather than adding one", async () => {
+    const specDir = await makeSpecDir();
+    await createNodeFile(specDir, "Requirement", "R-0001", requirementValues);
+    await approveNodeFile(specDir, "R-0001", signer);
+    await approveNodeFile(specDir, "R-0001", {
+      ...signer,
+      at: "2027-01-01T00:00:00.000Z",
+    });
+
+    const text = await readFile(
+      path.join(specDir, "intent/Requirement/R-0001.md"),
+      "utf8",
+    );
+    assert.equal(text.split("approval:").length, 2, text);
+    assert.ok(text.includes('at: "2027-01-01T00:00:00.000Z"'), text);
+    assert.ok(!text.includes("2026-08-15"), text);
+  });
+
+  test("an edit keeps the block and loses the fit", async () => {
+    const specDir = await makeSpecDir();
+    await createNodeFile(specDir, "Requirement", "R-0001", requirementValues);
+    const approved = await approveNodeFile(specDir, "R-0001", signer);
+
+    await updateNodeFile(specDir, "R-0001", {
+      ...requirementValues,
+      body: "## Statement\n\nThe system shall do the OTHER thing.",
+    });
+
+    const graph = await loadGraph(specDir);
+    const node = graph.nodes.find((entry) => entry.id === "R-0001");
+    // The block rides through the save byte for byte…
+    assert.deepEqual(node?.approval, approved.approval);
+    // …and the arithmetic is what notices it no longer fits.
+    assert.ok(node !== undefined && node.approval !== undefined);
+    const payload = approvalPayload(
+      "Requirement",
+      "R-0001",
+      node,
+      [],
+      blocksOf(node),
+    );
+    assert.notEqual(node.approval.hash, signer.hash(payload));
+  });
+
+  test("a relation added to an approved node keeps its block", async () => {
+    const specDir = await makeSpecDir();
+    await createNodeFile(specDir, "Requirement", "R-0001", requirementValues);
+    await createNodeFile(specDir, "AcceptanceCriterion", "AC-0001", criterionValues);
+    const approved = await approveNodeFile(specDir, "R-0001", signer);
+
+    await addEdge(specDir, { fromId: "R-0001", type: "HAS_CRITERION", toId: "AC-0001" });
+
+    const graph = await loadGraph(specDir);
+    const node = graph.nodes.find((entry) => entry.id === "R-0001");
+    assert.deepEqual(node?.approval, approved.approval);
+  });
+
+  test("an approval over a file that will not parse is refused in that file's own sentence", async () => {
+    const specDir = await makeSpecDir();
+    await place(specDir, "intent/Requirement/R-0001.md", "just some notes\n");
+    assert.deepEqual(await refusal(() => approveNodeFile(specDir, "R-0001", signer)), {
+      kind: "conflict",
+      message:
+        'intent/Requirement/R-0001.md has been edited into a state Shall cannot read — R-0001.md does not begin with a "---" frontmatter block, so it cannot be read as a spec node. Nothing was written, so that edit is still there to fix.',
+    });
+  });
+
+  test("an id nothing answers to is refused before anything is read", async () => {
+    const specDir = await makeSpecDir();
+    assert.deepEqual(await refusal(() => approveNodeFile(specDir, "R-9999", signer)), {
+      kind: "missing",
+      message: "Unknown node: R-9999",
+    });
+  });
+
+  test("a proposal is cleared without moving anything else in the file", async () => {
+    const specDir = await makeSpecDir();
+    // Signed clean, then proposed over — the way an agent actually does it.
+    const payload = approvalPayload(
+      "Requirement",
+      "R-0001",
+      requirementValues,
+      [],
+      {},
+    );
+    const hash = signer.hash(payload);
+    const approval = {
+      hash,
+      tag: signer.sign(hash),
+      by: "tester",
+      at: "2026-08-15T00:00:00.000Z",
+    };
+    await place(
+      specDir,
+      "intent/Requirement/R-0001.md",
+      emitNodeFile("Requirement", requirementValues, [], {
+        approval,
+        deletionProposed: { by: "session-7", rationale: "Superseded." },
+      }),
+    );
+
+    const cleared = await clearDeletionProposal(specDir, "R-0001");
+    assert.equal("deletionProposed" in cleared, false);
+    // The proposal sat inside the payload, so with it gone the old signature
+    // fits the file again — rejection restores green without a second write.
+    const text = await readFile(
+      path.join(specDir, "intent/Requirement/R-0001.md"),
+      "utf8",
+    );
+    assert.equal(
+      text,
+      emitNodeFile("Requirement", requirementValues, [], { approval }),
+    );
+    assert.equal(
+      approval.hash,
+      signer.hash(
+        approvalPayload("Requirement", "R-0001", requirementValues, [], {}),
+      ),
+    );
+  });
+
+  test("clearing a proposal that is not there is refused", async () => {
+    const specDir = await makeSpecDir();
+    await createNodeFile(specDir, "Requirement", "R-0001", requirementValues);
+    assert.deepEqual(await refusal(() => clearDeletionProposal(specDir, "R-0001")), {
+      kind: "invalid",
+      message: "R-0001 carries no proposed deletion, so there is nothing to reject.",
+    });
+  });
+});
+
+/**
+ * THE RESTORE DOOR IS THE FAR END OF GIT. The daemon reads bytes out of
+ * history and hands the parts here, so a restore is a write like any other —
+ * queued, judged at read-back, landed by rename — and these tests need no
+ * repository at all.
+ */
+describe("the restore door", () => {
+  const requirementValues = {
+    shortName: "r",
+    name: "R",
+    body: "## Statement\n\nThe system shall do the thing.",
+  };
+
+  test("a restore writes the node back at its own path, canonically, blocks and all", async () => {
+    const specDir = await makeSpecDir();
+    const approval = {
+      hash: "sha256:1234",
+      tag: "hmac:5678",
+      by: "tester",
+      at: "2026-08-15T00:00:00.000Z",
+    };
+    const restored = await restoreNodeFile(
+      specDir,
+      "Requirement",
+      "R-0001",
+      requirementValues,
+      [{ type: "MENTIONS", toId: "T-0009" }],
+      { approval },
+    );
+    assert.equal(restored.id, "R-0001");
+    assert.deepEqual(restored.approval, approval);
+
+    const text = await readFile(
+      path.join(specDir, "intent/Requirement/R-0001.md"),
+      "utf8",
+    );
+    assert.ok(isCanonical("Requirement", "R-0001.md", text));
+    // The dangling relation is restored as written: it is the healing the
+    // loader's kept-line rule promises, run in the other direction.
+    assert.ok(text.includes("to: T-0009"), text);
+  });
+
+  test("a restore refuses a node already standing", async () => {
+    const specDir = await makeSpecDir();
+    await createNodeFile(specDir, "Requirement", "R-0001", requirementValues);
+    assert.deepEqual(
+      await refusal(() =>
+        restoreNodeFile(specDir, "Requirement", "R-0001", requirementValues, [], {}),
+      ),
+      {
+        kind: "conflict",
+        message:
+          "R-0001 is already on disk at intent/Requirement/R-0001.md, so there is nothing to restore.",
+      },
+    );
+  });
+
+  test("a restore refuses an id another type already holds", async () => {
+    const specDir = await makeSpecDir();
+    await createNodeFile(specDir, "Goal", "X-0001", {
+      shortName: "g",
+      name: "G",
+      body: "The thing is worth doing.",
+    });
+    assert.deepEqual(
+      await refusal(() =>
+        restoreNodeFile(specDir, "Requirement", "X-0001", requirementValues, [], {}),
+      ),
+      {
+        kind: "conflict",
+        message:
+          "X-0001 is on disk as a Goal at intent/Goal/X-0001.md, so the Requirement git holds cannot be restored under that id.",
+      },
+    );
+  });
+
+  test("a revert replaces the whole file, blocks and all", async () => {
+    const specDir = await makeSpecDir();
+    await createNodeFile(specDir, "Requirement", "R-0001", requirementValues);
+    await updateNodeFile(specDir, "R-0001", {
+      ...requirementValues,
+      body: "## Statement\n\nEdited past the signature.",
+    });
+    const approval = {
+      hash: "sha256:1234",
+      tag: "hmac:5678",
+      by: "tester",
+      at: "2026-08-15T00:00:00.000Z",
+    };
+    const reverted = await revertNodeFile(specDir, "R-0001", requirementValues, [], {
+      approval,
+    });
+    assert.deepEqual(reverted.approval, approval);
+    assert.equal(
+      await readFile(path.join(specDir, "intent/Requirement/R-0001.md"), "utf8"),
+      emitNodeFile("Requirement", requirementValues, [], { approval }),
+    );
+  });
+
+  test("a revert of an id nothing answers to is refused", async () => {
+    const specDir = await makeSpecDir();
+    assert.deepEqual(
+      await refusal(() =>
+        revertNodeFile(specDir, "R-0001", requirementValues, [], {}),
+      ),
+      { kind: "missing", message: "Unknown node: R-0001" },
+    );
+  });
+
+  test("a restore refuses an id that differs from a standing one only in case", async () => {
+    const specDir = await makeSpecDir();
+    await createNodeFile(specDir, "Requirement", "R-0001", requirementValues);
+    assert.deepEqual(
+      await refusal(() =>
+        restoreNodeFile(specDir, "Requirement", "r-0001", requirementValues, [], {}),
+      ),
+      {
+        kind: "conflict",
+        message:
+          "r-0001 differs only in case from R-0001, and two such files cannot sit side by side on every filesystem. Nothing was restored.",
+      },
     );
   });
 });

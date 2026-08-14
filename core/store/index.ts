@@ -12,16 +12,22 @@
  */
 export {
   addEdge,
+  approveNodeFile,
+  clearDeletionProposal,
   createNodeFile,
   deleteNodeFile,
+  describeFailure as describeFileFailure,
   isStoreRefusal,
   loadGraph,
   removeEdge,
+  restoreNodeFile,
+  revertNodeFile,
   scaffoldNodeFile,
   StoreRefusal,
   updateNodeFile,
 } from "./file-store.js";
 export type {
+  ApprovalSigner,
   FileProblem,
   RefusalKind,
   RefusedFile,
