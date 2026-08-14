@@ -9,7 +9,7 @@ import {
   permittedEdgeTypes,
 } from "@shall/core/graph";
 import { isCanonical } from "@shall/core/serialize";
-import type { FileProblem } from "@shall/core/store";
+import type { FileProblem, SpecGraph } from "@shall/core/store";
 import {
   addEdge,
   createNodeFile,
@@ -206,8 +206,23 @@ export async function removeSpecNode(input: {
   await served(deleteNodeFile(await specDirFor(input.projectId), id));
 }
 
+/**
+ * The relations both of whose ends the loader served as nodes.
+ *
+ * A dangling relation — kept in its file as the history of a deletion and the
+ * clue for a re-anchor — is the check's business and the review's; the canvas
+ * draws boxes and lines, and a line to a box that is not there is not a
+ * drawing.
+ */
+function liveEdges(graph: SpecGraph): SpecEdge[] {
+  const living = new Set(graph.nodes.map((node) => node.id));
+  return graph.edges.filter(
+    (edge) => living.has(edge.fromId) && living.has(edge.toId),
+  );
+}
+
 export async function listSpecEdges(projectId: string): Promise<SpecEdge[]> {
-  return (await loadGraph(await specDirFor(projectId))).edges;
+  return liveEdges(await loadGraph(await specDirFor(projectId)));
 }
 
 /**
@@ -371,12 +386,13 @@ export async function scaffoldSpecNode(input: {
   };
 }
 
-/** What a check found: how big the graph is, what it refused, and what it merely noticed. */
+/** What a check found: how big the graph is, what it refused, where it does not hold, and what it merely noticed. */
 export interface SpecCheck {
   root: string;
   nodeCount: number;
   edgeCount: number;
   problems: FileProblem[];
+  gaps: FileProblem[];
   notes: FileProblem[];
 }
 
@@ -390,12 +406,20 @@ export interface SpecCheck {
  * so the project is found by walking up from the path, the way `git` finds its
  * own root.
  *
- * TWO LISTS, AND THE DIFFERENCE IS WHAT IT COSTS. A problem is a file left out
- * of the graph: something in it is wrong and the graph is smaller than the
- * folder until somebody fixes it. A note is a file that reads perfectly well and
- * is not written the way Shall writes it — comments, another quoting style, keys
- * in another order — all of which the next save from the panel will rewrite
- * away. Nobody should learn that from a diff they did not expect.
+ * THREE LISTS, AND THE DIFFERENCE IS WHAT EACH COSTS. A problem is a file left
+ * out of the graph: something in it is wrong and the graph is smaller than the
+ * folder until somebody fixes it. A gap is a hole the graph holds while every
+ * file reads — a relation kept toward an id nothing answers to — so the node is
+ * still in the count and the graph still does not hold together until somebody
+ * restores the missing file or re-anchors the survivor. A note is a file that
+ * reads perfectly well and is not written the way Shall writes it — comments,
+ * another quoting style, keys in another order — all of which the next save
+ * from the panel will rewrite away. Nobody should learn that from a diff they
+ * did not expect.
+ *
+ * Problems and gaps both fail the check, and that is deliberate pressure: a
+ * spec mid-authoring exits 1 until its holes close, which is the check doing
+ * its job and not a severity to demote.
  */
 export async function checkSpec(startPath: string): Promise<SpecCheck> {
   const root = await findProjectRootAbove(startPath);
@@ -407,6 +431,25 @@ export async function checkSpec(startPath: string): Promise<SpecCheck> {
 
   const specDir = getProjectSpecPath(root);
   const graph = await loadGraph(specDir);
+
+  // The gaps: every relation kept toward an id no file answers to, filed under
+  // the file that carries the line — that is where the fix happens, whether it
+  // is a restore of the target or a re-anchor of this node. The source of an
+  // edge is always a living node, because a refused file contributes no edges.
+  const living = new Set(graph.nodes.map((node) => node.id));
+  const typeById = new Map(graph.nodes.map((node) => [node.id, node.type]));
+  const gaps: FileProblem[] = [];
+  for (const edge of graph.edges) {
+    if (living.has(edge.toId)) {
+      continue;
+    }
+    const fromType = typeById.get(edge.fromId) ?? "?";
+    gaps.push({
+      file: `${bandFolderOf(fromType) ?? "?"}/${fromType}/${edge.fromId}.md`,
+      message: `${edge.fromId} has a ${edge.type} relation to ${edge.toId}, and no file names ${edge.toId}. The relation is kept as written, so writing or restoring ${edge.toId} attaches it again.`,
+    });
+  }
+  gaps.sort((a, b) => (a.file === b.file ? 0 : a.file < b.file ? -1 : 1));
 
   // Only the files that already read as nodes are asked. A file with a problem
   // is not also un-canonical: it has a louder thing wrong with it, and a person
@@ -433,8 +476,11 @@ export async function checkSpec(startPath: string): Promise<SpecCheck> {
   return {
     root,
     nodeCount: graph.nodes.length,
-    edgeCount: graph.edges.length,
+    // The live relations — a dangling line is a gap above, not a thing the
+    // count-line claims the graph holds.
+    edgeCount: liveEdges(graph).length,
     problems: graph.problems,
+    gaps,
     notes,
   };
 }

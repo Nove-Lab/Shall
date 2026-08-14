@@ -215,12 +215,15 @@ function count(amount: number, one: string, many: string): string {
  * `shall check` — the compiler an agent writing spec files by hand compiles
  * against.
  *
- * Two lists arrive and both are printed as `file — sentence`, because both are
- * about a file and the sentence already says which kind it is. Only problems
- * decide the exit code: a problem is a file left out of the graph, which is work
- * still to do, while a note is a file that reads perfectly well and merely is
- * not written the way Shall writes it. Failing a build over the second would
- * teach agents to reformat files that were never wrong.
+ * Three lists arrive and all are printed as `file — sentence`, because each is
+ * about a file and the sentence already says which kind it is. A problem is a
+ * file the graph could not take; a gap is a hole the graph holds while every
+ * file reads — a relation kept toward an id nothing answers to, a node no live
+ * anchor reaches; a note is a file that reads perfectly well and merely is not
+ * written the way Shall writes it. Problems and gaps decide the exit code, and
+ * a spec mid-authoring therefore fails until its holes close — deliberate
+ * pressure, not a severity to demote. Failing a build over a note would teach
+ * agents to reformat files that were never wrong.
  *
  * The count goes first even when something is broken, because what a problem
  * costs is exactly the difference between the folder and this number.
@@ -238,11 +241,14 @@ async function check(url: string): Promise<void> {
   for (const problem of result.problems) {
     console.log(`${problem.file} — ${problem.message}`);
   }
+  for (const gap of result.gaps) {
+    console.log(`${gap.file} — ${gap.message}`);
+  }
   for (const note of result.notes) {
     console.log(`${note.file} — ${note.message}`);
   }
 
-  if (result.problems.length > 0) {
+  if (result.problems.length + result.gaps.length > 0) {
     process.exitCode = 1;
   }
 }

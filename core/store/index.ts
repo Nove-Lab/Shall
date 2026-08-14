@@ -24,6 +24,7 @@ export {
 export type {
   FileProblem,
   RefusalKind,
+  RefusedFile,
   ScaffoldedNode,
   SpecGraph,
 } from "./file-store.js";
