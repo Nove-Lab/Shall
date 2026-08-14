@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { getRequestListener } from "@hono/node-server";
 import httpProxy from "http-proxy";
 import { createApp } from "./http/app.js";
+import { ensureApprovalKey } from "./host/approval-key.js";
 import { writeSharedTemplates } from "./host/project-files.js";
 import {
   ensureShallHome,
@@ -19,6 +20,10 @@ await ensureShallHome();
 // reads them from `~/.shall/templates` without ever opening a project in the
 // UI, so the daemon's start is the one moment that reliably precedes that.
 await writeSharedTemplates().catch(() => undefined);
+// The approval key, minted before the first approve could ask for it. A start
+// that cannot write it is not a start that fails — the approve door says what
+// is wrong in its own sentence when the moment comes.
+await ensureApprovalKey().catch(() => undefined);
 const config = await readConfig();
 const bindHost =
   process.env.SHALL_HOST === "0.0.0.0" ? "0.0.0.0" : "127.0.0.1";
