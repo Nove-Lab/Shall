@@ -428,6 +428,16 @@ describe("the remove door", () => {
     );
   });
 
+  test("refuses the execution band, whose records are not unhappened", async () => {
+    const project = await newProject();
+    await node(project, "WorkLog", "WL-0001", "It went fine.");
+    await says(
+      removeSpecNode({ projectId: project.id, id: "WL-0001" }),
+      "invalid",
+      "WL-0001 is a WorkLog, and the execution band is append-only — what happened is not unhappened by deleting its record. Nothing was removed.",
+    );
+  });
+
   test("takes its own file and leaves the relation into it as history", async () => {
     const project = await newProject();
     await node(project, "Goal", "G-0001", GOAL_BODY);

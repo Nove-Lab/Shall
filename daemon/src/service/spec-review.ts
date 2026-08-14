@@ -10,6 +10,7 @@ import {
 import {
   approvalPayload,
   blocksOf,
+  emitNodeFile,
   parseNodeFile,
 } from "@shall/core/serialize";
 import {
@@ -119,11 +120,20 @@ function fileOf(node: Pick<SpecNode, "type" | "id">): string {
 }
 
 /**
- * The version of this node git still holds whose bytes the STANDING approval
- * hash fits — the approved version, found by arithmetic rather than by
- * bookkeeping: no commit is marked, no sha is stored, the signature itself
- * says which version it signs. Hashing needs no key, so this works on a
- * machine that could never verify the tag.
+ * The version of this node git still holds whose CONTENT the standing
+ * approval hash fits — found by arithmetic rather than by bookkeeping: no
+ * commit is marked, no sha is stored, the signature itself says which bytes
+ * it signs. Hashing needs no key, so this works on a machine that could
+ * never verify the tag.
+ *
+ * WHAT COMES BACK IS THE CONTENT AND NEVER THE MATCHED COMMIT'S BLOCKS. The
+ * payload leaves the approval block out, so a commit made BEFORE the person
+ * approved hashes identically to one made after — and with a daemon that
+ * never commits on its own, the commit-then-approve ordering is the ordinary
+ * one, which makes the newest match usually the PRE-approval bytes. A caller
+ * that took that version's blocks would erase the very signature this walk
+ * exists to honour; both callers below reattach the STANDING approval
+ * instead, which is the one on disk and the one whose hash was matched.
  *
  * The walk is capped at git-cli's fifty commits of the one file. Past that,
  * the honest answer is "git no longer holds it", and the panel falls back to
@@ -134,10 +144,9 @@ async function approvedVersionFor(
   specDir: string,
   node: SpecNode,
 ): Promise<{
-  text: string;
   values: { shortName: string; name: string; body: string };
   edges: readonly { type: string; toId: string }[];
-  blocks: ReturnType<typeof blocksOf>;
+  deletionProposed: SpecNode["deletionProposed"];
 } | null> {
   const approval = node.approval;
   if (approval === undefined) {
@@ -169,18 +178,35 @@ async function approvedVersionFor(
     );
     if (seal.hash(payload) === approval.hash) {
       return {
-        text,
         values: {
           shortName: reading.node.shortName,
           name: reading.node.name,
           body: reading.node.body,
         },
         edges: reading.edges,
-        blocks: blocksOf(reading.node),
+        // Inside the payload, so a match carries it faithfully — in practice
+        // always undefined, because the approve door refuses to sign over one.
+        deletionProposed: reading.node.deletionProposed,
       };
     }
   }
   return null;
+}
+
+/**
+ * The approved content as the file the approve WROTE: canonical bytes plus
+ * the standing signature. This is what the panel diffs against and what a
+ * rejection puts back — never the matched commit verbatim, for the reason
+ * `approvedVersionFor` states.
+ */
+function approvedFileOf(
+  node: SpecNode,
+  approved: NonNullable<Awaited<ReturnType<typeof approvedVersionFor>>>,
+): string {
+  return emitNodeFile(node.type, approved.values, approved.edges, {
+    deletionProposed: approved.deletionProposed,
+    approval: node.approval,
+  });
 }
 
 /**
@@ -286,13 +312,15 @@ export async function rejectSpecDeletion(input: {
   const approved = await approvedVersionFor(projectPath, specDir, node);
   if (approved !== null) {
     return served(
-      revertNodeFile(
-        specDir,
-        input.id,
-        approved.values,
-        approved.edges,
-        approved.blocks,
-      ),
+      revertNodeFile(specDir, input.id, approved.values, approved.edges, {
+        // THE STANDING SIGNATURE RIDES OVER THE HISTORICAL CONTENT. The
+        // matched commit usually predates the approve (the daemon never
+        // commits on its own), so its own frontmatter has no approval block —
+        // taking it verbatim would make a rejection destroy the very
+        // signature it exists to honour.
+        deletionProposed: approved.deletionProposed,
+        approval: node.approval,
+      }),
     );
   }
   return served(clearDeletionProposal(specDir, input.id));
@@ -319,7 +347,12 @@ export async function readApprovedVersion(input: {
     throw missing(`Unknown node: ${input.id}`);
   }
   const approved = await approvedVersionFor(projectPath, specDir, node);
-  return { approved: approved === null ? null : approved.text, current };
+  return {
+    // The file as the approve wrote it — signature included — so the diff
+    // never shows the approval block as a change nobody made.
+    approved: approved === null ? null : approvedFileOf(node, approved),
+    current,
+  };
 }
 
 /**

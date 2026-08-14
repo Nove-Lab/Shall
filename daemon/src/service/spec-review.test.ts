@@ -392,6 +392,41 @@ describe("the deletion doors", () => {
     ]);
   });
 
+  test("rejecting over a commit made before the approval keeps the signature", async () => {
+    // The daemon never commits on its own, so commit-then-approve is the
+    // ordinary ordering — and the newest commit whose CONTENT the hash fits
+    // carries no approval block of its own. The rejection must reattach the
+    // STANDING signature rather than take that commit's frontmatter verbatim,
+    // or turning a proposal down would destroy the very approval it honours.
+    const project = await newProject();
+    await goal(project, "G-0001");
+    await commitSpec({ projectId: project.id, message: "Seal before approving" });
+    const approved = await approveSpecNode({ projectId: project.id, id: "G-0001" });
+    assert.ok(approved.approval !== undefined);
+
+    await writeFile(
+      specFile(project, "intent/Goal/G-0001.md"),
+      emitNodeFile(
+        "Goal",
+        { ...GOAL_VALUES, body: "Something else entirely." },
+        [],
+        {
+          approval: approved.approval,
+          deletionProposed: { by: "session-7", rationale: "Superseded." },
+        },
+      ),
+      "utf8",
+    );
+
+    const rejected = await rejectSpecDeletion({ projectId: project.id, id: "G-0001" });
+    assert.deepEqual(rejected.approval, approved.approval);
+    assert.equal(rejected.body, GOAL_VALUES.body);
+    const review = await reviewSpec(project.id);
+    assert.deepEqual(review.statuses, [
+      { id: "G-0001", color: "green", reason: "approved" },
+    ]);
+  });
+
   test("rejecting where nothing was proposed is refused", async () => {
     const project = await newProject();
     await goal(project, "G-0001");
@@ -566,6 +601,28 @@ describe("the git doors", () => {
     await writeFile(specFile(project, "intent/Goal/G-0001.md"), edited, "utf8");
 
     version = await readApprovedVersion({ projectId: project.id, id: "G-0001" });
+    assert.equal(version.approved, sealed);
+    assert.equal(version.current, edited);
+  });
+
+  test("the approved version is the file the approve wrote, even when the matching commit predates it", async () => {
+    const project = await newProject();
+    await goal(project, "G-0001");
+    await commitSpec({ projectId: project.id, message: "Seal before approving" });
+    await approveSpecNode({ projectId: project.id, id: "G-0001" });
+    const sealed = await readFile(
+      specFile(project, "intent/Goal/G-0001.md"),
+      "utf8",
+    );
+    const edited = sealed.replace(
+      "The spec travels with the repository.\n",
+      "The spec travels with the repository, always.\n",
+    );
+    await writeFile(specFile(project, "intent/Goal/G-0001.md"), edited, "utf8");
+
+    const version = await readApprovedVersion({ projectId: project.id, id: "G-0001" });
+    // Signature included: a diff against this never shows the approval block
+    // itself as a change nobody made.
     assert.equal(version.approved, sealed);
     assert.equal(version.current, edited);
   });

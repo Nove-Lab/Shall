@@ -11,6 +11,7 @@ import {
   anchorPhrase,
   bandOf,
   columnsInOrder,
+  isColored,
   nextIdSuggestion,
   sectionGuideFor,
   type Band,
@@ -101,6 +102,33 @@ function statusCopy(
   status: ReviewStatus,
   node: SpecNode,
 ): { title: string; body: string } | null {
+  // WHILE A DELETION IS PROPOSED THE BOX MUST NOT PROMISE WHAT IT SUPPRESSES.
+  // The diff and the Approve button both stand down then (the card above is
+  // the one open question), so a body saying "the lines below are what moved"
+  // would point at nothing, and "someone edited this node" would blame a
+  // person for the proposal sitting right above. One sentence, pointing up.
+  // An orphan's copy stays — the anchor is missing whatever else is asked.
+  if (node.deletionProposed !== undefined) {
+    switch (status.reason) {
+      case "unapproved":
+        return {
+          title: "Not approved",
+          body: "Nobody has approved this node yet, and an agent has proposed deleting it — the card above is the judgement to make first.",
+        };
+      case "forged":
+        return {
+          title: "Approval could not be verified",
+          body: "This node claims an approval this machine's key did not write, and an agent has proposed deleting it — the card above is the judgement to make first.",
+        };
+      case "changed":
+        return {
+          title: "Changed since it was approved",
+          body: "What changed is the deletion proposed above — judge it there. Rejecting it brings the approved version back.",
+        };
+      default:
+        break;
+    }
+  }
   switch (status.reason) {
     case "unapproved":
       return {
@@ -1014,16 +1042,22 @@ export function NodePanel({
             >
               Cancel
             </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              className="ml-auto"
-              disabled={busy}
-              onClick={() => setConfirmingDelete(true)}
-            >
-              <Trash2 />
-              Delete
-            </Button>
+            {/* THE EXECUTION BAND HAS NO DELETE, because those files record
+                what happened and a record's one legitimate end is a retention
+                sweep. The daemon refuses the call too — this only spares the
+                person a button whose every press is a sentence. */}
+            {node !== null && !isColored(node.type) ? null : (
+              <Button
+                type="button"
+                variant="destructive"
+                className="ml-auto"
+                disabled={busy}
+                onClick={() => setConfirmingDelete(true)}
+              >
+                <Trash2 />
+                Delete
+              </Button>
+            )}
           </>
         )}
       </div>
