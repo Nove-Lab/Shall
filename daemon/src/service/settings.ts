@@ -2,8 +2,8 @@ import { isProjectMetadata } from "./project-model.js";
 import { requireRegistryProject } from "./projects.js";
 import type { GlobalSettings, ProjectSettings } from "../types.js";
 import {
-  getProjectDatabasePath,
   getProjectShallPath,
+  getProjectSpecPath,
   readProjectMetadata,
   writeProjectMetadata,
 } from "../host/project-files.js";
@@ -60,7 +60,7 @@ export async function readProjectSettings(
     path: entry.path,
     schemaVersion: metadata.schemaVersion,
     shallPath: getProjectShallPath(entry.path),
-    databasePath: getProjectDatabasePath(entry.path),
+    specPath: getProjectSpecPath(entry.path),
   };
 }
 

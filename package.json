@@ -17,6 +17,7 @@
     "dev": "node scripts/dev.mjs",
     "build": "bun run build:core && bun run build:daemon && bun run build:cli && bun run --filter @shall/web build",
     "typecheck": "bun run build:core && bun run build:daemon && bun run build:cli && bun run --filter @shall/web typecheck",
+    "test": "bun run build:core && bun run --filter '*' test",
     "shall": "node client/cli/dist/main.js"
   },
   "devDependencies": {

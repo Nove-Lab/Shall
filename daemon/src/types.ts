@@ -50,5 +50,6 @@ export interface ProjectSettings {
   path: string;
   schemaVersion: number;
   shallPath: string;
-  databasePath: string;
+  /** Where the graph itself is: the committed markdown under `.shall/spec`. */
+  specPath: string;
 }

@@ -50,4 +50,7 @@ export {
 } from "./grammar.js";
 export type { EdgeTriple } from "./grammar.js";
 export type { SpecNode, SpecNodeValues } from "./node.js";
+export { formatEdgeId, parseEdgeId } from "./edge.js";
 export type { SpecEdge } from "./edge.js";
+export { judgeAttributes, judgeNodeId, judgeText } from "./validate.js";
+export type { AttributeJudgement, TextJudgement } from "./validate.js";

@@ -35,7 +35,7 @@ interface ProjectSettings {
   path: string;
   schemaVersion: number;
   shallPath: string;
-  databasePath: string;
+  specPath: string;
 }
 
 const GROUPS = [
@@ -295,7 +295,7 @@ export function SettingsScreen() {
                   label="Schema version"
                   value={String(settings.schemaVersion)}
                 />
-                <Fact label="Database" value={settings.databasePath} />
+                <Fact label="Spec folder" value={settings.specPath} />
               </Section>
 
               <div className="flex max-w-4xl items-center gap-3">

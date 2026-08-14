@@ -8,11 +8,13 @@ import {
 import type { RecentProject, RegistryProject } from "../types.js";
 import {
   assertDirectory,
+  ensureProjectSpec,
   getProjectMetadataPath,
   getProjectShallPath,
   pathExists,
   readProjectMetadata,
   writeProjectFiles,
+  writeTemplates,
 } from "../host/project-files.js";
 import { isShallHomePath } from "../host/shall-home.js";
 import {
@@ -69,6 +71,24 @@ export async function openProject(
   if (!isProjectMetadata(metadata)) {
     throw new Error(`Invalid Shall project: ${absolutePath}`);
   }
+
+  // A project arrives here from a git clone as often as from this machine's own
+  // `create`, and a clone carries neither an empty folder nor a guarantee that
+  // its templates came from this version of Shall. Both are cheap to settle and
+  // quiet when there is nothing to do: the spec folder is made if it is not
+  // there, and each template is compared before it is written, so opening a
+  // current project leaves `git status` exactly as it found it.
+  //
+  // NEITHER IS A CONDITION OF OPENING. Both are conveniences — the store makes
+  // a type folder on its first write anyway, and the templates are starting
+  // points a person copies — so a folder Shall may read but not write into (a
+  // read-only mount, a checkout owned by somebody else) opens and serves its
+  // graph rather than failing the click with an errno. Reading a project should
+  // never require the right to write to it.
+  await Promise.all([
+    ensureProjectSpec(absolutePath).catch(() => undefined),
+    writeTemplates(absolutePath).catch(() => undefined),
+  ]);
 
   const project = toRegistryProject(absolutePath, metadata);
   await upsertRegistryProject(project);
