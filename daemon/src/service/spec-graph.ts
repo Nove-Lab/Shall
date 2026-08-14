@@ -3,6 +3,7 @@ import type { SpecEdge, SpecNode } from "@shall/core/graph";
 import {
   anchorPhrase,
   bandFolderOf,
+  bandOf,
   isNodeType,
   isPermittedTriple,
   judgeNodeId,
@@ -215,13 +216,27 @@ export async function updateSpecNode(input: {
  * files, which stay exactly as their authors left them — the history of the
  * deletion, and the address a restore comes back to. The dialog says so before
  * the person confirms, and names how many lines are about to point at a hole.
+ *
+ * THE EXECUTION BAND IS NOT DELETED FROM AT ALL. Those files record what
+ * happened, and a record's one legitimate end is a retention sweep, not a
+ * button — so the door refuses by band, whether or not the file parses.
  */
 export async function removeSpecNode(input: {
   projectId: string;
   id: string;
 }): Promise<void> {
   const id = requireText("An id", input.id);
-  await served(deleteNodeFile(await specDirFor(input.projectId), id));
+  const specDir = await specDirFor(input.projectId);
+  const graph = await loadGraph(specDir);
+  const held =
+    graph.nodes.find((node) => node.id === id) ??
+    graph.refused.find((entry) => entry.id === id);
+  if (held !== undefined && bandOf(held.type) === "Execution") {
+    throw invalid(
+      `${id} is a ${held.type}, and the execution band is append-only — what happened is not unhappened by deleting its record. Nothing was removed.`,
+    );
+  }
+  await served(deleteNodeFile(specDir, id));
 }
 
 /**
