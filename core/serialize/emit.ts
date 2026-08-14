@@ -1,4 +1,4 @@
-import { attributesFor } from "../graph/index.js";
+import { isNodeType } from "../graph/index.js";
 import { emitScalar } from "./scalar.js";
 
 /**
@@ -11,14 +11,17 @@ import { emitScalar } from "./scalar.js";
  * home, and a file that repeated one of them would be a second home that a
  * merge could set against the first.
  *
- * CANONICAL MEANS THERE IS EXACTLY ONE ANSWER. Keys in one order, edges in one
- * order, sections in one order, LF, no BOM, one trailing newline. Two people
- * who make the same edit produce the same bytes and therefore no conflict, and
- * a save from the panel that changed nothing produces a diff that says so.
+ * THE FRONTMATTER IS THE MACHINE'S AND THE BODY IS THE AUTHOR'S. Above the
+ * fence live the three facts the graph itself needs — the two names and the
+ * outgoing edges — written canonically: keys in one order, edges in one order,
+ * LF, no BOM, one trailing newline, so two people who make the same edit
+ * produce the same bytes and therefore no conflict. Below the fence is the
+ * specification as free markdown, and emit is the IDENTITY on it: whatever a
+ * person or an agent wrote is what the file carries, byte for byte.
  *
- * It is a pure function of the roster and the node: no clock, no filesystem, no
- * randomness, and no help from the `yaml` package, which reads these files and
- * never writes one.
+ * It is a pure function of the node: no clock, no filesystem, no randomness,
+ * and no help from the `yaml` package, which reads these files and never writes
+ * one.
  */
 
 /** The frontmatter fence, opening and closing, exactly three hyphens on a line. */
@@ -27,9 +30,10 @@ export const FENCE = "---";
 /**
  * The one place the wire name and the file name of this field differ.
  * `shortName` is what every layer above calls it — the panel, the tRPC
- * procedures, `SpecNode` — and `short_name` is what the file says, because the
- * other keys in that block are stored column names and those are snake_case
- * already. The translation happens here and in the parser, and nowhere else.
+ * procedures, `SpecNode` — and `short_name` is what the file says, because a
+ * file key is something a person types and snake_case is what the format has
+ * always used. The translation happens here and in the parser, and nowhere
+ * else.
  */
 export const SHORT_NAME_KEY = "short_name";
 
@@ -45,7 +49,7 @@ export const EDGES_KEY = "edges";
 export interface NodeFileFields {
   readonly shortName: string;
   readonly name: string;
-  readonly attributes: Readonly<Record<string, string>>;
+  readonly body: string;
 }
 
 /**
@@ -79,16 +83,9 @@ function byTypeThenTarget(a: NodeFileEdge, b: NodeFileEdge): number {
 /**
  * The file, whole, ending in exactly one newline.
  *
- * The roster decides everything: which keys the frontmatter carries and in what
- * order, and which attributes are sections in the body instead. A `line` or a
- * `choice` is one scalar so it goes above the fence; `prose` is a person's
- * paragraphs, which belong in markdown where they can be read and reviewed, so
- * it goes below as `## Label`. Nothing here holds a list of which is which.
- *
- * An unfilled slot is an ABSENT KEY, never a key with an empty value. Empty and
- * absent would then be two spellings of one state, and the first thing that
- * would go wrong is a required slot passing the door because it was written
- * down as nothing at all.
+ * An empty body is an ABSENT tail, never a blank line after the fence: empty
+ * and absent would then be two spellings of one state, and the file of a node
+ * with nothing to say should end where its facts end.
  *
  * It throws for a type outside the canon, which is the one thing it cannot
  * write around. That is a caller that never went through a door, so it is a
@@ -100,24 +97,13 @@ export function emitNodeFile(
   node: NodeFileFields,
   edges: readonly NodeFileEdge[],
 ): string {
-  const descriptors = attributesFor(type);
-  if (descriptors === null) {
+  if (!isNodeType(type)) {
     throw new Error(`Unknown node type: ${type}`);
   }
 
   const lines: string[] = [FENCE];
   lines.push(`${SHORT_NAME_KEY}: ${emitScalar(node.shortName)}`);
   lines.push(`${NAME_KEY}: ${emitScalar(node.name)}`);
-  for (const descriptor of descriptors) {
-    if (descriptor.kind === "prose") {
-      continue;
-    }
-    const value = node.attributes[descriptor.name];
-    if (value === undefined || value === "") {
-      continue;
-    }
-    lines.push(`${descriptor.name}: ${emitScalar(value)}`);
-  }
 
   // Omitted entirely when there are none, rather than written as an empty list:
   // a node with no relations should read as a node with nothing to say about
@@ -138,20 +124,15 @@ export function emitNodeFile(
 
   let text = `${lines.join("\n")}\n`;
 
-  // A blank line, the heading, a blank line, then the value exactly as it is
-  // stored, and one newline to end it. The blank lines are markdown's own
-  // paragraph separation, and the value is untouched: emit is the identity on
-  // prose, which is why a `## ` line inside a value is refused at the door
-  // rather than escaped here.
-  for (const descriptor of descriptors) {
-    if (descriptor.kind !== "prose") {
-      continue;
-    }
-    const value = node.attributes[descriptor.name];
-    if (value === undefined || value === "") {
-      continue;
-    }
-    text += `\n## ${descriptor.label}\n\n${value}\n`;
+  // A blank line, then the body exactly as it is stored, and one newline to end
+  // it. The blank line is markdown's own paragraph separation from the fence,
+  // and the body is untouched: emit is the identity on it, which is what makes
+  // "the file is the truth" literal — the bytes a person reads are the bytes
+  // the author wrote. The body's own edges were settled at the door (LF, no
+  // leading or trailing blank lines), so wrapping it in exactly one blank line
+  // and one newline re-reads as the same body.
+  if (node.body !== "") {
+    text += `\n${node.body}\n`;
   }
 
   return text;

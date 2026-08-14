@@ -1,11 +1,16 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { parseDocument } from "yaml";
-import { NODE_TYPES, attributesFor, type SpecEdge } from "../graph/index.js";
+import {
+  bandFolderOf,
+  NODE_TYPES,
+  sectionGuideFor,
+  type SpecEdge,
+} from "../graph/index.js";
 import { emitNodeFile } from "./emit.js";
 import { parseNodeFile } from "./parse.js";
 import { emitScalar, isPlainSafe } from "./scalar.js";
-import { emitTemplate } from "./template.js";
+import { emitScaffold, emitTemplate } from "./template.js";
 import { isCanonical } from "./index.js";
 
 /**
@@ -21,6 +26,17 @@ import { isCanonical } from "./index.js";
  * once against the `yaml` package itself: every emitted scalar is read back and
  * must equal the string that went in. The first check says the rule is what we
  * think it is; the second says the rule is true.
+ *
+ * THE BODY IS CHECKED AS BYTES AND NEVER AS SHAPE. The format used to cut the
+ * body into `## Label` sections and hold each one against a per-type roster, so
+ * most of what this file had to say about a body was which headings a type was
+ * allowed to write. There is no roster now: everything under the closing fence
+ * is ONE markdown document that the reader hands back verbatim. So the tests
+ * that used to name a refusal — an unknown heading, a paragraph before the
+ * first one, the same heading twice — are here inverted, and each one now
+ * asserts that the file reads cleanly and that the text landed in `body`
+ * unchanged. Those inversions are the record of the refactor: if one of them
+ * ever starts failing, the roster has grown back.
  */
 
 // Written as codes rather than as characters so that what this file says and
@@ -33,13 +49,12 @@ const DEL = String.fromCharCode(0x7f);
 const SPACE = " ";
 
 /**
- * What a `line` value may not hold — the class `core/graph/validate.ts` refuses,
- * built from character codes so that this file and that one can be read against
- * each other without trusting an editor to render six invisible characters.
+ * The two characters no text file can carry, written the same way and for the
+ * same reason. They are the whole of what `judgeBody` refuses besides the byte
+ * cap, so they are the whole of what a body test has to smuggle in.
  */
-const LINE_BREAK = new RegExp(
-  `[\\n\\r\\u000B\\u000C${NEXT_LINE}${LINE_SEPARATOR}${PARAGRAPH_SEPARATOR}]`,
-);
+const NUL = String.fromCharCode(0x00);
+const LONE_SURROGATE = String.fromCharCode(0xd800);
 
 /**
  * The reader, stated a second time on purpose. `parse.ts` fixes these options
@@ -246,11 +261,38 @@ describe("emitScalar", () => {
   });
 });
 
-/** The contract's own example, and the shape every other golden is read against. */
+/**
+ * The contract's own example: two names, two edges, and a body that happens to
+ * be shaped like the template a Scenario ships with. HAPPENS TO BE is the whole
+ * point — nothing checks these headings, and the same file with one heading
+ * renamed reads exactly as well.
+ *
+ * The body is written out twice, here and inside the file, because that is what
+ * a golden is: the second copy is the claim, and computing it from the first
+ * would be a test of string concatenation.
+ */
+const SCENARIO_BODY = `## Preconditions
+
+The cart holds at least one item and the shopper has a saved card.
+
+## Steps
+
+1. The shopper opens the cart and chooses 결제하기.
+2. The system charges the saved card.
+
+## Postconditions
+
+An order exists and the cart is empty.`;
+
+const SCENARIO_NODE = {
+  shortName: "checkout-happy",
+  name: "Checkout succeeds with a saved card",
+  body: SCENARIO_BODY,
+};
+
 const SCENARIO = `---
 short_name: checkout-happy
 name: Checkout succeeds with a saved card
-scenario_type: main
 edges:
   - type: HAS_CRITERION
     to: AC-0004
@@ -272,18 +314,84 @@ The cart holds at least one item and the shopper has a saved card.
 An order exists and the cart is empty.
 `;
 
-const SCENARIO_NODE = {
-  shortName: "checkout-happy",
-  name: "Checkout succeeds with a saved card",
-  attributes: {
-    scenario_type: "main",
-    preconditions:
-      "The cart holds at least one item and the shopper has a saved card.",
-    steps:
-      "1. The shopper opens the cart and chooses 결제하기.\n2. The system charges the saved card.",
-    postconditions: "An order exists and the cart is empty.",
-  },
+/** The fixture for every emit test that is about the frontmatter and not the body. */
+const REQUIREMENT_NODE = {
+  shortName: "id-door",
+  name: "The daemon refuses a malformed id",
+  body: "## Statement\n\nThe daemon refuses a malformed id.",
 };
+
+/**
+ * A node with nothing to say yet — which is a node, not a refusal. The file
+ * ends at the closing fence: no blank line, no trailing anything, because an
+ * empty body and an absent body would otherwise be two spellings of one state.
+ */
+const EMPTY_BODY = `---
+short_name: first
+name: The first commit
+---
+`;
+
+/**
+ * Every markdown shape the old roster had an opinion about, in one body: prose
+ * before the first heading, a heading no type ever carried, that heading a
+ * second time, a `---` rule that is not a fence, a table, a fenced code block
+ * whose contents include a `## ` line, and an indented code block at the end.
+ * Each of those was a refusal once; together they are now one document.
+ */
+const MOTLEY_BODY = `Some prose before any heading at all.
+
+## Definition
+
+A term, and then a rule.
+
+---
+
+## Definition
+
+The same heading twice, which markdown allows and the graph does not read.
+
+| column | column |
+| ------ | ------ |
+| a      | b      |
+
+\`\`\`ts
+const x = 1;
+## not a heading, and nothing here pretends otherwise
+\`\`\`
+
+    an indented code block
+    on two lines`;
+
+const MOTLEY = `---
+short_name: motley
+name: A body in every shape markdown has
+---
+
+Some prose before any heading at all.
+
+## Definition
+
+A term, and then a rule.
+
+---
+
+## Definition
+
+The same heading twice, which markdown allows and the graph does not read.
+
+| column | column |
+| ------ | ------ |
+| a      | b      |
+
+\`\`\`ts
+const x = 1;
+## not a heading, and nothing here pretends otherwise
+\`\`\`
+
+    an indented code block
+    on two lines
+`;
 
 describe("emitNodeFile", () => {
   test("writes the canonical file, byte for byte", () => {
@@ -296,8 +404,27 @@ describe("emitNodeFile", () => {
     );
   });
 
+  test("the body goes into the file exactly as it was handed over", () => {
+    // Emit is the IDENTITY on the body, and this is the golden that says so:
+    // headings, a horizontal rule, a table, a code fence with a `## ` line
+    // inside it and an indented block all land as themselves. Nothing here is
+    // escaped, renumbered or re-indented on the way out.
+    assert.equal(
+      emitNodeFile(
+        "Term",
+        {
+          shortName: "motley",
+          name: "A body in every shape markdown has",
+          body: MOTLEY_BODY,
+        },
+        [],
+      ),
+      MOTLEY,
+    );
+  });
+
   test("sorts edges by type and then by target, whatever order it is handed", () => {
-    const sorted = emitNodeFile("Requirement", MINIMAL_REQUIREMENT, [
+    const sorted = emitNodeFile("Requirement", REQUIREMENT_NODE, [
       { type: "MENTIONS", toId: "T-0002" },
       { type: "HAS_CRITERION", toId: "AC-0002" },
       { type: "MENTIONS", toId: "T-0001" },
@@ -308,9 +435,6 @@ describe("emitNodeFile", () => {
       `---
 short_name: id-door
 name: The daemon refuses a malformed id
-statement: The daemon refuses a malformed id.
-requirement_type: functional
-priority: high
 edges:
   - type: HAS_CRITERION
     to: AC-0001
@@ -322,9 +446,9 @@ edges:
     to: T-0002
 ---
 
-## Description
+## Statement
 
-Every door judges the id before it judges anything else.
+The daemon refuses a malformed id.
 `,
     );
   });
@@ -334,76 +458,45 @@ Every door judges the id before it judges anything else.
       { type: "MENTIONS", toId: "T-0002" },
       { type: "HAS_CRITERION", toId: "AC-0001" },
     ];
-    emitNodeFile("Requirement", MINIMAL_REQUIREMENT, edges);
+    emitNodeFile("Requirement", REQUIREMENT_NODE, edges);
     assert.equal(edges[0]?.type, "MENTIONS");
   });
 
   test("omits the edges key entirely when there are none", () => {
-    const text = emitNodeFile("Requirement", MINIMAL_REQUIREMENT, []);
+    const text = emitNodeFile("Requirement", REQUIREMENT_NODE, []);
     assert.equal(text.includes("edges"), false);
   });
 
-  test("a node with no filled prose ends at the closing fence", () => {
-    const text = emitNodeFile(
-      "Commit",
-      { shortName: "first", name: "The first commit", attributes: { sha: "0x1A" } },
-      [],
-    );
+  test("a node with nothing to say ends at the closing fence", () => {
     assert.equal(
-      text,
-      `---
-short_name: first
-name: The first commit
-sha: "0x1A"
----
-`,
+      emitNodeFile(
+        "Commit",
+        { shortName: "first", name: "The first commit", body: "" },
+        [],
+      ),
+      EMPTY_BODY,
     );
-  });
-
-  test("an unfilled slot is an absent key, never an empty one", () => {
-    const text = emitNodeFile(
-      "Constraint",
-      {
-        shortName: "no-fonts",
-        name: "No third-party fonts",
-        attributes: {
-          statement: "The panel loads no font it did not ship.",
-          description: "The panel ships every font it uses.",
-          constraint_type: "security",
-          applies_when: "",
-        },
-      },
-      [],
-    );
-    assert.equal(text.includes("applies_when"), false);
-    assert.equal(text.includes("Rationale"), false);
+    // Said as bytes as well as as a golden, because the mistake this guards
+    // against is a single stray newline nobody would see in a diff view.
+    assert.equal(EMPTY_BODY.endsWith("---\n"), true);
   });
 
   test("refuses a type the canon does not have, loudly", () => {
     assert.throws(
-      () => emitNodeFile("Sandwich", MINIMAL_REQUIREMENT, []),
+      () => emitNodeFile("Sandwich", REQUIREMENT_NODE, []),
       /Unknown node type: Sandwich/,
     );
   });
 });
 
-const MINIMAL_REQUIREMENT = {
-  shortName: "id-door",
-  name: "The daemon refuses a malformed id",
-  attributes: {
-    statement: "The daemon refuses a malformed id.",
-    description: "Every door judges the id before it judges anything else.",
-    requirement_type: "functional",
-    priority: "high",
-  },
-};
-
-/** The round-trip fixture: one optional line slot and one optional section, both empty. */
+/**
+ * The round-trip fixture: two names, two edges of one type, and a body of one
+ * heading and one paragraph — small enough that every tolerated way of writing
+ * it can be spelled out as a replacement against these bytes.
+ */
 const CONSTRAINT = `---
 short_name: no-third-party-fonts
 name: The panel loads no third-party fonts
-statement: The panel loads no font it did not ship.
-constraint_type: security
 edges:
   - type: MENTIONS
     to: T-0001
@@ -428,15 +521,13 @@ function readConstraint(text: string) {
 
 describe("parseNodeFile round trip", () => {
   test("canonicalization is a fixpoint", () => {
-    for (const [label, text] of [
-      ["the contract's own example", SCENARIO],
-      ["the round-trip fixture", CONSTRAINT],
+    for (const [type, label, text] of [
+      ["Scenario", "the contract's own example", SCENARIO],
+      ["Constraint", "the round-trip fixture", CONSTRAINT],
+      ["Term", "a body in every markdown shape at once", MOTLEY],
+      ["Commit", "a node with nothing to say yet", EMPTY_BODY],
     ] as const) {
-      const reading = parseNodeFile(
-        label === "the round-trip fixture" ? "Constraint" : "Scenario",
-        "X-0001.md",
-        text,
-      );
+      const reading = parseNodeFile(type, "X-0001.md", text);
       assert.deepEqual(reading.problems, [], label);
       assert.ok(reading.node !== undefined);
       assert.equal(
@@ -444,37 +535,35 @@ describe("parseNodeFile round trip", () => {
         text,
         label,
       );
+      assert.equal(isCanonical(type, "X-0001.md", text), true, label);
     }
   });
 
-  test("a section that opens with an indented code block survives a round trip", () => {
+  test("the body comes back byte for byte, markdown and all", () => {
+    const reading = parseNodeFile("Term", "T-0001.md", MOTLEY);
+    assert.deepEqual(reading.problems, []);
+    assert.equal(reading.node?.body, MOTLEY_BODY);
+  });
+
+  test("a body that opens with an indented code block survives a round trip", () => {
     // The reason the door strips blank lines instead of trimming: a trim would
     // dedent the first line alone, and the file would stop being its own answer.
     const text = `---
 short_name: indented-block
-name: A section that opens with a code block
-scenario_type: main
+name: A body that opens with a code block
 ---
-
-## Preconditions
 
     const x = 1;
     const y = 2;
 
-## Steps
-
-Ordinary text.
-
-## Postconditions
-
-Done.
+Ordinary text after it.
 `;
     const reading = parseNodeFile("Scenario", "SC-0002.md", text);
     assert.deepEqual(reading.problems, []);
     assert.ok(reading.node !== undefined);
     assert.equal(
-      reading.node.attributes["preconditions"],
-      "    const x = 1;\n    const y = 2;",
+      reading.node.body,
+      "    const x = 1;\n    const y = 2;\n\nOrdinary text after it.",
     );
     assert.equal(
       emitNodeFile(reading.node.type, reading.node, reading.edges),
@@ -512,7 +601,10 @@ Done.
       ["comments", CONSTRAINT.replace("short_name:", "# a note\nshort_name:")],
       [
         "a trailing comment on a value",
-        CONSTRAINT.replace("security", "security  # the twelfth vocabulary"),
+        CONSTRAINT.replace(
+          "name: The panel loads no third-party fonts",
+          "name: The panel loads no third-party fonts  # the whole rule",
+        ),
       ],
       [
         "single quotes",
@@ -523,20 +615,21 @@ Done.
       ],
       [
         "double quotes",
-        CONSTRAINT.replace("constraint_type: security", 'constraint_type: "security"'),
+        CONSTRAINT.replace(
+          "short_name: no-third-party-fonts",
+          'short_name: "no-third-party-fonts"',
+        ),
       ],
       [
         "keys in another order",
         `---
-constraint_type: security
-name: The panel loads no third-party fonts
-statement: The panel loads no font it did not ship.
-short_name: no-third-party-fonts
 edges:
   - type: MENTIONS
     to: T-0001
   - type: MENTIONS
     to: T-0002
+name: The panel loads no third-party fonts
+short_name: no-third-party-fonts
 ---
 
 ## Description
@@ -563,48 +656,32 @@ The panel ships every font it uses.
       ["a byte-order mark", `${BOM}${CONSTRAINT}`],
       ["no final newline", CONSTRAINT.trimEnd()],
       [
-        "extra blank lines",
+        "blank lines around the body",
         CONSTRAINT.replace("## Description", "\n## Description").replace(
           "uses.\n",
           "uses.\n\n\n",
         ),
       ],
+      // A key with no value is a key not written — which is what the templates
+      // ship as, and what a person leaves behind when they clear a cell by
+      // hand. It reaches the stray-key rule only once somebody fills it in.
       [
-        "a carried key left empty",
-        CONSTRAINT.replace("constraint_type: security", "constraint_type: security\napplies_when:"),
+        "a key left with no value",
+        CONSTRAINT.replace(
+          "name: The panel loads no third-party fonts",
+          "name: The panel loads no third-party fonts\napplies_when:",
+        ),
       ],
       [
-        "a carried key written as null",
-        CONSTRAINT.replace("constraint_type: security", "constraint_type: security\napplies_when: ~"),
-      ],
-      [
-        "a carried section left empty",
-        `${CONSTRAINT}\n## Rationale\n`,
+        "a key written as null",
+        CONSTRAINT.replace(
+          "name: The panel loads no third-party fonts",
+          "name: The panel loads no third-party fonts\napplies_when: ~",
+        ),
       ],
       [
         "no blank line after the fence",
         CONSTRAINT.replace("---\n\n## Description", "---\n## Description"),
-      ],
-      [
-        "sections in another order",
-        `---
-short_name: no-third-party-fonts
-name: The panel loads no third-party fonts
-statement: The panel loads no font it did not ship.
-constraint_type: security
-edges:
-  - type: MENTIONS
-    to: T-0001
-  - type: MENTIONS
-    to: T-0002
----
-
-## Rationale
-
-## Description
-
-The panel ships every font it uses.
-`,
       ],
     ];
 
@@ -632,8 +709,8 @@ The panel ships every font it uses.
     );
     for (const written of ["edges: []", "edges:", "edges: ~"]) {
       const text = withoutEdges.replace(
-        "constraint_type: security",
-        `constraint_type: security\n${written}`,
+        "name: The panel loads no third-party fonts",
+        `name: The panel loads no third-party fonts\n${written}`,
       );
       const reading = readConstraint(text);
       assert.deepEqual(reading.edges, [], written);
@@ -656,12 +733,11 @@ The panel ships every font it uses.
     );
   });
 
-  test("every corpus value survives a whole file, wherever a door would let it in", () => {
+  test("every corpus value survives a whole file as a name", () => {
     // The identity fields refuse the C-class controls and nothing else, so a
     // U+2028 reaches the frontmatter through a name and has to come back out of
-    // it; a `line` attribute additionally refuses every line break, which is
-    // why the two loops filter differently. Both compare against the TRIMMED
-    // value, because trimming is the door's and happens on the way in.
+    // it. The comparison is against the TRIMMED value, because trimming is the
+    // door's and happens on the way in.
     for (const entry of SCALARS) {
       const value = entry.value.trim();
       if (value === "" || /\p{Cc}/u.test(value)) {
@@ -669,7 +745,7 @@ The panel ships every font it uses.
       }
       const written = emitNodeFile(
         "Commit",
-        { shortName: value, name: value, attributes: { sha: "0x1A" } },
+        { shortName: value, name: value, body: "## SHA\n\n0x1A" },
         [],
       );
       const reading = parseNodeFile("Commit", "CM-0001.md", written);
@@ -678,22 +754,29 @@ The panel ships every font it uses.
       assert.equal(reading.node?.name, value, JSON.stringify(entry.value));
       assert.equal(isCanonical("Commit", "CM-0001.md", written), true);
     }
+  });
 
+  test("every corpus value survives a whole file as the body, untrimmed", () => {
+    // The body is filtered differently and compared differently, and both
+    // differences are the point. It refuses no character the identity fields
+    // refuse — a tab, a DEL, a U+2028 are all ordinary text below the fence —
+    // and it is compared against the value AS WRITTEN rather than trimmed,
+    // because the door strips blank LINES and never touches the spaces inside
+    // one. ` leading` and `trailing ` therefore come back with their spaces.
     for (const entry of SCALARS) {
-      const value = entry.value.trim();
-      if (value === "" || LINE_BREAK.test(value)) {
+      if (entry.value.trim() === "") {
         continue;
       }
       const written = emitNodeFile(
         "Commit",
-        { shortName: "first", name: "The first commit", attributes: { sha: value } },
+        { shortName: "first", name: "The first commit", body: entry.value },
         [],
       );
       const reading = parseNodeFile("Commit", "CM-0001.md", written);
       assert.deepEqual(reading.problems, [], JSON.stringify(entry.value));
       assert.equal(
-        reading.node?.attributes["sha"],
-        value,
+        reading.node?.body,
+        entry.value,
         JSON.stringify(entry.value),
       );
       assert.equal(isCanonical("Commit", "CM-0001.md", written), true);
@@ -701,7 +784,7 @@ The panel ships every font it uses.
   });
 
   test("an id that reads as a number is quoted where an edge names it", () => {
-    const written = emitNodeFile("Requirement", MINIMAL_REQUIREMENT, [
+    const written = emitNodeFile("Requirement", REQUIREMENT_NODE, [
       { type: "MENTIONS", toId: "0x1A" },
     ]);
     assert.equal(written.includes('to: "0x1A"'), true);
@@ -710,121 +793,63 @@ The panel ships every font it uses.
     assert.equal(reading.edges[0]?.toId, "0x1A");
   });
 
-  test("the canonical file is the one that answers to isCanonical", () => {
-    assert.equal(isCanonical("Constraint", "C-0001.md", CONSTRAINT), true);
-    assert.equal(isCanonical("Scenario", "SC-0001.md", SCENARIO), true);
-  });
-
-  test("a file that cannot be read is not canonical either", () => {
-    assert.equal(isCanonical("Scenario", "SC-0001.md", "no frontmatter here"), false);
-  });
-
   test("a quoted value that had to be quoted survives the trip", () => {
     const written = emitNodeFile(
       "Commit",
-      {
-        shortName: "true",
-        name: `a: b`,
-        attributes: { sha: "0x1A", message: "12:30 and 1_000" },
-      },
+      { shortName: "true", name: "a: b", body: "## SHA\n\n12:30 and 1_000" },
       [],
     );
     const reading = parseNodeFile("Commit", "CM-0001.md", written);
     assert.deepEqual(reading.problems, []);
     assert.equal(reading.node?.shortName, "true");
     assert.equal(reading.node?.name, "a: b");
-    assert.equal(reading.node?.attributes["sha"], "0x1A");
-    assert.equal(emitNodeFile("Commit", reading.node!, []), written);
+    assert.equal(reading.node?.body, "## SHA\n\n12:30 and 1_000");
+    assert.ok(reading.node !== undefined);
+    assert.equal(emitNodeFile("Commit", reading.node, []), written);
   });
 });
 
-describe("prose", () => {
-  function withSteps(steps: string): string {
-    return `---
-short_name: checkout-happy
-name: Checkout succeeds with a saved card
-scenario_type: main
----
-
-## Preconditions
-
-A cart.
-
-## Steps
-
-${steps}
-
-## Postconditions
-
-An order.
-`;
-  }
-
-  function stepsOf(text: string): string | undefined {
-    const reading = parseNodeFile("Scenario", "SC-0001.md", text);
-    assert.deepEqual(reading.problems, []);
-    return reading.node?.attributes["steps"];
-  }
-
-  test("a horizontal rule inside prose is prose", () => {
-    assert.equal(stepsOf(withSteps("one\n\n---\n\ntwo")), "one\n\n---\n\ntwo");
+describe("isCanonical", () => {
+  test("the canonical file is the one that answers yes", () => {
+    assert.equal(isCanonical("Constraint", "C-0001.md", CONSTRAINT), true);
+    assert.equal(isCanonical("Scenario", "SC-0001.md", SCENARIO), true);
+    assert.equal(isCanonical("Commit", "CM-0001.md", EMPTY_BODY), true);
   });
 
-  test("a deeper heading inside prose is prose", () => {
-    assert.equal(stepsOf(withSteps("### A sub-heading\n\ntext")), "### A sub-heading\n\ntext");
+  test("valid but not canonical is a real state, and it answers no", () => {
+    // Each of these reads perfectly — the node and the edges are exactly the
+    // canonical file's — and each would be rewritten by the next save from the
+    // panel. That rewrite is what `shall check` exists to warn about.
+    for (const [label, text] of [
+      ["a comment", CONSTRAINT.replace("short_name:", "# a note\nshort_name:")],
+      [
+        "another quoting",
+        CONSTRAINT.replace(
+          "short_name: no-third-party-fonts",
+          "short_name: 'no-third-party-fonts'",
+        ),
+      ],
+      ["a trailing blank line under the body", `${CONSTRAINT}\n`],
+      ["no final newline at all", CONSTRAINT.trimEnd()],
+    ] as const) {
+      assert.deepEqual(
+        parseNodeFile("Constraint", "C-0001.md", text).problems,
+        [],
+        label,
+      );
+      assert.equal(isCanonical("Constraint", "C-0001.md", text), false, label);
+    }
   });
 
-  test("a code fence inside prose is prose", () => {
-    const fenced = "```ts\nconst x = 1;\n```";
-    assert.equal(stepsOf(withSteps(fenced)), fenced);
-  });
-
-  test("a hash pair with no space after it is not a section", () => {
-    // The door's rule and the split's rule are the same rule, so a line the
-    // reader keeps as prose is a line the door would have allowed.
-    const notHeadings = "##not a heading\n\n##";
-    assert.equal(stepsOf(withSteps(notHeadings)), notHeadings);
-  });
-
-  test("blank lines inside prose are kept", () => {
-    assert.equal(stepsOf(withSteps("one\n\n\n\ntwo")), "one\n\n\n\ntwo");
-  });
-
-  test("trailing spaces inside prose are kept, because markdown means them", () => {
-    const hardBreak = `one${SPACE}${SPACE}\ntwo`;
-    const text = withSteps(hardBreak);
-    assert.equal(stepsOf(text), hardBreak);
-    // And they survive the write, which is what makes them worth keeping.
-    const reading = parseNodeFile("Scenario", "SC-0001.md", text);
-    assert.ok(reading.node !== undefined);
+  test("a file that cannot be read is not canonical either", () => {
     assert.equal(
-      emitNodeFile("Scenario", reading.node, []).includes(hardBreak),
-      true,
+      isCanonical("Scenario", "SC-0001.md", "no frontmatter here"),
+      false,
     );
-  });
-
-  test('a "## " line inside a code fence is still a section, because there is no escape', () => {
-    const reading = parseNodeFile(
-      "Scenario",
-      "SC-0001.md",
-      withSteps("```\n## Not a heading\n```"),
+    assert.equal(
+      isCanonical("Sandwich", "S-0001.md", CONSTRAINT),
+      false,
     );
-    assert.deepEqual(reading.problems, [
-      'A Scenario does not carry "## Not a heading". It carries "## Preconditions", "## Steps", "## Postconditions" and nothing else.',
-    ]);
-  });
-
-  test('a "## " line a file can smuggle past the split is refused by the door', () => {
-    // U+2028 is a line break to a screen and not to a file, so this arrives as
-    // one line and is still a value that would come back as two attributes.
-    const reading = parseNodeFile(
-      "Scenario",
-      "SC-0001.md",
-      withSteps(`one${LINE_SEPARATOR}## two`),
-    );
-    assert.deepEqual(reading.problems, [
-      'Steps cannot contain a line that begins with "## " — that is how a spec file names its sections.',
-    ]);
   });
 });
 
@@ -833,24 +858,158 @@ function problemsOf(type: string, fileName: string, text: string): readonly stri
   return parseNodeFile(type, fileName, text).problems;
 }
 
-const GOOD_SCENARIO_HEAD = `---
+/**
+ * The head every refusal is written as a replacement against — the smallest
+ * file that reads cleanly, so that whatever a test breaks is the only thing
+ * broken about it.
+ */
+const GOOD_HEAD = `---
 short_name: checkout-happy
 name: Checkout succeeds with a saved card
-scenario_type: main
 ---
-
-## Preconditions
-
-A cart.
 
 ## Steps
 
-One step.
-
-## Postconditions
-
-An order.
+1. The shopper opens the cart.
 `;
+
+/**
+ * WHAT THE READER USED TO REFUSE AND NOW WELCOMES.
+ *
+ * Every test here asserts two things at once: that the file reads with no
+ * problems at all, and that the text landed in `body` unchanged. The second
+ * half matters as much as the first — a reader that accepted a stray heading
+ * and then dropped it would pass a test that only checked for silence.
+ */
+describe("the body is one free markdown document", () => {
+  function withBody(body: string): string {
+    return `---
+short_name: checkout-happy
+name: Checkout succeeds with a saved card
+---
+
+${body}
+`;
+  }
+
+  function bodyOf(body: string): string | undefined {
+    const reading = parseNodeFile("Scenario", "SC-0001.md", withBody(body));
+    assert.deepEqual(reading.problems, []);
+    return reading.node?.body;
+  }
+
+  test("a heading no type ever carried is just a heading", () => {
+    // This was `A Scenario does not carry "## Notes"`, the sentence the roster
+    // served most often, and there is no roster to serve it any more.
+    assert.equal(
+      bodyOf("## Notes\n\nSomething."),
+      "## Notes\n\nSomething.",
+    );
+  });
+
+  test("prose before the first heading is prose", () => {
+    // This was `Body text before the first "## " section belongs to no
+    // attribute`. It belongs to the body, which is the only thing it could ever
+    // have belonged to.
+    assert.equal(
+      bodyOf("A stray paragraph.\n\n## Steps\n\nOne step."),
+      "A stray paragraph.\n\n## Steps\n\nOne step.",
+    );
+  });
+
+  test("a body with no heading at all is a body", () => {
+    assert.equal(bodyOf("Just a sentence."), "Just a sentence.");
+  });
+
+  test("the same heading twice is the author's business", () => {
+    // This was `The file names "## Steps" twice.`
+    assert.equal(
+      bodyOf("## Steps\n\nOne.\n\n## Steps\n\nAgain."),
+      "## Steps\n\nOne.\n\n## Steps\n\nAgain.",
+    );
+  });
+
+  test("a horizontal rule is a horizontal rule and not a fence", () => {
+    // The closing fence is the FIRST `---` line after the opening one, and that
+    // line has already gone by, so every later one belongs to the document.
+    assert.equal(bodyOf("one\n\n---\n\ntwo"), "one\n\n---\n\ntwo");
+  });
+
+  test("a body that opens with a horizontal rule still reads", () => {
+    assert.equal(bodyOf("---\n\nafter the rule"), "---\n\nafter the rule");
+  });
+
+  test("a deeper heading is text like any other", () => {
+    assert.equal(bodyOf("### A sub-heading\n\ntext"), "### A sub-heading\n\ntext");
+  });
+
+  test("a code fence is kept whole, and a heading inside it is not a heading", () => {
+    // This was the one place the old split had no escape: a `## ` line inside a
+    // code fence was cut out as a section and refused. Nothing cuts now, so the
+    // fence keeps what it holds.
+    const fenced = "```ts\nconst x = 1;\n## Not a heading\n```";
+    assert.equal(bodyOf(fenced), fenced);
+  });
+
+  test("a table is kept whole", () => {
+    const table = "| a | b |\n| - | - |\n| 1 | 2 |";
+    assert.equal(bodyOf(table), table);
+  });
+
+  test("a hash pair with no space after it is text", () => {
+    const notHeadings = "##not a heading\n\n##";
+    assert.equal(bodyOf(notHeadings), notHeadings);
+  });
+
+  test("blank lines inside the body are kept", () => {
+    assert.equal(bodyOf("one\n\n\n\ntwo"), "one\n\n\n\ntwo");
+  });
+
+  test("blank lines at the edges of the body are dropped", () => {
+    // The one thing the door does touch, and it does it by whole lines: a body
+    // is stored without the empty lines the fence and the file end leave around
+    // it, so re-emitting it produces the bytes that were read.
+    assert.equal(bodyOf("\n\n  \n\nmiddle\n\n\n"), "middle");
+  });
+
+  test("trailing spaces inside the body are kept, because markdown means them", () => {
+    const hardBreak = `one${SPACE}${SPACE}\ntwo`;
+    assert.equal(bodyOf(hardBreak), hardBreak);
+    // And they survive the write, which is what makes them worth keeping.
+    const reading = parseNodeFile("Scenario", "SC-0001.md", withBody(hardBreak));
+    assert.ok(reading.node !== undefined);
+    assert.equal(
+      emitNodeFile("Scenario", reading.node, []).includes(hardBreak),
+      true,
+    );
+  });
+
+  test("the line breaks a screen honours and a file does not are ordinary text", () => {
+    // A one-line value used to refuse all three of these, because a value that
+    // renders as two lines and stores as one is a value nobody can edit. The
+    // body renders as whatever markdown makes of it and stores as itself.
+    for (const separator of [LINE_SEPARATOR, NEXT_LINE, PARAGRAPH_SEPARATOR]) {
+      const smuggled = `one${separator}## two`;
+      assert.equal(bodyOf(smuggled), smuggled, JSON.stringify(separator));
+    }
+  });
+
+  test("a file moved into another type's folder reads exactly as well", () => {
+    // Nothing about the bytes changed and the folder did — which used to be
+    // caught by the target type's roster, and is now caught by nothing, because
+    // there is nothing left in a body for a type to disagree with. What a type
+    // still decides is which edges it may write, and that is the loader's job.
+    const reading = parseNodeFile("Requirement", "SC-0001.md", GOOD_HEAD);
+    assert.deepEqual(reading.problems, []);
+    assert.deepEqual(reading.node, {
+      id: "SC-0001",
+      type: "Requirement",
+      shortName: "checkout-happy",
+      name: "Checkout succeeds with a saved card",
+      body: "## Steps\n\n1. The shopper opens the cart.",
+    });
+  });
+});
 
 describe("the refusals", () => {
   test("a file that does not open with a fence", () => {
@@ -910,44 +1069,66 @@ describe("the refusals", () => {
 short_name: checkout-happy
 name: Checkout succeeds with a saved card
 ${marker}
-scenario_type: main
 edges:
   - type: MENTIONS
     to: T-0001
 ---
 
-## Preconditions
-
-A cart.
-
 ## Steps
 
-One step.
-
-## Postconditions
-
-An order.
+1. The shopper opens the cart.
 `;
     // `...` ends a document; `--- ` is a document start that the frontmatter
     // scan walks past, because the fence it looks for is the line `---` exactly.
     for (const marker of ["...", "--- ", "--- # a note"]) {
-      assert.deepEqual(problemsOf("Scenario", "SC-0001.md", cut(marker)), [
-        sentence,
-      ], marker);
+      assert.deepEqual(
+        problemsOf("Scenario", "SC-0001.md", cut(marker)),
+        [sentence],
+        marker,
+      );
     }
   });
 
-  test("a value that is not text", () => {
+  test("an empty frontmatter block is an empty map, and says what is missing by name", () => {
+    // Not "the frontmatter is null, not a map": what a person has in front of
+    // them is a template with every value blank, and the useful sentences are
+    // the ones that name the two fields they have to fill.
+    for (const block of ["---\n---\n", "---\n\n---\n\nA body.\n", "---\n# only a comment\n---\n"]) {
+      assert.deepEqual(
+        problemsOf("Scenario", "SC-0001.md", block),
+        ["A short name is required.", "A name is required."],
+        JSON.stringify(block),
+      );
+    }
+  });
+
+  test("a name that is not text", () => {
     assert.deepEqual(
-      problemsOf("Scenario", "SC-0001.md", GOOD_SCENARIO_HEAD.replace("short_name: checkout-happy", "short_name: 42")),
+      problemsOf(
+        "Scenario",
+        "SC-0001.md",
+        GOOD_HEAD.replace("short_name: checkout-happy", "short_name: 42"),
+      ),
       ["short_name holds a number, not text. Quote the value."],
     );
     assert.deepEqual(
-      problemsOf("Scenario", "SC-0001.md", GOOD_SCENARIO_HEAD.replace("scenario_type: main", "scenario_type: true")),
-      [
-        "scenario_type holds a boolean, not text. Quote the value.",
-        "Scenario Type must be one of main, alternative, exception.",
-      ],
+      problemsOf(
+        "Scenario",
+        "SC-0001.md",
+        GOOD_HEAD.replace("short_name: checkout-happy", "short_name: true"),
+      ),
+      ["short_name holds a boolean, not text. Quote the value."],
+    );
+    assert.deepEqual(
+      problemsOf(
+        "Scenario",
+        "SC-0001.md",
+        GOOD_HEAD.replace(
+          "name: Checkout succeeds with a saved card",
+          "name:\n  - Checkout\n  - succeeds",
+        ),
+      ),
+      ["name holds a list, not text. Quote the value."],
     );
   });
 
@@ -955,7 +1136,7 @@ An order.
     const problems = problemsOf(
       "Scenario",
       "SC-0001.md",
-      GOOD_SCENARIO_HEAD.replace("short_name: checkout-happy", "short_name: 42"),
+      GOOD_HEAD.replace("short_name: checkout-happy", "short_name: 42"),
     );
     assert.equal(
       problems.some((problem) => problem.includes("is required")),
@@ -965,37 +1146,109 @@ An order.
 
   test("a file that carries its own id", () => {
     assert.deepEqual(
-      problemsOf("Scenario", "SC-0001.md", GOOD_SCENARIO_HEAD.replace("short_name:", "id: SC-0001\nshort_name:")),
+      problemsOf(
+        "Scenario",
+        "SC-0001.md",
+        GOOD_HEAD.replace("short_name:", "id: SC-0001\nshort_name:"),
+      ),
       ["A spec file does not carry id — the filename is the id."],
     );
   });
 
   test("a file that carries its own type", () => {
     assert.deepEqual(
-      problemsOf("Scenario", "SC-0001.md", GOOD_SCENARIO_HEAD.replace("short_name:", "type: Scenario\nshort_name:")),
+      problemsOf(
+        "Scenario",
+        "SC-0001.md",
+        GOOD_HEAD.replace("short_name:", "type: Scenario\nshort_name:"),
+      ),
       ["A spec file does not carry type — the folder is the type."],
     );
   });
 
-  test("prose written into the frontmatter", () => {
+  /**
+   * THE ONE RULE ABOUT THE FRONTMATTER, IN THREE GRAMMARS. Every key that is
+   * not one of the three is the same mistake — text that belongs below the
+   * fence — so it is one sentence however many keys are wrong, and the sentence
+   * has to read as English for one, for two and for a list.
+   */
+  test("a stray key, said as one sentence in the grammar the count calls for", () => {
+    const withKeys = (keys: string): string =>
+      GOOD_HEAD.replace(
+        "name: Checkout succeeds with a saved card",
+        `name: Checkout succeeds with a saved card\n${keys}`,
+      );
+    assert.deepEqual(problemsOf("Scenario", "SC-0001.md", withKeys("priority: high")), [
+      "The frontmatter carries short_name, name and edges and nothing else — priority belongs in the body, below the closing fence.",
+    ]);
+    assert.deepEqual(
+      problemsOf("Scenario", "SC-0001.md", withKeys("priority: high\nscenario_type: main")),
+      [
+        "The frontmatter carries short_name, name and edges and nothing else — priority and scenario_type belong in the body, below the closing fence.",
+      ],
+    );
     assert.deepEqual(
       problemsOf(
         "Scenario",
         "SC-0001.md",
-        GOOD_SCENARIO_HEAD.replace(
-          "## Steps\n\nOne step.\n\n",
-          "",
-        ).replace("scenario_type: main", "scenario_type: main\nsteps: One step."),
+        withKeys("priority: high\nscenario_type: main\nsteps: One step."),
       ),
-      ['steps is prose and lives in the body as "## Steps", not in the frontmatter.'],
+      [
+        "The frontmatter carries short_name, name and edges and nothing else — priority, scenario_type, steps belong in the body, below the closing fence.",
+      ],
     );
   });
 
-  test("a key this type does not carry", () => {
+  test("a prose key in the frontmatter is a stray key like any other", () => {
+    // `definition:` used to have its own sentence, because the roster knew that
+    // a Term carries a Definition and knew it lived in the body. Nothing knows
+    // that now — the templates suggest `## Definition` and suggest nothing —
+    // so the key is refused for the only reason left, which is the true one.
     assert.deepEqual(
-      problemsOf("Scenario", "SC-0001.md", GOOD_SCENARIO_HEAD.replace("scenario_type: main", "scenario_type: main\npriority: high")),
+      problemsOf(
+        "Term",
+        "T-0001.md",
+        "---\nshort_name: cart\nname: Cart\ndefinition: A basket of items.\n---\n",
+      ),
       [
-        "A Scenario does not carry priority. It carries scenario_type, preconditions, steps, postconditions and nothing else.",
+        "The frontmatter carries short_name, name and edges and nothing else — definition belongs in the body, below the closing fence.",
+      ],
+    );
+  });
+
+  test("a key named after a prototype is refused like any other stranger", () => {
+    // It has to be refused rather than dropped: assigning it into a plain
+    // object is a silent no-op, and a key nothing complains about is a key a
+    // person keeps writing.
+    assert.deepEqual(
+      problemsOf(
+        "Scenario",
+        "SC-0001.md",
+        GOOD_HEAD.replace(
+          "name: Checkout succeeds with a saved card",
+          "name: Checkout succeeds with a saved card\n__proto__: mine",
+        ),
+      ),
+      [
+        "The frontmatter carries short_name, name and edges and nothing else — __proto__ belongs in the body, below the closing fence.",
+      ],
+    );
+  });
+
+  test("the id and the type are named before the strays are", () => {
+    assert.deepEqual(
+      problemsOf(
+        "Scenario",
+        "SC-0001.md",
+        GOOD_HEAD.replace(
+          "short_name:",
+          "id: SC-0001\ntype: Scenario\npriority: high\nshort_name:",
+        ),
+      ),
+      [
+        "A spec file does not carry id — the filename is the id.",
+        "A spec file does not carry type — the folder is the type.",
+        "The frontmatter carries short_name, name and edges and nothing else — priority belongs in the body, below the closing fence.",
       ],
     );
   });
@@ -1009,70 +1262,59 @@ An order.
       "edges:\n  - type: HAS_CRITERION\n    to: AC-0001\n    weight: 3",
       "edges:\n  - type: HAS_CRITERION\n    to:",
       "edges:\n  - type: 3\n    to: AC-0001",
+      // Two bad entries and still one sentence: it is one rule, and a person
+      // told it once will re-read the whole list.
+      "edges:\n  - type: HAS_CRITERION\n  - to: AC-0001",
     ];
     for (const edges of cases) {
       assert.deepEqual(
-        problemsOf("Scenario", "SC-0001.md", GOOD_SCENARIO_HEAD.replace("scenario_type: main", `scenario_type: main\n${edges}`)),
+        problemsOf(
+          "Scenario",
+          "SC-0001.md",
+          GOOD_HEAD.replace(
+            "name: Checkout succeeds with a saved card",
+            `name: Checkout succeeds with a saved card\n${edges}`,
+          ),
+        ),
         ["Every entry under edges is a map of exactly type and to."],
         edges,
       );
     }
   });
 
-  test("body text before the first section", () => {
-    assert.deepEqual(
-      problemsOf("Scenario", "SC-0001.md", GOOD_SCENARIO_HEAD.replace("---\n\n## Preconditions", "---\n\nA stray paragraph.\n\n## Preconditions")),
-      ['Body text before the first "## " section belongs to no attribute.'],
-    );
-  });
-
-  test("a key named after a prototype is refused like any other stranger", () => {
-    // It has to be refused rather than dropped: assigning it into a plain
-    // object is a silent no-op, and a key nothing complains about is a key a
-    // person keeps writing.
-    assert.deepEqual(
-      problemsOf("Scenario", "SC-0001.md", GOOD_SCENARIO_HEAD.replace("scenario_type: main", "scenario_type: main\n__proto__: mine")),
-      [
-        "A Scenario does not carry __proto__. It carries scenario_type, preconditions, steps, postconditions and nothing else.",
-      ],
-    );
-  });
-
-  test("the stray paragraph is named before the sections are", () => {
+  test("an edge from a node to itself", () => {
     assert.deepEqual(
       problemsOf(
         "Scenario",
         "SC-0001.md",
-        `${GOOD_SCENARIO_HEAD.replace("---\n\n## Preconditions", "---\n\nA stray paragraph.\n\n## Preconditions")}\n## Notes\n\nSomething.\n`,
+        GOOD_HEAD.replace(
+          "name: Checkout succeeds with a saved card",
+          "name: Checkout succeeds with a saved card\nedges:\n  - type: MENTIONS\n    to: SC-0001",
+        ),
       ),
-      [
-        'Body text before the first "## " section belongs to no attribute.',
-        'A Scenario does not carry "## Notes". It carries "## Preconditions", "## Steps", "## Postconditions" and nothing else.',
-      ],
+      ["SC-0001 cannot relate to itself."],
     );
   });
 
-  test("a section this type does not carry", () => {
+  test("the same edge twice, said once", () => {
     assert.deepEqual(
-      problemsOf("Scenario", "SC-0001.md", `${GOOD_SCENARIO_HEAD}\n## Notes\n\nSomething.\n`),
-      [
-        'A Scenario does not carry "## Notes". It carries "## Preconditions", "## Steps", "## Postconditions" and nothing else.',
-      ],
-    );
-  });
-
-  test("the same section twice", () => {
-    assert.deepEqual(
-      problemsOf("Scenario", "SC-0001.md", `${GOOD_SCENARIO_HEAD}\n## Steps\n\nAgain.\n`),
-      ['The file names "## Steps" twice.'],
+      problemsOf(
+        "Scenario",
+        "SC-0001.md",
+        GOOD_HEAD.replace(
+          "name: Checkout succeeds with a saved card",
+          "name: Checkout succeeds with a saved card\nedges:\n  - type: MENTIONS\n    to: T-0001\n  - type: MENTIONS\n    to: T-0001\n  - type: MENTIONS\n    to: T-0001",
+        ),
+      ),
+      ["SC-0001 already has a MENTIONS relation to T-0001."],
     );
   });
 
   test("an id the filename cannot carry everywhere", () => {
-    assert.deepEqual(problemsOf("Scenario", "-SC-0001.md", GOOD_SCENARIO_HEAD), [
+    assert.deepEqual(problemsOf("Scenario", "-SC-0001.md", GOOD_HEAD), [
       "An id uses letters, digits, dots, hyphens and underscores, starts with a letter or digit, and holds at most 64 characters.",
     ]);
-    assert.deepEqual(problemsOf("Scenario", "NUL.md", GOOD_SCENARIO_HEAD), [
+    assert.deepEqual(problemsOf("Scenario", "NUL.md", GOOD_HEAD), [
       "NUL is a reserved device name on Windows, so no file can be named after it. Choose another id.",
     ]);
   });
@@ -1082,7 +1324,7 @@ An order.
       problemsOf(
         "Scenario",
         "SC-0001.md",
-        GOOD_SCENARIO_HEAD.replace("short_name: checkout-happy\n", "").replace(
+        GOOD_HEAD.replace("short_name: checkout-happy\n", "").replace(
           "name: Checkout succeeds with a saved card\n",
           "",
         ),
@@ -1093,49 +1335,72 @@ An order.
 
   test("a name that holds a control character", () => {
     assert.deepEqual(
-      problemsOf("Scenario", "SC-0001.md", GOOD_SCENARIO_HEAD.replace("name: Checkout succeeds with a saved card", 'name: "a\\u0001b"')),
+      problemsOf(
+        "Scenario",
+        "SC-0001.md",
+        GOOD_HEAD.replace(
+          "name: Checkout succeeds with a saved card",
+          'name: "a\\u0001b"',
+        ),
+      ),
       ["A name cannot contain a control character."],
     );
   });
 
-  test("required slots left empty, all at once", () => {
+  /**
+   * WHAT IS LEFT TO REFUSE IN A BODY, WHICH IS ALMOST NOTHING. Not a shape, not
+   * a heading, not a size a person would ever type — only the two characters
+   * that stop the file being text at all, and a cap on how much of the graph
+   * one node may be. Every sentence names "The specification", because that is
+   * what the body is and the person editing it is not thinking about a field.
+   */
+  test("a body that is not text", () => {
+    const withBody = (body: string): string =>
+      `---\nshort_name: cart\nname: Cart\n---\n\n${body}\n`;
+    assert.deepEqual(
+      problemsOf("Term", "T-0001.md", withBody(`before${NUL}after`)),
+      ["The specification cannot contain a NUL character."],
+    );
+    assert.deepEqual(
+      problemsOf("Term", "T-0001.md", withBody(`before${LONE_SURROGATE}after`)),
+      ["The specification is not well-formed text."],
+    );
+  });
+
+  test("a body over the byte cap", () => {
+    // Measured in bytes and not characters, which is why the Korean case is
+    // worth its own line: one syllable is three of them, so a third as many
+    // characters trips the same cap.
     assert.deepEqual(
       problemsOf(
-        "Scenario",
-        "SC-0001.md",
-        `---
-short_name: checkout-happy
-name: Checkout succeeds with a saved card
----
-`,
+        "Term",
+        "T-0001.md",
+        `---\nshort_name: cart\nname: Cart\n---\n\n${"x".repeat(262145)}\n`,
       ),
-      ["A Scenario requires Scenario Type, Preconditions, Steps, Postconditions."],
+      ["The specification cannot hold more than 256 KiB of text."],
     );
-  });
-
-  test("a choice outside its vocabulary", () => {
     assert.deepEqual(
-      problemsOf("Scenario", "SC-0001.md", GOOD_SCENARIO_HEAD.replace("scenario_type: main", "scenario_type: primary")),
-      ["Scenario Type must be one of main, alternative, exception."],
+      problemsOf(
+        "Term",
+        "T-0001.md",
+        `---\nshort_name: cart\nname: Cart\n---\n\n${"가".repeat(87382)}\n`,
+      ),
+      ["The specification cannot hold more than 256 KiB of text."],
     );
-  });
-
-  test("an edge from a node to itself", () => {
+    // And the last body that fits is not refused, so the cap is a cap and not
+    // an off-by-one.
     assert.deepEqual(
-      problemsOf("Scenario", "SC-0001.md", GOOD_SCENARIO_HEAD.replace("scenario_type: main", "scenario_type: main\nedges:\n  - type: MENTIONS\n    to: SC-0001")),
-      ["SC-0001 cannot relate to itself."],
-    );
-  });
-
-  test("the same edge twice, said once", () => {
-    assert.deepEqual(
-      problemsOf("Scenario", "SC-0001.md", GOOD_SCENARIO_HEAD.replace("scenario_type: main", "scenario_type: main\nedges:\n  - type: MENTIONS\n    to: T-0001\n  - type: MENTIONS\n    to: T-0001\n  - type: MENTIONS\n    to: T-0001")),
-      ["SC-0001 already has a MENTIONS relation to T-0001."],
+      problemsOf(
+        "Term",
+        "T-0001.md",
+        `---\nshort_name: cart\nname: Cart\n---\n\n${"x".repeat(262144)}\n`,
+      ),
+      [],
     );
   });
 
   test("a type the canon does not have, and nothing else", () => {
-    assert.deepEqual(problemsOf("Sandwich", "S-0001.md", GOOD_SCENARIO_HEAD), [
+    assert.deepEqual(problemsOf("Sandwich", "S-0001.md", GOOD_HEAD), [
       "Unknown node type: Sandwich",
     ]);
   });
@@ -1144,42 +1409,43 @@ name: Checkout succeeds with a saved card
     const reading = parseNodeFile(
       "Scenario",
       "SC-0001.md",
-      GOOD_SCENARIO_HEAD.replace(
-        "scenario_type: main",
-        "scenario_type: primary\nedges:\n  - type: MENTIONS\n    to: T-0001",
+      GOOD_HEAD.replace(
+        "name: Checkout succeeds with a saved card",
+        "name: Checkout succeeds with a saved card\npriority: high\nedges:\n  - type: MENTIONS\n    to: T-0001",
       ),
     );
     assert.equal(reading.node, undefined);
     assert.deepEqual(reading.edges, []);
-  });
-
-  test("a file moved into the wrong type folder is caught by its own roster", () => {
-    // Nothing about the bytes changed; the folder did, and the folder is the type.
-    assert.deepEqual(problemsOf("Requirement", "SC-0001.md", GOOD_SCENARIO_HEAD), [
-      'A Requirement does not carry "## Preconditions". It carries "## Description", "## Rationale" and nothing else.',
-      'A Requirement does not carry "## Steps". It carries "## Description", "## Rationale" and nothing else.',
-      'A Requirement does not carry "## Postconditions". It carries "## Description", "## Rationale" and nothing else.',
-      "A Requirement does not carry scenario_type. It carries statement, description, requirement_type, priority, rationale and nothing else.",
-      "A Requirement requires Statement, Description, Requirement Type, Priority.",
-    ]);
+    assert.equal(reading.problems.length, 1);
   });
 });
 
 describe("emitTemplate", () => {
   test("the Requirement template, byte for byte", () => {
+    // The longest guide in the canon, and the one with hints on two of its
+    // sections — so this golden pins the header a reference copy carries and a
+    // scaffold does not, the two required keys, the hint column, the relation
+    // table's arrow alignment and the suggested headings all at once.
     assert.equal(
       emitTemplate("Requirement"),
       `---
-# Requirement — copy to ../spec/Requirement/<id>.md and fill in.
-# The FILENAME is the id and the FOLDER is the type; neither is repeated below.
-# An id uses letters, digits, dots, hyphens and underscores, at most 64 characters.
-# Suggested shape: R-0001.
+# Requirement — the starting shape of a Requirement node.
+# \`shall add-spec-node --type Requirement\` writes this file into the project at
+# .shall/spec/intent/Requirement/<id>.md with the next free id as its name.
+# (Writing it there by hand works too: the FILENAME is the id and the FOLDER
+# is the type, so neither is repeated inside. An id uses letters, digits,
+# dots, hyphens and underscores, at most 64 characters — R-0001 is the shape
+# Shall suggests.)
 short_name:            # required · one line
 name:                  # required · one line
-statement:             # required · one line
-requirement_type:      # required · one of: functional | non_functional
-priority:              # required · one of: high | medium | low
-# Body sections: "## Description" required · "## Rationale" optional.
+# Everything below the closing fence is the specification: free markdown,
+# read back exactly as written. The headings that follow are a starting
+# shape, not a rule — keep them, reshape them or write your own.
+#   ## Statement
+#   ## Description
+#   ## Requirement Type — Functional · Non-Functional
+#   ## Priority — High · Medium · Low
+#   ## Rationale
 # Outgoing relations are written HERE and only here — never on the target.
 # From a Requirement the canon allows:
 #   HAS_CRITERION  -> AcceptanceCriterion
@@ -1194,47 +1460,48 @@ priority:              # required · one of: high | medium | low
 #     to: AC-0001
 ---
 
+## Statement
+
 ## Description
+
+## Requirement Type
+
+## Priority
 
 ## Rationale
 `,
     );
   });
 
-  test("the Question template, one of the three satellites", () => {
+  test("the Commit template, which the canon gives no outgoing relation", () => {
+    // The other branch of the relation block, as a golden rather than as a
+    // substring check: a type with no outgoing edge says so in one line and
+    // ships no commented-out `edges:` example, because there is nothing it
+    // could show.
     assert.equal(
-      emitTemplate("Question"),
+      emitTemplate("Commit"),
       `---
-# Question — copy to ../spec/Question/<id>.md and fill in.
-# The FILENAME is the id and the FOLDER is the type; neither is repeated below.
-# An id uses letters, digits, dots, hyphens and underscores, at most 64 characters.
-# Suggested shape: Q-0001.
+# Commit — the starting shape of a Commit node.
+# \`shall add-spec-node --type Commit\` writes this file into the project at
+# .shall/spec/execution/Commit/<id>.md with the next free id as its name.
+# (Writing it there by hand works too: the FILENAME is the id and the FOLDER
+# is the type, so neither is repeated inside. An id uses letters, digits,
+# dots, hyphens and underscores, at most 64 characters — CM-0001 is the shape
+# Shall suggests.)
 short_name:            # required · one line
 name:                  # required · one line
-question:              # required · one line
-state:                 # required · one of: open | closed
-# Body sections: "## Description" required · "## Answer" optional.
-# Outgoing relations are written HERE and only here — never on the target.
-# From a Question the canon allows:
-#   MENTIONS -> Term
-# edges:
-#   - type: MENTIONS
-#     to: T-0001
+# Everything below the closing fence is the specification: free markdown,
+# read back exactly as written. The headings that follow are a starting
+# shape, not a rule — keep them, reshape them or write your own.
+#   ## SHA
+#   ## Message
+# From a Commit the canon allows no outgoing relations.
 ---
 
-## Description
+## SHA
 
-## Answer
+## Message
 `,
-    );
-  });
-
-  test("a type the canon gives no outgoing relation says so", () => {
-    assert.equal(
-      emitTemplate("Commit").includes(
-        "# From a Commit the canon allows no outgoing relations.",
-      ),
-      true,
     );
     assert.equal(emitTemplate("Commit").includes("# edges:"), false);
   });
@@ -1250,25 +1517,227 @@ state:                 # required · one of: open | closed
     assert.equal(written.size, 23);
   });
 
-  test("every template reads back as a file whose only fault is that it is empty", () => {
+  test("every template names the command that writes it and the path it lands at", () => {
+    // The one line of a header that is not the same sentence for every type is
+    // the path, because the band folder is part of it. The two goldens above
+    // spell out `intent` and `execution`; this says the other twenty-one are
+    // `bandFolderOf`'s answer as well, so a type that moves band moves its
+    // template's path with it and nobody has to remember to.
     for (const entry of NODE_TYPES) {
-      const expected = [
-        "A short name is required.",
-        "A name is required.",
-        `A ${entry.name} requires ${(attributesFor(entry.name) ?? [])
-          .filter((descriptor) => descriptor.required)
-          .map((descriptor) => descriptor.label)
-          .join(", ")}.`,
-      ];
-      assert.deepEqual(
-        problemsOf(entry.name, `${entry.name}.md`, emitTemplate(entry.name)),
-        expected,
+      assert.equal(
+        emitTemplate(entry.name).includes(
+          `# \`shall add-spec-node --type ${entry.name}\` writes this file into the project at
+# .shall/spec/${bandFolderOf(entry.name)}/${entry.name}/<id>.md with the next free id as its name.
+`,
+        ),
+        true,
         entry.name,
       );
     }
   });
 
+  test("every template's headings are the section guide's, twice over", () => {
+    // Computed rather than written out — the two goldens above carry the
+    // byte-exact claim, and what this adds is that no type's template drifts
+    // from the guide it is derived from. Each suggested section appears twice
+    // on purpose: once in the comment block with its hint, where a person reads
+    // what the section is for, and once below the fence as an actual heading.
+    for (const entry of NODE_TYPES) {
+      const guide = sectionGuideFor(entry.name);
+      assert.ok(guide !== null, entry.name);
+      assert.ok(guide.length > 0, entry.name);
+      const text = emitTemplate(entry.name);
+      for (const suggested of guide) {
+        assert.equal(
+          text.includes(
+            suggested.hint === undefined
+              ? `#   ## ${suggested.label}\n`
+              : `#   ## ${suggested.label} — ${suggested.hint}\n`,
+          ),
+          true,
+          `${entry.name} · ${suggested.label}`,
+        );
+      }
+      assert.equal(
+        text.endsWith(
+          `\n${guide.map((suggested) => `## ${suggested.label}`).join("\n\n")}\n`,
+        ),
+        true,
+        entry.name,
+      );
+    }
+  });
+
+  test("every template reads back as a file whose only fault is that it is empty", () => {
+    // Two sentences and not three. The body a template ships — a stack of empty
+    // headings — is a perfectly good body, so nothing is said about it; what is
+    // missing is the two names, and those are exactly what the person opening
+    // the file is being asked for.
+    for (const entry of NODE_TYPES) {
+      assert.deepEqual(
+        problemsOf(entry.name, `${entry.name}.md`, emitTemplate(entry.name)),
+        ["A short name is required.", "A name is required."],
+        entry.name,
+      );
+    }
+  });
+
+  test("a filled-in template is a node, and its headings survive the filling", () => {
+    // The end of the journey the templates start: the comments go, the two
+    // names arrive, and the body the template shipped is still there, because
+    // nothing ever cut it up.
+    //
+    // A comment line is `# ` and a heading is `##`, which is the whole reason
+    // the filter tests for the space: the guide's suggestions are written into
+    // the comment block as `#   ## Label` AND below the fence as `## Label`,
+    // and only the first of those is a comment.
+    const filled = emitTemplate("Term")
+      .split("\n")
+      .filter((line) => !line.startsWith("# "))
+      .join("\n")
+      .replace("short_name:", "short_name: cart")
+      .replace("\nname:", "\nname: Cart");
+    const reading = parseNodeFile("Term", "T-0001.md", filled);
+    assert.deepEqual(reading.problems, []);
+    assert.equal(reading.node?.shortName, "cart");
+    assert.equal(reading.node?.name, "Cart");
+    assert.equal(reading.node?.body, "## Definition\n\n## Aliases");
+  });
+
   test("refuses a type the canon does not have, loudly", () => {
     assert.throws(() => emitTemplate("Sandwich"), /Unknown node type: Sandwich/);
+  });
+});
+
+/**
+ * THE SAME FILE, WRITTEN FOR THE OTHER AUDIENCE. A template is read in
+ * `~/.shall/templates/` before a node exists; a scaffold IS the node, written
+ * by `shall add-spec-node` at the path whose folder is already the type and
+ * whose name is already the id. So everything the header of a template spends
+ * on where the file goes and what to call it is gone, and nothing else is.
+ */
+describe("emitScaffold", () => {
+  test("the Term scaffold, byte for byte", () => {
+    // A short guide, one outgoing relation and therefore the commented-out
+    // `edges:` example — the whole shared middle in one golden, under the two
+    // lines that are all a scaffold says for itself.
+    assert.equal(
+      emitScaffold("Term"),
+      `---
+# A new Term. Fill it in — the \`#\` comments are notes to delete as you go,
+# and \`shall check\` reads the result.
+short_name:            # required · one line
+name:                  # required · one line
+# Everything below the closing fence is the specification: free markdown,
+# read back exactly as written. The headings that follow are a starting
+# shape, not a rule — keep them, reshape them or write your own.
+#   ## Definition
+#   ## Aliases — comma-separated
+# Outgoing relations are written HERE and only here — never on the target.
+# From a Term the canon allows:
+#   DENOTES -> DomainEntity
+# edges:
+#   - type: DENOTES
+#     to: DE-0001
+---
+
+## Definition
+
+## Aliases
+`,
+    );
+  });
+
+  test("all 23 types have a scaffold, and generating twice writes the same bytes", () => {
+    const written = new Set<string>();
+    for (const entry of NODE_TYPES) {
+      const once = emitScaffold(entry.name);
+      assert.equal(emitScaffold(entry.name), once, entry.name);
+      written.add(once);
+    }
+    assert.equal(written.size, 23);
+  });
+
+  test("every scaffold is its template with the header swapped and nothing else", () => {
+    // Said as a subtraction rather than as twenty-three more goldens. The two
+    // files share their starting lines in the source, and those begin at
+    // `short_name:` — so cut both files there, and below the cut the bytes must
+    // be identical for every type, while above it the scaffold carries exactly
+    // its own two lines. A change to the shared middle that reached one
+    // audience and not the other would fail here and nowhere else.
+    for (const entry of NODE_TYPES) {
+      const template = emitTemplate(entry.name);
+      const scaffold = emitScaffold(entry.name);
+      const templateAt = template.indexOf("\nshort_name:");
+      const scaffoldAt = scaffold.indexOf("\nshort_name:");
+      assert.ok(templateAt > 0, entry.name);
+      assert.ok(scaffoldAt > 0, entry.name);
+      assert.equal(
+        scaffold.slice(scaffoldAt),
+        template.slice(templateAt),
+        entry.name,
+      );
+      assert.equal(
+        scaffold.slice(0, scaffoldAt),
+        `---
+# A new ${entry.name}. Fill it in — the \`#\` comments are notes to delete as you go,
+# and \`shall check\` reads the result.`,
+        entry.name,
+      );
+    }
+  });
+
+  test("no scaffold repeats what its own path already says", () => {
+    // The whole difference between the two audiences, as four phrases. Each one
+    // is asserted in both directions: absent from every scaffold, present in
+    // every template, so this cannot pass by the phrases having quietly left
+    // the codebase.
+    for (const entry of NODE_TYPES) {
+      const scaffold = emitScaffold(entry.name);
+      const template = emitTemplate(entry.name);
+      for (const said of [
+        "shall add-spec-node",
+        ".shall/spec/",
+        "<id>.md",
+        "the FILENAME is the id",
+      ]) {
+        assert.equal(scaffold.includes(said), false, `${entry.name} · ${said}`);
+        assert.equal(template.includes(said), true, `${entry.name} · ${said}`);
+      }
+    }
+  });
+
+  test("every scaffold reads back as a file whose only fault is that it is empty", () => {
+    // The same two sentences a template reads back with, which is the point:
+    // the file `add-spec-node` leaves behind is one `shall check` can already
+    // read, and what it asks for is the two names and nothing else.
+    for (const entry of NODE_TYPES) {
+      assert.deepEqual(
+        problemsOf(entry.name, `${entry.name}.md`, emitScaffold(entry.name)),
+        ["A short name is required.", "A name is required."],
+        entry.name,
+      );
+    }
+  });
+
+  test("a filled-in scaffold is a node whose body is the headings it shipped", () => {
+    // The body has to be read from the filled-in file rather than from the
+    // shipped one: a reading with a problem hands back no node at all, so the
+    // two names go in first and the body comes back after.
+    const filled = emitScaffold("Term")
+      .split("\n")
+      .filter((line) => !line.startsWith("# "))
+      .join("\n")
+      .replace("short_name:", "short_name: cart")
+      .replace("\nname:", "\nname: Cart");
+    const reading = parseNodeFile("Term", "T-0001.md", filled);
+    assert.deepEqual(reading.problems, []);
+    assert.equal(reading.node?.shortName, "cart");
+    assert.equal(reading.node?.name, "Cart");
+    assert.equal(reading.node?.body, "## Definition\n\n## Aliases");
+  });
+
+  test("refuses a type the canon does not have, loudly", () => {
+    assert.throws(() => emitScaffold("Sandwich"), /Unknown node type: Sandwich/);
   });
 });

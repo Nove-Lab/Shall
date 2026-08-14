@@ -13,8 +13,9 @@ import {
   getProjectShallPath,
   pathExists,
   readProjectMetadata,
+  removeProjectTemplates,
   writeProjectFiles,
-  writeTemplates,
+  writeSharedTemplates,
 } from "../host/project-files.js";
 import { isShallHomePath } from "../host/shall-home.js";
 import {
@@ -73,21 +74,22 @@ export async function openProject(
   }
 
   // A project arrives here from a git clone as often as from this machine's own
-  // `create`, and a clone carries neither an empty folder nor a guarantee that
-  // its templates came from this version of Shall. Both are cheap to settle and
-  // quiet when there is nothing to do: the spec folder is made if it is not
-  // there, and each template is compared before it is written, so opening a
-  // current project leaves `git status` exactly as it found it.
+  // `create`. Three tidyings are cheap and quiet when there is nothing to do:
+  // the spec folder is made if it is not there, the machine's reference
+  // templates under `~/.shall/templates` are brought current, and a template
+  // set an older Shall committed into this project is removed — templates live
+  // with Shall now, and a stale copy in the repository would teach an agent a
+  // format the daemon no longer writes.
   //
-  // NEITHER IS A CONDITION OF OPENING. Both are conveniences — the store makes
-  // a type folder on its first write anyway, and the templates are starting
-  // points a person copies — so a folder Shall may read but not write into (a
-  // read-only mount, a checkout owned by somebody else) opens and serves its
-  // graph rather than failing the click with an errno. Reading a project should
-  // never require the right to write to it.
+  // NONE IS A CONDITION OF OPENING. All three are conveniences — so a folder
+  // Shall may read but not write into (a read-only mount, a checkout owned by
+  // somebody else) opens and serves its graph rather than failing the click
+  // with an errno. Reading a project should never require the right to write
+  // to it.
   await Promise.all([
     ensureProjectSpec(absolutePath).catch(() => undefined),
-    writeTemplates(absolutePath).catch(() => undefined),
+    writeSharedTemplates().catch(() => undefined),
+    removeProjectTemplates(absolutePath).catch(() => undefined),
   ]);
 
   const project = toRegistryProject(absolutePath, metadata);

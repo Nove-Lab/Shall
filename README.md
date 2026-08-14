@@ -19,7 +19,8 @@ client/cli/                                        — the `shall` command
 ```
 
 `core/serialize` is the file format itself: the canonical emitter, the lenient
-reader and the per-type templates. `core/store` is the folder around them —
+reader and the per-type starting files (the reference templates and the
+scaffolds `shall add-spec-node` writes). `core/store` is the folder around them —
 what a directory of markdown amounts to when it is read at once, and how a
 write lands. `core/arith` and `core/exchange` are still empty frames: the
 judgement arithmetic is not written, and `exchange` is a seat kept open rather
@@ -43,16 +44,21 @@ someone on the same panel — there is no hidden "current project" state.
 
 ## Spec plane
 
-A node is a file, not a row: `.shall/spec/<Type>/<id>.md`, committed alongside
-the code it specifies. The folder is the type and the filename is the id, so
+A node is a file, not a row: `.shall/spec/<band>/<Type>/<id>.md`, committed
+alongside the code it specifies. The band folder — `domain`, `intent`, `plan`
+or `execution` — is derived from the type and keeps the spec fanned out over
+four drawers; the type folder is the type and the filename is the id, so
 neither is written inside the file; an outgoing relation is a line in the
 source node's own file and lives nowhere else; the timestamps are the file's
 `mtime`. **Add node** opens the detail pane to write one, clicking a node on
 the canvas opens the same pane to read it, and **Edit** turns that pane back
-into the form with **Delete** beside **Save**. A save rewrites the whole file
-canonically — one key order, one edge order, LF, one trailing newline — so the
-same graph is always the same bytes and `git diff` says only what changed. It
-also drops any comments and custom ordering a hand-edited file was carrying.
+into the form with **Delete** beside **Save**. The specification itself is the
+file's body: free markdown, edited as one wide field and rendered back exactly
+as written — the `##` headings a template ships are a starting shape, not a
+rule. A save rewrites the frontmatter canonically — one key order, one edge
+order, LF, one trailing newline — so the same graph is always the same bytes
+and `git diff` says only what changed. It also drops any comments and custom
+ordering a hand-edited frontmatter was carrying; the body is kept as written.
 
 The daemon re-reads the folder on every query, so a file you edit by hand or
 pull in from a branch shows up on the next refresh with nothing to restart. A
@@ -77,25 +83,29 @@ registry config, so `npx shadcn add <component>` works from `apps/web`.
 
 ```
 <project>/.shall/
-  project.json          id, display name, schema version
-  .gitignore            the shall.db files and *.tmp — Shall's own leavings
-  spec/<Type>/<id>.md   the graph: one file per node
-  templates/<Type>.md   23 starting files, one per node type in the canon
+  project.json                 id, display name, schema version
+  .gitignore                   the shall.db files and *.tmp — Shall's own leavings
+  spec/<band>/<Type>/<id>.md   the graph: one file per node
 ```
 
-`.shall/spec` and `.shall/templates` belong in the repository, and that is the
-whole point of the arrangement: the spec travels with the code, git holds its
-history and its merges, and a fresh clone can be read before anyone has opened
-it in the UI. The `.gitignore` Shall writes covers only its own leavings — a
-`shall.db` left behind by a version from before the spec moved into files, and
-the `*.tmp` a write leaves if it dies between writing and renaming.
+`.shall/spec` belongs in the repository, and that is the whole point of the
+arrangement: the spec travels with the code, git holds its history and its
+merges, and a fresh clone can be read before anyone has opened it in the UI.
+The `.gitignore` Shall writes covers only its own leavings — a `shall.db` left
+behind by a version from before the spec moved into files, and the `*.tmp` a
+write leaves if it dies between writing and renaming. The 23 reference
+templates are not in the project any more: they are the machine's, regenerated
+under `~/.shall/templates/`, and a set an older Shall committed into a project
+is removed on the next open.
 
-Two `shall` subcommands go on top of this: `shall init` to write that folder
-into the current directory, and `shall check` to read the spec back and print
-what is wrong with it, one file and one sentence per line. The daemon answers
-both already (`projects.create` and `spec.check`, the latter finding the
-project by walking up from a path the way `git` does), but the CLI below is
-still only the launcher, so neither subcommand is wired yet.
+Three `shall` subcommands go on top of this: `shall init` to write that folder
+into the current directory, `shall check` to read the spec back and print what
+is wrong with it (one file and one sentence per line, exit 1 when a problem
+remains), and `shall add-spec-node --type <Type>` to start a new node — the
+daemon picks the next free id, writes the starting file at its own path, and
+the command prints that path on its first line so an agent knows exactly where
+to write. One command for all 23 types; the type argument is resolved
+case-insensitively.
 
 ## Development
 

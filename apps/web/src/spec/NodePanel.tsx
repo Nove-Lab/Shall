@@ -7,11 +7,10 @@ import {
 import { Pencil, Trash2, X } from "lucide-react";
 import {
   BAND_ORDER,
-  attributesFor,
   bandOf,
   columnsInOrder,
   nextIdSuggestion,
-  type AttributeDescriptor,
+  sectionGuideFor,
   type Band,
   type NodeTypeEntry,
   type SpecNode,
@@ -40,7 +39,6 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { formatTimestamp } from "./spec-node";
-import { displayedValue, unfilledRequired } from "./view/attributes";
 
 export type NodePanelMode = "create" | "view" | "edit";
 
@@ -81,28 +79,6 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 }
 
 /**
- * ONE ATTRIBUTE'S CONTROL, AND THE KIND CHOOSES IT — `line` a one-line box,
- * `prose` a several-line one, `choice` the vocabulary as a dropdown. The kind is
- * not a styling hint: the database holds a CHECK per kind, so a control that
- * offered the wrong shape would be offering a save that cannot land.
- *
- * ENTER SAVES FROM A `line` AND NOT FROM A `prose`, for the reason the id box
- * has always saved on Enter and the body box never has: a return key inside
- * prose is a paragraph break somebody meant to type.
- *
- * ONLY AN OPTIONAL `choice` OFFERS "None". A dropdown is the one control a
- * person cannot empty by hand — there is no backspace in it — so without that
- * row an optional choice is a decision that can be made once and never unmade.
- * A required one has no such row because emptying it is not a state the type
- * allows, and offering it would be offering a save the door refuses.
- *
- * THE `""` ⇄ `null` CONVERSION IS THIS BOUNDARY'S. The draft holds strings and
- * only strings, because that is what the wire carries and what the roster's
- * other two kinds are; Base UI spells "nothing selected" as `null`. The two meet
- * here, in one expression each way, rather than putting a second empty value
- * into the draft for every reader downstream to know about.
- */
-/**
  * A label's text and its required marker as ONE flex item — as two children
  * the Label's own `gap-2` would push the `*` half a rem off the word it marks.
  */
@@ -115,74 +91,17 @@ function RequiredLabel({ text }: { text: string }) {
   );
 }
 
-function AttributeField({
-  descriptor,
-  value,
-  onChange,
-  onEnter,
-}: {
-  descriptor: AttributeDescriptor;
-  value: string;
-  onChange: (value: string) => void;
-  onEnter: (event: KeyboardEvent<HTMLInputElement>) => void;
-}) {
-  const controlId = `node-attribute-${descriptor.name}`;
-  return (
-    <div className="grid gap-2">
-      <Label htmlFor={controlId}>
-        {descriptor.required ? (
-          <RequiredLabel text={descriptor.label} />
-        ) : (
-          descriptor.label
-        )}
-      </Label>
-      {descriptor.kind === "choice" ? (
-        <Select
-          value={value === "" ? null : value}
-          /* The vocabulary again, as data: it is what makes the trigger read
-             `External System` rather than the `external_system` it stores.
-             Without it Base UI has only the raw value to show. */
-          items={descriptor.values ?? []}
-          onValueChange={(next) => onChange(next ?? "")}
-        >
-          <SelectTrigger id={controlId} className="w-full">
-            {/* The label above already names the field, so the placeholder says
-                only that nothing has been picked — and says it without an
-                article, which "Choose a Actor Type" would get wrong. */}
-            <SelectValue placeholder="Choose one" />
-          </SelectTrigger>
-          <SelectContent alignItemWithTrigger={false}>
-            {descriptor.required ? null : (
-              <SelectItem value={null}>None</SelectItem>
-            )}
-            {(descriptor.values ?? []).map((choice) => (
-              <SelectItem key={choice.value} value={choice.value}>
-                {choice.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      ) : descriptor.kind === "prose" ? (
-        <Textarea
-          id={controlId}
-          rows={6}
-          className="text-sm"
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-        />
-      ) : (
-        <Input
-          id={controlId}
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          onKeyDown={onEnter}
-        />
-      )}
-      {descriptor.hint ? (
-        <p className="text-muted-foreground text-xs">{descriptor.hint}</p>
-      ) : null}
-    </div>
-  );
+/**
+ * The starting shape a type's template suggests, as the body the create form
+ * prefills — the same headings `~/.shall/templates/<Type>.md` ships, from the
+ * same guide. A GUIDE AND NOT A RULE: the person may delete every heading and
+ * write the specification any way they like, and the daemon accepts it either
+ * way. Empty for no type chosen yet, which is also the honest shape there.
+ */
+function bodySkeleton(type: string): string {
+  return (sectionGuideFor(type) ?? [])
+    .map((section) => `## ${section.label}`)
+    .join("\n\n");
 }
 
 /**
@@ -192,17 +111,17 @@ function AttributeField({
  * edit sends the node's own back unchanged and the daemon ignores them, so both
  * modes hand the caller one shape rather than two.
  *
- * `attributes` IS THE DRAFT AS IT STANDS, keyed by column name, and it may hold
- * columns the type on screen does not carry — see the re-aim effect for why it
- * is allowed to. Narrowing it to the type's roster is `attributesToSend`'s job
- * and the caller's, one step before the wire.
+ * `body` IS THE SPECIFICATION AS THE PERSON LEFT IT, one markdown document,
+ * sent whole. The daemon settles its edges — line endings, leading and
+ * trailing blank lines — and refuses only what no text file can carry, so
+ * nothing here narrows or reshapes it.
  */
 export interface NodeDraft {
   type: string;
   id: string;
   shortName: string;
   name: string;
-  attributes: Record<string, string>;
+  body: string;
 }
 
 interface NodePanelProps {
@@ -243,15 +162,8 @@ export function NodePanel({
   const [id, setId] = useState("");
   const [shortName, setShortName] = useState("");
   const [name, setName] = useState("");
-  /**
-   * EVERY ATTRIBUTE OF EVERY TYPE IN ONE MAP, keyed by the column name the wire
-   * uses. Not a `useState` per attribute: which attributes exist is the chosen
-   * type's answer and it changes while the form stands open, and hooks cannot be
-   * called conditionally. Not a map per type either — the whole point of keying
-   * by column is that `statement` typed under one type is the same `statement`
-   * under the next one that carries it.
-   */
-  const [attributes, setAttributes] = useState<Record<string, string>>({});
+  /** The specification, one markdown document — the whole of what a type used to split into fields. */
+  const [body, setBody] = useState("");
   /**
    * Whether the id on screen is the person's own rather than the suggestion.
    * Once it is theirs it stays theirs until the form is refilled — including
@@ -259,6 +171,12 @@ export function NodePanel({
    * one and having the suggestion reappear under their cursor is a fight.
    */
   const [idTouched, setIdTouched] = useState(false);
+  /**
+   * The same rule for the body: the skeleton in it is the template's until the
+   * person types, and theirs afterwards — a change of type must not overwrite a
+   * half-written specification with fresh headings.
+   */
+  const [bodyTouched, setBodyTouched] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -275,16 +193,14 @@ export function NodePanel({
     setBusy(false);
     setConfirmingDelete(false);
     setIdTouched(false);
+    setBodyTouched(false);
 
     if (node) {
       setType(node.type);
       setId(node.id);
       setShortName(node.shortName);
       setName(node.name);
-      // The stored map holds the filled slots only, so an optional cell nobody
-      // wrote is an absent key here and its control reads it as the empty box it
-      // is. Nothing has to invent a `""` for it.
-      setAttributes(node.attributes);
+      setBody(node.body);
       return;
     }
 
@@ -293,7 +209,9 @@ export function NodePanel({
     setId(nextIdSuggestion(startingType, existingIds));
     setShortName("");
     setName("");
-    setAttributes({});
+    // The template's starting shape, not an empty page — and only a suggestion:
+    // deleting all of it is as good a specification as filling it in.
+    setBody(bodySkeleton(startingType));
   }, [mode, nodeId]);
 
   /**
@@ -305,16 +223,10 @@ export function NodePanel({
    * asked for first. The counter is what makes the second ask a second ask.
    *
    * IT RE-AIMS AND IT DOES NOT CLEAR. Remounting on a `key` would say this in
-   * one word and throw away a half-typed draft. What survives the move is
-   * decided by the draft's own shape: it is keyed by COLUMN name, so a value
-   * stays under the name it was typed against and reappears in the form
-   * whenever the new type carries that column too — a `statement` written for a
-   * Requirement is there for a Finding, because it is the same column and means
-   * the same thing on both. A value whose column the new type does not carry
-   * stays in the draft, out of sight, and is never sent: `attributesToSend`
-   * names this type's roster and nothing else. So a change of type can leave a
-   * field on screen behind, but it cannot smuggle one to the daemon. Only the
-   * type moves, and the id with it under the same touch rule the dropdown uses.
+   * one word and throw away a half-typed draft. The two names stay as typed —
+   * they mean the same thing under every type — and the id and the body each
+   * follow their own touch rule: still the suggestion, they move with the type;
+   * the person's own, they stay the person's.
    *
    * A REQUEST THAT NAMES NO TYPE LEAVES THE FIELD ALONE: the toolbar's Add node
    * has no column and therefore no opinion, and resetting the dropdown there
@@ -328,32 +240,21 @@ export function NodePanel({
     if (!idTouched) {
       setId(nextIdSuggestion(presetType, existingIds));
     }
+    if (!bodyTouched) {
+      setBody(bodySkeleton(presetType));
+    }
   }, [request]);
 
-  /** The dropdown owns the id while the id is still a suggestion. */
+  /** The dropdown owns the id and the skeleton while each is still a suggestion. */
   function chooseType(next: string) {
     setType(next);
     if (!idTouched) {
       setId(nextIdSuggestion(next, existingIds));
     }
+    if (!bodyTouched) {
+      setBody(bodySkeleton(next));
+    }
   }
-
-  /** One box's text into the draft, under the column name it belongs to. */
-  function setAttribute(attribute: string, value: string) {
-    setAttributes((current) => ({ ...current, [attribute]: value }));
-  }
-
-  /**
-   * WHAT THE FORM ASKS FOR, DERIVED EVERY RENDER RATHER THAN STORED.
-   *
-   * It is a function of the type in the dropdown — the roster is a compiled
-   * import, so the answer is on hand the instant the type changes — and a copy
-   * kept in state would be a second thing to move when the dropdown moves.
-   * Empty covers the two cases that have no roster: no type chosen yet, and a
-   * type outside the canon, which only a stored row from another version could
-   * carry and which the write door refuses by name.
-   */
-  const descriptors = attributesFor(type) ?? [];
 
   const trimmedId = id.trim();
 
@@ -383,18 +284,16 @@ export function NodePanel({
    */
   const showIdProblem = idProblem !== null && (idTouched || trimmedId !== "");
 
-  // The four identity fields are required of every node, and the type decides
-  // which of its own slots are required on top of them — a Term needs a
-  // Definition, a Question needs a State. The daemon refuses a blank one by
-  // name and its emptiness rule is the one `unfilledRequired` runs, so the
-  // button is off exactly when a save would be refused. An optional slot left
-  // empty is not missing, it is empty, and it holds nothing up.
+  // The four identity fields are required of every node, and they are the whole
+  // of what is required: the specification below them is free markdown and an
+  // empty one is a node with nothing to say yet, not a refusal. The daemon's
+  // emptiness rule for the names is the same trim run here, so the button is
+  // off exactly when a save would be refused.
   const canSave =
     type.trim() !== "" &&
     trimmedId !== "" &&
     shortName.trim() !== "" &&
     name.trim() !== "" &&
-    unfilledRequired(descriptors, attributes).length === 0 &&
     idProblem === null;
 
   async function save() {
@@ -407,15 +306,15 @@ export function NodePanel({
     try {
       // Trimmed on the way out because the daemon trims before it stores: what
       // is sent is then what lands, and the panel is not showing one string
-      // while the table holds another. The attributes are handed over whole and
-      // trimmed one step later, where they are also narrowed to the type's own
-      // roster — see `attributesToSend`.
+      // while the file holds another. The body goes whole — the daemon settles
+      // its blank-line edges by its own one rule, and a second trim here would
+      // be a second rule about the same whitespace.
       await onSubmit({
         type: type.trim(),
         id: trimmedId,
         shortName: shortName.trim(),
         name: name.trim(),
-        attributes,
+        body,
       });
     } catch (saveError) {
       setError(
@@ -487,40 +386,19 @@ export function NodePanel({
             <Field label="Name">
               <span className="text-sm">{node.name}</span>
             </Field>
-            {/* THE ROSTER IS THE READING ORDER, not the map's. `attributes` is
-                a plain object and its keys arrive in whatever order the daemon
-                built them; the roster is the order the type was authored in and
-                the order the form stacked its boxes in, so a node reads the way
-                it was written.
-
-                AN EMPTY OPTIONAL SLOT IS SHOWN AND NOT SKIPPED. A row that
-                disappears when it is empty makes a person wonder whether the
-                type has it at all; the dash says "this type carries a
-                Benchmark, and this node has none", which is the answer they
-                came for. It cannot be a required slot: the door refuses those
-                empty, so a blank one here would be a row the database does not
-                hold. */}
-            {(attributesFor(node.type) ?? []).map((descriptor) => {
-              const value = node.attributes[descriptor.name];
-              return (
-                <Field key={descriptor.name} label={descriptor.label}>
-                  {value === undefined ? (
-                    <span className="text-muted-foreground text-sm">—</span>
-                  ) : descriptor.kind === "prose" ? (
-                    /* Prose is the body of a section in the node's own file, so
-                       it is read as the markdown it is. The form below still
-                       edits the characters — this is the reading side only, and
-                       what it draws is what `.shall/spec` holds. */
-                    <Markdown>{value}</Markdown>
-                  ) : (
-                    /* A choice reads as its English label; a line as itself. */
-                    <span className="text-sm">
-                      {displayedValue(descriptor, value)}
-                    </span>
-                  )}
-                </Field>
-              );
-            })}
+            {/* THE BODY IS THE NODE'S OWN FILE BELOW THE FENCE, read as the
+                markdown it is — whatever headings, lists or fences the author
+                chose, in the author's order, because the file is the truth and
+                this is the file. An empty one is shown as the dash rather than
+                skipped: "this node has no specification yet" is the answer a
+                person came for, not a row that quietly is not there. */}
+            <Field label="Specification">
+              {node.body === "" ? (
+                <span className="text-muted-foreground text-sm">—</span>
+              ) : (
+                <Markdown>{node.body}</Markdown>
+              )}
+            </Field>
             {/* UPDATED IS METADATA AND NOT AN ATTRIBUTE, which is worth
                 recording because the rows above it are exactly what the type
                 carries. The daemon sets it and no form offers it — the create
@@ -635,20 +513,32 @@ export function NodePanel({
               />
             </div>
 
-            {/* THE TYPE'S OWN FIELDS, IN THE ORDER ITS ROSTER AUTHORS THEM, and
-                the same list in create and in edit — an edit cannot move the
-                type, so the two forms are asking for the same thing. Before a
-                type is chosen there are none of them, which is the honest shape
-                for "which fields" being a question the type answers. */}
-            {descriptors.map((descriptor) => (
-              <AttributeField
-                key={descriptor.name}
-                descriptor={descriptor}
-                value={attributes[descriptor.name] ?? ""}
-                onChange={(value) => setAttribute(descriptor.name, value)}
-                onEnter={saveOnEnter}
+            {/* THE SPECIFICATION, AS ONE WIDE BOX. The body is free markdown
+                and this is its whole editor: no field per heading, because the
+                headings are the template's suggestion and not the format's
+                rule, and a form that drew a box per heading would be a form
+                that could not hold a body written any other way. Monospace,
+                because what is being edited is the markdown source the file
+                holds — the reading view above is where it renders. Enter is a
+                newline here, never a save. */}
+            <div className="grid gap-2">
+              <Label htmlFor="node-body">Specification</Label>
+              <Textarea
+                id="node-body"
+                rows={16}
+                className="font-mono text-sm"
+                spellCheck={false}
+                value={body}
+                onChange={(event) => {
+                  setBodyTouched(true);
+                  setBody(event.target.value);
+                }}
               />
-            ))}
+              <p className="text-muted-foreground text-xs">
+                Free markdown. The headings are the template&apos;s suggestion —
+                keep, reshape or delete them.
+              </p>
+            </div>
 
             {mode === "edit" && node ? (
               <Field label="Updated">

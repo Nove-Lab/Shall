@@ -1,8 +1,8 @@
 import { parseDocument } from "yaml";
 import {
-  attributesFor,
   formatEdgeId,
-  judgeAttributes,
+  isNodeType,
+  judgeBody,
   judgeNodeId,
   judgeText,
   type SpecEdge,
@@ -20,7 +20,14 @@ import { EDGES_KEY, FENCE, NAME_KEY, SHORT_NAME_KEY } from "./emit.js";
  * of those is read and then canonicalized away the next time the file is
  * written, which is a diff a person can see rather than a rule they have to
  * learn. What is refused is only what is ambiguous or wrong: a fact with two
- * homes, a value that is not text, a section that belongs to no attribute.
+ * homes, a name that is not text, a frontmatter key the format does not carry.
+ *
+ * THE BODY IS NOT JUDGED FOR SHAPE AT ALL. Everything under the closing fence
+ * is the specification, read as the one markdown document it is — any headings,
+ * any fences, any tables, or none. The templates suggest a shape and this
+ * reader has no opinion about it; what it checks is only what no text file can
+ * carry and the byte cap, which is `judgeBody`'s answer and the same answer the
+ * write doors give.
  *
  * IT COLLECTS AND NEVER THROWS, like the judgement it delegates to. A person
  * who hand-edited a file wants everything wrong with it at once, and a file
@@ -48,9 +55,6 @@ export interface NodeFileReading {
 }
 
 const MARKDOWN_SUFFIX = ".md";
-
-/** The one heading level that names a section. `###` and below are prose. */
-const SECTION_HEADING = /^## (.*)$/;
 
 /** Refused wholesale rather than per-key: it is one rule about one list. */
 const EDGE_SHAPE = "Every entry under edges is a map of exactly type and to.";
@@ -145,6 +149,11 @@ function isMap(value: unknown): value is Record<string, unknown> {
   );
 }
 
+/** Two names read as English; more than two are a list. */
+function namesPhrase(names: readonly string[]): string {
+  return names.length === 2 ? names.join(" and ") : names.join(", ");
+}
+
 /**
  * The id is the filename without its extension — the loader only offers files
  * that end in `.md`, so the suffix is stripped rather than checked for.
@@ -187,21 +196,16 @@ function judgeIdentity(
  *
  * The order the checks run in is the order a person can act on: whether this is
  * a spec file at all, then whether its frontmatter is YAML, then what its keys
- * say, then what its sections say, and only then whether what it all amounts to
- * is a node the canon allows. A sentence about a missing required slot is no
- * use to somebody whose frontmatter never closed.
- *
- * Where the answer cannot be built on, it is returned alone: an unknown type
- * has no roster, and a frontmatter that is not YAML has no keys, so there is
- * nothing further to say that would not be a guess.
+ * say, then whether the names carry, and only then the body — top of the file
+ * first, because that is how a person reads one. A sentence about the body is
+ * no use to somebody whose frontmatter never closed.
  */
 export function parseNodeFile(
   type: string,
   fileName: string,
   text: string,
 ): NodeFileReading {
-  const descriptors = attributesFor(type);
-  if (descriptors === null) {
+  if (!isNodeType(type)) {
     // The loader reads the type off the folder name and refuses a folder the
     // canon does not have, so this is the second fence and not the first.
     return { edges: [], problems: [`Unknown node type: ${type}`] };
@@ -254,14 +258,13 @@ export function parseNodeFile(
     ? frontmatter.value
     : {};
 
-  // A map and not an object, because a frontmatter key is whatever a person
-  // typed: `__proto__: something` assigned into a plain object is silently
-  // dropped by the prototype setter, and a key that disappears is a key nothing
-  // refuses. It becomes an object once, at the door, where `Object.fromEntries`
-  // makes even that name an ordinary own property.
-  const raw = new Map<string, string>();
   let shortName = "";
   let name = "";
+  // The keys the format does not carry, said once as one list: the rule is one
+  // rule — the frontmatter holds the graph's three facts and the body holds
+  // everything else — and five sentences about five keys would read as five
+  // rules.
+  const strays: string[] = [];
   for (const [key, value] of Object.entries(carried)) {
     if (key === EDGES_KEY) {
       continue;
@@ -280,6 +283,10 @@ export function parseNodeFile(
     if (value === null || value === undefined) {
       continue;
     }
+    if (key !== SHORT_NAME_KEY && key !== NAME_KEY) {
+      strays.push(key);
+      continue;
+    }
     let held: string;
     if (typeof value === "string") {
       held = value;
@@ -288,30 +295,22 @@ export function parseNodeFile(
         `${key} holds ${describeValue(value)}, not text. Quote the value.`,
       );
       // Kept, as the text it would have been if it had been quoted, so that the
-      // slot counts as FILLED. Answering an unquoted number with "a Requirement
-      // requires Statement" as well would name one mistake twice and send the
-      // person to fill a field they filled. The file is refused either way, so
-      // this value never reaches the graph.
+      // slot counts as FILLED. Answering an unquoted number with "A name is
+      // required" as well would name one mistake twice and send the person to
+      // fill a field they filled. The file is refused either way, so this value
+      // never reaches the graph.
       held = String(value);
     }
     if (key === SHORT_NAME_KEY) {
       shortName = held;
-      continue;
-    }
-    if (key === NAME_KEY) {
+    } else {
       name = held;
-      continue;
     }
-    const descriptor = descriptors.find((entry) => entry.name === key);
-    if (descriptor !== undefined && descriptor.kind === "prose") {
-      problems.push(
-        `${key} is prose and lives in the body as "## ${descriptor.label}", not in the frontmatter.`,
-      );
-    }
-    // A name this type does not carry is left in the map deliberately: the
-    // sentence against it is `judgeAttributes`', and it is written there once
-    // for the doors and for this reader alike.
-    raw.set(key, held);
+  }
+  if (strays.length > 0) {
+    problems.push(
+      `The frontmatter carries ${SHORT_NAME_KEY}, ${NAME_KEY} and ${EDGES_KEY} and nothing else — ${namesPhrase(strays)} ${strays.length === 1 ? "belongs" : "belong"} in the body, below the closing fence.`,
+    );
   }
 
   const edges: SpecEdge[] = [];
@@ -350,66 +349,6 @@ export function parseNodeFile(
     }
   }
 
-  // The body: everything after the closing fence, cut at every line that opens
-  // a section. A heading is the delimiter, so nothing inside a section can be
-  // one — which is the single restriction the prose door enforces, and the
-  // reason `###`, `---`, code fences and tables are all free here.
-  const prose = descriptors.filter((descriptor) => descriptor.kind === "prose");
-  const preamble: string[] = [];
-  const sections = new Map<string, string[]>();
-  // Held apart so the stray-paragraph sentence can be said first: it is about
-  // the top of the file, and a person reads a file from the top.
-  const sectionProblems: string[] = [];
-  let current: string[] | null = null;
-  for (const line of lines.slice(closingFence + 1)) {
-    const heading = SECTION_HEADING.exec(line);
-    if (heading === null) {
-      (current ?? preamble).push(line);
-      continue;
-    }
-    const label = heading[1] ?? "";
-    const descriptor = prose.find((entry) => entry.label === label);
-    if (descriptor === undefined) {
-      sectionProblems.push(
-        `A ${type} does not carry "## ${label}". It carries ${prose
-          .map((entry) => `"## ${entry.label}"`)
-          .join(", ")} and nothing else.`,
-      );
-      // Its lines belong to no attribute, so they are dropped rather than
-      // handed to the section before it, which would silently merge two.
-      current = [];
-      continue;
-    }
-    if (sections.has(descriptor.name)) {
-      sectionProblems.push(`The file names "## ${label}" twice.`);
-      current = [];
-      continue;
-    }
-    current = [];
-    sections.set(descriptor.name, current);
-  }
-  if (preamble.join("\n").trim() !== "") {
-    problems.push(
-      'Body text before the first "## " section belongs to no attribute.',
-    );
-  }
-  problems.push(...sectionProblems);
-  // The body wins over the frontmatter for a prose slot written in both. One of
-  // them is already a refusal, and the body is where the value belongs.
-  for (const [attribute, content] of sections) {
-    // Joined and handed over untouched: the write door strips a prose value's
-    // leading and trailing BLANK LINES, and doing it here as well would be a
-    // second rule about the same whitespace. One rule, run in one place, is also
-    // what makes the fixpoint hold — a reader that settled edges the door would
-    // settle differently is the two of them disagreeing about one value.
-    //
-    // Blank lines rather than a trim, so that a section may open with an
-    // indented code block: a trim would take the spaces off its first line only
-    // and leave them on the rest, which is a different document from the one
-    // that was written.
-    raw.set(attribute, content.join("\n"));
-  }
-
   const judgedId = judgeNodeId(id);
   if (judgedId !== null) {
     problems.push(judgedId);
@@ -418,8 +357,15 @@ export function parseNodeFile(
   problems.push(...judgedShortName.problems);
   const judgedName = judgeIdentity("A name", name);
   problems.push(...judgedName.problems);
-  const judged = judgeAttributes(type, Object.fromEntries(raw));
-  problems.push(...judged.problems);
+
+  // The body: everything after the closing fence, whole. Its edges are settled
+  // by the same rule the write doors run — leading and trailing BLANK LINES
+  // dropped rather than a trim, so a body that opens with an indented code
+  // block keeps its indentation — and one rule run in one place is also what
+  // makes the fixpoint hold. What is judged is only the characters no text
+  // file can carry and the byte cap; the markdown itself is the author's.
+  const judgedBody = judgeBody(lines.slice(closingFence + 1).join("\n"));
+  problems.push(...judgedBody.problems);
 
   // What one file can say about its own edges. Whether the canon allows the
   // triple needs the TARGET's type, which lives in another file, so that
@@ -456,7 +402,7 @@ export function parseNodeFile(
       type,
       shortName: judgedShortName.value,
       name: judgedName.value,
-      attributes: judged.values,
+      body: judgedBody.value,
     },
     edges,
     problems,

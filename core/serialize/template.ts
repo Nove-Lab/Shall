@@ -1,117 +1,76 @@
 import {
-  attributesFor,
+  bandFolderOf,
   EDGE_GRAMMAR,
   formatNodeId,
   idPrefixFor,
   nodeTypeEntry,
-  type AttributeDescriptor,
+  sectionGuideFor,
+  type SectionGuide,
 } from "../graph/index.js";
 import { EDGES_KEY, FENCE, NAME_KEY, SHORT_NAME_KEY } from "./emit.js";
 
 /**
- * The starting file for a type, derived from the roster and committed to the
- * repository — one per canon type, under `.shall/templates/`.
+ * The starting file for a type, in its two audiences.
  *
- * IT IS A PURE FUNCTION OF THE REGISTRY, so regenerating is byte-idempotent and
- * the daemon can rewrite the folder on every open, comparing bytes and writing
- * only what differs. `git status` stays quiet, and a Shall upgrade that changes
- * a vocabulary shows up as an ordinary diff a person can read and commit.
+ * `emitTemplate` is the REFERENCE COPY — one per canon type, regenerated under
+ * `~/.shall/templates/` so a person or an agent can read what a fresh node
+ * looks like before making one. `emitScaffold` is the same file AS IT LANDS IN
+ * A PROJECT: `shall add-spec-node` writes it at the node's own path, so the
+ * lines about where to put the file and what to name it are not in it — the
+ * path and the name are already true.
  *
- * THE HINTS ARE COMMENTS AND THE VALUES ARE EMPTY. A template that shipped
- * placeholder text would be a template whose placeholder could pass validation
- * — `TODO` is a perfectly good one-line string — and the first thing a person
- * would learn is that Shall accepts nonsense. Empty means absent, absent means
- * an unfilled required slot, and an unfilled required slot meets the same
- * `A Requirement requires Statement, Description.` a half-filled panel meets.
- * The guidance loop is the refusal, not the placeholder.
+ * BOTH ARE PURE FUNCTIONS OF THE CANON, so regenerating is byte-idempotent and
+ * the daemon can rewrite the reference folder on every start, comparing bytes
+ * and writing only what differs.
  *
- * EVERY WORD BELOW IS DERIVED. Requiredness and kind from the roster, the
- * vocabularies from the columns, the relation table from the edge grammar, the
- * suggested id from the type's prefix. Nothing here is a second copy of a fact
- * that lives somewhere else, which is why a template cannot go stale.
+ * A TEMPLATE IS A GUIDE AND NOT A CONTRACT. The body of a node is free
+ * markdown: nothing requires the headings this file ships, and a node written
+ * in an entirely different shape reads exactly as well. What must actually hold
+ * — the two names, the id in the filename, the edge grammar — is said in the
+ * `#` comments, which the first canonical save strips; the headings below the
+ * fence are a starting shape a person or an agent may keep, reshape or delete.
+ *
+ * EVERY WORD BELOW IS DERIVED. The sections and their hints from the guide, the
+ * relation table from the edge grammar, the paths from the band and the
+ * prefix. Nothing here is a second copy of a fact that lives somewhere else,
+ * which is why a template cannot go stale.
  */
 
 /**
- * The column the hints start in. It is the width the roster needs today — the
- * longest key any type carries in its frontmatter is `responsibility_type:` at
- * twenty — with room to spare, so that every template's hints line up in the
- * same place and a person reading two of them side by side reads one shape.
+ * The column the key hints start in — wide enough that the two keys' hints line
+ * up, and the same column in all 23 files so a person reading two of them side
+ * by side reads one shape.
  */
 const HINT_COLUMN = 23;
 
 /**
- * What one key wants, in four words: whether it must be filled, and whether it
- * is one line of anything or one of a fixed list. The vocabulary is written out
- * in the stored spellings, because that is what goes in the file — the English
- * labels belong to the panel.
+ * Everything below the header: the two required keys, the body guide, and the
+ * relation table. This is the part both audiences read identically, because
+ * what a node needs does not depend on how its file came to exist.
  */
-function hintFor(descriptor: AttributeDescriptor): string {
-  const need = descriptor.required ? "required" : "optional";
-  const shape =
-    descriptor.kind === "choice"
-      ? `one of: ${(descriptor.values ?? [])
-          .map((choice) => choice.value)
-          .join(" | ")}`
-      : "one line";
-  return `# ${need} · ${shape}`;
-}
-
-/**
- * The template for one type, or a thrown defect for a name the canon does not
- * have — the caller is a loop over the canon itself, so a miss is a bug and not
- * something a person can be told about.
- */
-export function emitTemplate(type: string): string {
-  const entry = nodeTypeEntry(type);
-  const descriptors = attributesFor(type);
-  if (entry === null || descriptors === null) {
-    throw new Error(`Unknown node type: ${type}`);
-  }
-
-  // The same split the emitter makes, from the same place: one scalar goes
-  // above the fence, a person's paragraphs go below it.
-  const scalars = descriptors.filter(
-    (descriptor) => descriptor.kind !== "prose",
-  );
-  const prose = descriptors.filter((descriptor) => descriptor.kind === "prose");
-
-  const lines: string[] = [FENCE];
-  lines.push(`# ${type} — copy to ../spec/${type}/<id>.md and fill in.`);
-  lines.push(
-    "# The FILENAME is the id and the FOLDER is the type; neither is repeated below.",
-  );
-  lines.push(
-    "# An id uses letters, digits, dots, hyphens and underscores, at most 64 characters.",
-  );
-  lines.push(`# Suggested shape: ${formatNodeId(entry.prefix, 1)}.`);
-
-  const keys: { key: string; hint: string }[] = [
-    { key: SHORT_NAME_KEY, hint: "# required · one line" },
-    { key: NAME_KEY, hint: "# required · one line" },
-    ...scalars.map((descriptor) => ({
-      key: descriptor.name,
-      hint: hintFor(descriptor),
-    })),
-  ];
-  // Aligned to the widest key when the roster ever grows one past the column,
-  // so the hints of one file always agree with each other even if they stop
-  // agreeing with another file's.
-  const column = Math.max(
-    HINT_COLUMN,
-    ...keys.map((slot) => slot.key.length + 2),
-  );
-  for (const slot of keys) {
-    lines.push(`${slot.key}:`.padEnd(column) + slot.hint);
+function startingLines(
+  type: string,
+  guide: readonly SectionGuide[],
+): string[] {
+  const lines: string[] = [];
+  for (const key of [SHORT_NAME_KEY, NAME_KEY]) {
+    lines.push(`${key}:`.padEnd(HINT_COLUMN) + "# required · one line");
   }
 
   lines.push(
-    `# Body sections: ${prose
-      .map(
-        (descriptor) =>
-          `"## ${descriptor.label}" ${descriptor.required ? "required" : "optional"}`,
-      )
-      .join(" · ")}.`,
+    "# Everything below the closing fence is the specification: free markdown,",
   );
+  lines.push(
+    "# read back exactly as written. The headings that follow are a starting",
+  );
+  lines.push("# shape, not a rule — keep them, reshape them or write your own.");
+  for (const suggested of guide) {
+    lines.push(
+      suggested.hint === undefined
+        ? `#   ## ${suggested.label}`
+        : `#   ## ${suggested.label} — ${suggested.hint}`,
+    );
+  }
 
   const rows = EDGE_GRAMMAR.filter((row) => row.fromType === type);
   const [firstRow] = rows;
@@ -139,15 +98,61 @@ export function emitTemplate(type: string): string {
     }
   }
 
-  lines.push(FENCE);
+  return lines;
+}
 
-  // The headings alone, with nothing under them — the same shape the emitter
-  // writes, with every value empty. A section left empty reads as absent, so
-  // the file a person starts from is a file that refuses itself until it is
-  // filled in.
+/** Header, shared middle, fence, then the suggested headings as an actual start. */
+function emitStartingFile(type: string, header: readonly string[]): string {
+  const guide = sectionGuideFor(type);
+  if (guide === null) {
+    throw new Error(`Unknown node type: ${type}`);
+  }
+  const lines = [FENCE, ...header, ...startingLines(type, guide), FENCE];
+
+  // The suggested headings, with nothing under them — the starting shape as an
+  // actual start. A body left exactly as shipped still reads as a node; what to
+  // put under each heading, and whether to keep it at all, is the author's.
   let text = `${lines.join("\n")}\n`;
-  if (prose.length > 0) {
-    text += `\n${prose.map((descriptor) => `## ${descriptor.label}`).join("\n\n")}\n`;
+  if (guide.length > 0) {
+    text += `\n${guide.map((suggested) => `## ${suggested.label}`).join("\n\n")}\n`;
   }
   return text;
+}
+
+/**
+ * The reference copy under `~/.shall/templates/`, or a thrown defect for a name
+ * the canon does not have — the caller is a loop over the canon itself, so a
+ * miss is a bug and not something a person can be told about.
+ *
+ * Its header is the half a scaffold does not need: where such a file lives,
+ * what its name means, and the command that writes one so nobody has to place
+ * it by hand.
+ */
+export function emitTemplate(type: string): string {
+  const entry = nodeTypeEntry(type);
+  const band = bandFolderOf(type);
+  if (entry === null || band === null) {
+    throw new Error(`Unknown node type: ${type}`);
+  }
+  return emitStartingFile(type, [
+    `# ${type} — the starting shape of a ${type} node.`,
+    `# \`shall add-spec-node --type ${type}\` writes this file into the project at`,
+    `# .shall/spec/${band}/${type}/<id>.md with the next free id as its name.`,
+    "# (Writing it there by hand works too: the FILENAME is the id and the FOLDER",
+    "# is the type, so neither is repeated inside. An id uses letters, digits,",
+    `# dots, hyphens and underscores, at most 64 characters — ${formatNodeId(entry.prefix, 1)} is the shape`,
+    "# Shall suggests.)",
+  ]);
+}
+
+/**
+ * The file `shall add-spec-node` writes at the node's own path. The filename
+ * and the folder are already the id and the type, so its header says only what
+ * is left to do — fill it in, and let the check read the result.
+ */
+export function emitScaffold(type: string): string {
+  return emitStartingFile(type, [
+    `# A new ${type}. Fill it in — the \`#\` comments are notes to delete as you go,`,
+    "# and `shall check` reads the result.",
+  ]);
 }
