@@ -8,6 +8,11 @@ import {
   type SpecEdge,
 } from "../graph/index.js";
 import { approvalPayload, emitNodeFile } from "./emit.js";
+import {
+  emitApprovalLedger,
+  parseApprovalLedger,
+  type ApprovalRecord,
+} from "./ledger.js";
 import { parseNodeFile } from "./parse.js";
 import { emitScalar, isPlainSafe } from "./scalar.js";
 import { emitScaffold, emitTemplate } from "./template.js";
@@ -2094,5 +2099,185 @@ priority: high
       reading.node,
     );
     assert.notEqual(payload, fewer);
+  });
+});
+
+/**
+ * The approval ledger — the one other file Shall writes. Held as goldens for
+ * the same reason the node file is: these bytes are committed beside the spec,
+ * and a byte that moves is a diff on a day nobody approved anything.
+ */
+describe("the approval ledger", () => {
+  const RECORD: ApprovalRecord = {
+    approvedHash:
+      "sha256:9f2b1c0000000000000000000000000000000000000000000000000000000000",
+    by: "yjshin",
+    at: "2026-08-15T09:12:33.412Z",
+  };
+  const LEDGER = [
+    "G-0001:",
+    "  approvedHash: sha256:9f2b1c0000000000000000000000000000000000000000000000000000000000",
+    "  by: yjshin",
+    '  at: "2026-08-15T09:12:33.412Z"',
+    "R-0001:",
+    "  approvedHash: sha256:aa",
+    "  by: someone",
+    '  at: "2026-08-15T10:00:00.000Z"',
+    "",
+  ].join("\n");
+
+  test("a ledger reads back as one record per id, and nothing else", () => {
+    const reading = parseApprovalLedger(LEDGER);
+    assert.equal(reading.problem, null);
+    assert.deepEqual(
+      [...reading.records.entries()],
+      [
+        ["G-0001", RECORD],
+        [
+          "R-0001",
+          { approvedHash: "sha256:aa", by: "someone", at: "2026-08-15T10:00:00.000Z" },
+        ],
+      ],
+    );
+  });
+
+  test("an absent ledger and an empty one are the same nothing", () => {
+    for (const text of ["", "\n", "# nothing approved yet\n"]) {
+      const reading = parseApprovalLedger(text);
+      assert.equal(reading.problem, null, JSON.stringify(text));
+      assert.equal(reading.records.size, 0);
+    }
+    assert.equal(emitApprovalLedger(new Map()), "");
+  });
+
+  test("the ids are written in byte order, and the file is a fixpoint", () => {
+    const records = new Map<string, ApprovalRecord>([
+      ["R-0001", { approvedHash: "sha256:aa", by: "someone", at: "2026-08-15T10:00:00.000Z" }],
+      ["G-0001", RECORD],
+    ]);
+    const written = emitApprovalLedger(records);
+    assert.equal(written, LEDGER);
+    const reading = parseApprovalLedger(written);
+    assert.equal(reading.problem, null);
+    assert.equal(emitApprovalLedger(reading.records), written);
+  });
+
+  test("a hand-written ledger in another spelling reads, and comes back canonical", () => {
+    const loose = [
+      "# approvals",
+      "R-0001: { approvedHash: 'sha256:aa', by: someone, at: '2026-08-15T10:00:00.000Z' }",
+      "'G-0001':",
+      "    at: 2026-08-15T09:12:33.412Z",
+      "    by: yjshin",
+      "    approvedHash: sha256:9f2b1c0000000000000000000000000000000000000000000000000000000000",
+      "",
+    ].join("\n");
+    const reading = parseApprovalLedger(loose);
+    assert.equal(reading.problem, null);
+    assert.equal(emitApprovalLedger(reading.records), LEDGER);
+  });
+
+  test("an id that reads as a number is quoted, and comes back the string it is", () => {
+    const records = new Map<string, ApprovalRecord>([["1234", RECORD]]);
+    const written = emitApprovalLedger(records);
+    assert.ok(written.startsWith('"1234":\n'), written);
+    const reading = parseApprovalLedger(written);
+    assert.equal(reading.problem, null);
+    assert.deepEqual([...reading.records.keys()], ["1234"]);
+  });
+
+  test("a record of anything but approvedHash, by and at is one sentence about that id", () => {
+    const shape =
+      "Every record in the approval ledger is a map of exactly approvedHash, by and at, each of them text — the record under G-0001 is not.";
+    for (const text of [
+      "G-0001:\n  approvedHash: sha256:aa\n  by: yjshin\n",
+      "G-0001:\n  approvedHash: sha256:aa\n  by: yjshin\n  at: x\n  tag: hmac:00\n",
+      "G-0001:\n  approvedHash: sha256:aa\n  by: yjshin\n  at: 12\n",
+      "G-0001: approved\n",
+      "G-0001:\n  - approvedHash: sha256:aa\n",
+    ]) {
+      assert.equal(parseApprovalLedger(text).problem, shape, text);
+    }
+  });
+
+  test("a blank value in a record is named under its id", () => {
+    assert.equal(
+      parseApprovalLedger("G-0001:\n  approvedHash: sha256:aa\n  by: ''\n  at: x\n").problem,
+      "Under G-0001, an approver is required.",
+    );
+    assert.equal(
+      parseApprovalLedger("G-0001:\n  approvedHash: '  '\n  by: yjshin\n  at: x\n").problem,
+      "Under G-0001, an approved hash is required.",
+    );
+    assert.equal(
+      parseApprovalLedger('G-0001:\n  approvedHash: sha256:aa\n  by: yjshin\n  at: "a\\tb"\n').problem,
+      "Under G-0001, an approval instant cannot contain a control character.",
+    );
+  });
+
+  test("an id written twice is refused, because an approval has one latest", () => {
+    const twice = `${LEDGER}G-0001:\n  approvedHash: sha256:bb\n  by: later\n  at: x\n`;
+    assert.equal(
+      parseApprovalLedger(twice).problem,
+      "The approval ledger is not YAML Shall can read: Map keys must be unique.",
+    );
+  });
+
+  test("an id written once as a number and once as text is refused, though YAML calls them different keys", () => {
+    const text =
+      "1234:\n  approvedHash: sha256:aa\n  by: a\n  at: x\n\"1234\":\n  approvedHash: sha256:bb\n  by: b\n  at: y\n";
+    assert.equal(
+      parseApprovalLedger(text).problem,
+      "1234 is written twice in the approval ledger, once as a number and once as text — an approval has one latest record.",
+    );
+  });
+
+  test("a blank id is refused, because a record belongs to a node", () => {
+    assert.equal(
+      parseApprovalLedger("null:\n  approvedHash: sha256:aa\n  by: a\n  at: x\n").problem,
+      "A record in the approval ledger names no node id.",
+    );
+    assert.equal(
+      parseApprovalLedger("CON:\n  approvedHash: sha256:aa\n  by: a\n  at: x\n").problem,
+      'The approval ledger names "CON", which is not a node id. CON is a reserved device name on Windows, so no file can be named after it. Choose another id.',
+    );
+  });
+
+  test("a ledger that is a list is refused as the shape it is", () => {
+    assert.equal(
+      parseApprovalLedger("- G-0001\n").problem,
+      "The approval ledger is a list, not a map from node id to approval record.",
+    );
+    assert.equal(
+      parseApprovalLedger("approved\n").problem,
+      "The approval ledger is text, not a map from node id to approval record.",
+    );
+  });
+
+  test("a second document inside the ledger is refused rather than silently dropped", () => {
+    assert.equal(
+      parseApprovalLedger(`${LEDGER}---\nX-1:\n  approvedHash: sha256:cc\n  by: c\n  at: z\n`).problem,
+      'The approval ledger is not YAML Shall can read: a "..." or "---" line inside it ends the ledger early, so the records after that line belong to nobody.',
+    );
+  });
+
+  test("a ledger that is not YAML at all is refused in the library's own words", () => {
+    const reading = parseApprovalLedger("G-0001: [\n");
+    assert.ok(reading.problem?.startsWith("The approval ledger is not YAML Shall can read: "), reading.problem ?? "");
+    assert.equal(reading.records.size, 0);
+  });
+
+  test("every corpus value survives a whole ledger as an approver's name", () => {
+    for (const entry of SCALARS) {
+      const value = entry.value.trim();
+      if (value === "" || /\p{Cc}/u.test(value)) {
+        continue;
+      }
+      const written = emitApprovalLedger(new Map([["G-0001", { ...RECORD, by: value }]]));
+      const reading = parseApprovalLedger(written);
+      assert.equal(reading.problem, null, JSON.stringify(entry.value));
+      assert.equal(reading.records.get("G-0001")?.by, value, JSON.stringify(entry.value));
+      assert.equal(emitApprovalLedger(reading.records), written);
+    }
   });
 });
