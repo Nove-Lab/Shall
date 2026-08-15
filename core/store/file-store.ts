@@ -964,8 +964,9 @@ export async function createNodeFile(
       );
     }
 
-    // A new node carries no machine block: nobody has approved what nobody
-    // has read, and nothing proposes the deletion of what was just made.
+    // A new node carries no machine block: nothing proposes the deletion of
+    // what was just made. (Whether anybody has approved it is the ledger's
+    // record, never a line in this file.)
     return writeNodeFile(root, type, id, fields, edges, {});
   });
 }

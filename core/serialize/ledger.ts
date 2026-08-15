@@ -164,15 +164,16 @@ export function parseApprovalLedger(text: string): ApprovalLedgerReading {
     );
   }
 
-  // The one fact `toJS()` loses: an id written once as a number and once as
-  // text is two keys to YAML and one property to JavaScript. Caught off the
-  // document's own key list, so a fact with two homes is refused here as it is
-  // in a node file.
+  // The one fact `toJS()` loses: an id written once bare and once quoted —
+  // `1234` and `"1234"`, `true` and `"true"` — is two keys to YAML and one
+  // property to JavaScript. Caught off the document's own key list, so a fact
+  // with two homes is refused here as it is in a node file. A key that spells
+  // no id at all (`~:`) is not a twin of anything; it is refused by name below.
   const seen = new Set<string>();
   for (const key of reading.rootKeys ?? []) {
-    if (seen.has(key)) {
+    if (key !== "" && seen.has(key)) {
       return refused(
-        `${key} is written twice in the approval ledger, once as a number and once as text — an approval has one latest record.`,
+        `${key} is written twice in the approval ledger, once bare and once quoted — YAML reads two keys and Shall one id, and an approval has one latest record.`,
       );
     }
     seen.add(key);

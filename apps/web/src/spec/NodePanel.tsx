@@ -463,9 +463,12 @@ export function NodePanel({
    * status quiet, and a diff under a question about removing the node entirely
    * is an answer to a question nobody asked.
    *
-   * THE STAMP IS IN THE KEY, so saving this node asks again: the file moved, and
-   * the comparison drawn against the version before the save is stale the moment
-   * it lands.
+   * TWO STAMPS ARE IN THE KEY. The file's, so saving this node asks again: the
+   * file moved, and the comparison drawn against the version before the save is
+   * stale the moment it lands. And the approval's, because the approval no
+   * longer lives in the file — a `git pull` or a hand edit can move the ledger
+   * while the node's bytes and mtime stay put, and the version the diff is
+   * drawn against is chosen by the record.
    */
   const wantsDiff =
     mode === "view" &&
@@ -473,7 +476,9 @@ export function NodePanel({
     node.deletionProposed === undefined &&
     status?.reason === "changed";
   const diffKey =
-    wantsDiff && node !== null ? `${node.id}:${String(node.updatedAt)}` : null;
+    wantsDiff && node !== null
+      ? `${node.id}:${String(node.updatedAt)}:${status?.approval?.at ?? ""}`
+      : null;
 
   /**
    * BOTH THE FLAG AND THE KEY GUARD, BECAUSE THEY GUARD DIFFERENT THINGS. `live`

@@ -51,8 +51,9 @@ import { readSpecNodeFile } from "../host/project-files.js";
  * NOTHING HERE IS STORED. Every answer is computed from two files at the
  * moment of the ask — the spec folder, which says what each node is, and the
  * approval ledger, which remembers what a person approved — and that is the
- * whole of the storage principle: the spec is the truth, git is the history,
- * the ledger is the record, and a colour is arithmetic over the three.
+ * whole of the storage principle: the spec is the truth, the ledger is the
+ * record, a colour is arithmetic over the two, and git is the history the
+ * version, restore and commit doors reach into.
  *
  * GREEN HAS ONE MANUFACTURER. The approve door below is the only place a
  * ledger record is ever written, and it is reached from the web UI alone. A
@@ -131,6 +132,47 @@ function fileOf(node: Pick<SpecNode, "type" | "id">): string {
 }
 
 /**
+ * A git-held version of a node file, with the block an older Shall wrote taken
+ * out — and ONLY a git-held one.
+ *
+ * Before the ledger, an approval was an `approval:` block inside the file, and
+ * git still holds every version written that way. The reader now refuses that
+ * key by name in the working tree, which is right there: the format has no
+ * such block, and a file that grows one is a file to fix. But a commit is not
+ * a file anybody can fix, and the block was never inside the payload a record's
+ * hash is taken over — so a history read drops it and reads the rest, and the
+ * version that was approved is still there to be found, restored and diffed
+ * against. Nothing here touches the reader; the tolerance is exactly as wide
+ * as the history that needs it.
+ *
+ * The block is a column-0 `approval:` key inside the frontmatter and the
+ * indented lines under it — the one place Shall ever wrote it. Anything else
+ * in the file is left as it stands, and the reader judges it as it would any
+ * committed version.
+ */
+function withoutRetiredApproval(text: string): string {
+  const lines = text.replace(/^\uFEFF/, "").replace(/\r\n?/g, "\n").split("\n");
+  if (lines[0] !== "---") {
+    return text;
+  }
+  const closing = lines.indexOf("---", 1);
+  if (closing === -1) {
+    return text;
+  }
+  const start = lines.findIndex(
+    (line, index) => index > 0 && index < closing && line.startsWith("approval:"),
+  );
+  if (start === -1) {
+    return text;
+  }
+  let end = start + 1;
+  while (end < closing && /^\s/.test(lines[end] ?? "")) {
+    end += 1;
+  }
+  return [...lines.slice(0, start), ...lines.slice(end)].join("\n");
+}
+
+/**
  * The version of this node git still holds whose CONTENT the ledger's record
  * names — found by arithmetic rather than by bookkeeping: no commit is marked,
  * no sha is stored, the hash itself says which bytes it was taken over.
@@ -177,7 +219,11 @@ async function approvedVersionFor(
     if (text === null) {
       continue;
     }
-    const reading = parseNodeFile(node.type, `${node.id}.md`, text);
+    const reading = parseNodeFile(
+      node.type,
+      `${node.id}.md`,
+      withoutRetiredApproval(text),
+    );
     if (reading.node === undefined) {
       continue;
     }
@@ -266,7 +312,7 @@ export async function approveSpecNode(input: {
   }
   if (node.deletionProposed !== undefined) {
     throw conflict(
-      `${input.id} carries a deletion an agent proposed, so approving it would sign a node that is asking to be removed — approve the deletion or reject it first.`,
+      `${input.id} carries a deletion an agent proposed, so approving it would record a node that is asking to be removed — approve the deletion or reject it first.`,
     );
   }
   const review = reviewGraph(graph, approvalsOf(records));
@@ -447,7 +493,11 @@ export async function restoreSpecNode(input: {
       `No commit in this repository holds a file for ${input.id}, so there is nothing to restore it from — only the working tree ever had it.`,
     );
   }
-  const reading = parseNodeFile(type, `${input.id}.md`, text);
+  const reading = parseNodeFile(
+    type,
+    `${input.id}.md`,
+    withoutRetiredApproval(text),
+  );
   const first = reading.problems[0];
   if (first !== undefined || reading.node === undefined) {
     throw conflict(

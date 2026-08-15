@@ -1,4 +1,4 @@
-import { isMap as isYamlMap, parseDocument } from "yaml";
+import { isMap as isYamlMap, isScalar, parseDocument } from "yaml";
 import { judgeText } from "../graph/index.js";
 
 /**
@@ -42,7 +42,8 @@ import { judgeText } from "../graph/index.js";
  * `"1234"` are both written is two entries to the library — a number and a
  * string, so `uniqueKeys` has nothing to say — and ONE property to JavaScript,
  * where every key is a string. The keys are read off the document before that
- * collapse, each spelled as the string it becomes, so a reader whose keys are
+ * collapse, each spelled as the string `toJS()` makes of it (a null key becomes
+ * the empty string there, and does here), so a reader whose keys are
  * identities (the ledger's node ids) can tell that a fact was written twice.
  * Null when the root is not a map.
  */
@@ -78,9 +79,17 @@ export function readYaml(source: string): YamlReading {
     value: document.toJS(),
     error: null,
     rootKeys: isYamlMap(contents)
-      ? contents.items.map((item) => String(item.key))
+      ? contents.items.map((item) => keyText(item.key))
       : null,
   };
+}
+
+/** A key as `toJS()` spells it: null is the empty string, everything else its text. */
+function keyText(key: unknown): string {
+  if (isScalar(key)) {
+    return key.value === null ? "" : String(key.value);
+  }
+  return String(key);
 }
 
 /** What a value is, in the words a refusal uses. */

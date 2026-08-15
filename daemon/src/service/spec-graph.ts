@@ -451,7 +451,8 @@ export interface SpecCheck {
  *
  * THREE LISTS, AND THE DIFFERENCE IS WHAT EACH COSTS. A problem is a file left
  * out of the graph: something in it is wrong and the graph is smaller than the
- * folder until somebody fixes it. A gap is a hole the graph holds while every
+ * folder until somebody fixes it — or the approval ledger, when it will not
+ * read, which is one file nothing green can be known without. A gap is a hole the graph holds while every
  * file reads — a relation kept toward an id nothing answers to — so the node is
  * still in the count and the graph still does not hold together until somebody
  * restores the missing file or re-anchors the survivor. A note is a file that
