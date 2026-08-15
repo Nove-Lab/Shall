@@ -1921,6 +1921,88 @@ describe("the approval door", () => {
     assert.ok(isCanonical("WorkLog", "WL-0001.md", text));
   });
 
+  test("a work log's commits sent with an edit replace the list, and an empty list clears it", async () => {
+    const specDir = await makeSpecDir();
+    await createNodeFile(specDir, "WorkLog", "WL-0001", {
+      shortName: "day-one",
+      name: "The first day",
+      body: "It went fine.",
+      commits: [{ sha: "9f2b1c4", message: "Keep one key at home" }],
+    });
+
+    // Sent: the list on the wire is the list — no merge, no append.
+    const replaced = await updateNodeFile(specDir, "WL-0001", {
+      shortName: "day-one",
+      name: "The first day",
+      body: "It went fine.",
+      commits: [
+        { sha: "41acde0", message: "Sign what lands" },
+        { sha: "7e0f2c5", message: "Reattach the standing signature" },
+      ],
+    });
+    assert.deepEqual(replaced.commits, [
+      { sha: "41acde0", message: "Sign what lands" },
+      { sha: "7e0f2c5", message: "Reattach the standing signature" },
+    ]);
+
+    // Left out: the file's own list rides along.
+    const carried = await updateNodeFile(specDir, "WL-0001", {
+      shortName: "day-one",
+      name: "The first day",
+      body: "It went fine, then better.",
+    });
+    assert.deepEqual(carried.commits, replaced.commits);
+
+    // Empty: a work log that produced no commit, and no key in the file.
+    const cleared = await updateNodeFile(specDir, "WL-0001", {
+      shortName: "day-one",
+      name: "The first day",
+      body: "It went fine, then better.",
+      commits: [],
+    });
+    assert.equal("commits" in cleared, false);
+    const text = await readFile(
+      path.join(specDir, "execution/WorkLog/WL-0001.md"),
+      "utf8",
+    );
+    assert.equal(text.includes("commits"), false, text);
+  });
+
+  test("commits sent for a type that does not carry them are refused by the reader, and nothing lands", async () => {
+    const specDir = await makeSpecDir();
+    assert.deepEqual(
+      await refusal(() =>
+        createNodeFile(specDir, "Requirement", "R-0001", {
+          shortName: "r",
+          name: "R",
+          body: "## Statement",
+          commits: [{ sha: "9f2b1c4", message: "Not here" }],
+        }),
+      ),
+      {
+        kind: "invalid",
+        message:
+          "A Requirement does not carry commits — only a WorkLog records the commits its work produced.",
+      },
+    );
+    assert.deepEqual(await readdir(specDir).catch(() => []), []);
+  });
+
+  test("a blank commit message is refused by name before anything is written", async () => {
+    const specDir = await makeSpecDir();
+    assert.deepEqual(
+      await refusal(() =>
+        createNodeFile(specDir, "WorkLog", "WL-0001", {
+          shortName: "d",
+          name: "D",
+          body: "",
+          commits: [{ sha: "9f2b1c4", message: "  " }],
+        }),
+      ),
+      { kind: "invalid", message: "A commit message is required." },
+    );
+  });
+
   test("a relation added to an approved node keeps its block", async () => {
     const specDir = await makeSpecDir();
     await createNodeFile(specDir, "Requirement", "R-0001", requirementValues);

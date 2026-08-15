@@ -95,9 +95,17 @@ export interface SpecNode {
  * `body` REPLACES THE WHOLE BODY: the panel edits it as one text and sends it
  * back as one text, so what arrives is the document as the author left it and
  * never a patch to merge.
+ *
+ * `commits` IS THE SAME BARGAIN FOR A WORKLOG'S LIST, WITH ONE MORE SPELLING:
+ * absent means "leave what the file has", so a caller that never heard of the
+ * key — an older client, an edit that reached only the names — carries the
+ * list over untouched; present means "this is the list now", and an empty
+ * list is a work log that produced no commit. On any other type the reader
+ * refuses the key by name, so a Requirement cannot pick one up by accident.
  */
 export interface SpecNodeValues {
   shortName: string;
   name: string;
   body: string;
+  commits?: readonly NodeCommit[] | undefined;
 }

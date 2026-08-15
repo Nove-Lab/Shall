@@ -418,6 +418,65 @@ describe("the edit door", () => {
   });
 });
 
+describe("a work log's commits through the doors", () => {
+  test("a create with commits writes them, and an update without leaves them", async () => {
+    const project = await newProject();
+    const created = await createSpecNode({
+      projectId: project.id,
+      type: "WorkLog",
+      id: "WL-0001",
+      shortName: "day-one",
+      name: "The first day",
+      body: "It went fine.",
+      commits: [{ sha: "9f2b1c4", message: "Keep one key at home" }],
+    });
+    assert.deepEqual(created.commits, [{ sha: "9f2b1c4", message: "Keep one key at home" }]);
+
+    const carried = await updateSpecNode({
+      projectId: project.id,
+      id: "WL-0001",
+      shortName: "day-one",
+      name: "The first day",
+      body: "It went fine, then better.",
+    });
+    assert.deepEqual(carried.commits, created.commits);
+
+    const replaced = await updateSpecNode({
+      projectId: project.id,
+      id: "WL-0001",
+      shortName: "day-one",
+      name: "The first day",
+      body: "It went fine, then better.",
+      commits: [
+        { sha: "9f2b1c4", message: "Keep one key at home" },
+        { sha: "41acde0", message: "Sign what lands" },
+      ],
+    });
+    assert.equal(replaced.commits?.length, 2);
+    // Written after the edges block would be, in the author's order.
+    const text = await readFile(
+      path.join(project.path, ".shall", "spec", "execution", "WorkLog", "WL-0001.md"),
+      "utf8",
+    );
+    assert.ok(text.indexOf("9f2b1c4") < text.indexOf("41acde0"), text);
+  });
+
+  test("commits on any other type are refused in the reader's sentence", async () => {
+    const project = await newProject();
+    await says(
+      createSpecNode({
+        projectId: project.id,
+        type: "Requirement",
+        id: "R-0001",
+        ...values("R-0001", REQUIREMENT_BODY),
+        commits: [{ sha: "9f2b1c4", message: "Not here" }],
+      }),
+      "invalid",
+      "A Requirement does not carry commits — only a WorkLog records the commits its work produced.",
+    );
+  });
+});
+
 describe("the remove door", () => {
   test("refuses an id nothing answers to", async () => {
     const project = await newProject();
