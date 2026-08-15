@@ -74,8 +74,9 @@ are two layouts of the same nodes. A relation is drawn by dragging from one
 card to another and picking a type the canon allows between them, and removed
 from the context menu on the line.
 
-Every card outside the execution band carries a traffic light, computed on
-read: red is an error to fix (a file that will not read, a node no live anchor
+Every card carries a traffic light, computed on read — the execution band
+too, because a record is written by an agent and read by a person like any
+other node: red is an error to fix (a file that will not read, a node no live anchor
 holds, an id that is referenced but gone), yellow is a judgement still owed (no
 approval yet, a tag this machine's key did not write, changed since it was
 approved), green is both settled. The node panel is where a judgement happens —
@@ -90,6 +91,11 @@ project is a git repository and the spec folder has uncommitted changes, and
 makes one commit scoped to `.shall/spec`. A file deleted by hand shows up under
 the toolbar's problems dialog with a **Restore** button that brings it back
 from git history.
+
+A work log names the commits its work produced in its own frontmatter — a
+`commits:` list of `sha` and `message`, in the order they were made — and the
+panel shows them under the specification. There is no Commit node type any
+more: two lines of fact did not need a file of their own.
 
 Settings edits real files: the daemon port lives in `~/.shall/config.json` and
 the display name in `<project>/.shall/project.json`. Everything else on that
@@ -112,7 +118,7 @@ arrangement: the spec travels with the code, git holds its history and its
 merges, and a fresh clone can be read before anyone has opened it in the UI.
 The `.gitignore` Shall writes covers only its own leavings — a `shall.db` left
 behind by a version from before the spec moved into files, and the `*.tmp` a
-write leaves if it dies between writing and renaming. The 23 reference
+write leaves if it dies between writing and renaming. The 22 reference
 templates are not in the project any more: they are the machine's, regenerated
 under `~/.shall/templates/`, and a set an older Shall committed into a project
 is removed on the next open.
@@ -130,7 +136,7 @@ about non-canonical files; problems and gaps exit 1), and
 `shall add-spec-node --type <Type>` to start a new node — the daemon picks the
 next free id, writes the starting file at its own path, and the command prints
 that path on its first line so an agent knows exactly where to write. One
-command for all 23 types; the type argument is resolved case-insensitively.
+command for all 22 types; the type argument is resolved case-insensitively.
 There is no `shall approve` and never will be: green is made by a person in
 the browser.
 

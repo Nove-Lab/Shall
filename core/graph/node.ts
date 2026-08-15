@@ -1,24 +1,14 @@
 /**
- * A node of the spec graph: a short name to read it by, a name, and the body —
- * the specification itself, as free markdown.
- *
- * `body` IS OPAQUE TEXT AND THE GRAPH DOES NOT READ IT. What a node says is the
- * author's — a person's or an agent's — and Shall renders it back exactly as it
- * was written. The structure the graph needs lives beside it, not inside it:
- * the type is the folder, the id is the filename, the two names are frontmatter
- * keys, and the relations are the `edges:` list. Everything the templates
- * suggest about the body — the `## Definition` a Term usually opens with — is a
- * starting shape, never a rule, so an empty body is a node with nothing to say
- * yet and not a refusal.
- *
- * The two instants are both stamps rather than fields — nothing on a form offers
- * them, and core has no clock to make one, so whoever reads the file brings
- * them. They are the file's own mtime, twice: a file has one modification time
- * and no birth time worth trusting, so a node reads as having been written when
- * it was last modified. That is also why a relation added to this node moves its
- * stamp — the relation is a line in this node's file, and writing the line
- * writes the file.
+ * One commit a piece of work produced, as a WorkLog's frontmatter records it:
+ * the hash git gave it and the message it was made with. This is what the
+ * Commit node type used to be — a whole file for two lines of fact — folded
+ * into the work log that made the commits, where the facts were always about.
  */
+export interface NodeCommit {
+  readonly sha: string;
+  readonly message: string;
+}
+
 /**
  * A human's signature over one node, written by the daemon on the web approve
  * action and by nothing else. `hash` is `sha256:<hex>` over the node's payload
@@ -48,6 +38,27 @@ export interface NodeDeletionProposal {
   readonly rationale: string;
 }
 
+/**
+ * A node of the spec graph: a short name to read it by, a name, and the body —
+ * the specification itself, as free markdown.
+ *
+ * `body` IS OPAQUE TEXT AND THE GRAPH DOES NOT READ IT. What a node says is the
+ * author's — a person's or an agent's — and Shall renders it back exactly as it
+ * was written. The structure the graph needs lives beside it, not inside it:
+ * the type is the folder, the id is the filename, the two names are frontmatter
+ * keys, and the relations are the `edges:` list. Everything the templates
+ * suggest about the body — the `## Definition` a Term usually opens with — is a
+ * starting shape, never a rule, so an empty body is a node with nothing to say
+ * yet and not a refusal.
+ *
+ * The two instants are both stamps rather than fields — nothing on a form offers
+ * them, and core has no clock to make one, so whoever reads the file brings
+ * them. They are the file's own mtime, twice: a file has one modification time
+ * and no birth time worth trusting, so a node reads as having been written when
+ * it was last modified. That is also why a relation added to this node moves its
+ * stamp — the relation is a line in this node's file, and writing the line
+ * writes the file.
+ */
 export interface SpecNode {
   id: string;
   type: string;
@@ -56,6 +67,12 @@ export interface SpecNode {
   body: string;
   createdAt: number;
   updatedAt: number;
+  /**
+   * The commits this work produced — a WorkLog's key and no other type's, so
+   * a reader of any other node never sees it set. Author content, inside the
+   * signed payload like the edges are; an ordinary save carries it over.
+   */
+  commits?: NodeCommit[] | undefined;
   /**
    * The two machine blocks, in a file that is otherwise the author's. A person
    * edits neither by hand, and every ordinary save carries both over

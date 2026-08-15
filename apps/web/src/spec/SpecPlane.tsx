@@ -13,7 +13,7 @@ import {
   Unlink,
   Waypoints,
 } from "lucide-react";
-import { isColored, permittedEdgeTypes } from "@shall/core/graph";
+import { bandOf, permittedEdgeTypes } from "@shall/core/graph";
 import { api } from "@/api";
 import { Button } from "@/components/ui/button";
 import {
@@ -830,7 +830,7 @@ export function SpecPlane() {
                     </ContextMenuItem>
                     {/* The execution band records what happened, and a record
                         has no Delete — the daemon refuses the call anyway. */}
-                    {isColored(menuNode.type) ? (
+                    {bandOf(menuNode.type) === "Execution" ? null : (
                       <>
                         <ContextMenuSeparator />
                         <ContextMenuItem
@@ -843,7 +843,7 @@ export function SpecPlane() {
                           Delete…
                         </ContextMenuItem>
                       </>
-                    ) : null}
+                    )}
                   </>
                 ) : menuEdge ? (
                   /* The relation is named by its type rather than by its two

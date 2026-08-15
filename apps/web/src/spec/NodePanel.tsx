@@ -11,7 +11,6 @@ import {
   anchorPhrase,
   bandOf,
   columnsInOrder,
-  isColored,
   nextIdSuggestion,
   sectionGuideFor,
   type Band,
@@ -67,7 +66,7 @@ interface TypeGroup {
 }
 
 /**
- * The twenty-three types as the canvas orders them: the four bands in band
+ * The twenty-two types as the canvas orders them: the four bands in band
  * order, each holding its own columns in canon order.
  *
  * Both facts are read off the canon rather than written here — `columnsInOrder`
@@ -716,16 +715,28 @@ export function NodePanel({
                     <Referrers edges={referrers} />
                   </div>
                 )}
+                {/* THE EXECUTION BAND HAS NO APPROVE DELETION. A record is
+                    not unhappened by removing it, and the daemon refuses the
+                    door either way — so the one honest button is Reject, and
+                    the sentence says why the other is not here. */}
+                {bandOf(node.type) === "Execution" ? (
+                  <p className="text-muted-foreground text-sm">
+                    The execution band is append-only, so this record cannot
+                    be deleted — reject the proposal to clear it.
+                  </p>
+                ) : null}
                 <div className="flex items-center gap-2">
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    disabled={reviewBusy}
-                    onClick={() => setConfirmingDelete(true)}
-                  >
-                    <Trash2 />
-                    Approve deletion
-                  </Button>
+                  {bandOf(node.type) === "Execution" ? null : (
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      disabled={reviewBusy}
+                      onClick={() => setConfirmingDelete(true)}
+                    >
+                      <Trash2 />
+                      Approve deletion
+                    </Button>
+                  )}
                   <Button
                     type="button"
                     variant="outline"
@@ -745,11 +756,11 @@ export function NodePanel({
                 what the board can show; this is where the same verdict gets its
                 sentence and, where there is one, the button that resolves it.
 
-                NO STATUS IS NO SECTION. A node the review does not mention is a
-                node outside the colour vocabulary — the execution band — and the
-                honest answer to "what colour is it" there is silence, not a
-                fourth colour meaning "not applicable". Nothing here works a band
-                out for itself.
+                NO STATUS IS NO SECTION. A node the review does not mention has
+                no verdict to say — the review lists every canon type, the
+                execution band included, so in practice that is only the moment
+                before it has been read — and the honest answer then is silence,
+                not a fourth colour. Nothing here works a verdict out for itself.
 
                 GREEN IS ONE MUTED LINE AND NOT A BOX. A box is a thing to deal
                 with, and an approved node is the state everything else is trying
@@ -847,6 +858,33 @@ export function NodePanel({
                 <Markdown>{node.body}</Markdown>
               )}
             </Field>
+            {/* THE WORK LOG'S COMMITS, in the order the author recorded them.
+                It is a WorkLog's key and no other type's, so no other panel
+                grows the row; a work log that has none says so with the dash,
+                because "this work produced no commit" is an answer too. The
+                sha is the file's own text — a person reading it beside a
+                terminal wants the characters, not a link the panel invents. */}
+            {node.type === "WorkLog" ? (
+              <Field label="Commits">
+                {node.commits === undefined || node.commits.length === 0 ? (
+                  <span className="text-muted-foreground text-sm">—</span>
+                ) : (
+                  <ul className="grid gap-1.5">
+                    {node.commits.map((commit, index) => (
+                      <li
+                        key={`${commit.sha}:${String(index)}`}
+                        className="flex items-baseline gap-2"
+                      >
+                        <span className="bg-muted shrink-0 rounded-md border px-1.5 py-0.5 font-mono text-xs">
+                          {commit.sha}
+                        </span>
+                        <span className="text-sm">{commit.message}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </Field>
+            ) : null}
             {/* UPDATED IS METADATA AND NOT AN ATTRIBUTE, which is worth
                 recording because the rows above it are exactly what the type
                 carries. The daemon sets it and no form offers it — the create
@@ -892,7 +930,7 @@ export function NodePanel({
                     <SelectTrigger id="node-type" autoFocus className="w-full">
                       <SelectValue placeholder="Choose a type" />
                     </SelectTrigger>
-                    {/* Item-aligned positioning would hang a twenty-three row
+                    {/* Item-aligned positioning would hang a twenty-two row
                         list off the chosen row; in a docked panel this many
                         rows only fit as a plain drop below the trigger. */}
                     <SelectContent alignItemWithTrigger={false}>
@@ -1046,7 +1084,7 @@ export function NodePanel({
                 what happened and a record's one legitimate end is a retention
                 sweep. The daemon refuses the call too — this only spares the
                 person a button whose every press is a sentence. */}
-            {node !== null && !isColored(node.type) ? null : (
+            {node !== null && bandOf(node.type) === "Execution" ? null : (
               <Button
                 type="button"
                 variant="destructive"

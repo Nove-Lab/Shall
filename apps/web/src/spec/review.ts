@@ -51,8 +51,9 @@ export const NO_SIGNALS: ReadonlyMap<string, Signal> = new Map();
  * card silently drawn in no class at all.
  *
  * A NODE WITH NO ENTRY GETS NO SIGNAL, and that absence is the daemon's answer
- * rather than a gap: the execution band is outside the colour vocabulary
- * altogether, so its cards draw no dot. Nothing here computes a band.
+ * rather than a gap — every canon type is coloured now, the execution band
+ * included, so a card without a dot is a card the review has not answered for.
+ * Nothing here computes a verdict of its own.
  */
 export function signalsOf(
   report: ReviewReport | null,

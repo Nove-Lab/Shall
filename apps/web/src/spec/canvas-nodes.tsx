@@ -283,12 +283,12 @@ export function SpecNodeCard({ data }: NodeProps<CardNode>) {
             setting this feature made up. They live in `SIGNAL_CLASS` beside the
             component that paints them.
 
-            `null` DRAWS NOTHING, ON PURPOSE AND WITHOUT MOVING ANYTHING. The
-            execution band is outside the colour vocabulary — no verdict is the
-            true answer there, and a fourth colour meaning "not applicable" would
-            be a verdict — and the card's box is the layout's own declaration, so
-            the card with no square is exactly the size of the ones beside it and
-            nothing on the board moves. */}
+            `null` DRAWS NOTHING, ON PURPOSE AND WITHOUT MOVING ANYTHING. Every
+            canon type is coloured — the execution band included — so `null` is
+            only a card the review has not answered for yet, and a fourth colour
+            meaning "not answered" would be a verdict; the card's box is the
+            layout's own declaration, so the card with no square is exactly the
+            size of the ones beside it and nothing on the board moves. */}
         {data.signal === null ? null : <StatusDot color={data.signal} />}
         <span className="truncate font-mono text-xs">{data.node.id}</span>
       </div>

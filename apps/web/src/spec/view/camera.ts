@@ -62,7 +62,7 @@ export type CardGeometry = {
  *
  * 1 is the scale the card is drawn at, and there is no zoom left in it to
  * spend. The card is two 16px text rows in a 44px box: at 0.7 a row renders
- * 11px, and at the fit-to-view that once framed all twenty-three columns it
+ * 11px, and at the fit-to-view that once framed all twenty-two columns it
  * rendered under 7 — and an id and a short name you cannot read is the entire
  * content of a card. The graph view still zooms by wheel; this number is only
  * where it OPENS.

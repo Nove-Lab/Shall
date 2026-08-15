@@ -29,6 +29,7 @@ export {
 export type {
   ApprovalSigner,
   FileProblem,
+  NodeFileValues,
   RefusalKind,
   RefusedFile,
   ScaffoldedNode,
