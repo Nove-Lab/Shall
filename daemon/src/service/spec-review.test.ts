@@ -648,14 +648,17 @@ describe("the git doors", () => {
     );
   });
 
-  test("a commit with nothing to commit is refused in a sentence", async () => {
+  test("a commit refuses when neither the spec nor the ledger has moved", async () => {
     const project = await newProject();
     await goal(project, "G-0001");
+    await approveSpecNode({ projectId: project.id, id: "G-0001" });
     await commitSpec({ projectId: project.id, message: "Commit the goal" });
+    // Both halves are in the history now, so there is no second commit to make
+    // and the sentence says which two places were looked at.
     await says(
       commitSpec({ projectId: project.id, message: "Again" }),
       "conflict",
-      "The spec folder holds no change to commit, so nothing was committed.",
+      "The spec folder and the approval ledger hold no change to commit, so nothing was committed.",
     );
   });
 
@@ -670,23 +673,81 @@ describe("the git doors", () => {
     );
   });
 
-  test("one commit holds the spec folder and nothing else", async () => {
+  test("one commit holds the spec folder and the ledger and nothing else", async () => {
     const project = await newProject();
     await goal(project, "G-0001");
+    await approveSpecNode({ projectId: project.id, id: "G-0001" });
     await writeFile(path.join(project.path, "notes.txt"), "not spec\n", "utf8");
 
     await commitSpec({ projectId: project.id, message: "Commit the goal" });
 
-    const status = await run("git", ["status", "--porcelain"], {
+    const porcelain = await run("git", ["status", "--porcelain"], {
       cwd: project.path,
     });
-    // The stray file is still uncommitted; the spec is not.
-    assert.ok(status.stdout.includes("notes.txt"), status.stdout);
-    assert.ok(!status.stdout.includes(".shall/spec"), status.stdout);
-    const subject = await run("git", ["log", "-1", "--format=%s"], {
+    // The stray file is still uncommitted; neither half of the spec is.
+    assert.ok(porcelain.stdout.includes("notes.txt"), porcelain.stdout);
+    assert.ok(!porcelain.stdout.includes(".shall/spec"), porcelain.stdout);
+    assert.ok(!porcelain.stdout.includes(".shall/ledger"), porcelain.stdout);
+    assert.deepEqual(await readSpecGitStatus(project.id), {
+      repo: true,
+      dirty: false,
+    });
+    // One commit, and the person's own sentence on it.
+    const written = await run("git", ["show", "--stat", "--format=%s", "HEAD"], {
       cwd: project.path,
     });
-    assert.equal(subject.stdout.trim(), "Commit the goal");
+    assert.ok(written.stdout.startsWith("Commit the goal\n"), written.stdout);
+    assert.ok(written.stdout.includes("G-0001.md"), written.stdout);
+    assert.ok(written.stdout.includes("approvals.yaml"), written.stdout);
+    assert.ok(!written.stdout.includes("notes.txt"), written.stdout);
+  });
+
+  test("an approval makes the ledger dirty, and the commit takes it with the spec", async () => {
+    const project = await newProject();
+    await goal(project, "G-0001");
+    await commitSpec({ projectId: project.id, message: "Commit the goal" });
+    assert.deepEqual(await readSpecGitStatus(project.id), {
+      repo: true,
+      dirty: false,
+    });
+
+    // The approve door writes nothing but the ledger — the node file is not
+    // touched — and the button lights up all the same, because a person's
+    // approval is a change the repository should carry.
+    await approveSpecNode({ projectId: project.id, id: "G-0001" });
+    assert.deepEqual(await readSpecGitStatus(project.id), {
+      repo: true,
+      dirty: true,
+    });
+
+    await commitSpec({ projectId: project.id, message: "Approve the goal" });
+    assert.deepEqual(await readSpecGitStatus(project.id), {
+      repo: true,
+      dirty: false,
+    });
+    const written = await run("git", ["show", "--stat", "--format=", "HEAD"], {
+      cwd: project.path,
+    });
+    assert.ok(written.stdout.includes("approvals.yaml"), written.stdout);
+  });
+
+  test("a project that has never approved anything commits its spec with no ledger to find", async () => {
+    const project = await newProject();
+    await goal(project, "G-0001");
+    // No approval has ever been made, so `.shall/ledger` is not a folder on
+    // this disk — and a pathspec naming nothing is what `git add` refuses.
+    await assert.rejects(stat(ledgerFile(project)));
+
+    await commitSpec({ projectId: project.id, message: "Commit the goal" });
+    assert.deepEqual(await readSpecGitStatus(project.id), {
+      repo: true,
+      dirty: false,
+    });
+    const written = await run("git", ["show", "--stat", "--format=", "HEAD"], {
+      cwd: project.path,
+    });
+    assert.ok(written.stdout.includes("G-0001.md"), written.stdout);
+    assert.ok(!written.stdout.includes("ledger"), written.stdout);
   });
 
   test("the approved version arrives beside the current bytes, and null when git never held it", async () => {

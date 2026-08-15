@@ -474,27 +474,59 @@ export async function restoreSpecNode(input: {
 }
 
 /**
- * Whether the Commit Spec button has anything to do. No repository and no git
- * are ordinary states here, not refusals — the button simply is not shown.
+ * The two paths one commit covers: the spec folder, and the FOLDER the ledger
+ * sits in rather than the ledger file itself.
+ *
+ * THE FOLDER, SO THAT A LEDGER SOMEBODY DELETED BY HAND IS COMMITTED AS THE
+ * DELETION IT IS. Naming the file would name a pathspec matching nothing in the
+ * worktree the moment it is gone, and the removal would sit outside every
+ * commit this button makes — the spec would travel without the record of what
+ * was approved in it. Naming the folder keeps the deletion inside the commit,
+ * where the history can say when the approvals went.
+ *
+ * A project nobody has approved anything in has no such folder at all, which
+ * `git-cli` is built for: `status` is silent under it and `commitPaths` drops
+ * it before git is ever asked to stage it.
+ */
+function gitPathsFor(
+  root: string,
+  specDir: string,
+  ledgerFile: string,
+): readonly string[] {
+  return [
+    toPosix(path.relative(root, specDir)),
+    toPosix(path.relative(root, path.dirname(ledgerFile))),
+  ];
+}
+
+/**
+ * Whether the Commit Spec button has anything to do — a change under the spec
+ * folder or under the ledger beside it, because one approval and no edit is a
+ * commit worth offering. No repository and no git are ordinary states here, not
+ * refusals — the button simply is not shown.
  */
 export async function readSpecGitStatus(
   projectId: string,
 ): Promise<{ repo: boolean; dirty: boolean }> {
-  const { projectPath, specDir } = await projectSpecFor(projectId);
+  const { projectPath, specDir, ledgerFile } = await projectSpecFor(projectId);
   const root = await repositoryRoot(projectPath);
   if (root === null) {
     return { repo: false, dirty: false };
   }
   return {
     repo: true,
-    dirty: await isDirtyUnder(root, toPosix(path.relative(root, specDir))),
+    dirty: await isDirtyUnder(root, gitPathsFor(root, specDir, ledgerFile)),
   };
 }
 
 /**
- * The person's own commit — the daemon never makes one on its own. One
- * commit, scoped to the spec folder, so whatever else they have staged stays
- * exactly as staged.
+ * The person's own commit — the daemon never makes one on its own. ONE commit,
+ * scoped to the spec folder and the approval ledger beside it, so whatever else
+ * they have staged stays exactly as staged.
+ *
+ * The two travel together because they are read together: a spec whose ledger
+ * stayed behind clones as a graph nothing is green in, and a ledger whose spec
+ * stayed behind names bytes the clone has never seen.
  */
 export async function commitSpec(input: {
   projectId: string;
@@ -504,7 +536,9 @@ export async function commitSpec(input: {
   if (message === "") {
     throw invalid("A commit message is required.");
   }
-  const { projectPath, specDir } = await projectSpecFor(input.projectId);
+  const { projectPath, specDir, ledgerFile } = await projectSpecFor(
+    input.projectId,
+  );
   if (!(await gitPresent(projectPath))) {
     throw conflict(
       "Shall could not run git on this machine, so the spec could not be committed — install git, or commit by hand.",
@@ -516,11 +550,13 @@ export async function commitSpec(input: {
       `This project is in no git repository, so there is nothing to commit into — run git init in ${projectPath} first.`,
     );
   }
-  const relSpec = toPosix(path.relative(root, specDir));
-  if (!(await isDirtyUnder(root, relSpec))) {
-    throw conflict("The spec folder holds no change to commit, so nothing was committed.");
+  const paths = gitPathsFor(root, specDir, ledgerFile);
+  if (!(await isDirtyUnder(root, paths))) {
+    throw conflict(
+      "The spec folder and the approval ledger hold no change to commit, so nothing was committed.",
+    );
   }
-  const answer = await commitPaths(root, relSpec, message);
+  const answer = await commitPaths(root, paths, message);
   if (answer.kind !== "ok") {
     const why =
       answer.kind === "failed"

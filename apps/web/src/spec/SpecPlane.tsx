@@ -1045,12 +1045,14 @@ export function SpecPlane() {
         </Dialog>
       )}
 
-      {/* ONE COMMIT FOR THE WHOLE SPEC FOLDER, WHICH IS WHAT THE SPEC IS. The
-          graph is files now: a node is a file, a relation is a line in one, and
-          a save writes whichever files that took. Offering to commit a node
+      {/* ONE COMMIT FOR THE WHOLE SPEC FOLDER AND THE LEDGER THAT JUDGES IT.
+          The graph is files now: a node is a file, a relation is a line in one,
+          and a save writes whichever files that took. Offering to commit a node
           would be offering a half of a change that has no meaning on its own —
-          the relation would go without the node it points at — so the unit here
-          is the folder, and the person supplies only the sentence. */}
+          the relation would go without the node it points at, or the spec would
+          go without the approvals that colour it — so the unit here is the
+          folder and the book beside it, and the person supplies only the
+          sentence. */}
       {commitOpen ? (
         <Dialog
           open
@@ -1066,8 +1068,8 @@ export function SpecPlane() {
                   and a dialog that offered to move it would be a git client
                   growing inside a spec board. */}
               <DialogDescription>
-                Everything under .shall/spec goes into one commit on the branch
-                you are on.
+                Everything under .shall/spec, and the approval ledger beside it,
+                goes into one commit on the branch you are on.
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-2">
