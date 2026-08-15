@@ -455,18 +455,51 @@ describe("yellow and green", () => {
   });
 });
 
-describe("outside colour", () => {
-  test("an execution node has no colour at all", () => {
-    // A work log is the record of work done. It is not approved and cannot go
-    // stale — a log from March is exactly as true in June — so it is dropped
-    // rather than filed as some fourth kind of thing.
+describe("the execution band", () => {
+  test("a work log is coloured like any other node, and held by the journal that logs it", () => {
+    // The record is written by an agent and read by a person, so the same
+    // three questions apply: does it read, does anything reach it, has a person
+    // signed off. A journal is the root of the record and stands on its own; a
+    // work log nothing logs and no task addresses is an orphan.
+    const journal = node("Journal", "J-0001");
+    const logged = node("WorkLog", "WL-0001");
+    const stray = node("WorkLog", "WL-0002");
     const review = reviewGraph(
       graphOf({
-        nodes: [node("WorkLog", "WL-0001"), node("Goal", "G-0001")],
+        nodes: [journal, logged, stray],
+        edges: [edge("J-0001", "LOGS", "WL-0001")],
       }),
       seal,
     );
-    assert.equal(statusOf(review, "WL-0001"), undefined);
-    assert.deepEqual(review.statuses.map((status) => status.id), ["G-0001"]);
+    assert.deepEqual(statusOf(review, "J-0001"), {
+      id: "J-0001",
+      color: "yellow",
+      reason: "unapproved",
+    });
+    assert.deepEqual(statusOf(review, "WL-0001"), {
+      id: "WL-0001",
+      color: "yellow",
+      reason: "unapproved",
+    });
+    assert.deepEqual(statusOf(review, "WL-0002"), {
+      id: "WL-0002",
+      color: "red",
+      reason: "orphan",
+    });
+  });
+
+  test("an approved work log is green", () => {
+    const journal = node("Journal", "J-0001");
+    const logs = [edge("J-0001", "LOGS", "WL-0001")];
+    const signed = approve(node("WorkLog", "WL-0001"), []);
+    const review = reviewGraph(
+      graphOf({ nodes: [journal, signed], edges: logs }),
+      seal,
+    );
+    assert.deepEqual(statusOf(review, "WL-0001"), {
+      id: "WL-0001",
+      color: "green",
+      reason: "approved",
+    });
   });
 });

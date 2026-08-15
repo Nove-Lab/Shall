@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import {
   access,
   mkdir,
+  readdir,
   readFile,
   rename,
   rm,
@@ -44,7 +45,7 @@ export function getProjectSpecPath(projectPath: string): string {
 }
 
 /**
- * The 23 reference templates, regenerated under Shall's own home — one set for
+ * The 22 reference templates, regenerated under Shall's own home — one set for
  * the machine, not one per project. A project carries its spec and nothing
  * else; the starting shapes are Shall's to keep current, and a copy in every
  * repository was a copy that went stale the day Shall was upgraded.
@@ -166,7 +167,7 @@ export async function writeProjectMetadata(
 }
 
 /**
- * The 23 templates, WRITTEN ONLY WHERE THE BYTES DIFFER.
+ * The 22 templates, WRITTEN ONLY WHERE THE BYTES DIFFER.
  *
  * `emitTemplate` is a pure function of the canon, so regenerating is
  * byte-idempotent and this can run on every start and every open. Comparing
@@ -186,6 +187,16 @@ async function writeTemplatesInto(directory: string): Promise<void> {
       // reading a template never reads half of one.
       await writeByRename(target, text);
     }),
+  );
+  // A template for a type the canon no longer has is removed: it would teach
+  // an agent to write a node the loader refuses by folder name. The folder is
+  // Shall's own generated output, so nothing here is anybody's to keep.
+  const known = new Set(NODE_TYPES.map((entry) => `${entry.name}.md`));
+  const entries = await readdir(directory).catch(() => [] as string[]);
+  await Promise.all(
+    entries
+      .filter((entry) => entry.endsWith(".md") && !known.has(entry))
+      .map((entry) => rm(path.join(directory, entry), { force: true })),
   );
 }
 

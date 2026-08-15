@@ -1,5 +1,5 @@
 /**
- * The canon's 23 node types: the one roster, and where each type is drawn.
+ * The canon's 22 node types: the one roster, and where each type is drawn.
  *
  * A *layer* is the canon's own fact — v5 §1 puts every body type in Domain,
  * Intent, Plan or Execution, and gives the three satellites none, because a
@@ -46,7 +46,6 @@ const CANON = [
   { name: "Journal", layer: "Execution", prefix: "J" },
   { name: "WorkLog", layer: "Execution", prefix: "WL" },
   { name: "Evidence", layer: "Execution", prefix: "EV" },
-  { name: "Commit", layer: "Execution", prefix: "CM" },
   { name: "VerificationReport", layer: "Execution", prefix: "VR" },
   { name: "Finding", layer: "Execution", prefix: "F" },
   { name: "Assumption", layer: null, prefix: "AS" },

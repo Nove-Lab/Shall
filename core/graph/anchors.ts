@@ -18,12 +18,16 @@ import { bandOf, type NodeTypeName } from "./canon.js";
  * direction behind plausible-looking code, and a wrong direction here turns a
  * healthy node red on somebody's screen.
  *
- * THREE TYPES ANCHOR NOTHING AND THAT IS THE POINT. `Term`, `DomainEntity` and
+ * FOUR TYPES ANCHOR NOTHING AND THAT IS THE POINT. `Term`, `DomainEntity` and
  * `Goal` are where the canon starts — a vocabulary word and a top goal are
  * worth having before anything points at them, so requiring an anchor of them
- * would make an empty project's first node wrong the moment it was written. The
- * six execution types are rootless here too, but for a different reason: they
- * sit outside colour altogether (see `isColored`), so nothing ever asks.
+ * would make an empty project's first node wrong the moment it was written.
+ * `Journal` is the fourth: it is where the execution record starts, and
+ * nothing in the canon points at a journal. The rest of the execution band is
+ * anchored like everything else — a work log by the journal that logs it or
+ * the task it addresses, and the evidence, reports and findings by the work
+ * log that submitted or recorded them — because a record nothing reaches is
+ * as much a card left lying on the canvas as a requirement nothing requires.
  *
  * Nothing here reads a file, a database or a clock, so it is as safe in a
  * browser bundle as the rest of `core/graph`.
@@ -78,14 +82,14 @@ export const ANCHOR_RULES: readonly AnchorRule[] = [
   { type: "DataSchema",           anchors: [{ direction: "in", edgeType: "CARRIES" }] },
   { type: "ImplementationTask",   anchors: [{ direction: "in", edgeType: "ALLOCATES" }, { direction: "in", edgeType: "IS_PLANNED_BY" }] },
 
-  // Execution. Rootless because it is outside colour: a journal entry is a
-  // record of what happened, and a record is never wrong for standing alone.
+  // Execution. The journal is the root of the record; everything below it is
+  // held by the work log that submitted or recorded it, and a work log by the
+  // journal that logs it or the task it addresses — either will do.
   { type: "Journal",              anchors: [] },
-  { type: "WorkLog",              anchors: [] },
-  { type: "Evidence",             anchors: [] },
-  { type: "Commit",               anchors: [] },
-  { type: "VerificationReport",   anchors: [] },
-  { type: "Finding",              anchors: [] },
+  { type: "WorkLog",              anchors: [{ direction: "in", edgeType: "LOGS" }, { direction: "in", edgeType: "IS_ADDRESSED_BY" }] },
+  { type: "Evidence",             anchors: [{ direction: "in", edgeType: "SUBMITS" }, { direction: "in", edgeType: "IS_CLAIMED_BY" }] },
+  { type: "VerificationReport",   anchors: [{ direction: "in", edgeType: "SUBMITS" }] },
+  { type: "Finding",              anchors: [{ direction: "in", edgeType: "RECORDS" }] },
 
   // Satellites. Two hang off the chalk node that raised them; the third is the
   // one row in this table that points the other way — a `Decision` is held by
@@ -116,21 +120,21 @@ export function isRootless(type: string): boolean {
 }
 
 /**
- * Whether a node of this type is coloured at all.
+ * Whether a node of this type is coloured at all — which is every type the
+ * canon has, the execution band included.
  *
- * DOMAIN, INTENT AND PLAN ARE THE SPECIFICATION; EXECUTION IS THE RECORD OF
- * DOING IT. A record does not get approved and cannot go stale — a work log
- * from March is exactly as true in June — so asking whether it is green is
- * asking a question it has no answer to. The satellites are coloured, because
- * `bandOf` draws them in Intent and an unanswered question is a real hole in a
- * specification.
+ * THE RECORD IS JUDGED LIKE THE SPECIFICATION. A work log is written by an
+ * agent and read by a person, and the same three questions apply to it: does
+ * the file read, does anything reach it, and has a person signed off on what
+ * it says. The execution band was outside colour for one round and is not any
+ * more; what stays outside is deletion — a record is not unhappened by
+ * removing it — and that is the store's rule rather than this one's.
  *
- * An unknown type is not coloured either. It is not a judgement about that type
- * so much as the absence of one: nothing here knows what it would mean.
+ * An unknown type is not coloured. It is not a judgement about that type so
+ * much as the absence of one: nothing here knows what it would mean.
  */
 export function isColored(type: string): boolean {
-  const band = bandOf(type);
-  return band === "Domain" || band === "Intent" || band === "Plan";
+  return bandOf(type) !== null;
 }
 
 /** "an" before a vowel letter, "a" before anything else — the edge types are ASCII. */

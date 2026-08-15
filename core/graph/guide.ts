@@ -135,7 +135,6 @@ const GUIDE: Readonly<Record<NodeTypeName, readonly SectionGuide[]>> = {
     section("Claim"),
     section("Verdict", "Pending · Approved · Rejected"),
   ],
-  Commit: [section("SHA"), section("Message")],
   // No Verdict, and that absence is the design: this type testifies and does
   // not conclude (§3.19).
   VerificationReport: [

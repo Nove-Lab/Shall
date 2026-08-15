@@ -282,11 +282,12 @@ export function isHashMatched(
 /**
  * THE PRIORITY ORDER AND NOTHING ELSE.
  *
- * Null is not a colour and not an absence of information — it is a node the
- * question does not apply to. The execution band is the record of work done, and
- * a work log is neither approved nor stale; asking whether it is green is asking
- * something it has no answer to. An id nothing claims has no type to ask about,
- * so it goes through: a hole is a hole whatever was supposed to fill it.
+ * Null is not a colour and not an absence of information — it is a subject the
+ * question does not apply to, which today is only a type the canon does not
+ * have. Every canon type is coloured, the execution band included: a work log
+ * is written by an agent and read by a person, and the same three questions
+ * apply to it as to a requirement. An id nothing claims has no type to ask
+ * about, so it goes through: a hole is a hole whatever was supposed to fill it.
  */
 export function colorOf(
   subject: ColorSubject,

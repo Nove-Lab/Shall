@@ -46,26 +46,17 @@ describe("ANCHOR_RULES", () => {
     }
   }
 
-  test("leaves rootless exactly the three the canon starts from and the six of execution", () => {
+  test("leaves rootless exactly the three the canon starts from, and the journal that starts the record", () => {
     // Written out rather than derived, because deriving it from the same table
     // the code reads would agree with any table at all. The three are where a
-    // specification begins — a word, a thing, a goal — and the six are the
-    // execution record, which is outside colour anyway.
+    // specification begins — a word, a thing, a goal — and the journal is where
+    // the execution record begins; everything else in the record is held by
+    // the work log that submitted or recorded it.
     assert.deepEqual(
       ANCHOR_RULES.filter((rule) => isRootless(rule.type)).map(
         (rule) => rule.type,
       ),
-      [
-        "Term",
-        "DomainEntity",
-        "Goal",
-        "Journal",
-        "WorkLog",
-        "Evidence",
-        "Commit",
-        "VerificationReport",
-        "Finding",
-      ],
+      ["Term", "DomainEntity", "Goal", "Journal"],
     );
   });
 
@@ -78,19 +69,15 @@ describe("ANCHOR_RULES", () => {
 });
 
 describe("isColored", () => {
-  for (const type of ["Term", "DomainEntity", "Goal", "Requirement", "Interface", "Assumption", "Question", "Decision"]) {
-    test(`${type} is coloured, because it is part of the specification`, () => {
-      assert.equal(isColored(type), true);
+  for (const entry of NODE_TYPES) {
+    test(`${entry.name} is coloured, because every canon type is read by a person`, () => {
+      assert.equal(isColored(entry.name), true);
     });
   }
 
-  for (const type of ["Journal", "WorkLog", "Evidence", "Commit", "VerificationReport", "Finding", "Widget"]) {
-    test(`${type} is outside colour`, () => {
-      // The execution record is not approved and cannot go stale, and a type
-      // nothing knows has no colour to be asked about.
-      assert.equal(isColored(type), false);
-    });
-  }
+  test("a type nothing knows has no colour to be asked about", () => {
+    assert.equal(isColored("Widget"), false);
+  });
 });
 
 describe("anchorPhrase", () => {

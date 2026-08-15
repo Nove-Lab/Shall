@@ -8,7 +8,7 @@ import { before, describe, test } from "node:test";
 import { emitNodeFile } from "@shall/core/serialize";
 import { isRefusal, type Refusal } from "./errors.js";
 import { createProject } from "./projects.js";
-import { createSpecEdge, createSpecNode } from "./spec-graph.js";
+import { createSpecEdge, createSpecNode, updateSpecNode } from "./spec-graph.js";
 import {
   approveSpecNode,
   commitSpec,
@@ -118,8 +118,16 @@ describe("the review", () => {
     assert.deepEqual(review.broken, []);
   });
 
-  test("an execution node appears in no list at all", async () => {
+  test("an execution node is coloured like any other, and held by its journal", async () => {
     const project = await newProject();
+    await createSpecNode({
+      projectId: project.id,
+      type: "Journal",
+      id: "J-0001",
+      shortName: "week-one",
+      name: "The first week",
+      body: "## Period\n\nThis week.",
+    });
     await createSpecNode({
       projectId: project.id,
       type: "WorkLog",
@@ -128,8 +136,22 @@ describe("the review", () => {
       name: "The first day",
       body: "It went fine.",
     });
-    const review = await reviewSpec(project.id);
-    assert.deepEqual(review.statuses, []);
+    let review = await reviewSpec(project.id);
+    assert.deepEqual(review.statuses, [
+      { id: "J-0001", color: "yellow", reason: "unapproved" },
+      { id: "WL-0001", color: "red", reason: "orphan" },
+    ]);
+    await createSpecEdge({
+      projectId: project.id,
+      type: "LOGS",
+      fromId: "J-0001",
+      toId: "WL-0001",
+    });
+    review = await reviewSpec(project.id);
+    assert.deepEqual(review.statuses, [
+      { id: "J-0001", color: "yellow", reason: "unapproved" },
+      { id: "WL-0001", color: "yellow", reason: "unapproved" },
+    ]);
   });
 
   test("a node the loader refused is broken and not a status", async () => {
@@ -229,20 +251,66 @@ describe("the approve door", () => {
     );
   });
 
-  test("refuses the execution band in the band's own terms", async () => {
+  test("approves a work log, commits and all, and the list survives the signature", async () => {
+    // The execution band is judged like the specification, and a WorkLog's
+    // commits are inside the payload the approval signs — so they ride through
+    // the approve untouched, and a later save carries them over as well.
     const project = await newProject();
     await createSpecNode({
       projectId: project.id,
-      type: "WorkLog",
+      type: "Journal",
+      id: "J-0001",
+      shortName: "week-one",
+      name: "The first week",
+      body: "## Period\n\nThis week.",
+    });
+    // Written by hand the way an agent writes one — the type folder made
+    // first, because the store makes it only on its own first write.
+    const logFile = specFile(project, "execution/WorkLog/WL-0001.md");
+    await mkdir(path.dirname(logFile), { recursive: true });
+    await writeFile(
+      logFile,
+      emitNodeFile(
+        "WorkLog",
+        {
+          shortName: "day-one",
+          name: "The first day",
+          body: "It went fine.",
+          commits: [{ sha: "9f2b1c4", message: "Keep one key at home" }],
+        },
+        [],
+      ),
+      "utf8",
+    );
+    await createSpecEdge({
+      projectId: project.id,
+      type: "LOGS",
+      fromId: "J-0001",
+      toId: "WL-0001",
+    });
+
+    const approved = await approveSpecNode({ projectId: project.id, id: "WL-0001" });
+    assert.deepEqual(approved.commits, [{ sha: "9f2b1c4", message: "Keep one key at home" }]);
+    let review = await reviewSpec(project.id);
+    assert.deepEqual(
+      review.statuses.find((status) => status.id === "WL-0001"),
+      { id: "WL-0001", color: "green", reason: "approved" },
+    );
+
+    // An ordinary save touches the body and nothing else in the frontmatter.
+    const saved = await updateSpecNode({
+      projectId: project.id,
       id: "WL-0001",
       shortName: "day-one",
       name: "The first day",
-      body: "It went fine.",
+      body: "It went fine, then better.",
     });
-    await says(
-      approveSpecNode({ projectId: project.id, id: "WL-0001" }),
-      "invalid",
-      "WL-0001 is a WorkLog, and the execution band records what happened rather than stating what shall be, so there is nothing here to approve.",
+    assert.deepEqual(saved.commits, [{ sha: "9f2b1c4", message: "Keep one key at home" }]);
+    assert.deepEqual(saved.approval, approved.approval);
+    review = await reviewSpec(project.id);
+    assert.deepEqual(
+      review.statuses.find((status) => status.id === "WL-0001"),
+      { id: "WL-0001", color: "yellow", reason: "changed" },
     );
   });
 

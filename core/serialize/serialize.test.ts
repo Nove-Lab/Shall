@@ -470,7 +470,7 @@ The daemon refuses a malformed id.
   test("a node with nothing to say ends at the closing fence", () => {
     assert.equal(
       emitNodeFile(
-        "Commit",
+        "Evidence",
         { shortName: "first", name: "The first commit", body: "" },
         [],
       ),
@@ -525,7 +525,7 @@ describe("parseNodeFile round trip", () => {
       ["Scenario", "the contract's own example", SCENARIO],
       ["Constraint", "the round-trip fixture", CONSTRAINT],
       ["Term", "a body in every markdown shape at once", MOTLEY],
-      ["Commit", "a node with nothing to say yet", EMPTY_BODY],
+      ["Evidence", "a node with nothing to say yet", EMPTY_BODY],
     ] as const) {
       const reading = parseNodeFile(type, "X-0001.md", text);
       assert.deepEqual(reading.problems, [], label);
@@ -744,15 +744,15 @@ The panel ships every font it uses.
         continue;
       }
       const written = emitNodeFile(
-        "Commit",
+        "Evidence",
         { shortName: value, name: value, body: "## SHA\n\n0x1A" },
         [],
       );
-      const reading = parseNodeFile("Commit", "CM-0001.md", written);
+      const reading = parseNodeFile("Evidence", "EV-0001.md", written);
       assert.deepEqual(reading.problems, [], JSON.stringify(entry.value));
       assert.equal(reading.node?.shortName, value, JSON.stringify(entry.value));
       assert.equal(reading.node?.name, value, JSON.stringify(entry.value));
-      assert.equal(isCanonical("Commit", "CM-0001.md", written), true);
+      assert.equal(isCanonical("Evidence", "EV-0001.md", written), true);
     }
   });
 
@@ -768,18 +768,18 @@ The panel ships every font it uses.
         continue;
       }
       const written = emitNodeFile(
-        "Commit",
+        "Evidence",
         { shortName: "first", name: "The first commit", body: entry.value },
         [],
       );
-      const reading = parseNodeFile("Commit", "CM-0001.md", written);
+      const reading = parseNodeFile("Evidence", "EV-0001.md", written);
       assert.deepEqual(reading.problems, [], JSON.stringify(entry.value));
       assert.equal(
         reading.node?.body,
         entry.value,
         JSON.stringify(entry.value),
       );
-      assert.equal(isCanonical("Commit", "CM-0001.md", written), true);
+      assert.equal(isCanonical("Evidence", "EV-0001.md", written), true);
     }
   });
 
@@ -795,17 +795,17 @@ The panel ships every font it uses.
 
   test("a quoted value that had to be quoted survives the trip", () => {
     const written = emitNodeFile(
-      "Commit",
+      "Evidence",
       { shortName: "true", name: "a: b", body: "## SHA\n\n12:30 and 1_000" },
       [],
     );
-    const reading = parseNodeFile("Commit", "CM-0001.md", written);
+    const reading = parseNodeFile("Evidence", "EV-0001.md", written);
     assert.deepEqual(reading.problems, []);
     assert.equal(reading.node?.shortName, "true");
     assert.equal(reading.node?.name, "a: b");
     assert.equal(reading.node?.body, "## SHA\n\n12:30 and 1_000");
     assert.ok(reading.node !== undefined);
-    assert.equal(emitNodeFile("Commit", reading.node, []), written);
+    assert.equal(emitNodeFile("Evidence", reading.node, []), written);
   });
 });
 
@@ -813,7 +813,7 @@ describe("isCanonical", () => {
   test("the canonical file is the one that answers yes", () => {
     assert.equal(isCanonical("Constraint", "C-0001.md", CONSTRAINT), true);
     assert.equal(isCanonical("Scenario", "SC-0001.md", SCENARIO), true);
-    assert.equal(isCanonical("Commit", "CM-0001.md", EMPTY_BODY), true);
+    assert.equal(isCanonical("Evidence", "EV-0001.md", EMPTY_BODY), true);
   });
 
   test("valid but not canonical is a real state, and it answers no", () => {
@@ -1473,48 +1473,58 @@ name:                  # required · one line
     );
   });
 
-  test("the Commit template, which the canon gives no outgoing relation", () => {
+  test("the Evidence template, which the canon gives no outgoing relation", () => {
     // The other branch of the relation block, as a golden rather than as a
     // substring check: a type with no outgoing edge says so in one line and
     // ships no commented-out `edges:` example, because there is nothing it
-    // could show.
+    // could show. Evidence has been that type since CITES left with the Commit
+    // node — what it testifies about is named by the work log and the
+    // criterion that reach it, never by a line of its own.
     assert.equal(
-      emitTemplate("Commit"),
+      emitTemplate("Evidence"),
       `---
-# Commit — the starting shape of a Commit node.
-# \`shall add-spec-node --type Commit\` writes this file into the project at
-# .shall/spec/execution/Commit/<id>.md with the next free id as its name.
+# Evidence — the starting shape of a Evidence node.
+# \`shall add-spec-node --type Evidence\` writes this file into the project at
+# .shall/spec/execution/Evidence/<id>.md with the next free id as its name.
 # (Writing it there by hand works too: the FILENAME is the id and the FOLDER
 # is the type, so neither is repeated inside. An id uses letters, digits,
-# dots, hyphens and underscores, at most 64 characters — CM-0001 is the shape
+# dots, hyphens and underscores, at most 64 characters — EV-0001 is the shape
 # Shall suggests.)
 short_name:            # required · one line
 name:                  # required · one line
 # Everything below the closing fence is the specification: free markdown,
 # read back exactly as written. The headings that follow are a starting
 # shape, not a rule — keep them, reshape them or write your own.
-#   ## SHA
-#   ## Message
-# From a Commit the canon allows no outgoing relations.
+#   ## Claim
+#   ## Verdict — Pending · Approved · Rejected
+# From a Evidence the canon allows no outgoing relations.
 ---
 
-## SHA
+## Claim
 
-## Message
+## Verdict
 `,
     );
-    assert.equal(emitTemplate("Commit").includes("# edges:"), false);
+    assert.equal(emitTemplate("Evidence").includes("# edges:"), false);
   });
 
-  test("all 23 types have a template, and generating twice writes the same bytes", () => {
-    assert.equal(NODE_TYPES.length, 23);
+  test("the WorkLog template shows where its commits go", () => {
+    // The one type-specific key, and the only template that mentions it: an
+    // agent starting a work log sees the shape of the list it will fill.
+    const text = emitTemplate("WorkLog");
+    assert.ok(text.includes("# commits:\n#   - sha: 0123abc\n#     message: "), text);
+    assert.equal(emitTemplate("Journal").includes("commits"), false);
+  });
+
+  test("all 22 types have a template, and generating twice writes the same bytes", () => {
+    assert.equal(NODE_TYPES.length, 22);
     const written = new Set<string>();
     for (const entry of NODE_TYPES) {
       const once = emitTemplate(entry.name);
       assert.equal(emitTemplate(entry.name), once, entry.name);
       written.add(once);
     }
-    assert.equal(written.size, 23);
+    assert.equal(written.size, 22);
   });
 
   test("every template names the command that writes it and the path it lands at", () => {
@@ -1648,14 +1658,14 @@ name:                  # required · one line
     );
   });
 
-  test("all 23 types have a scaffold, and generating twice writes the same bytes", () => {
+  test("all 22 types have a scaffold, and generating twice writes the same bytes", () => {
     const written = new Set<string>();
     for (const entry of NODE_TYPES) {
       const once = emitScaffold(entry.name);
       assert.equal(emitScaffold(entry.name), once, entry.name);
       written.add(once);
     }
-    assert.equal(written.size, 23);
+    assert.equal(written.size, 22);
   });
 
   test("every scaffold is its template with the header swapped and nothing else", () => {
@@ -1947,5 +1957,144 @@ describe("the two machine blocks", () => {
     assert.ok(here.startsWith("Requirement/R-0001\n"));
     assert.notEqual(here, there);
     assert.equal(here.slice(here.indexOf("\n")), there.slice(there.indexOf("\n")));
+  });
+});
+
+/**
+ * THE WORKLOG'S COMMITS. The Commit node type is gone; the commits a piece of
+ * work produced are a list in the WorkLog's own frontmatter — sha and message,
+ * in the order they were made — and no other type carries the key. What is
+ * pinned here is the shape, the order (author's, never sorted), the fixpoint,
+ * and the two sentences: one for a malformed entry and one for the key on a
+ * type that has no business with it.
+ */
+const LOGGED = `---
+short_name: day-one
+name: The first day's work
+edges:
+  - type: SUBMITS
+    to: EV-0001
+commits:
+  - sha: 9f2b1c4
+    message: Keep one key at home, and sign nothing without it
+  - sha: 41acde0
+    message: "2026-08-15 release notes"
+---
+
+## Narrative
+
+The key landed.
+`;
+
+describe("the WorkLog's commits", () => {
+  test("a commits list reads back as the shas and messages it carries, in order", () => {
+    const reading = parseNodeFile("WorkLog", "WL-0001.md", LOGGED);
+    assert.deepEqual(reading.problems, []);
+    assert.deepEqual(reading.node?.commits, [
+      { sha: "9f2b1c4", message: "Keep one key at home, and sign nothing without it" },
+      { sha: "41acde0", message: "2026-08-15 release notes" },
+    ]);
+  });
+
+  test("the list is written after the edges, in the author's order, and the file is a fixpoint", () => {
+    const reading = parseNodeFile("WorkLog", "WL-0001.md", LOGGED);
+    assert.ok(reading.node !== undefined);
+    assert.equal(
+      emitNodeFile(reading.node.type, reading.node, reading.edges, reading.node),
+      LOGGED,
+    );
+    assert.equal(isCanonical("WorkLog", "WL-0001.md", LOGGED), true);
+  });
+
+  test("a work log without commits has no key for them, in the object as in the file", () => {
+    const written = emitNodeFile("WorkLog", { shortName: "d", name: "D", body: "" }, []);
+    assert.equal(written.includes("commits"), false);
+    const reading = parseNodeFile("WorkLog", "WL-0001.md", written);
+    assert.ok(reading.node !== undefined);
+    assert.equal("commits" in reading.node, false);
+  });
+
+  test("an empty list is a list of no commits, read as absent", () => {
+    const bare = LOGGED.replace(
+      /commits:\n(  - sha[^\n]*\n    message[^\n]*\n){2}/,
+      "commits: []\n",
+    );
+    const reading = parseNodeFile("WorkLog", "WL-0001.md", bare);
+    assert.deepEqual(reading.problems, []);
+    assert.ok(reading.node !== undefined);
+    assert.equal("commits" in reading.node, false);
+    assert.equal(isCanonical("WorkLog", "WL-0001.md", bare), false);
+  });
+
+  test("an entry that is not sha and message is one sentence about the list", () => {
+    const wide = LOGGED.replace(
+      "    message: Keep one key at home, and sign nothing without it\n",
+      "    message: Keep one key at home, and sign nothing without it\n    author: me\n",
+    );
+    assert.deepEqual(parseNodeFile("WorkLog", "WL-0001.md", wide).problems, [
+      "Every entry under commits is a map of exactly sha and message.",
+    ]);
+    const short = LOGGED.replace(
+      "    message: Keep one key at home, and sign nothing without it\n",
+      "",
+    );
+    assert.deepEqual(parseNodeFile("WorkLog", "WL-0001.md", short).problems, [
+      "Every entry under commits is a map of exactly sha and message.",
+    ]);
+  });
+
+  test("a blank message is refused by name", () => {
+    const blank = LOGGED.replace(
+      "    message: Keep one key at home, and sign nothing without it\n",
+      '    message: ""\n',
+    );
+    assert.deepEqual(parseNodeFile("WorkLog", "WL-0001.md", blank).problems, [
+      "A commit message is required.",
+    ]);
+  });
+
+  test("commits on any other type is refused by name, not as a stray", () => {
+    const misplaced = `---
+short_name: r
+name: R
+commits:
+  - sha: 9f2b1c4
+    message: Not where this belongs
+---
+`;
+    assert.deepEqual(parseNodeFile("Requirement", "R-0001.md", misplaced).problems, [
+      "A Requirement does not carry commits — only a WorkLog records the commits its work produced.",
+    ]);
+  });
+
+  test("the stray sentence names commits on a WorkLog and not elsewhere", () => {
+    const strayLog = LOGGED.replace("commits:\n", "priority: high\ncommits:\n");
+    assert.deepEqual(parseNodeFile("WorkLog", "WL-0001.md", strayLog).problems, [
+      "The frontmatter carries short_name, name, edges, commits, deletionProposed and approval and nothing else — priority belongs in the body, below the closing fence.",
+    ]);
+    const strayReq = `---
+short_name: r
+name: R
+priority: high
+---
+`;
+    assert.deepEqual(parseNodeFile("Requirement", "R-0001.md", strayReq).problems, [
+      "The frontmatter carries short_name, name, edges, deletionProposed and approval and nothing else — priority belongs in the body, below the closing fence.",
+    ]);
+  });
+
+  test("the commits are inside the payload an approval signs", () => {
+    const reading = parseNodeFile("WorkLog", "WL-0001.md", LOGGED);
+    assert.ok(reading.node !== undefined);
+    const payload = approvalPayload("WorkLog", "WL-0001", reading.node, reading.edges, reading.node);
+    assert.ok(payload.includes("commits:"), payload);
+    const fewer = approvalPayload(
+      "WorkLog",
+      "WL-0001",
+      { ...reading.node, commits: reading.node.commits?.slice(0, 1) },
+      reading.edges,
+      reading.node,
+    );
+    assert.notEqual(payload, fewer);
   });
 });
