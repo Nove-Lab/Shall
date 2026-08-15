@@ -17,7 +17,7 @@ import {
   writeProjectFiles,
   writeSharedTemplates,
 } from "../host/project-files.js";
-import { writeAgentDenyRule } from "../host/agent-settings.js";
+import { writeAgentDenyRules } from "../host/agent-settings.js";
 import { initRepository, repositoryRoot } from "../host/git-cli.js";
 import { readGitBranch } from "../host/git.js";
 import { isShallHomePath } from "../host/shall-home.js";
@@ -47,7 +47,7 @@ export async function createProject(
     await initRepository(absolutePath);
   }
   // The same convenience an open runs — see openProject for why it is quiet.
-  await writeAgentDenyRule(absolutePath);
+  await writeAgentDenyRules(absolutePath);
   const project = toRegistryProject(absolutePath, metadata);
   await upsertRegistryProject(project);
   return project;
@@ -91,8 +91,9 @@ export async function openProject(
   // templates under `~/.shall/templates` are brought current, a template set
   // an older Shall committed into this project is removed — templates live
   // with Shall now, and a stale copy in the repository would teach an agent a
-  // format the daemon no longer writes — and the agent settings gain the deny
-  // rule that keeps the approval key's home out of an agent's reading.
+  // format the daemon no longer writes — and the agent settings gain the two
+  // deny rules that keep Shall's own home out of an agent's reading and the
+  // approval ledger out of its pen.
   //
   // NONE IS A CONDITION OF OPENING. All four are conveniences — so a folder
   // Shall may read but not write into (a read-only mount, a checkout owned by
@@ -103,7 +104,7 @@ export async function openProject(
     ensureProjectSpec(absolutePath).catch(() => undefined),
     writeSharedTemplates().catch(() => undefined),
     removeProjectTemplates(absolutePath).catch(() => undefined),
-    writeAgentDenyRule(absolutePath),
+    writeAgentDenyRules(absolutePath),
   ]);
 
   const project = toRegistryProject(absolutePath, metadata);
