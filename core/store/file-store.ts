@@ -749,7 +749,7 @@ async function writeNodeFile(
   fields: NodeFileFields,
   edges: readonly NodeFileEdge[],
   // Required and never defaulted, so the compiler walks every caller: a door
-  // that forgot the blocks would silently strip a node's approval on save.
+  // that forgot the blocks would silently strip a deletion proposal on save.
   blocks: NodeFileBlocks,
 ): Promise<SpecNode> {
   const fileName = `${id}${MARKDOWN_SUFFIX}`;
@@ -1067,7 +1067,7 @@ export async function updateNodeFile(
     // The blocks ride along like the edges do: lines in this file the edit did
     // not receive and therefore does not touch. The commits are the one list
     // an edit MAY reach — sent, they replace; left out, they ride along too.
-    // The changed content un-matches an approval's hash by itself — that is
+    // The changed content un-matches the approved hash by itself — that is
     // arithmetic, not this door's job.
     const fields = settleFields(values, values.commits ?? held.node.commits);
     return writeNodeFile(
@@ -1083,9 +1083,9 @@ export async function updateNodeFile(
 
 /**
  * The proposal taken back out, and nothing else in the file moved. The
- * proposal sat inside the approval's payload, so on a node whose only change
- * WAS the proposal, stripping it makes the standing signature fit again — the
- * rejection restores green without a second write.
+ * proposal sits inside the payload an approval's hash is taken over, so on a
+ * node whose only change WAS the proposal, stripping it makes the standing
+ * record fit again — the rejection restores green without a second write.
  */
 export async function clearDeletionProposal(
   specDir: string,
@@ -1102,9 +1102,7 @@ export async function clearDeletionProposal(
     if (held.node.deletionProposed === undefined) {
       throw invalid(`${id} carries no proposed deletion, so there is nothing to reject.`);
     }
-    return writeNodeFile(root, found.type, id, held.node, held.edges, {
-      approval: held.node.approval,
-    });
+    return writeNodeFile(root, found.type, id, held.node, held.edges, {});
   });
 }
 
@@ -1113,7 +1111,7 @@ export async function clearDeletionProposal(
  * one caller with the right to do that: a rejection putting the approved
  * version back. An ordinary edit reaches three fields and carries the rest;
  * this door is handed the rest, because what it writes is not an edit but a
- * return to bytes a person already signed.
+ * return to bytes a person already approved.
  */
 export async function revertNodeFile(
   specDir: string,

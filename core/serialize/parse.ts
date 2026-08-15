@@ -3,13 +3,11 @@ import {
   isNodeType,
   judgeBody,
   judgeNodeId,
-  type NodeApproval,
   type NodeDeletionProposal,
   type SpecEdge,
   type SpecNode,
 } from "../graph/index.js";
 import {
-  APPROVAL_KEY,
   COMMITS_KEY,
   COMMITS_TYPE,
   DELETION_PROPOSED_KEY,
@@ -18,6 +16,7 @@ import {
   NAME_KEY,
   SHORT_NAME_KEY,
 } from "./emit.js";
+import { LEDGER_FILE } from "./ledger.js";
 import {
   describeValue,
   isMap,
@@ -55,6 +54,13 @@ import {
  * the file's to be silent about; a file that writes either one is refused,
  * which is the only way the folder and the filename can stay the single home of
  * each.
+ *
+ * AN APPROVAL IS NOT THE FILE'S EITHER, AND IT USED TO BE. Whether a person
+ * has read this node lives in the ledger under `.shall` and nowhere else, so
+ * the frontmatter is the author's again and a colour is arithmetic over two
+ * files. A file still carrying the old `approval:` block is therefore refused
+ * BY NAME, like `id` and `type`: a block read and dropped in silence would
+ * leave somebody trusting a line that decides nothing.
  */
 
 /** What a file can say about its node: everything but the two stamps `stat` holds. */
@@ -86,8 +92,8 @@ const COMMIT_SHAPE = "Every entry under commits is a commit sha, as text.";
  */
 function carriedKeys(type: string): readonly string[] {
   return type === COMMITS_TYPE
-    ? [SHORT_NAME_KEY, NAME_KEY, EDGES_KEY, COMMITS_KEY, DELETION_PROPOSED_KEY, APPROVAL_KEY]
-    : [SHORT_NAME_KEY, NAME_KEY, EDGES_KEY, DELETION_PROPOSED_KEY, APPROVAL_KEY];
+    ? [SHORT_NAME_KEY, NAME_KEY, EDGES_KEY, COMMITS_KEY, DELETION_PROPOSED_KEY]
+    : [SHORT_NAME_KEY, NAME_KEY, EDGES_KEY, DELETION_PROPOSED_KEY];
 }
 
 /** "a, b, c and d" — the list of carried keys as a sentence reads it. */
@@ -98,13 +104,11 @@ function keysPhrase(keys: readonly string[]): string {
 }
 
 /**
- * The machine blocks, refused whole for the same reason the edges list is: a
- * stranger key inside one, a key missing from one and a value that is not text
+ * The machine block, refused whole for the same reason the edges list is: a
+ * stranger key inside it, a key missing from it and a value that is not text
  * are one rule about one block, said once. What the VALUES may hold is judged
  * per field further down, in sentences a person can act on by name.
  */
-const APPROVAL_SHAPE =
-  "The approval block is a map of exactly hash, tag, by and at, each of them text.";
 const DELETION_SHAPE =
   "The deletionProposed block is a map of exactly by and rationale, each of them text.";
 
@@ -216,13 +220,12 @@ export function parseNodeFile(
 
   let shortName = "";
   let name = "";
-  let approval: NodeApproval | undefined;
   let deletionProposed: NodeDeletionProposal | undefined;
   let commits: string[] | undefined;
   // The keys the format does not carry, said once as one list: the rule is one
   // rule — the frontmatter holds the graph's three facts, a WorkLog's commits
-  // and the two machine blocks, and the body holds everything else — and six
-  // sentences about six keys would read as six rules.
+  // and the one machine block, and the body holds everything else — and five
+  // sentences about five keys would read as five rules.
   const strays: string[] = [];
   for (const [key, value] of Object.entries(carried)) {
     if (key === EDGES_KEY) {
@@ -248,6 +251,15 @@ export function parseNodeFile(
       problems.push("A spec file does not carry type — the folder is the type.");
       continue;
     }
+    // Named above the empty-value rule, so that a block somebody half-deleted
+    // is refused too: the KEY is what moved out, and a bare `approval:` left
+    // behind is the same file to fix.
+    if (key === "approval") {
+      problems.push(
+        `A spec file does not carry approval — an approval lives in .shall/${LEDGER_FILE}, and only Shall writes there. Delete the block; the node's colour comes from the ledger.`,
+      );
+      continue;
+    }
     // A key written with no value is the same as a key not written: that is
     // what the templates ship as, and what a person leaves behind when they
     // clear a cell by hand.
@@ -270,25 +282,6 @@ export function parseNodeFile(
       );
       problems.push(...by.problems, ...rationale.problems);
       deletionProposed = { by: by.value, rationale: rationale.value };
-      continue;
-    }
-    if (key === APPROVAL_KEY) {
-      const held = readStringMap(value, ["hash", "tag", "by", "at"]);
-      if (held === null) {
-        problems.push(APPROVAL_SHAPE);
-        continue;
-      }
-      const hash = judgeIdentity("An approval hash", held["hash"] ?? "");
-      const tag = judgeIdentity("An approval tag", held["tag"] ?? "");
-      const by = judgeIdentity("An approver", held["by"] ?? "");
-      const at = judgeIdentity("An approval instant", held["at"] ?? "");
-      problems.push(
-        ...hash.problems,
-        ...tag.problems,
-        ...by.problems,
-        ...at.problems,
-      );
-      approval = { hash: hash.value, tag: tag.value, by: by.value, at: at.value };
       continue;
     }
     if (key !== SHORT_NAME_KEY && key !== NAME_KEY) {
@@ -448,7 +441,6 @@ export function parseNodeFile(
       // Spread in rather than assigned, so a node without a block has no key
       // for it either — one spelling of absence, here as in the file.
       ...(commits !== undefined ? { commits } : {}),
-      ...(approval !== undefined ? { approval } : {}),
       ...(deletionProposed !== undefined ? { deletionProposed } : {}),
     },
     edges,

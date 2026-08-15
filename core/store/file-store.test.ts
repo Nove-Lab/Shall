@@ -311,7 +311,7 @@ describe("the loader's problem matrix", () => {
       at: "intent/Requirement/R-0001.md",
       text: "---\nshort_name: a\nname: n\npriority: high\n---\n\n## Statement\n\ns\n",
       sentence:
-        "The frontmatter carries short_name, name, edges, deletionProposed and approval and nothing else — priority belongs in the body, below the closing fence.",
+        "The frontmatter carries short_name, name, edges and deletionProposed and nothing else — priority belongs in the body, below the closing fence.",
     },
     {
       // Said once as one list, because it is one rule: two sentences about two
@@ -320,7 +320,7 @@ describe("the loader's problem matrix", () => {
       at: "intent/Requirement/R-0001.md",
       text: "---\nshort_name: a\nname: n\nstatement: s\npriority: high\n---\n",
       sentence:
-        "The frontmatter carries short_name, name, edges, deletionProposed and approval and nothing else — statement and priority belong in the body, below the closing fence.",
+        "The frontmatter carries short_name, name, edges and deletionProposed and nothing else — statement and priority belong in the body, below the closing fence.",
     },
     {
       why: "an edges entry that is not a map of exactly type and to",
@@ -1355,7 +1355,7 @@ Because a cart is not an order.
     assert.deepEqual(await refusal(() => updateNodeFile(specDir, "R-0001", values)), {
       kind: "conflict",
       message:
-        "intent/Requirement/R-0001.md has been edited into a state Shall cannot read — The frontmatter carries short_name, name, edges, deletionProposed and approval and nothing else — statement belongs in the body, below the closing fence. Nothing was written, so that edit is still there to fix.",
+        "intent/Requirement/R-0001.md has been edited into a state Shall cannot read — The frontmatter carries short_name, name, edges and deletionProposed and nothing else — statement belongs in the body, below the closing fence. Nothing was written, so that edit is still there to fix.",
     });
     assert.equal(
       await readFile(path.join(specDir, "intent/Requirement/R-0001.md"), "utf8"),
@@ -1776,7 +1776,7 @@ describe("writes go through the queue one at a time", () => {
  */
 describe("a work log's commits through the doors", () => {
   test("a work log's commits ride through an edit and a relation, like the edges do", async () => {
-    // The commits are the WorkLog's own frontmatter and inside the signed
+    // The commits are the WorkLog's own frontmatter and inside the approval
     // payload; an ordinary save receives three values and carries the rest.
     const specDir = await makeSpecDir();
     await place(
@@ -1920,7 +1920,7 @@ describe("the deletion proposal door", () => {
 
     const cleared = await clearDeletionProposal(specDir, "R-0001");
     assert.equal("deletionProposed" in cleared, false);
-    // The proposal sat inside the approval payload, so with it gone the file
+    // The proposal sits inside the approval payload, so with it gone the file
     // hashes as it did before the agent wrote — a record taken over the clean
     // node fits again, and a rejection restores green without a second write.
     const text = await readFile(
@@ -1957,13 +1957,11 @@ describe("the restore door", () => {
     body: "## Statement\n\nThe system shall do the thing.",
   };
 
-  test("a restore writes the node back at its own path, canonically, blocks and all", async () => {
+  test("a restore writes the node back at its own path, canonically, the proposal and all", async () => {
     const specDir = await makeSpecDir();
-    const approval = {
-      hash: "sha256:1234",
-      tag: "hmac:5678",
-      by: "tester",
-      at: "2026-08-15T00:00:00.000Z",
+    const deletionProposed = {
+      by: "session-7",
+      rationale: "Superseded by R-0007.",
     };
     const restored = await restoreNodeFile(
       specDir,
@@ -1971,10 +1969,10 @@ describe("the restore door", () => {
       "R-0001",
       requirementValues,
       [{ type: "MENTIONS", toId: "T-0009" }],
-      { approval },
+      { deletionProposed },
     );
     assert.equal(restored.id, "R-0001");
-    assert.deepEqual(restored.approval, approval);
+    assert.deepEqual(restored.deletionProposed, deletionProposed);
 
     const text = await readFile(
       path.join(specDir, "intent/Requirement/R-0001.md"),
@@ -2020,26 +2018,24 @@ describe("the restore door", () => {
     );
   });
 
-  test("a revert replaces the whole file, blocks and all", async () => {
+  test("a revert replaces the whole file, the proposal and all", async () => {
     const specDir = await makeSpecDir();
     await createNodeFile(specDir, "Requirement", "R-0001", requirementValues);
     await updateNodeFile(specDir, "R-0001", {
       ...requirementValues,
-      body: "## Statement\n\nEdited past the signature.",
+      body: "## Statement\n\nEdited past the approved hash.",
     });
-    const approval = {
-      hash: "sha256:1234",
-      tag: "hmac:5678",
-      by: "tester",
-      at: "2026-08-15T00:00:00.000Z",
+    const deletionProposed = {
+      by: "session-7",
+      rationale: "Superseded by R-0007.",
     };
     const reverted = await revertNodeFile(specDir, "R-0001", requirementValues, [], {
-      approval,
+      deletionProposed,
     });
-    assert.deepEqual(reverted.approval, approval);
+    assert.deepEqual(reverted.deletionProposed, deletionProposed);
     assert.equal(
       await readFile(path.join(specDir, "intent/Requirement/R-0001.md"), "utf8"),
-      emitNodeFile("Requirement", requirementValues, [], { approval }),
+      emitNodeFile("Requirement", requirementValues, [], { deletionProposed }),
     );
   });
 

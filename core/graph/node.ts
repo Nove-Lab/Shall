@@ -1,21 +1,4 @@
 /**
- * A human's signature over one node, written by the daemon on the web approve
- * action and by nothing else. `hash` is `sha256:<hex>` over the node's payload
- * — its own `type/id` line, then its canonical file without this block — and
- * `tag` is `hmac:<hex>`, the HMAC-SHA256 of that hash string under this
- * machine's key at `~/.shall/key`. An agent can copy the shape but not the
- * tag, which is the whole of what makes green a state only a person can make.
- */
-export interface NodeApproval {
-  readonly hash: string;
-  readonly tag: string;
-  /** The username of whoever pressed approve. */
-  readonly by: string;
-  /** ISO 8601, the daemon's clock at the moment of the write. */
-  readonly at: string;
-}
-
-/**
  * An agent asking for this node to go, written by the agent into the file
  * itself — the one deletion path an agent has. The block is inside the
  * approval payload, so writing it un-matches the hash and the node turns
@@ -61,17 +44,16 @@ export interface SpecNode {
    * key and no other type's, so a reader of any other node never sees it set.
    * A sha and nothing else: the message, the author and the date are git's to
    * answer for, and a list that copied them would be a second home for facts
-   * whose first home is the repository. Author content, inside the signed
+   * whose first home is the repository. Author content, inside the approval
    * payload like the edges are; an ordinary save carries it over.
    */
   commits?: string[] | undefined;
   /**
-   * The two machine blocks, in a file that is otherwise the author's. A person
-   * edits neither by hand, and every ordinary save carries both over
+   * The one machine block, in a file that is otherwise the author's. A person
+   * does not edit it by hand, and every ordinary save carries it over
    * untouched. The explicit `| undefined` is what lets a caller build a node
-   * with `{ approval: maybe }` under `exactOptionalPropertyTypes`.
+   * with `{ deletionProposed: maybe }` under `exactOptionalPropertyTypes`.
    */
-  approval?: NodeApproval | undefined;
   deletionProposed?: NodeDeletionProposal | undefined;
 }
 
