@@ -160,8 +160,19 @@ export async function repositoryRoot(startPath: string): Promise<string | null> 
 }
 
 /**
- * Whether anything under `relDir` is uncommitted — the question behind whether
- * the button is worth offering.
+ * Whether anything under any of `relPaths` is uncommitted — the question behind
+ * whether the button is worth offering.
+ *
+ * ONE STATUS FOR ALL THE PATHS, because the answer is one boolean: git takes
+ * every pathspec at once and prints the union, and asking it once per path
+ * would spawn a process to learn nothing the first one did not already say.
+ *
+ * A PATH THAT IS NOWHERE IS NOT AN ERROR HERE. `status` under a pathspec that
+ * matches nothing is silent and exits 0 — unlike `add` and `commit`, which both
+ * refuse one — so the approval ledger's folder can be asked about on every
+ * glance at a project that has never approved anything and has no such folder
+ * yet. Only a path outside the repository fails at all, and that reads as not
+ * dirty like every other failure here — the last paragraph below.
  *
  * AN UNTRACKED FILE COUNTS, which is what `--untracked-files=all` is for: a
  * node somebody just wrote has never been added, and it is exactly the change
@@ -171,7 +182,8 @@ export async function repositoryRoot(startPath: string): Promise<string | null> 
  *
  * `--porcelain=v1` is named rather than left to default, because the default is
  * git's to change; all this asks is whether the output is empty, and naming the
- * version is what keeps that a stable question.
+ * version is what keeps that a stable question. The output itself is never
+ * read for what it says — see `commitPaths` for why nothing here parses it.
  *
  * A git that failed, or is not there, reads as NOT DIRTY. The button it feeds
  * would offer to commit something Shall cannot see, and offering nothing is the
@@ -179,14 +191,14 @@ export async function repositoryRoot(startPath: string): Promise<string | null> 
  */
 export async function isDirtyUnder(
   root: string,
-  relDir: string,
+  relPaths: readonly string[],
 ): Promise<boolean> {
   const answer = await runGit(root, [
     "status",
     "--porcelain=v1",
     "--untracked-files=all",
     "--",
-    relDir,
+    ...relPaths,
   ]);
   return answer.kind === "ok" && answer.stdout.trim() !== "";
 }
@@ -220,15 +232,34 @@ const SHALL_IDENTITY = [
 ] as const;
 
 /**
- * Everything under `relDir`, staged and committed in one commit under the
+ * Everything under `relPaths`, staged and committed in ONE commit under the
  * message a person gave. The only write this module makes, and it makes it
  * because somebody pressed a button.
  *
  * `commit -- <pathspec>` IS A PARTIAL COMMIT, AND THAT IS THE POINT. Whatever
  * else a person has staged stays staged and stays out of this commit: the
- * button records the spec and nothing but the spec. A daemon that swept up
- * somebody's half-staged refactor because it happened to be in the index would
- * be the last time they pressed it.
+ * button records the spec and the ledger beside it and nothing else. A daemon
+ * that swept up somebody's half-staged refactor because it happened to be in
+ * the index would be the last time they pressed it.
+ *
+ * THE PATHS ARE FILTERED DOWN TO THE ONES THAT ACTUALLY MOVED, BECAUSE GIT
+ * REFUSES A PATHSPEC THAT NAMES NOTHING. `add -A -- <path>` is fatal on a
+ * pathspec matching neither the worktree nor the index — a folder that is not
+ * there at all, which is exactly the approval ledger of a project nobody has
+ * approved anything in — and it takes the whole `add` down with it; `commit --
+ * <path>` fails on a pathspec the index and HEAD have never heard of, an
+ * untracked empty folder included. A path with a change in it is by
+ * construction known to both, so filtering by `isDirtyUnder` leaves only
+ * pathspecs both commands accept. A tracked folder somebody deleted whole
+ * survives the filter and both commands: the index still matches it, and the
+ * commit records the deletion.
+ *
+ * THE FILTER ASKS ONE PATH AT A TIME AND NEVER READS THE STATUS OUTPUT. Which
+ * of several paths moved cannot be told from the union `isDirtyUnder` already
+ * asks for, and picking the answer back out of the porcelain lines would mean
+ * parsing them — where a path with a byte above ASCII arrives quoted and
+ * escaped, and a rename arrives as `old -> new`, two paths on one line. A
+ * second question per path is cheaper than being wrong about a path's name.
  *
  * THE IDENTITY IS SUPPLIED, NEVER OVERRIDDEN. Shall's own pair goes on the
  * front of the argv only when the machine has neither name nor email of its
@@ -240,17 +271,36 @@ const SHALL_IDENTITY = [
  * here as an ordinary `failed` answer carrying git's own stderr, which is what
  * the caller shows.
  *
- * A subtree with nothing in it is a failure, not a silence — git exits 1 saying
- * the pathspec matched nothing — so callers ask `isDirtyUnder` first.
+ * ONE RACE IS NAMED AND NOT FOUGHT: a file that goes away between the filter
+ * and the `add` turns a matched pathspec back into an unmatched one, and the
+ * answer is git's own failure sentence. There is no retry — the person pressed
+ * the button once, and the honest thing is to show them what git said rather
+ * than to commit some other tree than the one they were looking at.
+ *
+ * Nothing dirty means nothing is spawned at all, and the answer wears git's own
+ * words for it. Callers ask `isDirtyUnder` first, so this is the floor and not
+ * the ordinary path.
  */
 export async function commitPaths(
   root: string,
-  relDir: string,
+  relPaths: readonly string[],
   message: string,
 ): Promise<GitAnswer> {
+  const dirty: string[] = [];
+  for (const rel of relPaths) {
+    if (await isDirtyUnder(root, [rel])) {
+      dirty.push(rel);
+    }
+  }
+  if (dirty.length === 0) {
+    // git's opening words for this, with the rest of its sentence left off:
+    // what follows in git's own output ("working tree clean") is a claim about
+    // the whole tree, and this is a claim about these paths.
+    return { kind: "failed", code: 1, stderr: "nothing to commit" };
+  }
   // `-A` under a pathspec, so a node file somebody deleted by hand is staged as
-  // the deletion it is. Anything outside `relDir` is untouched.
-  const staged = await runGit(root, ["add", "-A", "--", relDir]);
+  // the deletion it is. Anything outside `dirty` is untouched.
+  const staged = await runGit(root, ["add", "-A", "--", ...dirty]);
   if (staged.kind !== "ok") {
     return staged;
   }
@@ -261,7 +311,7 @@ export async function commitPaths(
     "-m",
     message,
     "--",
-    relDir,
+    ...dirty,
   ]);
 }
 

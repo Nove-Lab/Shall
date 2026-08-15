@@ -105,10 +105,16 @@ async function commitEverything(root: string, message: string): Promise<string> 
 
 const SPEC = ".shall/spec";
 const NODE = `${SPEC}/intent/Requirement/R-0001.md`;
+/** The second subtree one commit covers, and the folder it lives in. */
+const LEDGER_DIR = ".shall/ledger";
+const LEDGER = `${LEDGER_DIR}/approvals.yaml`;
 
 /** No trailing newline and a byte above ASCII, so "byte for byte" means it. */
 const FIRST = "---\nshort_name: café\nname: A café\n---\n\nFirst.";
 const SECOND = "---\nshort_name: café\nname: A café\n---\n\nSecond.";
+/** Shaped like the ledger only so a reader knows what these bytes stand for. */
+const RECORD =
+  "R-0001:\n  approvedHash: sha256:0000\n  by: someone\n  at: 2026-08-15T09:00:00.000Z\n";
 
 describe("running git at all", () => {
   test("a name nothing answers to is an answer and not a crash", async () => {
@@ -165,18 +171,34 @@ describe("what is uncommitted", () => {
     { skip: NO_GIT && "no git on this machine" },
     async () => {
       const root = await newRepository();
-      assert.equal(await isDirtyUnder(root, SPEC), false);
+      assert.equal(await isDirtyUnder(root, [SPEC]), false);
 
       // Untracked, which is the state every new node file starts in.
       await place(root, NODE, FIRST);
-      assert.equal(await isDirtyUnder(root, SPEC), true);
+      assert.equal(await isDirtyUnder(root, [SPEC]), true);
 
       await commitEverything(root, "the first node");
-      assert.equal(await isDirtyUnder(root, SPEC), false);
+      assert.equal(await isDirtyUnder(root, [SPEC]), false);
 
       // Edited in place: tracked and changed is the other half of dirty.
       await place(root, NODE, SECOND);
-      assert.equal(await isDirtyUnder(root, SPEC), true);
+      assert.equal(await isDirtyUnder(root, [SPEC]), true);
+    },
+  );
+
+  test(
+    "a path that is not there anywhere counts as clean rather than as an error",
+    { skip: NO_GIT && "no git on this machine" },
+    async () => {
+      const root = await newRepository();
+      await place(root, NODE, FIRST);
+
+      // Nobody has approved anything here, so there is no ledger folder to
+      // find — and a pathspec matching nothing is silence, not a failure.
+      assert.equal(await isDirtyUnder(root, [LEDGER_DIR]), false);
+      // And it does not swallow the path beside it that HAS moved: the answer
+      // is the union of the two, which is what the button asks about.
+      assert.equal(await isDirtyUnder(root, [SPEC, LEDGER_DIR]), true);
     },
   );
 });
@@ -190,15 +212,137 @@ describe("recording a commit", () => {
       await place(root, NODE, FIRST);
       await place(root, "README.md", "# somebody's own work\n");
 
-      const answer = await commitPaths(root, SPEC, "Save the spec");
+      const answer = await commitPaths(root, [SPEC], "Save the spec");
       assert.equal(answer.kind, "ok", JSON.stringify(answer));
 
-      assert.equal(await isDirtyUnder(root, SPEC), false);
+      assert.equal(await isDirtyUnder(root, [SPEC]), false);
       // The file outside the subtree is untouched: still uncommitted, and not
       // in the tree the commit wrote.
-      assert.equal(await isDirtyUnder(root, "README.md"), true);
+      assert.equal(await isDirtyUnder(root, ["README.md"]), true);
       assert.equal(await fileAt(root, "HEAD", NODE), FIRST);
       assert.equal(await fileAt(root, "HEAD", "README.md"), null);
+    },
+  );
+
+  test(
+    "two subtrees go into one commit, and a third stays exactly as it was staged",
+    { skip: NO_GIT && "no git on this machine" },
+    async () => {
+      const root = await newRepository();
+      await place(root, NODE, FIRST);
+      await place(root, LEDGER, RECORD);
+      await place(root, "notes.md", "somebody's own work\n");
+      // Staged by hand and left there: the half-finished change this button
+      // must never sweep up.
+      await must(root, ["add", "--", "notes.md"]);
+
+      const answer = await commitPaths(
+        root,
+        [SPEC, LEDGER_DIR],
+        "Save the spec",
+      );
+      assert.equal(answer.kind, "ok", JSON.stringify(answer));
+
+      // One commit, holding both subtrees.
+      assert.equal(await fileAt(root, "HEAD", NODE), FIRST);
+      assert.equal(await fileAt(root, "HEAD", LEDGER), RECORD);
+      assert.equal((await must(root, ["rev-list", "--count", "HEAD"])).trim(), "1");
+      assert.equal(await isDirtyUnder(root, [SPEC, LEDGER_DIR]), false);
+
+      // The third path is out of the commit and still staged, byte for byte
+      // as the person left it.
+      assert.equal(await fileAt(root, "HEAD", "notes.md"), null);
+      assert.equal(
+        (await must(root, ["diff", "--cached", "--name-only"])).trim(),
+        "notes.md",
+      );
+    },
+  );
+
+  test(
+    "a path with nothing in it is dropped from the commit rather than failing it",
+    { skip: NO_GIT && "no git on this machine" },
+    async () => {
+      const root = await newRepository();
+      await place(root, NODE, FIRST);
+      await place(root, LEDGER, RECORD);
+      await commitEverything(root, "the node and the ledger");
+
+      // Only the node moved, and the quiet path is dropped rather than sorted
+      // out: a path with nothing in it may be a folder git tracks and has
+      // nothing to say about, or one that is not there at all — the second is
+      // the one `add` is fatal over — so the filter treats both alike.
+      await place(root, NODE, SECOND);
+      const answer = await commitPaths(
+        root,
+        [SPEC, LEDGER_DIR],
+        "Change the node",
+      );
+      assert.equal(answer.kind, "ok", JSON.stringify(answer));
+      assert.equal(
+        (await must(root, ["show", "--name-only", "--format=", "HEAD"])).trim(),
+        NODE,
+      );
+      assert.equal(await fileAt(root, "HEAD", LEDGER), RECORD);
+    },
+  );
+
+  test(
+    "a folder git has never seen is not a pathspec that fails a commit",
+    { skip: NO_GIT && "no git on this machine" },
+    async () => {
+      const root = await newRepository();
+      await place(root, NODE, FIRST);
+
+      // Nobody has approved anything, so there is no ledger folder at all —
+      // and `add -A` over a pathspec matching nothing is fatal for the whole
+      // add, which is what the filter is there to prevent.
+      const answer = await commitPaths(
+        root,
+        [SPEC, LEDGER_DIR],
+        "Save the spec",
+      );
+      assert.equal(answer.kind, "ok", JSON.stringify(answer));
+      assert.equal(await fileAt(root, "HEAD", NODE), FIRST);
+
+      // An empty folder is the other half of the same fact: `add` takes it and
+      // `commit` refuses it, and it never reaches either because a folder with
+      // nothing in it has nothing to commit.
+      await mkdir(path.join(root, LEDGER_DIR), { recursive: true });
+      await place(root, NODE, SECOND);
+      const second = await commitPaths(
+        root,
+        [SPEC, LEDGER_DIR],
+        "Change the node",
+      );
+      assert.equal(second.kind, "ok", JSON.stringify(second));
+      assert.equal(await fileAt(root, "HEAD", NODE), SECOND);
+    },
+  );
+
+  test(
+    "a subtree somebody deleted whole is committed as the deletion it is",
+    { skip: NO_GIT && "no git on this machine" },
+    async () => {
+      const root = await newRepository();
+      await place(root, NODE, FIRST);
+      await place(root, LEDGER, RECORD);
+      await commitEverything(root, "the node and the ledger");
+
+      await rm(path.join(root, LEDGER_DIR), { recursive: true });
+      // The worktree has no such folder now, but the index still matches the
+      // pathspec — so the removal is a change like any other.
+      assert.equal(await isDirtyUnder(root, [LEDGER_DIR]), true);
+
+      const answer = await commitPaths(
+        root,
+        [SPEC, LEDGER_DIR],
+        "Drop the ledger",
+      );
+      assert.equal(answer.kind, "ok", JSON.stringify(answer));
+      assert.equal(await fileAt(root, "HEAD", LEDGER), null);
+      assert.equal(await fileAt(root, "HEAD", NODE), FIRST);
+      assert.equal(await isDirtyUnder(root, [SPEC, LEDGER_DIR]), false);
     },
   );
 
@@ -209,7 +353,7 @@ describe("recording a commit", () => {
       const root = await newRepository();
       await place(root, NODE, FIRST);
 
-      const answer = await commitPaths(root, SPEC, "Save the spec");
+      const answer = await commitPaths(root, [SPEC], "Save the spec");
       assert.equal(answer.kind, "ok", JSON.stringify(answer));
       assert.equal((await must(root, ["log", "-1", "--format=%an"])).trim(), "Shall");
       assert.equal(
@@ -222,7 +366,7 @@ describe("recording a commit", () => {
       await must(root, ["config", "user.name", "Someone"]);
       await must(root, ["config", "user.email", "someone@example.com"]);
       await place(root, NODE, SECOND);
-      const second = await commitPaths(root, SPEC, "Change the node");
+      const second = await commitPaths(root, [SPEC], "Change the node");
       assert.equal(second.kind, "ok", JSON.stringify(second));
       assert.equal(
         (await must(root, ["log", "-1", "--format=%an"])).trim(),
@@ -300,13 +444,15 @@ describe("a folder that is no repository", () => {
     { skip: NO_GIT && "no git on this machine" },
     async () => {
       const bare = await mkdtemp(path.join(os.tmpdir(), "shall-gitcli-out-"));
-      assert.equal(await isDirtyUnder(bare, SPEC), false);
+      assert.equal(await isDirtyUnder(bare, [SPEC]), false);
       assert.deepEqual(await fileHistory(bare, NODE), []);
       assert.equal(await fileAt(bare, "HEAD", NODE), null);
       assert.equal(await pathForId(bare, SPEC, "R-0001"), null);
       assert.equal(await lastCommitTouching(bare, NODE), null);
-      // And a commit says so in git's own words rather than pretending.
-      const answer = await commitPaths(bare, SPEC, "Save the spec");
+      // And a commit is a failure rather than a throw: nothing can be dirty
+      // where git answers nothing, so no path survives the filter and no
+      // process is spawned to be refused by.
+      const answer = await commitPaths(bare, [SPEC], "Save the spec");
       assert.equal(answer.kind, "failed");
     },
   );
