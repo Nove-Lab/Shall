@@ -3,17 +3,17 @@ import { mkdir, mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, test } from "node:test";
-import { AGENT_DENY_RULE, writeAgentDenyRule } from "./agent-settings.js";
+import { AGENT_DENY_RULES, writeAgentDenyRules } from "./agent-settings.js";
 
 /**
- * The deny rule Shall writes into a project's `.claude/settings.json`.
+ * The deny rules Shall writes into a project's `.claude/settings.json`.
  *
  * WHAT IS PINNED HERE IS RESTRAINT. The file belongs to the person, not to
  * Shall, and every test below is a way for an open to keep its hands off it: an
  * unparseable file is not rewritten, a settings block of the wrong shape is not
- * corrected, a rule already written is not written again, and a deny list full
+ * corrected, rules already written are not written again, and a deny list full
  * of somebody else's entries keeps all of them. The one thing an open may do is
- * append one string.
+ * append the strings that are not there yet, at the end.
  */
 
 async function newProject(): Promise<string> {
@@ -35,16 +35,16 @@ async function writeSettings(
   return settingsPath;
 }
 
-describe("the agent deny rule", () => {
-  test("a project with no settings file gets one carrying the deny rule", async () => {
+describe("the agent deny rules", () => {
+  test("a project with no settings file gets one carrying both deny rules", async () => {
     const project = await newProject();
-    await writeAgentDenyRule(project);
+    await writeAgentDenyRules(project);
 
     const text = await readFile(settingsPathOf(project), "utf8");
     const value = JSON.parse(text) as {
       permissions: { deny: unknown[] };
     };
-    assert.deepEqual(value.permissions.deny, [AGENT_DENY_RULE]);
+    assert.deepEqual(value.permissions.deny, [...AGENT_DENY_RULES]);
     // Two-space JSON with a trailing newline, like every other file Shall
     // writes, so it does not show up as a no-newline-at-end diff.
     assert.ok(text.endsWith("\n"), JSON.stringify(text));
@@ -58,7 +58,7 @@ describe("the agent deny rule", () => {
       '{"model":"opus","permissions":{"allow":["Bash"],"deny":["WebFetch"]},"other":1}',
     );
 
-    await writeAgentDenyRule(project);
+    await writeAgentDenyRules(project);
 
     const text = await readFile(settingsPath, "utf8");
     const value = JSON.parse(text) as {
@@ -70,7 +70,7 @@ describe("the agent deny rule", () => {
     assert.deepEqual(value.permissions.allow, ["Bash"]);
     assert.equal(value.other, 1);
     // Appended at the END: what was already denied stays first.
-    assert.deepEqual(value.permissions.deny, ["WebFetch", AGENT_DENY_RULE]);
+    assert.deepEqual(value.permissions.deny, ["WebFetch", ...AGENT_DENY_RULES]);
 
     // And the file still reads in the order the person wrote it — the merge
     // assigns to keys that already exist, which does not move them.
@@ -79,15 +79,45 @@ describe("the agent deny rule", () => {
     assert.ok(text.indexOf('"allow"') < text.indexOf('"deny"'), text);
   });
 
-  test("a rule already written is not written twice", async () => {
+  test("a file holding one of the two rules gains only the other, and gains it at the end", async () => {
+    const [homeRule, ledgerRule] = AGENT_DENY_RULES;
+    const cases: { original: string; expected: string[] }[] = [
+      // The file an older Shall wrote, back when Shall's home was the only
+      // door it had anything to say about.
+      {
+        original: '{"permissions":{"deny":["Read(~/.shall/**)"]}}',
+        expected: [homeRule, ledgerRule],
+      },
+      {
+        original: '{"permissions":{"deny":["Edit(/.shall/ledger/**)"]}}',
+        expected: [ledgerRule, homeRule],
+      },
+    ];
+
+    for (const { original, expected } of cases) {
+      const project = await newProject();
+      const settingsPath = await writeSettings(project, original);
+
+      await writeAgentDenyRules(project);
+
+      const value = JSON.parse(await readFile(settingsPath, "utf8")) as {
+        permissions: { deny: unknown[] };
+      };
+      // Appended, never reordered: the rule that was already there keeps the
+      // place the person is used to seeing it in, and the diff is one line.
+      assert.deepEqual(value.permissions.deny, expected, original);
+    }
+  });
+
+  test("rules already written are not written again, and the mtime stays quiet", async () => {
     const project = await newProject();
-    await writeAgentDenyRule(project);
+    await writeAgentDenyRules(project);
     const settingsPath = settingsPathOf(project);
     const before = await stat(settingsPath);
     const text = await readFile(settingsPath, "utf8");
 
     await new Promise((resolve) => setTimeout(resolve, 20));
-    await writeAgentDenyRule(project);
+    await writeAgentDenyRules(project);
 
     // An open runs this every time, and an open that rewrote the file would
     // hand the person a diff on every click.
@@ -102,7 +132,7 @@ describe("the agent deny rule", () => {
     const original = "// comment\n{}";
     const settingsPath = await writeSettings(project, original);
 
-    await writeAgentDenyRule(project);
+    await writeAgentDenyRules(project);
 
     assert.equal(await readFile(settingsPath, "utf8"), original);
   });
@@ -116,7 +146,7 @@ describe("the agent deny rule", () => {
       const project = await newProject();
       const settingsPath = await writeSettings(project, original);
 
-      await writeAgentDenyRule(project);
+      await writeAgentDenyRules(project);
 
       // Shall does not get to decide what somebody else's shape meant.
       assert.equal(await readFile(settingsPath, "utf8"), original, original);
@@ -130,20 +160,20 @@ describe("the agent deny rule", () => {
       '{"permissions":{"deny":[1,"x"]}}',
     );
 
-    await writeAgentDenyRule(project);
+    await writeAgentDenyRules(project);
 
     const value = JSON.parse(await readFile(settingsPath, "utf8")) as {
       permissions: { deny: unknown[] };
     };
-    // The module polices nothing but its own entry.
-    assert.deepEqual(value.permissions.deny, [1, "x", AGENT_DENY_RULE]);
+    // The module polices nothing but its own two entries.
+    assert.deepEqual(value.permissions.deny, [1, "x", ...AGENT_DENY_RULES]);
   });
 
   test("a settings file with no permissions key gains one at the end", async () => {
     const project = await newProject();
     const settingsPath = await writeSettings(project, '{"model":"opus"}');
 
-    await writeAgentDenyRule(project);
+    await writeAgentDenyRules(project);
 
     const text = await readFile(settingsPath, "utf8");
     const value = JSON.parse(text) as {
@@ -151,7 +181,7 @@ describe("the agent deny rule", () => {
       permissions: { deny: unknown[] };
     };
     assert.equal(value.model, "opus");
-    assert.deepEqual(value.permissions.deny, [AGENT_DENY_RULE]);
+    assert.deepEqual(value.permissions.deny, [...AGENT_DENY_RULES]);
     assert.ok(text.indexOf('"model"') < text.indexOf('"permissions"'), text);
   });
 
@@ -162,6 +192,6 @@ describe("the agent deny rule", () => {
     const project = await newProject();
     await writeFile(path.join(project, ".claude"), "not a folder\n", "utf8");
 
-    await writeAgentDenyRule(project);
+    await writeAgentDenyRules(project);
   });
 });
