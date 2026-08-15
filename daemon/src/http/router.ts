@@ -39,13 +39,13 @@ import {
 const t = initTRPC.create();
 
 /**
- * A WorkLog's commits as the panel sends them. Optional on both node writes and
- * the same bargain as every other string here: shape only, and whether a sha or
- * a message is blank, or the type has any business carrying the list, is the
- * reader's sentence over the bytes about to land. Left out entirely, an update
- * carries the file's own list over — the spelling an older client speaks.
+ * A WorkLog's commit shas as the panel sends them. Optional on both node writes
+ * and the same bargain as every other string here: shape only, and whether a
+ * sha is blank, or the type has any business carrying the list, is the reader's
+ * sentence over the bytes about to land. Left out entirely, an update carries
+ * the file's own list over — the spelling an older client speaks.
  */
-const COMMITS = z.array(z.object({ sha: z.string(), message: z.string() }));
+const COMMITS = z.array(z.string());
 
 const STATUS_BY_KIND: Record<RefusalKind, TRPCError["code"]> = {
   invalid: "BAD_REQUEST",

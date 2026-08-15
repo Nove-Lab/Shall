@@ -23,7 +23,6 @@ import {
   judgeText,
   nextIdSuggestion,
   parseEdgeId,
-  type NodeCommit,
   type SpecEdge,
   type SpecNode,
   type SpecNodeValues,
@@ -1090,14 +1089,14 @@ async function readNodeFile(
  */
 function settleFields(
   values: SpecNodeValues,
-  commits: readonly NodeCommit[] | undefined,
+  commits: readonly string[] | undefined,
 ): NodeFileFields {
   return {
     shortName: judgeText("A short name", values.shortName).value,
     name: judgeText("A name", values.name).value,
     body: judgeBody(values.body).value,
-    // A WorkLog's commits ride along unsettled: each sha and message is judged
-    // by the reader over the emitted bytes, like everything else.
+    // A WorkLog's commit shas ride along unsettled: each is judged by the
+    // reader over the emitted bytes, like everything else.
     commits,
   };
 }

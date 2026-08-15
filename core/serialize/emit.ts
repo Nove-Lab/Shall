@@ -1,7 +1,6 @@
 import {
   isNodeType,
   type NodeApproval,
-  type NodeCommit,
   type NodeDeletionProposal,
 } from "../graph/index.js";
 import { emitScalar } from "./scalar.js";
@@ -48,10 +47,11 @@ export const NAME_KEY = "name";
 export const EDGES_KEY = "edges";
 
 /**
- * A WorkLog's key and no other type's: the commits the work produced, each a
- * `sha` and a `message`. It replaces the Commit node type — a whole file for
- * two lines of fact — with two lines in the file those facts were always
- * about. The reader refuses it on any other type by name.
+ * A WorkLog's key and no other type's: the commits the work produced, as the
+ * shas git gave them and nothing else — the message is git's to answer for. It
+ * replaces the Commit node type, a whole file for one line of fact, with one
+ * line in the file that fact was always about. The reader refuses it on any
+ * other type by name.
  */
 export const COMMITS_KEY = "commits";
 
@@ -78,11 +78,11 @@ export interface NodeFileFields {
   readonly name: string;
   readonly body: string;
   /**
-   * The WorkLog's commits, in the order the author wrote them — chronology is
-   * the author's fact, so this list is emitted as given and never sorted the
-   * way the edges are. `undefined` and empty both emit as no key.
+   * The WorkLog's commit shas, in the order the author wrote them — chronology
+   * is the author's fact, so this list is emitted as given and never sorted
+   * the way the edges are. `undefined` and empty both emit as no key.
    */
-  readonly commits?: readonly NodeCommit[] | undefined;
+  readonly commits?: readonly string[] | undefined;
 }
 
 /**
@@ -176,9 +176,10 @@ export function emitNodeFile(
   const commits = node.commits ?? [];
   if (commits.length > 0) {
     lines.push(`${COMMITS_KEY}:`);
-    for (const commit of commits) {
-      lines.push(`  - sha: ${emitScalar(commit.sha)}`);
-      lines.push(`    message: ${emitScalar(commit.message)}`);
+    for (const sha of commits) {
+      // Through the scalar rule like an id: a seven-digit sha of nothing but
+      // digits would come back a number written plain.
+      lines.push(`  - ${emitScalar(sha)}`);
     }
   }
 

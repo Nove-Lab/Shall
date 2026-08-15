@@ -48,7 +48,6 @@ export {
 export type { EdgeTriple } from "./grammar.js";
 export type {
   NodeApproval,
-  NodeCommit,
   NodeDeletionProposal,
   SpecNode,
   SpecNodeValues,

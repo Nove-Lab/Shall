@@ -14,7 +14,6 @@ import {
   nextIdSuggestion,
   sectionGuideFor,
   type Band,
-  type NodeCommit,
   type NodeTypeEntry,
   type SpecEdge,
   type SpecNode,
@@ -234,12 +233,12 @@ export interface NodeDraft {
   name: string;
   body: string;
   /**
-   * A WorkLog's commits, present exactly when the form was a WorkLog's — the
-   * list is then the whole list, empty for a work log that produced none, and
-   * absent for every other type so the daemon carries or omits as its own rule
-   * says.
+   * A WorkLog's commit shas, present exactly when the form was a WorkLog's —
+   * the list is then the whole list, empty for a work log that produced none,
+   * and absent for every other type so the daemon carries or omits as its own
+   * rule says.
    */
-  commits?: readonly NodeCommit[];
+  commits?: readonly string[];
 }
 
 /**
@@ -251,16 +250,11 @@ export interface NodeDraft {
 interface CommitRow {
   key: number;
   sha: string;
-  message: string;
 }
 
 /** Empty for anything but a WorkLog, whose list the panel edits row by row. */
 function rowsOf(node: SpecNode | null): CommitRow[] {
-  return (node?.commits ?? []).map((commit, index) => ({
-    key: index,
-    sha: commit.sha,
-    message: commit.message,
-  }));
+  return (node?.commits ?? []).map((sha, index) => ({ key: index, sha }));
 }
 
 interface NodePanelProps {
@@ -596,39 +590,49 @@ export function NodePanel({
    * form grows the editor the moment WorkLog is picked.
    */
   const isWorkLog = type.trim() === "WorkLog";
-  /**
-   * A row half filled blocks the save the way a blank name does — the daemon
-   * would refuse it by name over the bytes, and the button should be off
-   * exactly then. A row left wholly blank is not a commit at all; it is a
-   * person who clicked Add and changed their mind, and it is dropped on the
-   * way out rather than held against them.
-   */
-  const halfFilledCommit =
-    isWorkLog &&
-    commits.some(
-      (row) =>
-        (row.sha.trim() === "") !== (row.message.trim() === ""),
-    );
   const canSave =
     type.trim() !== "" &&
     trimmedId !== "" &&
     shortName.trim() !== "" &&
     name.trim() !== "" &&
-    idProblem === null &&
-    !halfFilledCommit;
+    idProblem === null;
 
   function addCommit() {
-    setCommits((current) => [
-      ...current,
-      { key: nextKey, sha: "", message: "" },
-    ]);
+    setCommits((current) => [...current, { key: nextKey, sha: "" }]);
     setNextKey((current) => current + 1);
   }
 
-  function editCommit(key: number, patch: Partial<Pick<CommitRow, "sha" | "message">>) {
-    setCommits((current) =>
-      current.map((row) => (row.key === key ? { ...row, ...patch } : row)),
-    );
+  /**
+   * One row's text — and, WHEN A PASTE BRINGS SEVERAL, several rows. The
+   * ordinary way to have a list of shas is `git log --format=%h` in a
+   * terminal, and pasting that into one box should not mean retyping it into
+   * six; whitespace splits it, the first sha keeps the row being typed in (so
+   * focus stays put), and the rest are new rows after it. A sha holds no
+   * whitespace, so nothing legitimate is lost to the split.
+   */
+  function editCommit(key: number, value: string) {
+    if (!/\s/.test(value)) {
+      setCommits((current) =>
+        current.map((row) => (row.key === key ? { ...row, sha: value } : row)),
+      );
+      return;
+    }
+    const parts = value.split(/\s+/).filter((part) => part !== "");
+    const [first = "", ...rest] = parts;
+    setCommits((current) => {
+      const at = current.findIndex((row) => row.key === key);
+      if (at === -1) {
+        return current;
+      }
+      const extra = rest.map((sha, offset) => ({ key: nextKey + offset, sha }));
+      return [
+        ...current.slice(0, at),
+        { key, sha: first },
+        ...extra,
+        ...current.slice(at + 1),
+      ];
+    });
+    setNextKey((current) => current + rest.length);
   }
 
   function removeCommit(key: number) {
@@ -657,9 +661,11 @@ export function NodePanel({
         body,
       };
       if (isWorkLog) {
+        // A row left blank is somebody who clicked Add and changed their
+        // mind, dropped on the way out rather than held against them.
         draft.commits = commits
-          .filter((row) => row.sha.trim() !== "" || row.message.trim() !== "")
-          .map((row) => ({ sha: row.sha.trim(), message: row.message.trim() }));
+          .map((row) => row.sha.trim())
+          .filter((sha) => sha !== "");
       }
       await onSubmit(draft);
     } catch (saveError) {
@@ -948,24 +954,22 @@ export function NodePanel({
             {/* THE WORK LOG'S COMMITS, in the order the author recorded them.
                 It is a WorkLog's key and no other type's, so no other panel
                 grows the row; a work log that has none says so with the dash,
-                because "this work produced no commit" is an answer too. The
-                sha is the file's own text — a person reading it beside a
+                because "this work produced no commit" is an answer too. Shas
+                and nothing else — the message is git's to answer for — and
+                the sha is the file's own text: a person reading it beside a
                 terminal wants the characters, not a link the panel invents. */}
             {node.type === "WorkLog" ? (
               <Field label="Commits">
                 {node.commits === undefined || node.commits.length === 0 ? (
                   <span className="text-muted-foreground text-sm">—</span>
                 ) : (
-                  <ul className="grid gap-1.5">
-                    {node.commits.map((commit, index) => (
+                  <ul className="flex flex-wrap gap-1.5">
+                    {node.commits.map((sha, index) => (
                       <li
-                        key={`${commit.sha}:${String(index)}`}
-                        className="flex items-baseline gap-2"
+                        key={`${sha}:${String(index)}`}
+                        className="bg-muted rounded-md border px-1.5 py-0.5 font-mono text-xs"
                       >
-                        <span className="bg-muted shrink-0 rounded-md border px-1.5 py-0.5 font-mono text-xs">
-                          {commit.sha}
-                        </span>
-                        <span className="text-sm">{commit.message}</span>
+                        {sha}
                       </li>
                     ))}
                   </ul>
@@ -1113,26 +1117,21 @@ export function NodePanel({
               </p>
             </div>
 
-            {/* THE COMMITS, ROW BY ROW, ON A WORKLOG'S FORM AND NO OTHER. A
-                sha and a message per row, in the order the work made them —
-                the order is the author's fact, so rows are added at the end
-                and never sorted. The same two Inputs the rest of the form
-                uses, mono for the sha because that is what a person pastes
-                from a terminal. */}
+            {/* THE COMMITS, ROW BY ROW, ON A WORKLOG'S FORM AND NO OTHER. One
+                sha per row, in the order the work made them — the order is the
+                author's fact, so rows are added at the end and never sorted.
+                The same Input the rest of the form uses, mono because that is
+                what a person pastes from a terminal; a paste of several shas
+                becomes several rows. */}
             {isWorkLog ? (
               <div className="grid gap-2">
                 <Label>Commits</Label>
-                {commits.length === 0 ? (
-                  <p className="text-muted-foreground text-xs">
-                    The commits this work produced, in the order they were
-                    made. None recorded yet.
-                  </p>
-                ) : (
+                {commits.length === 0 ? null : (
                   <ul className="grid gap-2">
                     {commits.map((row) => (
                       <li
                         key={row.key}
-                        className="grid grid-cols-[minmax(0,7.5rem)_minmax(0,1fr)_auto] items-center gap-2"
+                        className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2"
                       >
                         <Input
                           aria-label="Commit sha"
@@ -1141,16 +1140,7 @@ export function NodePanel({
                           spellCheck={false}
                           value={row.sha}
                           onChange={(event) =>
-                            editCommit(row.key, { sha: event.target.value })
-                          }
-                          onKeyDown={saveOnEnter}
-                        />
-                        <Input
-                          aria-label="Commit message"
-                          placeholder="message"
-                          value={row.message}
-                          onChange={(event) =>
-                            editCommit(row.key, { message: event.target.value })
+                            editCommit(row.key, event.target.value)
                           }
                           onKeyDown={saveOnEnter}
                         />
@@ -1167,7 +1157,7 @@ export function NodePanel({
                     ))}
                   </ul>
                 )}
-                <div className="flex items-center gap-2">
+                <div>
                   <Button
                     type="button"
                     variant="outline"
@@ -1177,12 +1167,12 @@ export function NodePanel({
                     <Plus />
                     Add commit
                   </Button>
-                  {halfFilledCommit ? (
-                    <p className="text-destructive text-xs">
-                      Each commit needs both a sha and a message.
-                    </p>
-                  ) : null}
                 </div>
+                <p className="text-muted-foreground text-xs">
+                  The commits this work produced, one sha per row, in the
+                  order they were made. Paste several at once and they split
+                  into rows.
+                </p>
               </div>
             ) : null}
 

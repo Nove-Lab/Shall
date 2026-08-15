@@ -4,7 +4,6 @@ import { reviewGraph, type GraphReview } from "@shall/core/arith";
 import {
   anchorPhrase,
   bandFolderOf,
-  type NodeCommit,
   type SpecNode,
 } from "@shall/core/graph";
 import {
@@ -148,7 +147,7 @@ async function approvedVersionFor(
     shortName: string;
     name: string;
     body: string;
-    commits: readonly NodeCommit[] | undefined;
+    commits: readonly string[] | undefined;
   };
   edges: readonly { type: string; toId: string }[];
   deletionProposed: SpecNode["deletionProposed"];

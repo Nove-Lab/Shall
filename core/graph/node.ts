@@ -1,15 +1,4 @@
 /**
- * One commit a piece of work produced, as a WorkLog's frontmatter records it:
- * the hash git gave it and the message it was made with. This is what the
- * Commit node type used to be — a whole file for two lines of fact — folded
- * into the work log that made the commits, where the facts were always about.
- */
-export interface NodeCommit {
-  readonly sha: string;
-  readonly message: string;
-}
-
-/**
  * A human's signature over one node, written by the daemon on the web approve
  * action and by nothing else. `hash` is `sha256:<hex>` over the node's payload
  * — its own `type/id` line, then its canonical file without this block — and
@@ -68,11 +57,14 @@ export interface SpecNode {
   createdAt: number;
   updatedAt: number;
   /**
-   * The commits this work produced — a WorkLog's key and no other type's, so
-   * a reader of any other node never sees it set. Author content, inside the
-   * signed payload like the edges are; an ordinary save carries it over.
+   * The commits this work produced, as the shas git gave them — a WorkLog's
+   * key and no other type's, so a reader of any other node never sees it set.
+   * A sha and nothing else: the message, the author and the date are git's to
+   * answer for, and a list that copied them would be a second home for facts
+   * whose first home is the repository. Author content, inside the signed
+   * payload like the edges are; an ordinary save carries it over.
    */
-  commits?: NodeCommit[] | undefined;
+  commits?: string[] | undefined;
   /**
    * The two machine blocks, in a file that is otherwise the author's. A person
    * edits neither by hand, and every ordinary save carries both over
@@ -107,5 +99,5 @@ export interface SpecNodeValues {
   shortName: string;
   name: string;
   body: string;
-  commits?: readonly NodeCommit[] | undefined;
+  commits?: readonly string[] | undefined;
 }
