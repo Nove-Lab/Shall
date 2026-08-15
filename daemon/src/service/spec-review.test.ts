@@ -276,7 +276,7 @@ describe("the approve door", () => {
           shortName: "day-one",
           name: "The first day",
           body: "It went fine.",
-          commits: [{ sha: "9f2b1c4", message: "Keep one key at home" }],
+          commits: ["9f2b1c4"],
         },
         [],
       ),
@@ -290,7 +290,7 @@ describe("the approve door", () => {
     });
 
     const approved = await approveSpecNode({ projectId: project.id, id: "WL-0001" });
-    assert.deepEqual(approved.commits, [{ sha: "9f2b1c4", message: "Keep one key at home" }]);
+    assert.deepEqual(approved.commits, ["9f2b1c4"]);
     let review = await reviewSpec(project.id);
     assert.deepEqual(
       review.statuses.find((status) => status.id === "WL-0001"),
@@ -305,7 +305,7 @@ describe("the approve door", () => {
       name: "The first day",
       body: "It went fine, then better.",
     });
-    assert.deepEqual(saved.commits, [{ sha: "9f2b1c4", message: "Keep one key at home" }]);
+    assert.deepEqual(saved.commits, ["9f2b1c4"]);
     assert.deepEqual(saved.approval, approved.approval);
     review = await reviewSpec(project.id);
     assert.deepEqual(

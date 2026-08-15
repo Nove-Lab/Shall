@@ -6,7 +6,6 @@ import {
   judgeNodeId,
   judgeText,
   type NodeApproval,
-  type NodeCommit,
   type NodeDeletionProposal,
   type SpecEdge,
   type SpecNode,
@@ -72,8 +71,7 @@ const MARKDOWN_SUFFIX = ".md";
 const EDGE_SHAPE = "Every entry under edges is a map of exactly type and to.";
 
 /** The same rule for the WorkLog's commits: one list, one shape, said once. */
-const COMMIT_SHAPE =
-  "Every entry under commits is a map of exactly sha and message.";
+const COMMIT_SHAPE = "Every entry under commits is a commit sha, as text.";
 
 /**
  * The keys a file of this type may carry above the fence, in the order the
@@ -334,7 +332,7 @@ export function parseNodeFile(
   let name = "";
   let approval: NodeApproval | undefined;
   let deletionProposed: NodeDeletionProposal | undefined;
-  let commits: NodeCommit[] | undefined;
+  let commits: string[] | undefined;
   // The keys the format does not carry, said once as one list: the rule is one
   // rule — the frontmatter holds the graph's three facts, a WorkLog's commits
   // and the two machine blocks, and the body holds everything else — and six
@@ -437,31 +435,30 @@ export function parseNodeFile(
     );
   }
 
-  // The WorkLog's commits: a list of maps of exactly `sha` and `message`, both
-  // one line of text, kept in the order written. Judged like the edges — one
-  // sentence for the list's shape, however many entries are wrong — and then
-  // per value, so a blank message is named as a blank message.
+  // The WorkLog's commits: a list of shas, each one line of text, kept in the
+  // order written. Judged like the edges — one sentence for the list's shape,
+  // however many entries are wrong — and then per value, so a blank sha is
+  // named as a blank sha. A sha that reads as a number is a string here all
+  // the same, because the emitter quotes it and the schema is the core one.
   if (type === COMMITS_TYPE) {
     const listed = carried[COMMITS_KEY];
     if (listed !== null && listed !== undefined) {
       if (!Array.isArray(listed)) {
         problems.push(COMMIT_SHAPE);
       } else {
-        const read: NodeCommit[] = [];
+        const read: string[] = [];
         let said = false;
         for (const entry of listed) {
-          const held = readStringMap(entry, ["sha", "message"]);
-          if (held === null) {
+          if (typeof entry !== "string") {
             if (!said) {
               said = true;
               problems.push(COMMIT_SHAPE);
             }
             continue;
           }
-          const sha = judgeIdentity("A commit sha", held["sha"] ?? "");
-          const message = judgeIdentity("A commit message", held["message"] ?? "");
-          problems.push(...sha.problems, ...message.problems);
-          read.push({ sha: sha.value, message: message.value });
+          const sha = judgeIdentity("A commit sha", entry);
+          problems.push(...sha.problems);
+          read.push(sha.value);
         }
         // An empty list is a list of no commits, which is the same fact as no
         // key — read as absent, and brought canonical by the next save.

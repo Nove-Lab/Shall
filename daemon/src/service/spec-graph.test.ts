@@ -428,9 +428,9 @@ describe("a work log's commits through the doors", () => {
       shortName: "day-one",
       name: "The first day",
       body: "It went fine.",
-      commits: [{ sha: "9f2b1c4", message: "Keep one key at home" }],
+      commits: ["9f2b1c4"],
     });
-    assert.deepEqual(created.commits, [{ sha: "9f2b1c4", message: "Keep one key at home" }]);
+    assert.deepEqual(created.commits, ["9f2b1c4"]);
 
     const carried = await updateSpecNode({
       projectId: project.id,
@@ -447,12 +447,9 @@ describe("a work log's commits through the doors", () => {
       shortName: "day-one",
       name: "The first day",
       body: "It went fine, then better.",
-      commits: [
-        { sha: "9f2b1c4", message: "Keep one key at home" },
-        { sha: "41acde0", message: "Sign what lands" },
-      ],
+      commits: ["9f2b1c4", "41acde0"],
     });
-    assert.equal(replaced.commits?.length, 2);
+    assert.deepEqual(replaced.commits, ["9f2b1c4", "41acde0"]);
     // Written after the edges block would be, in the author's order.
     const text = await readFile(
       path.join(project.path, ".shall", "spec", "execution", "WorkLog", "WL-0001.md"),
@@ -469,7 +466,7 @@ describe("a work log's commits through the doors", () => {
         type: "Requirement",
         id: "R-0001",
         ...values("R-0001", REQUIREMENT_BODY),
-        commits: [{ sha: "9f2b1c4", message: "Not here" }],
+        commits: ["9f2b1c4"],
       }),
       "invalid",
       "A Requirement does not carry commits — only a WorkLog records the commits its work produced.",

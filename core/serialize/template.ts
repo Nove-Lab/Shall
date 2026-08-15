@@ -110,11 +110,10 @@ function startingLines(
   // and no other type carries the key, so no other template mentions it.
   if (type === COMMITS_TYPE) {
     lines.push(
-      "# The commits this work produced, in the order they were made — sha and message.",
+      "# The commits this work produced, one sha per line, in the order they were made.",
     );
     lines.push(`# ${COMMITS_KEY}:`);
-    lines.push("#   - sha: 0123abc");
-    lines.push("#     message: The subject line the commit was made with");
+    lines.push("#   - 0123abc");
   }
 
   return lines;

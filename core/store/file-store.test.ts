@@ -1884,10 +1884,7 @@ describe("the approval door", () => {
           shortName: "day-one",
           name: "The first day",
           body: "It went fine.",
-          commits: [
-            { sha: "9f2b1c4", message: "Keep one key at home" },
-            { sha: "41acde0", message: "Sign what lands" },
-          ],
+          commits: ["9f2b1c4", "41acde0"],
         },
         [],
       ),
@@ -1903,10 +1900,7 @@ describe("the approval door", () => {
       name: "The first day",
       body: "It went fine, then better.",
     });
-    assert.deepEqual(saved.commits, [
-      { sha: "9f2b1c4", message: "Keep one key at home" },
-      { sha: "41acde0", message: "Sign what lands" },
-    ]);
+    assert.deepEqual(saved.commits, ["9f2b1c4", "41acde0"]);
     await addEdge(specDir, { fromId: "WL-0001", type: "SUBMITS", toId: "EV-0001" });
     const graph = await loadGraph(specDir);
     const log = graph.nodes.find((entry) => entry.id === "WL-0001");
@@ -1927,7 +1921,7 @@ describe("the approval door", () => {
       shortName: "day-one",
       name: "The first day",
       body: "It went fine.",
-      commits: [{ sha: "9f2b1c4", message: "Keep one key at home" }],
+      commits: ["9f2b1c4"],
     });
 
     // Sent: the list on the wire is the list — no merge, no append.
@@ -1935,15 +1929,9 @@ describe("the approval door", () => {
       shortName: "day-one",
       name: "The first day",
       body: "It went fine.",
-      commits: [
-        { sha: "41acde0", message: "Sign what lands" },
-        { sha: "7e0f2c5", message: "Reattach the standing signature" },
-      ],
+      commits: ["41acde0", "7e0f2c5"],
     });
-    assert.deepEqual(replaced.commits, [
-      { sha: "41acde0", message: "Sign what lands" },
-      { sha: "7e0f2c5", message: "Reattach the standing signature" },
-    ]);
+    assert.deepEqual(replaced.commits, ["41acde0", "7e0f2c5"]);
 
     // Left out: the file's own list rides along.
     const carried = await updateNodeFile(specDir, "WL-0001", {
@@ -1976,7 +1964,7 @@ describe("the approval door", () => {
           shortName: "r",
           name: "R",
           body: "## Statement",
-          commits: [{ sha: "9f2b1c4", message: "Not here" }],
+          commits: ["9f2b1c4"],
         }),
       ),
       {
@@ -1988,7 +1976,7 @@ describe("the approval door", () => {
     assert.deepEqual(await readdir(specDir).catch(() => []), []);
   });
 
-  test("a blank commit message is refused by name before anything is written", async () => {
+  test("a blank commit sha is refused by name before anything is written", async () => {
     const specDir = await makeSpecDir();
     assert.deepEqual(
       await refusal(() =>
@@ -1996,10 +1984,10 @@ describe("the approval door", () => {
           shortName: "d",
           name: "D",
           body: "",
-          commits: [{ sha: "9f2b1c4", message: "  " }],
+          commits: ["9f2b1c4", "  "],
         }),
       ),
-      { kind: "invalid", message: "A commit message is required." },
+      { kind: "invalid", message: "A commit sha is required." },
     );
   });
 

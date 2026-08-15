@@ -1512,7 +1512,7 @@ name:                  # required · one line
     // The one type-specific key, and the only template that mentions it: an
     // agent starting a work log sees the shape of the list it will fill.
     const text = emitTemplate("WorkLog");
-    assert.ok(text.includes("# commits:\n#   - sha: 0123abc\n#     message: "), text);
+    assert.ok(text.includes("# commits:\n#   - 0123abc\n"), text);
     assert.equal(emitTemplate("Journal").includes("commits"), false);
   });
 
@@ -1962,11 +1962,12 @@ describe("the two machine blocks", () => {
 
 /**
  * THE WORKLOG'S COMMITS. The Commit node type is gone; the commits a piece of
- * work produced are a list in the WorkLog's own frontmatter — sha and message,
- * in the order they were made — and no other type carries the key. What is
+ * work produced are a list of shas in the WorkLog's own frontmatter — the sha
+ * and nothing else, in the order they were made, because the message and the
+ * rest are git's to answer for — and no other type carries the key. What is
  * pinned here is the shape, the order (author's, never sorted), the fixpoint,
- * and the two sentences: one for a malformed entry and one for the key on a
- * type that has no business with it.
+ * the quoting of a sha that reads as a number, and the two sentences: one for
+ * a malformed entry and one for the key on a type that has no business with it.
  */
 const LOGGED = `---
 short_name: day-one
@@ -1975,10 +1976,8 @@ edges:
   - type: SUBMITS
     to: EV-0001
 commits:
-  - sha: 9f2b1c4
-    message: Keep one key at home, and sign nothing without it
-  - sha: 41acde0
-    message: "2026-08-15 release notes"
+  - 9f2b1c4
+  - "1234567"
 ---
 
 ## Narrative
@@ -1987,13 +1986,10 @@ The key landed.
 `;
 
 describe("the WorkLog's commits", () => {
-  test("a commits list reads back as the shas and messages it carries, in order", () => {
+  test("a commits list reads back as the shas it carries, in order", () => {
     const reading = parseNodeFile("WorkLog", "WL-0001.md", LOGGED);
     assert.deepEqual(reading.problems, []);
-    assert.deepEqual(reading.node?.commits, [
-      { sha: "9f2b1c4", message: "Keep one key at home, and sign nothing without it" },
-      { sha: "41acde0", message: "2026-08-15 release notes" },
-    ]);
+    assert.deepEqual(reading.node?.commits, ["9f2b1c4", "1234567"]);
   });
 
   test("the list is written after the edges, in the author's order, and the file is a fixpoint", () => {
@@ -2006,6 +2002,19 @@ describe("the WorkLog's commits", () => {
     assert.equal(isCanonical("WorkLog", "WL-0001.md", LOGGED), true);
   });
 
+  test("a sha of nothing but digits is quoted, and comes back the string it is", () => {
+    // Seven hex digits can all be decimal digits, and written plain a YAML
+    // reader hands back a number — the whole reason every scalar goes through
+    // the one rule. Read back with the quotes gone by hand, the core schema
+    // makes it a number and the reader refuses it as not text.
+    const written = emitNodeFile("WorkLog", { shortName: "d", name: "D", body: "", commits: ["1234567"] }, []);
+    assert.ok(written.includes('  - "1234567"\n'), written);
+    const bare = written.replace('  - "1234567"', "  - 1234567");
+    assert.deepEqual(parseNodeFile("WorkLog", "WL-0001.md", bare).problems, [
+      "Every entry under commits is a commit sha, as text.",
+    ]);
+  });
+
   test("a work log without commits has no key for them, in the object as in the file", () => {
     const written = emitNodeFile("WorkLog", { shortName: "d", name: "D", body: "" }, []);
     assert.equal(written.includes("commits"), false);
@@ -2016,7 +2025,7 @@ describe("the WorkLog's commits", () => {
 
   test("an empty list is a list of no commits, read as absent", () => {
     const bare = LOGGED.replace(
-      /commits:\n(  - sha[^\n]*\n    message[^\n]*\n){2}/,
+      'commits:\n  - 9f2b1c4\n  - "1234567"\n',
       "commits: []\n",
     );
     const reading = parseNodeFile("WorkLog", "WL-0001.md", bare);
@@ -2026,30 +2035,20 @@ describe("the WorkLog's commits", () => {
     assert.equal(isCanonical("WorkLog", "WL-0001.md", bare), false);
   });
 
-  test("an entry that is not sha and message is one sentence about the list", () => {
-    const wide = LOGGED.replace(
-      "    message: Keep one key at home, and sign nothing without it\n",
-      "    message: Keep one key at home, and sign nothing without it\n    author: me\n",
+  test("an entry that is not text is one sentence about the list", () => {
+    const mapped = LOGGED.replace(
+      "  - 9f2b1c4\n",
+      "  - sha: 9f2b1c4\n    message: not any more\n",
     );
-    assert.deepEqual(parseNodeFile("WorkLog", "WL-0001.md", wide).problems, [
-      "Every entry under commits is a map of exactly sha and message.",
-    ]);
-    const short = LOGGED.replace(
-      "    message: Keep one key at home, and sign nothing without it\n",
-      "",
-    );
-    assert.deepEqual(parseNodeFile("WorkLog", "WL-0001.md", short).problems, [
-      "Every entry under commits is a map of exactly sha and message.",
+    assert.deepEqual(parseNodeFile("WorkLog", "WL-0001.md", mapped).problems, [
+      "Every entry under commits is a commit sha, as text.",
     ]);
   });
 
-  test("a blank message is refused by name", () => {
-    const blank = LOGGED.replace(
-      "    message: Keep one key at home, and sign nothing without it\n",
-      '    message: ""\n',
-    );
+  test("a blank sha is refused by name", () => {
+    const blank = LOGGED.replace("  - 9f2b1c4\n", '  - ""\n');
     assert.deepEqual(parseNodeFile("WorkLog", "WL-0001.md", blank).problems, [
-      "A commit message is required.",
+      "A commit sha is required.",
     ]);
   });
 
@@ -2058,8 +2057,7 @@ describe("the WorkLog's commits", () => {
 short_name: r
 name: R
 commits:
-  - sha: 9f2b1c4
-    message: Not where this belongs
+  - 9f2b1c4
 ---
 `;
     assert.deepEqual(parseNodeFile("Requirement", "R-0001.md", misplaced).problems, [
