@@ -54,6 +54,8 @@ export function describeFailure(error: unknown): string {
       return "it is a folder and not a file";
     case "ENOTDIR":
       return "something along its path is a file and not a folder";
+    case "EEXIST":
+      return "something already stands where a folder along its path would go";
     case "ELOOP":
       return "its symbolic links lead in a circle";
     case "ENAMETOOLONG":

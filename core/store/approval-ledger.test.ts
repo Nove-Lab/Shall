@@ -111,6 +111,22 @@ describe("the approval ledger door", () => {
     assert.equal(reading.records.size, 0);
   });
 
+  test("a ledger folder that is somehow a file is never written into, and the sentence says what stands there", async () => {
+    const file = await makeLedgerPath();
+    await mkdir(path.dirname(path.dirname(file)), { recursive: true });
+    await writeFile(path.dirname(file), "not a folder\n", "utf8");
+
+    // Reads as no ledger (above), so the door reaches for the folder and finds
+    // a file standing where it would go — a refusal with the path in it, and
+    // the file left exactly as it was.
+    const answer = await refusal(() => recordApproval(file, "G-0001", APPROVED));
+    assert.deepEqual(answer, {
+      kind: "conflict",
+      message: `The approval ledger at ${file} could not be written: something already stands where a folder along its path would go.`,
+    });
+    assert.equal(await readFile(path.dirname(file), "utf8"), "not a folder\n");
+  });
+
   test("the first approval writes the ledger, folder and all, in canonical bytes", async () => {
     const file = await makeLedgerPath();
 

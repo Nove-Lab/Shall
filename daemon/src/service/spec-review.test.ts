@@ -389,7 +389,7 @@ describe("the approve door", () => {
     await says(
       approveSpecNode({ projectId: project.id, id: "G-0001" }),
       "conflict",
-      "G-0001 carries a deletion an agent proposed, so approving it would sign a node that is asking to be removed — approve the deletion or reject it first.",
+      "G-0001 carries a deletion an agent proposed, so approving it would record a node that is asking to be removed — approve the deletion or reject it first.",
     );
   });
 
@@ -579,6 +579,55 @@ describe("the deletion doors", () => {
       after.statuses.find((entry) => entry.id === "Q-0001"),
       status("Q-0001", "green", "approved", stamped(approved)),
     );
+  });
+
+  test("a history entry that still carries an approval block is a usable base for the diff, the reject and the restore", async () => {
+    // Every commit made before the ledger holds the old block. It is refused
+    // in the working tree by name, and it is not the working tree here — git
+    // is — so the version the record names is still found, and a file deleted
+    // by hand still comes back, canonical and without the block.
+    const project = await newProject();
+    await goal(project, "G-0001");
+    const file = specFile(project, "intent/Goal/G-0001.md");
+    const canonical = await readFile(file, "utf8");
+    const legacy = canonical.replace(
+      "---\n\n",
+      'approval:\n  hash: sha256:00\n  tag: gone\n  by: yjshin\n  at: "2026-08-15T00:00:00.000Z"\n---\n\n',
+    );
+    await writeFile(file, legacy, "utf8");
+    await run("git", ["add", "-A", "--", ".shall/spec"], { cwd: project.path });
+    await run("git", ["-c", "user.name=T", "-c", "user.email=t@t", "commit", "-q", "-m", "Before the ledger"], {
+      cwd: project.path,
+    });
+    // The strip, uncommitted — the state a project is in right after moving.
+    await writeFile(file, canonical, "utf8");
+    const approved = await approveSpecNode({ projectId: project.id, id: "G-0001" });
+
+    // The diff base: HEAD holds the approved content under the old block.
+    await writeFile(file, canonical.replace("repository.\n", "repository, always.\n"), "utf8");
+    const version = await readApprovedVersion({ projectId: project.id, id: "G-0001" });
+    assert.equal(version.approved, canonical);
+
+    // The reject: the agent's edit and proposal both undone from that commit.
+    await writeFile(
+      file,
+      emitNodeFile("Goal", { ...GOAL_VALUES, body: "Something else." }, [], {
+        deletionProposed: { by: "session-7", rationale: "Superseded." },
+      }),
+      "utf8",
+    );
+    const rejected = await rejectSpecDeletion({ projectId: project.id, id: "G-0001" });
+    assert.equal(rejected.body, GOAL_VALUES.body);
+    assert.equal(await readFile(file, "utf8"), canonical);
+
+    // The restore: back from HEAD, canonical, blockless, and green.
+    await rm(file);
+    await restoreSpecNode({ projectId: project.id, id: "G-0001" });
+    assert.equal(await readFile(file, "utf8"), canonical);
+    const review = await reviewSpec(project.id);
+    assert.deepEqual(review.statuses, [
+      status("G-0001", "green", "approved", stamped(approved)),
+    ]);
   });
 
   test("a restore refuses a node already standing", async () => {

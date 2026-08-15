@@ -153,7 +153,7 @@ describe("the agent deny rules", () => {
     }
   });
 
-  test("a deny list that is an array of mixed junk still just gets the rule appended", async () => {
+  test("a deny list that is an array of mixed junk still just gets the rules appended", async () => {
     const project = await newProject();
     const settingsPath = await writeSettings(
       project,

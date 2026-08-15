@@ -226,7 +226,9 @@ function count(amount: number, one: string, many: string): string {
  * agents to reformat files that were never wrong.
  *
  * The count goes first even when something is broken, because what a problem
- * costs is exactly the difference between the folder and this number.
+ * costs is exactly the difference between the folder and this number — with
+ * one exception the daemon spells from the project root, the approval ledger,
+ * which costs no node and every green.
  */
 async function check(url: string): Promise<void> {
   const result = await connect(url).spec.check.query({ path: process.cwd() });

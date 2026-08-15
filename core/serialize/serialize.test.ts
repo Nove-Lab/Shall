@@ -2241,20 +2241,35 @@ describe("the approval ledger", () => {
     );
   });
 
-  test("an id written once as a number and once as text is refused, though YAML calls them different keys", () => {
-    const text =
-      "1234:\n  approvedHash: sha256:aa\n  by: a\n  at: x\n\"1234\":\n  approvedHash: sha256:bb\n  by: b\n  at: y\n";
-    assert.equal(
-      parseApprovalLedger(text).problem,
-      "1234 is written twice in the approval ledger, once as a number and once as text — an approval has one latest record.",
-    );
+  test("an id written once bare and once quoted is refused, though YAML calls them different keys", () => {
+    const record = "  approvedHash: sha256:aa\n  by: a\n  at: x\n";
+    for (const [bare, id] of [
+      ["1234", "1234"],
+      ["true", "true"],
+    ] as const) {
+      assert.equal(
+        parseApprovalLedger(`${bare}:\n${record}"${id}":\n${record}`).problem,
+        `${id} is written twice in the approval ledger, once bare and once quoted — YAML reads two keys and Shall one id, and an approval has one latest record.`,
+        bare,
+      );
+    }
   });
 
   test("a blank id is refused, because a record belongs to a node", () => {
-    assert.equal(
-      parseApprovalLedger("null:\n  approvedHash: sha256:aa\n  by: a\n  at: x\n").problem,
-      "A record in the approval ledger names no node id.",
-    );
+    const record = "  approvedHash: sha256:aa\n  by: a\n  at: x\n";
+    for (const text of [
+      `null:\n${record}`,
+      `~:\n${record}`,
+      // A null key beside the id "null" is not that id written twice: one of
+      // them names no node at all, and that is what is said.
+      `~:\n${record}"null":\n${record}`,
+    ]) {
+      assert.equal(
+        parseApprovalLedger(text).problem,
+        "A record in the approval ledger names no node id.",
+        text,
+      );
+    }
     assert.equal(
       parseApprovalLedger("CON:\n  approvedHash: sha256:aa\n  by: a\n  at: x\n").problem,
       'The approval ledger names "CON", which is not a node id. CON is a reserved device name on Windows, so no file can be named after it. Choose another id.',
