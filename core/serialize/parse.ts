@@ -1,10 +1,8 @@
-import { parseDocument } from "yaml";
 import {
   formatEdgeId,
   isNodeType,
   judgeBody,
   judgeNodeId,
-  judgeText,
   type NodeApproval,
   type NodeDeletionProposal,
   type SpecEdge,
@@ -20,6 +18,14 @@ import {
   NAME_KEY,
   SHORT_NAME_KEY,
 } from "./emit.js";
+import {
+  describeValue,
+  isMap,
+  judgeIdentity,
+  readStringMap,
+  readYaml,
+  type YamlError,
+} from "./yaml.js";
 
 /**
  * A file back into a node — lenient about how it was written, exact about what
@@ -103,120 +109,27 @@ const DELETION_SHAPE =
   "The deletionProposed block is a map of exactly by and rationale, each of them text.";
 
 /**
- * A block as the strings it claims to be, or null when its shape is not the
- * exact tuple asked for. Every named key must be present as text and no other
- * key may stand beside them — the length check plus the per-key check is both
- * halves of that at once.
- */
-function readStringMap(
-  value: unknown,
-  keys: readonly string[],
-): Record<string, string> | null {
-  if (!isMap(value)) {
-    return null;
-  }
-  if (Object.keys(value).length !== keys.length) {
-    return null;
-  }
-  const held: Record<string, string> = {};
-  for (const key of keys) {
-    const field = value[key];
-    if (typeof field !== "string") {
-      return null;
-    }
-    held[key] = field;
-  }
-  return held;
-}
-
-/**
- * THE PARSE CONTRACT, IN ONE PLACE. What the `yaml` package accepts is part of
- * the file format, so its version is pinned exactly in `package.json` and its
- * options are settled here and nowhere else — a second call site with a second
- * set of options would be a second format.
- *
- * The 1.2 core schema is the narrow one: `Yes` and `12:30` come back as the
- * strings they look like, and only `true`, `null`, numbers and the like resolve
- * away. (The emitter is wider than this on purpose, and quotes anything YAML
- * 1.1 would have resolved too, because other programs read these files.)
- * `uniqueKeys` turns a repeated key into an error instead of letting the last
- * one win silently, which is exactly the mistake a merge makes.
- *
- * `prettyErrors` is off because the message is going into a sentence a person
- * reads in a panel, and the pretty form is three lines with a caret drawn under
- * the source.
- *
- * `logLevel` IS `error` AND NOT `silent`, WHICH IS A CORRECTNESS SETTING AND NOT
- * A LOGGING ONE. The library reads `silent` in exactly one place that is not a
- * log call: it is the switch that decides whether a source holding more than one
- * document is an error at all. Silenced, `parseDocument` hands back the first
- * document and drops the rest of the file without a word — so a `...` line in
- * the middle of the frontmatter would take every key after it, and the edges
- * list with them, and the next save from the panel would make that loss
- * permanent. At `error` the library still prints nothing (it warns only at
- * `warn` and `debug`) and the dropped keys become a refusal instead.
- */
-function parseFrontmatter(source: string): { value: unknown; error: string | null } {
-  const document = parseDocument(source, {
-    version: "1.2",
-    schema: "core",
-    uniqueKeys: true,
-    prettyErrors: false,
-    logLevel: "error",
-  });
-  const [error] = document.errors;
-  if (error !== undefined) {
-    return { value: null, error: describeParseError(error) };
-  }
-  return { value: document.toJS(), error: null };
-}
-
-/**
- * The library's own message, except where the library is talking to a
- * programmer. Its answer to a second document is "please use
+ * The frontmatter as YAML, read under the one contract in `yaml.ts` — the
+ * options live there and nowhere else, because they are the file format.
+ * What comes back is the library's own message, except where the library is
+ * talking to a programmer: its answer to a second document is "please use
  * YAML.parseAllDocuments()", which names a function nobody editing a markdown
  * file will ever call; what the person needs is the line in their file and what
  * it did.
  */
-function describeParseError(error: { code?: string; message: string }): string {
+function parseFrontmatter(source: string): { value: unknown; error: string | null } {
+  const reading = readYaml(source);
+  if (reading.error !== null) {
+    return { value: null, error: describeParseError(reading.error) };
+  }
+  return { value: reading.value, error: null };
+}
+
+function describeParseError(error: YamlError): string {
   if (error.code === "MULTIPLE_DOCS") {
     return 'a "..." or "---" line inside it ends the document early, so the keys after that line belong to no node';
   }
   return error.message;
-}
-
-/** What a value is, in the words a refusal uses. */
-function describeValue(value: unknown): string {
-  if (Array.isArray(value)) {
-    return "a list";
-  }
-  if (value instanceof Date) {
-    return "a date";
-  }
-  switch (typeof value) {
-    case "number":
-    case "bigint":
-      return "a number";
-    case "boolean":
-      return "a boolean";
-    // A string reaches here only from the root-shape check, where a frontmatter
-    // block holding one bare scalar has to be described as something other than
-    // the map it is being contrasted with — "the frontmatter is a map, not the
-    // map of keys a spec file carries" is a sentence nobody can act on.
-    case "string":
-      return "text";
-    default:
-      return "a map";
-  }
-}
-
-function isMap(value: unknown): value is Record<string, unknown> {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    !Array.isArray(value) &&
-    !(value instanceof Date)
-  );
 }
 
 /** Two names read as English; more than two are a list. */
@@ -232,33 +145,6 @@ function idFromFileName(fileName: string): string {
   return fileName.endsWith(MARKDOWN_SUFFIX)
     ? fileName.slice(0, -MARKDOWN_SUFFIX.length)
     : fileName;
-}
-
-/**
- * A field of the node's own identity, judged as the write door judges it: the
- * same trim, the same two characters a text file cannot carry, then required
- * and then the control characters an id or a name must not hold. Two doors
- * judging one field differently is how a file the panel cannot save gets
- * written by the panel.
- */
-function judgeIdentity(
-  label: string,
-  value: string,
-): { value: string; problems: string[] } {
-  const judged = judgeText(label, value);
-  if (judged.problem !== null) {
-    return { value: judged.value, problems: [judged.problem] };
-  }
-  if (judged.value === "") {
-    return { value: judged.value, problems: [`${label} is required.`] };
-  }
-  if (/\p{Cc}/u.test(judged.value)) {
-    return {
-      value: judged.value,
-      problems: [`${label} cannot contain a control character.`],
-    };
-  }
-  return { value: judged.value, problems: [] };
 }
 
 /**
