@@ -1,15 +1,5 @@
-import { randomUUID } from "node:crypto";
 import type { Dirent } from "node:fs";
-import {
-  mkdir,
-  readdir,
-  readFile,
-  rename,
-  rm,
-  stat,
-  unlink,
-  writeFile,
-} from "node:fs/promises";
+import { mkdir, readdir, stat, unlink } from "node:fs/promises";
 import path from "node:path";
 import {
   BAND_FOLDERS,
@@ -39,6 +29,14 @@ import {
   type NodeFileReading,
   type ParsedNode,
 } from "../serialize/index.js";
+import {
+  describeFailure,
+  isAbsent,
+  readText,
+  withQueue,
+  writeBytes,
+} from "./files.js";
+import { conflict, invalid, missing } from "./refusal.js";
 
 /**
  * The spec folder as a graph, and the graph back into the spec folder.
@@ -94,46 +92,12 @@ export interface SpecGraph {
 }
 
 /**
- * A refusal is something the caller can act on — an id already taken, a node
- * that is not there, a file on disk in a state a save would destroy — as opposed
- * to a fault, which is this module failing at its own job.
- *
- * The kinds are the daemon's three, spelled the same, because the daemon is what
- * turns them into status codes and a second vocabulary here would be a
- * translation table nobody maintains. This module cannot import the daemon's
- * `Refusal` (core knows nothing about a transport), so it throws its own and the
- * service maps it.
+ * The refusals themselves live in `refusal.ts`, where the ledger's door can
+ * throw them too, and are named again here because a caller catching one from a
+ * spec write should not have to learn which file declares the class.
  */
-export type RefusalKind = "invalid" | "conflict" | "missing";
-
-export class StoreRefusal extends Error {
-  readonly kind: RefusalKind;
-
-  constructor(kind: RefusalKind, message: string) {
-    super(message);
-    this.name = "StoreRefusal";
-    this.kind = kind;
-  }
-}
-
-export function isStoreRefusal(error: unknown): error is StoreRefusal {
-  return error instanceof StoreRefusal;
-}
-
-/** The value cannot be what it is: unknown to the canon, blank, self-directed. */
-function invalid(message: string): StoreRefusal {
-  return new StoreRefusal("invalid", message);
-}
-
-/** Something already written stands where this would go. */
-function conflict(message: string): StoreRefusal {
-  return new StoreRefusal("conflict", message);
-}
-
-/** Nothing in the folder answers to that id. */
-function missing(message: string): StoreRefusal {
-  return new StoreRefusal("missing", message);
-}
+export { isStoreRefusal, StoreRefusal } from "./refusal.js";
+export type { RefusalKind } from "./refusal.js";
 
 const MARKDOWN_SUFFIX = ".md";
 
@@ -152,55 +116,6 @@ function compare(a: string, b: string): number {
 /** Two names read as English; more than two are a list. */
 function namesPhrase(names: readonly string[]): string {
   return names.length === 2 ? names.join(" and ") : names.join(", ");
-}
-
-/**
- * A folder that is not there is a graph with nothing in it, not a failure: a
- * fresh `shall init` has no type folders at all, and git does not carry an empty
- * one, so the first node of a project is written into a folder that does not
- * exist yet. `ENOTDIR` joins it — a `spec` that is somehow a file has no
- * entries either, and the check-and-then-read race is worse than the answer.
- */
-function isAbsent(error: unknown): boolean {
-  if (typeof error !== "object" || error === null) {
-    return false;
-  }
-  const code = (error as { code?: unknown }).code;
-  return code === "ENOENT" || code === "ENOTDIR";
-}
-
-/**
- * Why the filesystem said no, in words a person can act on.
- *
- * AN ERRNO IS NOT A SENTENCE. These strings end up inside refusals a person
- * reads in a panel or under `shall check`, where this codebase says what
- * happened in English rather than handing over a code to look up. The mapped
- * ones are the codes a spec folder actually produces — a permission bit, a
- * symlink pointing at a folder, a path with a file part-way along it.
- *
- * The unmapped tail keeps the code, deliberately. Something nobody anticipated
- * has gone wrong, and inventing a soothing English phrase for it would tell the
- * person less than the four letters their operating system already documents.
- */
-export function describeFailure(error: unknown): string {
-  const code = (error as { code?: unknown } | null)?.code;
-  switch (code) {
-    case "EACCES":
-    case "EPERM":
-      return "the filesystem refused permission";
-    case "EISDIR":
-      return "it is a folder and not a file";
-    case "ENOTDIR":
-      return "something along its path is a file and not a folder";
-    case "ELOOP":
-      return "its symbolic links lead in a circle";
-    case "ENAMETOOLONG":
-      return "its name is longer than the filesystem allows";
-    default:
-      return typeof code === "string"
-        ? `the filesystem answered ${code}`
-        : "the filesystem refused it";
-  }
 }
 
 /**
@@ -240,45 +155,6 @@ async function readDirectory(directory: string): Promise<DirectoryReading> {
       return { entries: [], problem: null };
     }
     return { entries: [], problem: describeFailure(error) };
-  }
-}
-
-/**
- * Bytes decoded STRICTLY, which `readFile(path, "utf8")` is not.
- *
- * That one answers a malformed byte with U+FFFD and no complaint, so a file
- * saved by a Latin-1 editor would load as a node whose name is quietly not the
- * name in the file — and the first save from the panel would write the
- * replacement character down and lose the original byte with nothing to undo.
- * A file this module cannot read faithfully is a file it refuses to read at all.
- */
-const UTF8 = new TextDecoder("utf-8", { fatal: true });
-
-/**
- * One file's text, or why there is none. `absent` is not a problem: nobody
- * asked about a file that is not there, and a file that vanished between the
- * listing and the read is the ordinary shape of an agent working in the folder.
- */
-type TextReading =
-  | { readonly kind: "text"; readonly text: string }
-  | { readonly kind: "absent" }
-  /** A clause, not a sentence: each caller says what it cost. */
-  | { readonly kind: "unreadable"; readonly because: string };
-
-async function readText(absolutePath: string): Promise<TextReading> {
-  let bytes: Buffer;
-  try {
-    bytes = await readFile(absolutePath);
-  } catch (error) {
-    if (isAbsent(error)) {
-      return { kind: "absent" };
-    }
-    return { kind: "unreadable", because: describeFailure(error) };
-  }
-  try {
-    return { kind: "text", text: UTF8.decode(bytes) };
-  } catch {
-    return { kind: "unreadable", because: "it is not valid UTF-8 text" };
   }
 }
 
@@ -858,64 +734,6 @@ export async function loadGraph(specDir: string): Promise<SpecGraph> {
   return { nodes, edges, problems, refused };
 }
 
-/** The tail of the queue for each spec folder, so the next write can join it. */
-const queues = new Map<string, Promise<unknown>>();
-
-/**
- * One write at a time per spec folder, because a write is the unit of work and
- * several of them are read-modify-write over the same file.
- *
- * A single rename never needed this. A read-modify-write is a different animal
- * — the await between reading a file and rewriting it is a gap another write
- * would slip into, and two writes that both read the same file before either
- * rewrote it would leave the second one's version standing with the first one's
- * change gone. Queuing removes the gaps rather than teaching every caller to
- * retry, and it is what the architecture already claims: the daemon is the
- * single Shall process writing these files.
- *
- * READS DO NOT QUEUE. `loadGraph` never waits for a write, because a write
- * lands by rename and a reader therefore sees one whole version of a file or
- * another — never half of one. That is also the arrangement that keeps an agent
- * editing the folder from being a party this queue has to know about.
- *
- * Nothing inside `run` may call back in here — the queue would be waiting on
- * itself. The helpers below take the resolved folder they were handed instead.
- */
-async function withSpecDir<T>(
-  specDir: string,
-  run: () => Promise<T>,
-): Promise<T> {
-  const ahead = queues.get(specDir) ?? Promise.resolve();
-  // A write that failed is still a write that finished, so the queue moves on.
-  const turn = ahead.catch(() => undefined).then(run);
-  queues.set(specDir, turn);
-  return turn;
-}
-
-/**
- * Written beside the file and moved onto it, so a reader — the panel, another
- * agent, `git status` — never meets a half-written node. A `.tmp` left behind
- * by a crash is ignored by the loader rather than read as a node.
- *
- * THE NAME IS UNIQUE PER WRITE AND NOT PER PROCESS. The pid says who is
- * writing, which is worth knowing when a stray file turns up, but it is not
- * enough on its own to say WHICH write: two daemons in separate pid namespaces
- * over one mounted volume, or one pid reused after the first daemon died, would
- * share the name — and two writers sharing a temp path is one of them
- * truncating the other's bytes and the loser renaming a file that is no longer
- * there. The random tail costs nothing and removes the question.
- */
-async function writeBytes(target: string, text: string): Promise<void> {
-  const temporary = `${target}.${process.pid}.${randomUUID().slice(0, 8)}.tmp`;
-  try {
-    await writeFile(temporary, text, "utf8");
-    await rename(temporary, target);
-  } catch (error) {
-    await rm(temporary, { force: true });
-    throw error;
-  }
-}
-
 /**
  * THE INVARIANT OF THIS MODULE: it never writes a file it cannot read back.
  *
@@ -1120,7 +938,7 @@ export async function createNodeFile(
   edges: readonly NodeFileEdge[] = [],
 ): Promise<SpecNode> {
   const root = path.resolve(specDir);
-  return withSpecDir(root, async () => {
+  return withQueue(root, async () => {
     // Nothing further can be said about a type outside the canon — not which
     // folder the file would live in, not what it would look like — so this
     // answer is alone.
@@ -1182,7 +1000,7 @@ export async function scaffoldNodeFile(
   type: string,
 ): Promise<ScaffoldedNode> {
   const root = path.resolve(specDir);
-  return withSpecDir(root, async () => {
+  return withQueue(root, async () => {
     if (!isNodeType(type)) {
       throw invalid(`Unknown node type: ${type}`);
     }
@@ -1236,7 +1054,7 @@ export async function updateNodeFile(
   values: SpecNodeValues,
 ): Promise<SpecNode> {
   const root = path.resolve(specDir);
-  return withSpecDir(root, async () => {
+  return withQueue(root, async () => {
     const { candidates } = await discoverForWriting(root);
     const found = locate(candidates, id);
     if (found === undefined) {
@@ -1295,7 +1113,7 @@ export async function approveNodeFile(
   signer: ApprovalSigner,
 ): Promise<SpecNode> {
   const root = path.resolve(specDir);
-  return withSpecDir(root, async () => {
+  return withQueue(root, async () => {
     const { candidates } = await discoverForWriting(root);
     const found = locate(candidates, id);
     if (found === undefined) {
@@ -1328,7 +1146,7 @@ export async function clearDeletionProposal(
   id: string,
 ): Promise<SpecNode> {
   const root = path.resolve(specDir);
-  return withSpecDir(root, async () => {
+  return withQueue(root, async () => {
     const { candidates } = await discoverForWriting(root);
     const found = locate(candidates, id);
     if (found === undefined) {
@@ -1359,7 +1177,7 @@ export async function revertNodeFile(
   blocks: NodeFileBlocks,
 ): Promise<SpecNode> {
   const root = path.resolve(specDir);
-  return withSpecDir(root, async () => {
+  return withQueue(root, async () => {
     const { candidates } = await discoverForWriting(root);
     const found = locate(candidates, id);
     if (found === undefined) {
@@ -1391,7 +1209,7 @@ export async function restoreNodeFile(
   blocks: NodeFileBlocks,
 ): Promise<SpecNode> {
   const root = path.resolve(specDir);
-  return withSpecDir(root, async () => {
+  return withQueue(root, async () => {
     if (!isNodeType(type)) {
       throw invalid(`Unknown node type: ${type}`);
     }
@@ -1444,7 +1262,7 @@ export async function deleteNodeFile(
   id: string,
 ): Promise<void> {
   const root = path.resolve(specDir);
-  return withSpecDir(root, async () => {
+  return withQueue(root, async () => {
     const { candidates } = await discoverForWriting(root);
     const target = locate(candidates, id);
     if (target === undefined) {
@@ -1481,7 +1299,7 @@ export async function addEdge(
   edge: { fromId: string; type: string; toId: string },
 ): Promise<SpecEdge> {
   const root = path.resolve(specDir);
-  return withSpecDir(root, async () => {
+  return withQueue(root, async () => {
     const { candidates } = await discoverForWriting(root);
     const from = locate(candidates, edge.fromId);
     if (from === undefined) {
@@ -1538,7 +1356,7 @@ export async function removeEdge(
   edgeId: string,
 ): Promise<void> {
   const root = path.resolve(specDir);
-  return withSpecDir(root, async () => {
+  return withQueue(root, async () => {
     const triple = parseEdgeId(edgeId);
     if (triple === null) {
       throw missing(`Unknown edge: ${edgeId}`);
