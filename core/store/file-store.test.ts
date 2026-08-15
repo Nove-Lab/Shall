@@ -1871,6 +1871,56 @@ describe("the approval door", () => {
     assert.notEqual(node.approval.hash, signer.hash(payload));
   });
 
+  test("a work log's commits ride through an edit and a relation, like the edges do", async () => {
+    // The commits are the WorkLog's own frontmatter and inside the signed
+    // payload; an ordinary save receives three values and carries the rest.
+    const specDir = await makeSpecDir();
+    await place(
+      specDir,
+      "execution/WorkLog/WL-0001.md",
+      emitNodeFile(
+        "WorkLog",
+        {
+          shortName: "day-one",
+          name: "The first day",
+          body: "It went fine.",
+          commits: [
+            { sha: "9f2b1c4", message: "Keep one key at home" },
+            { sha: "41acde0", message: "Sign what lands" },
+          ],
+        },
+        [],
+      ),
+    );
+    await createNodeFile(specDir, "Evidence", "EV-0001", {
+      shortName: "ev",
+      name: "EV",
+      body: "## Claim\n\nIt worked.",
+    });
+
+    const saved = await updateNodeFile(specDir, "WL-0001", {
+      shortName: "day-one",
+      name: "The first day",
+      body: "It went fine, then better.",
+    });
+    assert.deepEqual(saved.commits, [
+      { sha: "9f2b1c4", message: "Keep one key at home" },
+      { sha: "41acde0", message: "Sign what lands" },
+    ]);
+    await addEdge(specDir, { fromId: "WL-0001", type: "SUBMITS", toId: "EV-0001" });
+    const graph = await loadGraph(specDir);
+    const log = graph.nodes.find((entry) => entry.id === "WL-0001");
+    assert.deepEqual(log?.commits, saved.commits);
+    // In the author's order, after the edges, and canonical.
+    const text = await readFile(
+      path.join(specDir, "execution/WorkLog/WL-0001.md"),
+      "utf8",
+    );
+    assert.ok(text.indexOf("edges:") < text.indexOf("commits:"), text);
+    assert.ok(text.indexOf("9f2b1c4") < text.indexOf("41acde0"), text);
+    assert.ok(isCanonical("WorkLog", "WL-0001.md", text));
+  });
+
   test("a relation added to an approved node keeps its block", async () => {
     const specDir = await makeSpecDir();
     await createNodeFile(specDir, "Requirement", "R-0001", requirementValues);

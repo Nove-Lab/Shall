@@ -24,14 +24,16 @@ daemon 하나가 돌고, 사람은 localhost 웹 화면에서 스펙을 보고 �
   === 정칙 바이트`이고, 그래서 아무것도 바꾸지 않은 저장은 빈 diff를 내고, 같은 편집을
   한 두 사람은 충돌 없이 병합된다.
 - **frontmatter는 기계의 것, 본문은 저자의 것.** 펜스 위에는 그래프가 필요로 하는
-  세 가지 — `short_name`·`name`·`edges` — 와, 기계가 스스로 쓰는 블록 둘 —
+  세 가지 — `short_name`·`name`·`edges` — 와, WorkLog 하나만 나르는 `commits`(그
+  작업이 만든 커밋의 sha·message 목록), 그리고 기계가 스스로 쓰는 블록 둘 —
   에이전트가 삭제를 청하는 `deletionProposed`, 데몬이 사람의 서명을 앉히는
   `approval` — 만 산다. 펜스 아래는 스펙 그 자체이고, 자유 마크다운이다: 어떤
   헤딩이든, 어떤 형태든, 쓴 그대로 읽히고 그려진다. 템플릿의 `## <라벨>` 헤딩들은
   시작을 돕는 제안이지 규칙이 아니다.
 - **green의 제조자는 사람 하나다.** 노드의 색은 저장되지 않고 매번 계산된다 —
   red는 고칠 오류(missing·문법 위반·고아), yellow는 사람의 판정이 남은 상태
-  (미승인·태그 위조·승인 후 변경), green은 둘 다 끝난 상태다. green을 만드는 길은
+  (미승인·태그 위조·승인 후 변경), green은 둘 다 끝난 상태다. 실행 밴드도 같은
+  세 물음을 받는다 — 기록도 에이전트가 쓰고 사람이 읽는다. green을 만드는 길은
   웹의 승인 버튼뿐이고, 그 서명은 `~/.shall/key`의 머신 키가 만든 HMAC이라
   에이전트는 블록의 모양은 흉내 내도 태그는 만들 수 없다.
 - **전체가 하나의 TypeScript 프로그램.** "쓰기 경로가 몇 개인가" 같은 질문에 코드
@@ -77,9 +79,10 @@ daemon 하나가 돌고, 사람은 localhost 웹 화면에서 스펙을 보고 �
 
 그래서 frontmatter의 `id:`·`type:` 키는 **금지**이고, 있으면 문장으로 거부한다
 ("A spec file does not carry id — the filename is the id." / "…the folder is the
-type."). 그 밖의 키도 마찬가지다 — frontmatter는 `short_name`·`name`·`edges`와
-두 기계 블록(`deletionProposed`·`approval`)만 나르고, 다른 키는 본문으로 가라는
-문장 하나로 거부된다. 엣지가 출발 파일에만 있으니 노드 파일을 지우면 나가는 엣지가
+type."). 그 밖의 키도 마찬가지다 — frontmatter는 `short_name`·`name`·`edges`,
+WorkLog에 한해 `commits`, 그리고 두 기계 블록(`deletionProposed`·`approval`)만
+나르고, 다른 키는 본문으로 가라는 문장 하나로 거부된다(`commits`를 다른 타입에
+쓰면 WorkLog의 키라는 문장으로). 엣지가 출발 파일에만 있으니 노드 파일을 지우면 나가는 엣지가
 함께 사라지고, 지울 것을 세는 장부가 따로 없다.
 
 타입별 하위 폴더는 두 가지를 산다 — 폴더가 타입의 집이 되어 파일 안에서 타입이
@@ -95,10 +98,11 @@ type."). 그 밖의 키도 마찬가지다 — frontmatter는 `short_name`·`nam
 1. **만든다.** `shall add-spec-node --type Requirement` — 타입마다 명령이 있는 게
    아니라 이 하나가 전부다. 데몬이 다음 빈 id를 골라
    `.shall/spec/intent/Requirement/<id>.md`에 시작 파일을 써 주고, 출력의 첫 줄이
-   그 절대 경로다. 손으로 만들어도 똑같이 읽힌다: 참조 템플릿 23개는
+   그 절대 경로다. 손으로 만들어도 똑같이 읽힌다: 참조 템플릿 22개는
    `~/.shall/templates/`에 있고, 폴더가 타입·파일명이 id라는 규칙은 같다.
-2. **채운다.** frontmatter는 `short_name`·`name`, 나가는 관계가 있으면 `edges:` —
-   그리고 그게 전부다. 펜스 아래 본문이 스펙이고, 자유 마크다운이다: 템플릿이 깔아 준
+2. **채운다.** frontmatter는 `short_name`·`name`, 나가는 관계가 있으면 `edges:`,
+   WorkLog라면 그 작업이 만든 커밋의 `commits:` 목록(sha·message, 만든 순서) — 그리고
+   그게 전부다. 펜스 아래 본문이 스펙이고, 자유 마크다운이다: 템플릿이 깔아 준
    `## <라벨>` 헤딩들은 시작 형태일 뿐이라 그대로 채워도, 고쳐 써도, 전부 지우고
    다른 형태로 써도 된다. 템플릿의 `#` 주석은 남겨도 지워도 된다. 손대지 않은
    템플릿을 그대로 두면 검사가 두 문장을 돌려준다 — `A short name is required.` ·
@@ -138,10 +142,15 @@ type."). 그 밖의 키도 마찬가지다 — frontmatter는 `short_name`·`nam
 
 스펙 그래프의 문법을 정의한다.
 
-- 노드·엣지 타입 정의 — 타입은 canon의 23개, 노드의 내용은 자유 마크다운 본문 하나
-- 23개 타입의 네 밴드 배치: 도메인(Domain) · 의도(Intent) · 설계(Plan) ·
+- 노드·엣지 타입 정의 — 타입은 canon의 22개, 노드의 내용은 자유 마크다운 본문 하나.
+  옛 Commit 타입은 사라졌다: 작업이 만든 커밋은 WorkLog frontmatter의 `commits:`
+  목록(sha·message)이지 노드가 아니다 — 두 줄의 사실에 파일 하나는 과했다
+- 22개 타입의 네 밴드 배치: 도메인(Domain) · 의도(Intent) · 설계(Plan) ·
   실행(Execution). 층이 없는 위성 셋은 매달린 노드를 따르되, 캔버스에 자리가 있도록
   Intent 밴드에 그린다
+- 앵커 테이블 — 타입마다 노드를 그래프에 붙드는 관계(방향 포함). 뿌리 넷(Term·
+  DomainEntity·Goal·Journal)만 앵커가 없고, 실행 밴드의 나머지는 그것을 제출·기록한
+  WorkLog(WorkLog는 Journal이나 ImplementationTask)에 붙든다. 문법 테이블과 교차검증된다
 - 판정 규칙 — id 형태, 두 이름, 본문의 문자·크기. 순수 함수 하나로 모아 두어
   파일 로더와 daemon의 door가 **같은 것**을 부른다. 문장도 발견 순서도 하나뿐이다
 - 섹션 가이드 — 타입마다 템플릿이 제안하는 `## <라벨>` 시작 형태. 데이터일 뿐,
@@ -178,7 +187,9 @@ type."). 그 밖의 키도 마찬가지다 — frontmatter는 `short_name`·`nam
   앵커 0) → 승인 없음 → 태그 위조 → 해시 불일치 → green. 여섯 판정이 각각 순수
   술어 함수(`isMissing`·`hasSchemaViolation`·`isOrphan`·`hasApproval`·`isTagValid`
   ·`isHashMatched`)이고, 조합 함수는 우선순위만 쥔다 — 조건이 자라면 술어가,
-  순서가 바뀌면 조합이 바뀐다. 실행 밴드는 색 밖이다
+  순서가 바뀌면 조합이 바뀐다. canon의 모든 타입이 색을 받는다 — 실행 밴드도
+  기록을 에이전트가 쓰고 사람이 읽으니 같은 세 물음을 받는다. 색 밖에 남는 것은
+  삭제뿐이다: 기록은 지운다고 없던 일이 되지 않는다
 - 서명 검증은 주입받은 `Seal`(hash·verifies)로 한다 — 키는 daemon의 것이고 core는
   브라우저에서도 돈다. 삭제 제안은 페이로드 안에 있어 전용 분기가 없다: 적으면
   changed, 벗기면 도로 green
@@ -239,8 +250,8 @@ type."). 그 밖의 키도 마찬가지다 — frontmatter는 `short_name`·`nam
   목록에 없다. 한 번 열어야만 쓸 수 있는 스펙은 그것을 나르는 repo보다 덜
   이동적이다. `scaffold`는 타입을 대소문자 무시로 해석해 다음 빈 id로 시작 파일을
   쓰고 그 경로를 답한다
-- 기동할 때와 프로젝트를 열 때 `~/.shall/templates`의 참조 템플릿 23개를 바이트
-  비교해 다른 것만 다시 쓰고, `spec/` 폴더가 있는지 보장하고, 옛 Shall이 프로젝트에
+- 기동할 때와 프로젝트를 열 때 `~/.shall/templates`의 참조 템플릿 22개를 바이트
+  비교해 다른 것만 다시 쓰고(canon에서 빠진 타입의 템플릿은 지운다), `spec/` 폴더가 있는지 보장하고, 옛 Shall이 프로젝트에
   남긴 `.shall/templates`는 지우고, `.claude/settings.json`에
   `Read(~/.shall/**)` deny 규칙을 병합해 둔다(파싱 안 되는 파일은 바이트 그대로
   두는, 조용한 관례 방어)
@@ -296,8 +307,8 @@ MCP 서버 · webhook 수신 · 외부 cron · 추론 클라이언트와 그 게
 아래는 이제 사용자 repo에 바이트로 남는다. 바꾸면 그들의 git 히스토리를 다시 쓰게
 하므로, 바꾸지 않는다.
 
-- **파일 형식** — frontmatter 키 다섯(`short_name`·`name`·`edges`·
-  `deletionProposed`·`approval`)의 순서, 스칼라의 맨몸/따옴표 판정, 본문은 자유
+- **파일 형식** — frontmatter 키의 순서(`short_name`·`name`·`edges`, WorkLog에만
+  `commits`, 그리고 `deletionProposed`·`approval`), 스칼라의 맨몸/따옴표 판정, 본문은 자유
   마크다운 그대로, LF·BOM 없음·말미 개행 하나. 기계 블록 둘은 이번에 **의도적으로
   더한 것**이고, 더한 순간부터 함께 얼었다. 관대한 **읽기의 수용 범위**도 형식의
   일부라 `yaml` 패키지 버전이 정확히 고정돼 있다

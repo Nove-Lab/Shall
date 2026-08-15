@@ -18,6 +18,8 @@ export {
   APPROVAL_KEY,
   approvalPayload,
   blocksOf,
+  COMMITS_KEY,
+  COMMITS_TYPE,
   DELETION_PROPOSED_KEY,
   emitNodeFile,
   FENCE,

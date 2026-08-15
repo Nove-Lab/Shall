@@ -80,9 +80,9 @@ export type CardNodeData = {
    *
    * REQUIRED AND NULLABLE, never optional: under `exactOptionalPropertyTypes` an
    * absent field and a field holding nothing are different asks, and this is the
-   * second — every card answers the question, and `null` is one of the answers.
-   * The execution band is outside the colour vocabulary altogether, so its cards
-   * draw no dot at all.
+   * second — every card answers the question, and `null` is one of the answers:
+   * a card the review has not answered for. Every canon type is coloured, the
+   * execution band included.
    */
   readonly signal: Signal | null;
   /** The node that was clicked — one card on the board, or none. */

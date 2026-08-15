@@ -6,12 +6,15 @@ import {
   judgeNodeId,
   judgeText,
   type NodeApproval,
+  type NodeCommit,
   type NodeDeletionProposal,
   type SpecEdge,
   type SpecNode,
 } from "../graph/index.js";
 import {
   APPROVAL_KEY,
+  COMMITS_KEY,
+  COMMITS_TYPE,
   DELETION_PROPOSED_KEY,
   EDGES_KEY,
   FENCE,
@@ -67,6 +70,28 @@ const MARKDOWN_SUFFIX = ".md";
 
 /** Refused wholesale rather than per-key: it is one rule about one list. */
 const EDGE_SHAPE = "Every entry under edges is a map of exactly type and to.";
+
+/** The same rule for the WorkLog's commits: one list, one shape, said once. */
+const COMMIT_SHAPE =
+  "Every entry under commits is a map of exactly sha and message.";
+
+/**
+ * The keys a file of this type may carry above the fence, in the order the
+ * emitter writes them — the sentence about a stray key names exactly these, so
+ * a WorkLog hears about `commits` and a Requirement does not.
+ */
+function carriedKeys(type: string): readonly string[] {
+  return type === COMMITS_TYPE
+    ? [SHORT_NAME_KEY, NAME_KEY, EDGES_KEY, COMMITS_KEY, DELETION_PROPOSED_KEY, APPROVAL_KEY]
+    : [SHORT_NAME_KEY, NAME_KEY, EDGES_KEY, DELETION_PROPOSED_KEY, APPROVAL_KEY];
+}
+
+/** "a, b, c and d" — the list of carried keys as a sentence reads it. */
+function keysPhrase(keys: readonly string[]): string {
+  const head = keys.slice(0, -1);
+  const last = keys[keys.length - 1] ?? "";
+  return `${head.join(", ")} and ${last}`;
+}
 
 /**
  * The machine blocks, refused whole for the same reason the edges list is: a
@@ -309,13 +334,26 @@ export function parseNodeFile(
   let name = "";
   let approval: NodeApproval | undefined;
   let deletionProposed: NodeDeletionProposal | undefined;
+  let commits: NodeCommit[] | undefined;
   // The keys the format does not carry, said once as one list: the rule is one
-  // rule — the frontmatter holds the graph's three facts and the two machine
-  // blocks, and the body holds everything else — and six sentences about six
-  // keys would read as six rules.
+  // rule — the frontmatter holds the graph's three facts, a WorkLog's commits
+  // and the two machine blocks, and the body holds everything else — and six
+  // sentences about six keys would read as six rules.
   const strays: string[] = [];
   for (const [key, value] of Object.entries(carried)) {
     if (key === EDGES_KEY) {
+      continue;
+    }
+    if (key === COMMITS_KEY) {
+      // Read below with the edges — but named here on the type that has no
+      // business carrying it, by name rather than as a stray, because the
+      // person who wrote it was thinking of a WorkLog and the sentence should
+      // say which file it belongs in.
+      if (type !== COMMITS_TYPE) {
+        problems.push(
+          `A ${type} does not carry ${COMMITS_KEY} — only a ${COMMITS_TYPE} records the commits its work produced.`,
+        );
+      }
       continue;
     }
     if (key === "id") {
@@ -395,8 +433,43 @@ export function parseNodeFile(
   }
   if (strays.length > 0) {
     problems.push(
-      `The frontmatter carries ${SHORT_NAME_KEY}, ${NAME_KEY}, ${EDGES_KEY}, ${DELETION_PROPOSED_KEY} and ${APPROVAL_KEY} and nothing else — ${namesPhrase(strays)} ${strays.length === 1 ? "belongs" : "belong"} in the body, below the closing fence.`,
+      `The frontmatter carries ${keysPhrase(carriedKeys(type))} and nothing else — ${namesPhrase(strays)} ${strays.length === 1 ? "belongs" : "belong"} in the body, below the closing fence.`,
     );
+  }
+
+  // The WorkLog's commits: a list of maps of exactly `sha` and `message`, both
+  // one line of text, kept in the order written. Judged like the edges — one
+  // sentence for the list's shape, however many entries are wrong — and then
+  // per value, so a blank message is named as a blank message.
+  if (type === COMMITS_TYPE) {
+    const listed = carried[COMMITS_KEY];
+    if (listed !== null && listed !== undefined) {
+      if (!Array.isArray(listed)) {
+        problems.push(COMMIT_SHAPE);
+      } else {
+        const read: NodeCommit[] = [];
+        let said = false;
+        for (const entry of listed) {
+          const held = readStringMap(entry, ["sha", "message"]);
+          if (held === null) {
+            if (!said) {
+              said = true;
+              problems.push(COMMIT_SHAPE);
+            }
+            continue;
+          }
+          const sha = judgeIdentity("A commit sha", held["sha"] ?? "");
+          const message = judgeIdentity("A commit message", held["message"] ?? "");
+          problems.push(...sha.problems, ...message.problems);
+          read.push({ sha: sha.value, message: message.value });
+        }
+        // An empty list is a list of no commits, which is the same fact as no
+        // key — read as absent, and brought canonical by the next save.
+        if (read.length > 0) {
+          commits = read;
+        }
+      }
+    }
   }
 
   const edges: SpecEdge[] = [];
@@ -491,6 +564,7 @@ export function parseNodeFile(
       body: judgedBody.value,
       // Spread in rather than assigned, so a node without a block has no key
       // for it either — one spelling of absence, here as in the file.
+      ...(commits !== undefined ? { commits } : {}),
       ...(approval !== undefined ? { approval } : {}),
       ...(deletionProposed !== undefined ? { deletionProposed } : {}),
     },

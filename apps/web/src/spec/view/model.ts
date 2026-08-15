@@ -1,7 +1,7 @@
 /**
  * What the Spec plane's two views are computed from.
  *
- * The roster itself is canon and lives in `@shall/core/graph`: the twenty-three
+ * The roster itself is canon and lives in `@shall/core/graph`: the twenty-two
  * types, their layers, the band order and the column order. This file re-exports
  * the pieces the views read so a view module has one import, and owns the two
  * things that are *presentation* and therefore not the canon's to hold.

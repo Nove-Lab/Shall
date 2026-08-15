@@ -23,6 +23,7 @@ import {
   judgeText,
   nextIdSuggestion,
   parseEdgeId,
+  type NodeCommit,
   type SpecEdge,
   type SpecNode,
   type SpecNodeValues,
@@ -1087,12 +1088,28 @@ async function readNodeFile(
  * bytes, so that one set of sentences answers for both doors and for the
  * loader, and in the order a person reads a file: names first, body after.
  */
-function settleFields(values: SpecNodeValues): NodeFileFields {
+function settleFields(
+  values: SpecNodeValues,
+  commits: readonly NodeCommit[] | undefined,
+): NodeFileFields {
   return {
     shortName: judgeText("A short name", values.shortName).value,
     name: judgeText("A name", values.name).value,
     body: judgeBody(values.body).value,
+    // A WorkLog's commits ride along unsettled: each sha and message is judged
+    // by the reader over the emitted bytes, like everything else.
+    commits,
   };
+}
+
+/**
+ * What a whole-file write hands over — the three values an edit reaches, plus
+ * the WorkLog's commits when the file has them. The doors that replace a file
+ * outright (revert, restore) take this; the ordinary edit takes the values and
+ * carries the commits from disk.
+ */
+export interface NodeFileValues extends SpecNodeValues {
+  readonly commits?: readonly NodeCommit[] | undefined;
 }
 
 /**
@@ -1119,7 +1136,7 @@ export async function createNodeFile(
     if (!isNodeType(type)) {
       throw invalid(`Unknown node type: ${type}`);
     }
-    const fields = settleFields(values);
+    const fields = settleFields(values, undefined);
     const shape = judgeNodeId(id);
     if (shape !== null) {
       throw invalid(shape);
@@ -1239,10 +1256,11 @@ export async function updateNodeFile(
     // is too long, then told the file was unreadable all along, has been sent
     // twice for one answer.
     const held = await readNodeFile(found);
-    const fields = settleFields(values);
-    // The blocks ride along like the edges do: lines in this file the edit did
-    // not receive and therefore does not touch. The changed content un-matches
-    // an approval's hash by itself — that is arithmetic, not this door's job.
+    // The commits and the blocks ride along like the edges do: lines in this
+    // file the edit did not receive and therefore does not touch. The changed
+    // content un-matches an approval's hash by itself — that is arithmetic,
+    // not this door's job.
+    const fields = settleFields(values, held.node.commits);
     return writeNodeFile(
       root,
       found.type,
@@ -1344,7 +1362,7 @@ export async function clearDeletionProposal(
 export async function revertNodeFile(
   specDir: string,
   id: string,
-  values: SpecNodeValues,
+  values: NodeFileValues,
   edges: readonly NodeFileEdge[],
   blocks: NodeFileBlocks,
 ): Promise<SpecNode> {
@@ -1355,7 +1373,14 @@ export async function revertNodeFile(
     if (found === undefined) {
       throw missing(`Unknown node: ${id}`);
     }
-    return writeNodeFile(root, found.type, id, settleFields(values), edges, blocks);
+    return writeNodeFile(
+      root,
+      found.type,
+      id,
+      settleFields(values, values.commits),
+      edges,
+      blocks,
+    );
   });
 }
 
@@ -1369,7 +1394,7 @@ export async function restoreNodeFile(
   specDir: string,
   type: string,
   id: string,
-  values: SpecNodeValues,
+  values: NodeFileValues,
   edges: readonly NodeFileEdge[],
   blocks: NodeFileBlocks,
 ): Promise<SpecNode> {
@@ -1398,7 +1423,14 @@ export async function restoreNodeFile(
         `${id} is already on disk at ${standing.file}, so there is nothing to restore.`,
       );
     }
-    return writeNodeFile(root, type, id, settleFields(values), edges, blocks);
+    return writeNodeFile(
+      root,
+      type,
+      id,
+      settleFields(values, values.commits),
+      edges,
+      blocks,
+    );
   });
 }
 

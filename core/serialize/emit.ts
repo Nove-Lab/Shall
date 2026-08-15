@@ -1,6 +1,7 @@
 import {
   isNodeType,
   type NodeApproval,
+  type NodeCommit,
   type NodeDeletionProposal,
 } from "../graph/index.js";
 import { emitScalar } from "./scalar.js";
@@ -17,7 +18,8 @@ import { emitScalar } from "./scalar.js";
  *
  * THE FRONTMATTER IS THE MACHINE'S AND THE BODY IS THE AUTHOR'S. Above the
  * fence live the three facts the graph itself needs — the two names and the
- * outgoing edges — written canonically: keys in one order, edges in one order,
+ * outgoing edges — plus a WorkLog's commits and the two machine blocks, all
+ * written canonically: keys in one order, edges in one order,
  * LF, no BOM, one trailing newline, so two people who make the same edit
  * produce the same bytes and therefore no conflict. Below the fence is the
  * specification as free markdown, and emit is the IDENTITY on it: whatever a
@@ -46,6 +48,17 @@ export const NAME_KEY = "name";
 export const EDGES_KEY = "edges";
 
 /**
+ * A WorkLog's key and no other type's: the commits the work produced, each a
+ * `sha` and a `message`. It replaces the Commit node type — a whole file for
+ * two lines of fact — with two lines in the file those facts were always
+ * about. The reader refuses it on any other type by name.
+ */
+export const COMMITS_KEY = "commits";
+
+/** The type that carries `commits:`. Read by the reader and the template alike. */
+export const COMMITS_TYPE = "WorkLog";
+
+/**
  * The two machine blocks, camelCase where the three author keys are not: they
  * are the spelling agents are told to type and the daemon writes, chosen with
  * the user spec and kept even beside `short_name` — reversing the choice is
@@ -64,6 +77,12 @@ export interface NodeFileFields {
   readonly shortName: string;
   readonly name: string;
   readonly body: string;
+  /**
+   * The WorkLog's commits, in the order the author wrote them — chronology is
+   * the author's fact, so this list is emitted as given and never sorted the
+   * way the edges are. `undefined` and empty both emit as no key.
+   */
+  readonly commits?: readonly NodeCommit[] | undefined;
 }
 
 /**
@@ -151,7 +170,19 @@ export function emitNodeFile(
     }
   }
 
-  // The machine blocks come after the author's three keys, each omitted whole
+  // The commits, kept in the author's own order — see `NodeFileFields`. Emit
+  // does not ask whether this type may carry them; the reader does, over the
+  // bytes about to be written, which is what the read-back door is for.
+  const commits = node.commits ?? [];
+  if (commits.length > 0) {
+    lines.push(`${COMMITS_KEY}:`);
+    for (const commit of commits) {
+      lines.push(`  - sha: ${emitScalar(commit.sha)}`);
+      lines.push(`    message: ${emitScalar(commit.message)}`);
+    }
+  }
+
+  // The machine blocks come after the author's four keys, each omitted whole
   // when absent — a bare `approval:` would be a second spelling of "none". The
   // inner key order is fixed here and free at the reader, like everything else
   // about the format. `approval` is LAST, above the closing fence, on purpose:
