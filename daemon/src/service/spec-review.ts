@@ -1,6 +1,11 @@
 import os from "node:os";
 import path from "node:path";
-import { reviewGraph, type GraphReview } from "@shall/core/arith";
+import {
+  contentHashOf,
+  reviewGraph,
+  type Approvals,
+  type GraphReview,
+} from "@shall/core/arith";
 import {
   anchorPhrase,
   bandFolderOf,
@@ -11,23 +16,20 @@ import {
   blocksOf,
   emitNodeFile,
   parseNodeFile,
+  type ApprovalLedger,
+  type ApprovalRecord,
 } from "@shall/core/serialize";
 import {
-  approveNodeFile,
   clearDeletionProposal,
-  describeFileFailure,
   loadGraph,
+  readApprovalLedger,
+  recordApproval,
   restoreNodeFile,
   revertNodeFile,
   type SpecGraph,
 } from "@shall/core/store";
 import { conflict, invalid, missing } from "./errors.js";
 import { projectSpecFor, served } from "./spec-graph.js";
-import {
-  ensureApprovalKey,
-  getApprovalKeyPath,
-  makeSeal,
-} from "../host/approval-key.js";
 import {
   commitPaths,
   fileAt,
@@ -38,6 +40,7 @@ import {
   repositoryRoot,
   runGit,
 } from "../host/git-cli.js";
+import { payloadHash } from "../host/hash.js";
 import { readSpecNodeFile } from "../host/project-files.js";
 
 /**
@@ -45,17 +48,26 @@ import { readSpecNodeFile } from "../host/project-files.js";
  * doors that resolve them — approve, reject a proposed deletion, restore a
  * missing file, and the person's own commit button.
  *
- * NOTHING HERE IS STORED. Every answer is computed from the files and the key
- * at the moment of the ask, which is the whole of the storage principle: the
- * spec folder is the truth, git is the history, and a colour is arithmetic.
+ * NOTHING HERE IS STORED. Every answer is computed from two files at the
+ * moment of the ask — the spec folder, which says what each node is, and the
+ * approval ledger, which remembers what a person approved — and that is the
+ * whole of the storage principle: the spec is the truth, git is the history,
+ * the ledger is the record, and a colour is arithmetic over the three.
  *
  * GREEN HAS ONE MANUFACTURER. The approve door below is the only place a
- * valid approval block is ever minted, and it is reached from the web UI
- * alone. There is no caller context on this router, so nothing MECHANICAL
- * stops a local process from calling it — the agents' contract is file-only
- * by architecture, the deny rule keeps the key out of their reach, and a
- * local token belongs here the day the daemon has any caller it does not
- * trust.
+ * ledger record is ever written, and it is reached from the web UI alone. A
+ * node file says nothing about its own approval — that claim moved out of the
+ * frontmatter so that the spec folder is pure authorship — and the ledger is
+ * kept out of an agent's hands by a settings rule, which is convention and not
+ * a sandbox: the agents' contract is file-only by architecture, and a local
+ * token belongs here the day the daemon has any caller it does not trust.
+ *
+ * THE APPROVE DOOR HASHES OUTSIDE ANY QUEUE, AND THAT IS FINE. It hashes the
+ * graph it just loaded and writes only the ledger, never the node file. A save
+ * that lands between the read and the record leaves a record naming bytes that
+ * are no longer on disk, and the node reads yellow "changed" until the person
+ * approves again — never a false green, because a record names content and
+ * not a moment.
  */
 
 /** Repo-root-relative, `/`-separated — the one spelling git-cli accepts. */
@@ -63,33 +75,33 @@ function toPosix(relative: string): string {
   return relative.split(path.sep).join("/");
 }
 
+/** The ledger's records and the daemon's hash, as the colour chain takes them. */
+function approvalsOf(records: ApprovalLedger): Approvals {
+  return { records, hash: payloadHash };
+}
+
 /**
- * The seal, or the refusal that says why there is none. The two callers speak
- * of different casualties — an approve that could not happen, a review that
- * cannot call anything green — so the sentence is theirs to choose; a corrupt
- * key file already arrives as a whole sentence of its own and is forwarded
- * rather than wrapped.
+ * The ledger, or the refusal that says why it cannot be trusted. A LEDGER THAT
+ * WILL NOT READ IS A REFUSAL, NOT A QUIET ANSWER: a review served over an
+ * empty map would paint every approved node yellow, and a screenful of yellow
+ * that is really "the ledger would not read" is a lie with a colour. The two
+ * callers speak of different casualties — an approve that did not happen, a
+ * review that cannot call anything green — so the sentence is theirs to
+ * choose; the ledger's own problem sentence is carried inside either.
  */
-async function requireSeal(
+async function requireLedger(
+  ledgerFile: string,
   casualty: "approve" | "review",
-): Promise<ReturnType<typeof makeSeal>> {
-  try {
-    return makeSeal(await ensureApprovalKey());
-  } catch (error) {
-    if (
-      error instanceof Error &&
-      error.message.startsWith("The approval key at")
-    ) {
-      throw conflict(error.message);
-    }
-    const keyPath = getApprovalKeyPath();
-    const why = describeFileFailure(error);
-    throw conflict(
-      casualty === "approve"
-        ? `Shall could not open its approval key at ${keyPath} (${why}), so nothing was approved — an approval nobody can verify is not one.`
-        : `Shall could not open its approval key at ${keyPath} (${why}), so no approval on this machine can be checked and nothing here is green until it can.`,
-    );
+): Promise<ApprovalLedger> {
+  const ledger = await readApprovalLedger(ledgerFile);
+  if (ledger.problem === null) {
+    return ledger.records;
   }
+  throw conflict(
+    casualty === "approve"
+      ? `Shall could not read the approval ledger at ${ledgerFile} — ${ledger.problem} Nothing was approved, because writing into a ledger nobody can read would bury what it holds; restore it from git or move it aside, and approve again.`
+      : `Shall could not read the approval ledger at ${ledgerFile} — ${ledger.problem} Nothing here is green until it reads: the ledger is Shall's own file, so restore it from git or move it aside.`,
+  );
 }
 
 /**
@@ -119,20 +131,17 @@ function fileOf(node: Pick<SpecNode, "type" | "id">): string {
 }
 
 /**
- * The version of this node git still holds whose CONTENT the standing
- * approval hash fits — found by arithmetic rather than by bookkeeping: no
- * commit is marked, no sha is stored, the signature itself says which bytes
- * it signs. Hashing needs no key, so this works on a machine that could
- * never verify the tag.
+ * The version of this node git still holds whose CONTENT the ledger's record
+ * names — found by arithmetic rather than by bookkeeping: no commit is marked,
+ * no sha is stored, the hash itself says which bytes it was taken over.
  *
- * WHAT COMES BACK IS THE CONTENT AND NEVER THE MATCHED COMMIT'S BLOCKS. The
- * payload leaves the approval block out, so a commit made BEFORE the person
- * approved hashes identically to one made after — and with a daemon that
- * never commits on its own, the commit-then-approve ordering is the ordinary
- * one, which makes the newest match usually the PRE-approval bytes. A caller
- * that took that version's blocks would erase the very signature this walk
- * exists to honour; both callers below reattach the STANDING approval
- * instead, which is the one on disk and the one whose hash was matched.
+ * WHAT COMES BACK IS CONTENT, AND ONLY CONTENT. The payload is the canonical
+ * file with the node's own address on top, so any commit holding those bytes
+ * matches, whenever it was made relative to the approval — and with a daemon
+ * that never commits on its own, the commit usually predates the approve. That
+ * is exactly why the ledger is a separate file: putting the matched version
+ * back moves nothing in the ledger, so the approval survives the revert by
+ * construction and there is no signature to carry over.
  *
  * The walk is capped at git-cli's fifty commits of the one file. Past that,
  * the honest answer is "git no longer holds it", and the panel falls back to
@@ -142,6 +151,7 @@ async function approvedVersionFor(
   projectPath: string,
   specDir: string,
   node: SpecNode,
+  record: ApprovalRecord | undefined,
 ): Promise<{
   values: {
     shortName: string;
@@ -152,8 +162,7 @@ async function approvedVersionFor(
   edges: readonly { type: string; toId: string }[];
   deletionProposed: SpecNode["deletionProposed"];
 } | null> {
-  const approval = node.approval;
-  if (approval === undefined) {
+  if (record === undefined) {
     return null;
   }
   const root = await repositoryRoot(projectPath);
@@ -163,7 +172,6 @@ async function approvedVersionFor(
   const relative = toPosix(
     path.relative(root, path.join(specDir, fileOf(node))),
   );
-  const seal = makeSeal(null);
   for (const sha of await fileHistory(root, relative)) {
     const text = await fileAt(root, sha, relative);
     if (text === null) {
@@ -180,7 +188,7 @@ async function approvedVersionFor(
       reading.edges,
       blocksOf(reading.node),
     );
-    if (seal.hash(payload) === approval.hash) {
+    if (payloadHash(payload) === record.approvedHash) {
       return {
         values: {
           shortName: reading.node.shortName,
@@ -190,7 +198,7 @@ async function approvedVersionFor(
         },
         edges: reading.edges,
         // Inside the payload, so a match carries it faithfully — in practice
-        // always undefined, because the approve door refuses to sign over one.
+        // always undefined, because the approve door refuses to record over one.
         deletionProposed: reading.node.deletionProposed,
       };
     }
@@ -199,10 +207,10 @@ async function approvedVersionFor(
 }
 
 /**
- * The approved content as the file the approve WROTE: canonical bytes plus
- * the standing signature. This is what the panel diffs against and what a
- * rejection puts back — never the matched commit verbatim, for the reason
- * `approvedVersionFor` states.
+ * The approved content as Shall would write it: the canonical bytes the
+ * record's hash names. This is what the panel diffs against and what a
+ * rejection puts back — a file that says nothing about its own approval,
+ * because no file does any more.
  */
 function approvedFileOf(
   node: SpecNode,
@@ -210,40 +218,40 @@ function approvedFileOf(
 ): string {
   return emitNodeFile(node.type, approved.values, approved.edges, {
     deletionProposed: approved.deletionProposed,
-    approval: node.approval,
   });
 }
 
 /**
  * The colours, computed per request. Nothing is cached because nothing is
  * stored: a few hundred hashes over a few KiB each is microseconds, and a
- * cache would be a second home for a fact whose first home is the files.
- *
- * A KEY THAT CANNOT BE READ IS A REFUSAL, NOT A QUIET ANSWER: a review served
- * on a keyless seal would paint every approved node yellow, and a screenful
- * of yellow that is really "the key would not open" is a lie with a colour.
+ * cache would be a second home for a fact whose first home is two files.
  */
 export async function reviewSpec(projectId: string): Promise<GraphReview> {
-  const { specDir } = await projectSpecFor(projectId);
-  const seal = await requireSeal("review");
-  return reviewGraph(await loadGraph(specDir), seal);
+  const { specDir, ledgerFile } = await projectSpecFor(projectId);
+  const records = await requireLedger(ledgerFile, "review");
+  return reviewGraph(await loadGraph(specDir), approvalsOf(records));
 }
 
 /**
- * A person turns a node green — the one manufacturer.
+ * A person turns a node green — the one manufacturer, and it writes one line
+ * in the ledger and not a byte of the node's file.
  *
- * The refusals run in the order a person can act on: the project, the key,
+ * The refusals run in the order a person can act on: the project, the ledger,
  * the file's own state, the node's existence, the standing deletion proposal,
  * and last the anchor — because "fix the file" comes before "decide the
  * proposal" and both come before "nothing reaches it yet". The execution band
  * is approved like any other: a record is read by a person too.
+ *
+ * WHAT IS HASHED IS THE NODE AS LOADED, through the same function the colour
+ * chain uses, so the record written here is the record `isHashMatched` will
+ * find fitting a moment later — same payload, same edges, same hash.
  */
 export async function approveSpecNode(input: {
   projectId: string;
   id: string;
-}): Promise<SpecNode> {
-  const { specDir } = await projectSpecFor(input.projectId);
-  const seal = await requireSeal("approve");
+}): Promise<ApprovalRecord> {
+  const { specDir, ledgerFile } = await projectSpecFor(input.projectId);
+  const records = await requireLedger(ledgerFile, "approve");
   const graph = await loadGraph(specDir);
 
   const refused = graph.refused.find((entry) => entry.id === input.id);
@@ -261,7 +269,7 @@ export async function approveSpecNode(input: {
       `${input.id} carries a deletion an agent proposed, so approving it would sign a node that is asking to be removed — approve the deletion or reject it first.`,
     );
   }
-  const review = reviewGraph(graph, seal);
+  const review = reviewGraph(graph, approvalsOf(records));
   const status = review.statuses.find((entry) => entry.id === input.id);
   if (status !== undefined && status.reason === "orphan") {
     throw invalid(
@@ -269,10 +277,12 @@ export async function approveSpecNode(input: {
     );
   }
 
+  const edges = graph.edges
+    .filter((edge) => edge.fromId === node.id)
+    .map((edge) => ({ type: edge.type, toId: edge.toId }));
   return served(
-    approveNodeFile(specDir, input.id, {
-      hash: seal.hash,
-      sign: seal.sign,
+    recordApproval(ledgerFile, input.id, {
+      approvedHash: contentHashOf(node, edges, payloadHash),
       by: userName(),
       at: new Date().toISOString(),
     }),
@@ -281,17 +291,20 @@ export async function approveSpecNode(input: {
 
 /**
  * A proposed deletion, turned down. When git still holds the version the
- * standing approval signs, that version comes back whole — the proposal and
- * whatever else the agent touched are both undone, and the old signature fits
- * again. When it does not — no repository, no commit, no approval — stripping
- * the block IS the rejection, and any other edit stays where the agent left
- * it, honestly yellow.
+ * ledger's record names, that version comes back whole — the proposal and
+ * whatever else the agent touched are both undone, and the record fits again
+ * without the ledger moving. When it does not — no repository, no commit, no
+ * record — stripping the block IS the rejection, and any other edit stays
+ * where the agent left it, honestly yellow.
  */
 export async function rejectSpecDeletion(input: {
   projectId: string;
   id: string;
 }): Promise<SpecNode> {
-  const { projectPath, specDir } = await projectSpecFor(input.projectId);
+  const { projectPath, specDir, ledgerFile } = await projectSpecFor(
+    input.projectId,
+  );
+  const records = await requireLedger(ledgerFile, "review");
   const graph = await loadGraph(specDir);
 
   const node = graph.nodes.find((entry) => entry.id === input.id);
@@ -310,17 +323,16 @@ export async function rejectSpecDeletion(input: {
     );
   }
 
-  const approved = await approvedVersionFor(projectPath, specDir, node);
+  const approved = await approvedVersionFor(
+    projectPath,
+    specDir,
+    node,
+    records.get(input.id),
+  );
   if (approved !== null) {
     return served(
       revertNodeFile(specDir, input.id, approved.values, approved.edges, {
-        // THE STANDING SIGNATURE RIDES OVER THE HISTORICAL CONTENT. The
-        // matched commit usually predates the approve (the daemon never
-        // commits on its own), so its own frontmatter has no approval block —
-        // taking it verbatim would make a rejection destroy the very
-        // signature it exists to honour.
         deletionProposed: approved.deletionProposed,
-        approval: node.approval,
       }),
     );
   }
@@ -329,7 +341,7 @@ export async function rejectSpecDeletion(input: {
 
 /**
  * The two texts the changed-since-approval diff is drawn from: the file as it
- * stands, and the version the signature still fits. `approved` is null when
+ * stands, and the version the ledger's record names. `approved` is null when
  * git cannot answer — never a refusal, because the panel's fallback (the
  * whole file, with a sentence saying why) is a better answer than an error.
  */
@@ -337,7 +349,10 @@ export async function readApprovedVersion(input: {
   projectId: string;
   id: string;
 }): Promise<{ approved: string | null; current: string }> {
-  const { projectPath, specDir } = await projectSpecFor(input.projectId);
+  const { projectPath, specDir, ledgerFile } = await projectSpecFor(
+    input.projectId,
+  );
+  const records = await requireLedger(ledgerFile, "review");
   const graph = await loadGraph(specDir);
   const node = graph.nodes.find((entry) => entry.id === input.id);
   if (node === undefined) {
@@ -347,10 +362,13 @@ export async function readApprovedVersion(input: {
   if (current === null) {
     throw missing(`Unknown node: ${input.id}`);
   }
-  const approved = await approvedVersionFor(projectPath, specDir, node);
+  const approved = await approvedVersionFor(
+    projectPath,
+    specDir,
+    node,
+    records.get(input.id),
+  );
   return {
-    // The file as the approve wrote it — signature included — so the diff
-    // never shows the approval block as a change nobody made.
     approved: approved === null ? null : approvedFileOf(node, approved),
     current,
   };
@@ -359,7 +377,10 @@ export async function readApprovedVersion(input: {
 /**
  * A file somebody removed the way no door sanctions, put back from history.
  * Git lends the bytes; the store writes them through its own doors, so what
- * lands is queued, judged and canonical like any other write.
+ * lands is queued, judged and canonical like any other write. The ledger is
+ * not consulted and not touched: if it still holds a record for this id and
+ * the restored bytes are the bytes it names, the node comes back green by
+ * arithmetic alone.
  */
 export async function restoreSpecNode(input: {
   projectId: string;

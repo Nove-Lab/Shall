@@ -194,11 +194,12 @@ export const appRouter = t.router({
       .input(z.object({ path: z.string().min(1), type: z.string() }))
       .mutation(({ input }) => scaffoldSpecNode(input)),
     // The review surface: colours computed on read, and the doors that
-    // resolve them. `approve` is the one manufacturer of green, reached from
-    // the web UI alone — the agents' contract is file-only by architecture,
-    // and the guard is that convention plus the deny rule over the key; a
-    // local token belongs here the day the daemon has a caller it does not
-    // trust.
+    // resolve them. `approve` is the one manufacturer of green — it writes a
+    // record into the approval ledger and nothing into the node's file — and
+    // it is reached from the web UI alone: the agents' contract is file-only
+    // by architecture, and the guard is that convention plus the deny rule
+    // over the ledger; a local token belongs here the day the daemon has a
+    // caller it does not trust.
     review: procedure
       .input(z.object({ projectId: z.string().min(1) }))
       .query(({ input }) => reviewSpec(input.projectId)),

@@ -11,7 +11,7 @@ import {
 } from "node:fs/promises";
 import path from "node:path";
 import { bandFolderOf, NODE_TYPES } from "@shall/core/graph";
-import { emitTemplate } from "@shall/core/serialize";
+import { emitTemplate, LEDGER_FILE } from "@shall/core/serialize";
 import type { ProjectMetadata } from "../types.js";
 import { getShallHome, isShallHomePath } from "./shall-home.js";
 
@@ -42,6 +42,17 @@ export function getProjectMetadataPath(projectPath: string): string {
 /** The spec graph itself: `<band>/<Type>/<id>.md`, one committed file per node. */
 export function getProjectSpecPath(projectPath: string): string {
   return path.join(getProjectShallPath(projectPath), "spec");
+}
+
+/**
+ * The approval ledger, beside the spec and committed with it: one YAML map
+ * from node id to the latest approval. Only the daemon writes it. Nothing
+ * creates it ahead of time — git carries no empty folder, and unlike `spec/`
+ * no person ever opens it by hand — so the first approval makes it, folder
+ * and all, and a project that has approved nothing has no ledger to find.
+ */
+export function getProjectLedgerPath(projectPath: string): string {
+  return path.join(getProjectShallPath(projectPath), LEDGER_FILE);
 }
 
 /**

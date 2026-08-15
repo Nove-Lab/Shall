@@ -18,7 +18,6 @@ import {
   type SpecNodeValues,
 } from "../graph/index.js";
 import {
-  approvalPayload,
   blocksOf,
   emitNodeFile,
   emitScaffold,
@@ -1079,59 +1078,6 @@ export async function updateNodeFile(
       held.edges,
       blocksOf(held.node),
     );
-  });
-}
-
-/**
- * What signs an approval. Core has no clock, no username and no key, so all
- * four arrive from the daemon; what core contributes is the payload and the
- * moment — see the door below for why the moment matters.
- */
-export interface ApprovalSigner {
-  readonly hash: (payload: string) => string;
-  readonly sign: (hash: string) => string;
-  readonly by: string;
-  readonly at: string;
-}
-
-/**
- * A person's approval, written into the node's file.
- *
- * IT READS, SIGNS AND WRITES IN ONE QUEUE TURN, and that is the whole reason
- * this is a store door rather than daemon code: a hash computed on the other
- * side of the queue would be a hash of what the file said a moment ago, and a
- * save landing in between would mint an approval born already stale — signed
- * bytes nobody ever saw together on disk.
- *
- * A deletion proposal, if one is standing, rides through untouched. Whether an
- * approval OVER a proposal makes sense is the service's question; this door
- * only promises that what lands is the file it read plus one signature.
- */
-export async function approveNodeFile(
-  specDir: string,
-  id: string,
-  signer: ApprovalSigner,
-): Promise<SpecNode> {
-  const root = path.resolve(specDir);
-  return withQueue(root, async () => {
-    const { candidates } = await discoverForWriting(root);
-    const found = locate(candidates, id);
-    if (found === undefined) {
-      throw missing(`Unknown node: ${id}`);
-    }
-    const held = await readNodeFile(found);
-    const payload = approvalPayload(
-      found.type,
-      id,
-      held.node,
-      held.edges,
-      blocksOf(held.node),
-    );
-    const hash = signer.hash(payload);
-    return writeNodeFile(root, found.type, id, held.node, held.edges, {
-      approval: { hash, tag: signer.sign(hash), by: signer.by, at: signer.at },
-      deletionProposed: held.node.deletionProposed,
-    });
   });
 }
 

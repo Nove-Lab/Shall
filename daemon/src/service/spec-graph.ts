@@ -11,7 +11,7 @@ import {
   NODE_TYPES,
   permittedEdgeTypes,
 } from "@shall/core/graph";
-import { isCanonical } from "@shall/core/serialize";
+import { isCanonical, LEDGER_FILE } from "@shall/core/serialize";
 import type { FileProblem, SpecGraph } from "@shall/core/store";
 import {
   addEdge,
@@ -19,15 +19,17 @@ import {
   deleteNodeFile,
   isStoreRefusal,
   loadGraph,
+  readApprovalLedger,
   removeEdge,
   scaffoldNodeFile,
   updateNodeFile,
 } from "@shall/core/store";
 import { Refusal, conflict, invalid, missing } from "./errors.js";
-import { makeSeal } from "../host/approval-key.js";
+import { payloadHash } from "../host/hash.js";
 import { requireRegistryProject } from "./projects.js";
 import {
   findProjectRootAbove,
+  getProjectLedgerPath,
   getProjectShallPath,
   getProjectSpecPath,
   pathExists,
@@ -35,9 +37,10 @@ import {
 } from "../host/project-files.js";
 
 /**
- * The project a `spec.*` procedure works in: its path on disk and its spec
- * folder — exported because the review service needs both halves (git wants
- * the project, the store wants the spec).
+ * The project a `spec.*` procedure works in: its path on disk, its spec
+ * folder and its approval ledger — exported because the review service needs
+ * all three (git wants the project, the store wants the spec, the colours want
+ * the ledger).
  *
  * The registry outlives the folder it points at — a project gets moved,
  * deleted, or checked out somewhere else and the entry stays behind. It
@@ -48,7 +51,7 @@ import {
  */
 export async function projectSpecFor(
   projectId: string,
-): Promise<{ projectPath: string; specDir: string }> {
+): Promise<{ projectPath: string; specDir: string; ledgerFile: string }> {
   const project = await requireRegistryProject(projectId);
   if (!(await pathExists(getProjectShallPath(project.path)))) {
     throw missing(`Not a Shall project: ${project.path}`);
@@ -56,6 +59,7 @@ export async function projectSpecFor(
   return {
     projectPath: project.path,
     specDir: getProjectSpecPath(project.path),
+    ledgerFile: getProjectLedgerPath(project.path),
   };
 }
 
@@ -470,10 +474,11 @@ export async function checkSpec(startPath: string): Promise<SpecCheck> {
 
   const specDir = getProjectSpecPath(root);
   const graph = await loadGraph(specDir);
+  const ledger = await readApprovalLedger(getProjectLedgerPath(root));
 
   // The gaps: the graph's holes, computed by the same arithmetic the review
-  // serves — on a keyless seal, because the check never speaks of yellow and
-  // no key is needed to say where nothing stands. A missing id is filed under
+  // serves — over the real ledger and the real hash, so the check and the
+  // review can never disagree about a graph. A missing id is filed under
   // every file that names it, because those lines are where the fix happens —
   // a restore of the target, or a re-anchor of the survivor; an orphan is
   // filed under its own file. The source of an edge is always a living node,
@@ -483,7 +488,10 @@ export async function checkSpec(startPath: string): Promise<SpecCheck> {
     const type = typeById.get(id) ?? "?";
     return `${bandFolderOf(type) ?? "?"}/${type}/${id}.md`;
   };
-  const review = reviewGraph(graph, makeSeal(null));
+  const review = reviewGraph(graph, {
+    records: ledger.records,
+    hash: payloadHash,
+  });
   const gaps: FileProblem[] = [];
   for (const entry of review.missing) {
     for (const referrer of entry.referencedBy) {
@@ -527,13 +535,27 @@ export async function checkSpec(startPath: string): Promise<SpecCheck> {
   // project has one type folder.
   notes.sort((a, b) => (a.file === b.file ? 0 : a.file < b.file ? -1 : 1));
 
+  // A ledger that will not read is a problem like a file that will not read:
+  // an error to fix, and the check exits 1 on it. It is the one row in this
+  // list spelled from the PROJECT root rather than the spec folder — the
+  // ledger is the spec's sibling, and `../ledger/approvals.yaml` is a spelling
+  // nobody would type — and it goes first, because a person should hear that
+  // the ledger would not read before a list of node files.
+  const problems: FileProblem[] =
+    ledger.problem === null
+      ? graph.problems
+      : [
+          { file: `.shall/${LEDGER_FILE}`, message: ledger.problem },
+          ...graph.problems,
+        ];
+
   return {
     root,
     nodeCount: graph.nodes.length,
     // The live relations — a dangling line is a gap above, not a thing the
     // count-line claims the graph holds.
     edgeCount: liveEdges(graph).length,
-    problems: graph.problems,
+    problems,
     gaps,
     notes,
   };

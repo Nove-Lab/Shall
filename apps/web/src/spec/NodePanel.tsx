@@ -94,8 +94,15 @@ const TYPE_GROUPS: readonly TypeGroup[] = BAND_ORDER.map((band) => ({
  * no node behind it, so there is no panel to open on it; `malformed` is a file
  * that would not read, which never reaches `statuses` at all and is listed under
  * Problems instead; `approved` is green, which draws one muted line and no box.
- * They are spelled out rather than left to a `default` so that a fourth yellow —
- * or a reason renamed in the canon — is a compile error here.
+ * They are spelled out rather than left to a `default` so that a third yellow —
+ * or a reason renamed in the canon — is a compile error here. (There WAS a
+ * third yellow once, when an approval was a signed block inside the file and
+ * its tag could fail to verify; the ledger has no tags, and the arm went with
+ * it.)
+ *
+ * WHO APPROVED IT COMES FROM THE STATUS, NOT THE NODE. The daemon reads the
+ * approval ledger and sends `by` and `at` beside the colour; the node's own
+ * file says nothing about its approval, and the panel does not pretend it does.
  */
 function statusCopy(
   status: ReviewStatus,
@@ -114,11 +121,6 @@ function statusCopy(
           title: "Not approved",
           body: "Nobody has approved this node yet, and an agent has proposed deleting it — the card above is the judgement to make first.",
         };
-      case "forged":
-        return {
-          title: "Approval could not be verified",
-          body: "This node claims an approval this machine's key did not write, and an agent has proposed deleting it — the card above is the judgement to make first.",
-        };
       case "changed":
         return {
           title: "Changed since it was approved",
@@ -134,15 +136,13 @@ function statusCopy(
         title: "Not approved",
         body: "Nobody has approved this node yet. The specification below is the whole of what approving it signs off.",
       };
-    case "forged":
-      return {
-        title: "Approval could not be verified",
-        body: "This node claims an approval this machine's key did not write. Read it again and approve it yourself.",
-      };
     case "changed":
       return {
         title: "Changed since it was approved",
-        body: "Someone edited this node after it was approved. The lines below are what moved.",
+        body:
+          status.approval === null
+            ? "Someone edited this node after it was approved. The lines below are what moved."
+            : `Someone edited this node after ${status.approval.by} approved it on ${formatStamp(status.approval.at)}. The lines below are what moved.`,
       };
     case "orphan": {
       // WHAT WOULD ANCHOR IT IS THE CANON'S ANSWER AND NOT A LIST KEPT HERE:
@@ -168,13 +168,12 @@ function statusCopy(
 }
 
 /**
- * THE THREE STATES APPROVING RESOLVES. An orphan is the one colour a signature
+ * THE TWO STATES APPROVING RESOLVES. An orphan is the one colour an approval
  * cannot fix — the graph has to change first — so it gets the sentence and no
  * button, and the daemon refuses it at the door either way.
  */
 const APPROVABLE: ReadonlySet<StatusReason> = new Set<StatusReason>([
   "unapproved",
-  "forged",
   "changed",
 ]);
 
@@ -857,8 +856,9 @@ export function NodePanel({
 
                 GREEN IS ONE MUTED LINE AND NOT A BOX. A box is a thing to deal
                 with, and an approved node is the state everything else is trying
-                to reach: it says who signed it and when, at the weight of a
-                caption, and gets out of the way of the specification below.
+                to reach: it says who approved it and when — read off the
+                ledger, not the file — at the weight of a caption, and gets out
+                of the way of the specification below.
 
                 WHILE A DELETION IS PROPOSED THE SECTION GOES QUIET — the dot and
                 the sentence, no Approve and no diff. There is exactly one
@@ -869,9 +869,9 @@ export function NodePanel({
               <div className="flex items-center gap-1.5">
                 <StatusDot color="green" />
                 <span className="text-muted-foreground text-sm">
-                  {node.approval === undefined
+                  {status.approval === null
                     ? "Approved"
-                    : `Approved by ${node.approval.by} · ${formatStamp(node.approval.at)}`}
+                    : `Approved by ${status.approval.by} · ${formatStamp(status.approval.at)}`}
                 </span>
               </div>
             ) : statusText === null ? null : (

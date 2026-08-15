@@ -9,25 +9,28 @@
  * change an answer with nobody told about it.
  *
  * IT IS PURE AND BROWSER-SAFE. No filesystem, no clock, no crypto: the graph
- * arrives as data, and the one thing a key can do — sign and verify — arrives as
- * a `Seal` the daemon builds. So the same web bundle that draws the canvas can
- * colour it, and the daemon and the panel cannot disagree about what a node is.
+ * arrives as data, the approval ledger's records arrive as data beside it, and
+ * the one call core cannot make itself — a sha256 over a node's content —
+ * arrives as a function, the two together as `Approvals` the daemon builds. So
+ * the same web bundle that draws the canvas can colour it, and the daemon and
+ * the panel cannot disagree about what a node is.
  */
 export {
   colorContextOf,
   colorOf,
+  contentHashOf,
   hasApproval,
   hasSchemaViolation,
   isHashMatched,
   isMissing,
   isOrphan,
-  isTagValid,
 } from "./color.js";
 export type {
+  Approvals,
   ColorContext,
   ColorSubject,
   ColorVerdict,
-  Seal,
+  PayloadHash,
 } from "./color.js";
 export { reviewGraph } from "./review.js";
 export type {
