@@ -18,7 +18,6 @@ import { parseNodeFile } from "./parse.js";
  * merge without a conflict.
  */
 export {
-  APPROVAL_KEY,
   approvalPayload,
   blocksOf,
   COMMITS_KEY,
@@ -65,8 +64,9 @@ export function isCanonical(
     return false;
   }
   // The parse is passed as the blocks too — `ParsedNode` satisfies the shape —
-  // so an approved file is compared against the whole of what a save would
-  // write. Left out, every approved file would read as "valid but not
-  // canonical" and the next save would silently strip its signature.
+  // so a file carrying a deletion proposal is compared against the whole of
+  // what a save would write. Left out, every proposed file would read as
+  // "valid but not canonical" over a block already written exactly as this
+  // emitter writes it.
   return emitNodeFile(type, reading.node, reading.edges, reading.node) === text;
 }

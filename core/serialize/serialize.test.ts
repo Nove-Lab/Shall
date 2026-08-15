@@ -1184,12 +1184,12 @@ edges:
         `name: Checkout succeeds with a saved card\n${keys}`,
       );
     assert.deepEqual(problemsOf("Scenario", "SC-0001.md", withKeys("priority: high")), [
-      "The frontmatter carries short_name, name, edges, deletionProposed and approval and nothing else — priority belongs in the body, below the closing fence.",
+      "The frontmatter carries short_name, name, edges and deletionProposed and nothing else — priority belongs in the body, below the closing fence.",
     ]);
     assert.deepEqual(
       problemsOf("Scenario", "SC-0001.md", withKeys("priority: high\nscenario_type: main")),
       [
-        "The frontmatter carries short_name, name, edges, deletionProposed and approval and nothing else — priority and scenario_type belong in the body, below the closing fence.",
+        "The frontmatter carries short_name, name, edges and deletionProposed and nothing else — priority and scenario_type belong in the body, below the closing fence.",
       ],
     );
     assert.deepEqual(
@@ -1199,7 +1199,7 @@ edges:
         withKeys("priority: high\nscenario_type: main\nsteps: One step."),
       ),
       [
-        "The frontmatter carries short_name, name, edges, deletionProposed and approval and nothing else — priority, scenario_type, steps belong in the body, below the closing fence.",
+        "The frontmatter carries short_name, name, edges and deletionProposed and nothing else — priority, scenario_type, steps belong in the body, below the closing fence.",
       ],
     );
   });
@@ -1216,7 +1216,7 @@ edges:
         "---\nshort_name: cart\nname: Cart\ndefinition: A basket of items.\n---\n",
       ),
       [
-        "The frontmatter carries short_name, name, edges, deletionProposed and approval and nothing else — definition belongs in the body, below the closing fence.",
+        "The frontmatter carries short_name, name, edges and deletionProposed and nothing else — definition belongs in the body, below the closing fence.",
       ],
     );
   });
@@ -1235,7 +1235,7 @@ edges:
         ),
       ),
       [
-        "The frontmatter carries short_name, name, edges, deletionProposed and approval and nothing else — __proto__ belongs in the body, below the closing fence.",
+        "The frontmatter carries short_name, name, edges and deletionProposed and nothing else — __proto__ belongs in the body, below the closing fence.",
       ],
     );
   });
@@ -1253,7 +1253,7 @@ edges:
       [
         "A spec file does not carry id — the filename is the id.",
         "A spec file does not carry type — the folder is the type.",
-        "The frontmatter carries short_name, name, edges, deletionProposed and approval and nothing else — priority belongs in the body, below the closing fence.",
+        "The frontmatter carries short_name, name, edges and deletionProposed and nothing else — priority belongs in the body, below the closing fence.",
       ],
     );
   });
@@ -1758,15 +1758,17 @@ name:                  # required · one line
 });
 
 /**
- * THE TWO MACHINE BLOCKS. A file is otherwise the author's; `deletionProposed`
- * is the one thing an agent writes above the fence, and `approval` is the one
- * thing the daemon does. What is pinned here is the block grammar — exact
- * tuples, text only, one line each — the canonical order they are written in,
- * and the payload an approval signs, which is the file WITHOUT the signature
- * and WITH the node's own address, because those two choices are the whole of
- * what makes a signature worth the name.
+ * THE BLOCK THE MACHINE WRITES, AND THE ONE THAT MOVED OUT. A file is
+ * otherwise the author's; `deletionProposed` is the one thing an agent writes
+ * above the fence, and `approval` is no longer something a file carries at all
+ * — it lives in the ledger, so a file still holding the block is refused BY
+ * NAME rather than read and dropped in silence. What is pinned here is the
+ * block grammar — an exact tuple, text only, one line each — where it is
+ * written, both refusals, and the payload an approval's hash is taken over,
+ * which is the whole file WITH the node's own address on top, because that
+ * address is the whole of what stops a copy arriving green.
  */
-const SIGNED = `---
+const PROPOSED = `---
 short_name: cart-total
 name: The cart shows a total
 edges:
@@ -1775,11 +1777,6 @@ edges:
 deletionProposed:
   by: session-7
   rationale: Superseded by R-0007.
-approval:
-  hash: sha256:9f2b
-  tag: hmac:41ac
-  by: yjshin
-  at: "2026-08-15T09:12:33.412Z"
 ---
 
 ## Statement
@@ -1787,84 +1784,110 @@ approval:
 The cart shows a total.
 `;
 
-describe("the two machine blocks", () => {
-  test("an approval block reads back as the four strings it carries", () => {
-    const reading = parseNodeFile("Requirement", "R-0001.md", SIGNED);
-    assert.deepEqual(reading.problems, []);
-    assert.deepEqual(reading.node?.approval, {
-      hash: "sha256:9f2b",
-      tag: "hmac:41ac",
-      by: "yjshin",
-      // Quoted in the file because it opens like a date, and a string here
-      // because the reader is pinned to the core schema either way.
-      at: "2026-08-15T09:12:33.412Z",
-    });
-  });
+/** The sentence a file that still carries the retired block is refused with. */
+const APPROVAL_MOVED =
+  "A spec file does not carry approval — an approval lives in .shall/ledger/approvals.yaml, and only Shall writes there. Delete the block; the node's colour comes from the ledger.";
 
+describe("the block the machine writes, and the one that moved out", () => {
   test("a deletion proposal reads back as the two strings it carries", () => {
-    const reading = parseNodeFile("Requirement", "R-0001.md", SIGNED);
+    const reading = parseNodeFile("Requirement", "R-0001.md", PROPOSED);
+    assert.deepEqual(reading.problems, []);
     assert.deepEqual(reading.node?.deletionProposed, {
       by: "session-7",
       rationale: "Superseded by R-0007.",
     });
   });
 
-  test("the blocks are written after the edges, in one order, and the file is a fixpoint", () => {
-    const reading = parseNodeFile("Requirement", "R-0001.md", SIGNED);
+  test("the block is written after the edges and the commits, and the file is a fixpoint", () => {
+    const reading = parseNodeFile("Requirement", "R-0001.md", PROPOSED);
     assert.ok(reading.node !== undefined);
     assert.equal(
       emitNodeFile(reading.node.type, reading.node, reading.edges, reading.node),
-      SIGNED,
+      PROPOSED,
     );
-    assert.equal(isCanonical("Requirement", "R-0001.md", SIGNED), true);
+    assert.equal(isCanonical("Requirement", "R-0001.md", PROPOSED), true);
+    // Last above the closing fence whatever the author's keys amount to — on
+    // the one type that also carries a list, the block comes after it.
+    const logged = emitNodeFile(
+      "WorkLog",
+      { shortName: "day-one", name: "The first day", body: "", commits: ["9f2b1c4"] },
+      [],
+      { deletionProposed: { by: "session-7", rationale: "Superseded." } },
+    );
+    assert.ok(
+      logged.indexOf("deletionProposed:") > logged.indexOf("commits:"),
+      logged,
+    );
+    assert.equal(isCanonical("WorkLog", "WL-0001.md", logged), true);
   });
 
   test("a node without a block has no key for it, in the object as in the file", () => {
     const written = emitNodeFile("Requirement", REQUIREMENT_NODE, []);
-    assert.equal(written.includes("approval"), false);
     assert.equal(written.includes("deletionProposed"), false);
     const reading = parseNodeFile("Requirement", "R-0001.md", written);
     assert.ok(reading.node !== undefined);
-    assert.equal("approval" in reading.node, false);
     assert.equal("deletionProposed" in reading.node, false);
   });
 
   test("a block written with nothing under it is a block that is not there", () => {
-    // The same rule every key already has: a bare `approval:` is what clearing
-    // one by hand leaves behind, and it reads as absence — valid, and brought
-    // canonical by the next save rather than refused.
-    const bare = SIGNED
-      .replace("deletionProposed:\n  by: session-7\n  rationale: Superseded by R-0007.\n", "deletionProposed:\n")
-      .replace("approval:\n  hash: sha256:9f2b\n  tag: hmac:41ac\n  by: yjshin\n  at: \"2026-08-15T09:12:33.412Z\"\n", "approval:\n");
+    // The same rule every key already has: a bare `deletionProposed:` is what
+    // clearing one by hand leaves behind, and it reads as absence — valid, and
+    // brought canonical by the next save rather than refused.
+    const bare = PROPOSED.replace(
+      "deletionProposed:\n  by: session-7\n  rationale: Superseded by R-0007.\n",
+      "deletionProposed:\n",
+    );
     const reading = parseNodeFile("Requirement", "R-0001.md", bare);
     assert.deepEqual(reading.problems, []);
     assert.ok(reading.node !== undefined);
-    assert.equal("approval" in reading.node, false);
     assert.equal("deletionProposed" in reading.node, false);
     assert.equal(isCanonical("Requirement", "R-0001.md", bare), false);
   });
 
-  test("an approval missing a key is one sentence about the block, not four about its fields", () => {
-    const short = SIGNED.replace("  at: \"2026-08-15T09:12:33.412Z\"\n", "");
+  test("a proposal missing a key is one sentence about the block, not two about its fields", () => {
+    const short = PROPOSED.replace("  rationale: Superseded by R-0007.\n", "");
     const reading = parseNodeFile("Requirement", "R-0001.md", short);
     assert.deepEqual(reading.problems, [
-      "The approval block is a map of exactly hash, tag, by and at, each of them text.",
+      "The deletionProposed block is a map of exactly by and rationale, each of them text.",
     ]);
   });
 
   test("a key the block does not carry is refused with the block, not with the frontmatter", () => {
-    const wide = SIGNED.replace(
-      "  by: yjshin\n",
-      "  by: yjshin\n  note: looks fine\n",
+    const wide = PROPOSED.replace(
+      "  by: session-7\n",
+      "  by: session-7\n  note: looks fine\n",
     );
     const reading = parseNodeFile("Requirement", "R-0001.md", wide);
     assert.deepEqual(reading.problems, [
-      "The approval block is a map of exactly hash, tag, by and at, each of them text.",
+      "The deletionProposed block is a map of exactly by and rationale, each of them text.",
     ]);
   });
 
+  test("a file that still carries an approval block is refused by name, and the sentence says where an approval lives", () => {
+    // The format carried this block until the ledger took it over. A file
+    // written then is a file somebody still has, and reading it as a stray key
+    // would send them to move a signature into the body.
+    const held = PROPOSED.replace(
+      "---\n\n## Statement",
+      'approval:\n  hash: sha256:9f2b\n  by: yjshin\n  at: "2026-08-15T09:12:33.412Z"\n---\n\n## Statement',
+    );
+    const reading = parseNodeFile("Requirement", "R-0001.md", held);
+    assert.deepEqual(reading.problems, [APPROVAL_MOVED]);
+    assert.equal(reading.node, undefined);
+  });
+
+  test("a bare approval key is refused too, because the key is the thing that moved", () => {
+    // Every other key reads as absent when it is written with nothing under
+    // it. This one is refused all the same: half a deletion by hand is still a
+    // file with the retired key in it, and the sentence is what says so.
+    const bare = PROPOSED.replace("---\n\n## Statement", "approval:\n---\n\n## Statement");
+    const reading = parseNodeFile("Requirement", "R-0001.md", bare);
+    assert.deepEqual(reading.problems, [APPROVAL_MOVED]);
+    assert.equal(reading.node, undefined);
+  });
+
   test("a value in a block that is not text is the block's own sentence", () => {
-    const numbered = SIGNED.replace(
+    const numbered = PROPOSED.replace(
       "  rationale: Superseded by R-0007.\n",
       "  rationale: 3\n",
     );
@@ -1875,7 +1898,7 @@ describe("the two machine blocks", () => {
   });
 
   test("a rationale that runs over two lines is refused, because a block value is one line", () => {
-    const paragraphs = SIGNED.replace(
+    const paragraphs = PROPOSED.replace(
       "  rationale: Superseded by R-0007.\n",
       "  rationale: |\n    Superseded by R-0007.\n    And by R-0008.\n",
     );
@@ -1886,7 +1909,7 @@ describe("the two machine blocks", () => {
   });
 
   test("a blank block value is refused by name", () => {
-    const blank = SIGNED.replace(
+    const blank = PROPOSED.replace(
       "  rationale: Superseded by R-0007.\n",
       '  rationale: ""\n',
     );
@@ -1919,8 +1942,8 @@ describe("the two machine blocks", () => {
     }
   });
 
-  test("the payload leaves the approval out and keeps everything else", () => {
-    const reading = parseNodeFile("Requirement", "R-0001.md", SIGNED);
+  test("the payload is the canonical file itself, with the node's own address on top", () => {
+    const reading = parseNodeFile("Requirement", "R-0001.md", PROPOSED);
     assert.ok(reading.node !== undefined);
     const payload = approvalPayload(
       "Requirement",
@@ -1929,21 +1952,16 @@ describe("the two machine blocks", () => {
       reading.edges,
       reading.node,
     );
-    assert.equal(payload.includes("approval:"), false);
+    // The property a person can verify by hand: nothing is taken out of the
+    // file and nothing is added but the address line, so the bytes a hash is
+    // taken over are the bytes they are looking at. The proposal is inside,
+    // which is what makes an agent writing one break the hash.
+    assert.equal(payload, `Requirement/R-0001\n${PROPOSED}`);
     assert.equal(payload.includes("deletionProposed:"), true);
-    // The property a person can verify by hand: the payload is this very file
-    // with the approval's five lines deleted and the address line prepended.
-    assert.equal(
-      payload,
-      `Requirement/R-0001\n${SIGNED.replace(
-        'approval:\n  hash: sha256:9f2b\n  tag: hmac:41ac\n  by: yjshin\n  at: "2026-08-15T09:12:33.412Z"\n',
-        "",
-      )}`,
-    );
   });
 
   test("the payload names the node's own path, so an approved file copied to another id verifies nowhere", () => {
-    const reading = parseNodeFile("Requirement", "R-0001.md", SIGNED);
+    const reading = parseNodeFile("Requirement", "R-0001.md", PROPOSED);
     assert.ok(reading.node !== undefined);
     const here = approvalPayload(
       "Requirement",
@@ -2073,7 +2091,7 @@ commits:
   test("the stray sentence names commits on a WorkLog and not elsewhere", () => {
     const strayLog = LOGGED.replace("commits:\n", "priority: high\ncommits:\n");
     assert.deepEqual(parseNodeFile("WorkLog", "WL-0001.md", strayLog).problems, [
-      "The frontmatter carries short_name, name, edges, commits, deletionProposed and approval and nothing else — priority belongs in the body, below the closing fence.",
+      "The frontmatter carries short_name, name, edges, commits and deletionProposed and nothing else — priority belongs in the body, below the closing fence.",
     ]);
     const strayReq = `---
 short_name: r
@@ -2082,11 +2100,11 @@ priority: high
 ---
 `;
     assert.deepEqual(parseNodeFile("Requirement", "R-0001.md", strayReq).problems, [
-      "The frontmatter carries short_name, name, edges, deletionProposed and approval and nothing else — priority belongs in the body, below the closing fence.",
+      "The frontmatter carries short_name, name, edges and deletionProposed and nothing else — priority belongs in the body, below the closing fence.",
     ]);
   });
 
-  test("the commits are inside the payload an approval signs", () => {
+  test("the commits are inside the payload the ledger's hash names", () => {
     const reading = parseNodeFile("WorkLog", "WL-0001.md", LOGGED);
     assert.ok(reading.node !== undefined);
     const payload = approvalPayload("WorkLog", "WL-0001", reading.node, reading.edges, reading.node);
@@ -2191,7 +2209,7 @@ describe("the approval ledger", () => {
       "Every record in the approval ledger is a map of exactly approvedHash, by and at, each of them text — the record under G-0001 is not.";
     for (const text of [
       "G-0001:\n  approvedHash: sha256:aa\n  by: yjshin\n",
-      "G-0001:\n  approvedHash: sha256:aa\n  by: yjshin\n  at: x\n  tag: hmac:00\n",
+      "G-0001:\n  approvedHash: sha256:aa\n  by: yjshin\n  at: x\n  note: looks fine\n",
       "G-0001:\n  approvedHash: sha256:aa\n  by: yjshin\n  at: 12\n",
       "G-0001: approved\n",
       "G-0001:\n  - approvedHash: sha256:aa\n",

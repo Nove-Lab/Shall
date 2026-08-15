@@ -1,8 +1,4 @@
-import {
-  isNodeType,
-  type NodeApproval,
-  type NodeDeletionProposal,
-} from "../graph/index.js";
+import { isNodeType, type NodeDeletionProposal } from "../graph/index.js";
 import { emitScalar } from "./scalar.js";
 
 /**
@@ -17,7 +13,7 @@ import { emitScalar } from "./scalar.js";
  *
  * THE FRONTMATTER IS THE MACHINE'S AND THE BODY IS THE AUTHOR'S. Above the
  * fence live the three facts the graph itself needs — the two names and the
- * outgoing edges — plus a WorkLog's commits and the two machine blocks, all
+ * outgoing edges — plus a WorkLog's commits and the one machine block, all
  * written canonically: keys in one order, edges in one order,
  * LF, no BOM, one trailing newline, so two people who make the same edit
  * produce the same bytes and therefore no conflict. Below the fence is the
@@ -59,14 +55,12 @@ export const COMMITS_KEY = "commits";
 export const COMMITS_TYPE = "WorkLog";
 
 /**
- * The two machine blocks, camelCase where the three author keys are not: they
- * are the spelling agents are told to type and the daemon writes, chosen with
- * the user spec and kept even beside `short_name` — reversing the choice is
- * these two constants and nothing else.
+ * The one machine block, camelCase where the three author keys are not: it is
+ * the spelling an agent is told to type and the daemon writes back, chosen
+ * with the user spec and kept even beside `short_name` — reversing the choice
+ * is this one constant and nothing else.
  */
 export const DELETION_PROPOSED_KEY = "deletionProposed";
-
-export const APPROVAL_KEY = "approval";
 
 /**
  * What a file says about its node. It is `SpecNode` minus the four facts a file
@@ -96,18 +90,18 @@ export interface NodeFileEdge {
 }
 
 /**
- * The two machine blocks a file may carry — the deletion an agent proposed,
- * and the approval the daemon signed. `ParsedNode` satisfies this shape, so a
- * rewrite hands its own parse back and the blocks travel whole.
+ * The one machine block a file may carry: the deletion an agent proposed. It
+ * is a shape of its own rather than a bare field because it is the half of a
+ * file no edit ever sends and every write must carry — `ParsedNode` satisfies
+ * it, so a rewrite hands its own parse back and the block travels whole.
  */
 export interface NodeFileBlocks {
-  readonly approval?: NodeApproval | undefined;
   readonly deletionProposed?: NodeDeletionProposal | undefined;
 }
 
 /** The blocks of a parse, on their own — what every carry-over hands back. */
 export function blocksOf(node: NodeFileBlocks): NodeFileBlocks {
-  return { approval: node.approval, deletionProposed: node.deletionProposed };
+  return { deletionProposed: node.deletionProposed };
 }
 
 /**
@@ -183,23 +177,15 @@ export function emitNodeFile(
     }
   }
 
-  // The machine blocks come after the author's four keys, each omitted whole
-  // when absent — a bare `approval:` would be a second spelling of "none". The
-  // inner key order is fixed here and free at the reader, like everything else
-  // about the format. `approval` is LAST, above the closing fence, on purpose:
-  // the payload its hash signs is this very file with the block deleted and an
-  // identity line prepended, so a person can check a signature by hand.
+  // The one machine block comes after the author's keys, last above the
+  // closing fence, and is omitted WHOLE when absent — a bare
+  // `deletionProposed:` would be a second spelling of "none". Its inner key
+  // order is fixed here and free at the reader, like everything else about the
+  // format.
   if (blocks.deletionProposed !== undefined) {
     lines.push(`${DELETION_PROPOSED_KEY}:`);
     lines.push(`  by: ${emitScalar(blocks.deletionProposed.by)}`);
     lines.push(`  rationale: ${emitScalar(blocks.deletionProposed.rationale)}`);
-  }
-  if (blocks.approval !== undefined) {
-    lines.push(`${APPROVAL_KEY}:`);
-    lines.push(`  hash: ${emitScalar(blocks.approval.hash)}`);
-    lines.push(`  tag: ${emitScalar(blocks.approval.tag)}`);
-    lines.push(`  by: ${emitScalar(blocks.approval.by)}`);
-    lines.push(`  at: ${emitScalar(blocks.approval.at)}`);
   }
   lines.push(FENCE);
 
@@ -220,21 +206,22 @@ export function emitNodeFile(
 }
 
 /**
- * The bytes an approval signs: the node's own path, then the file it would be
- * without the signature.
+ * The bytes an approval is an approval OF: the node's own path, then the whole
+ * of the node's file.
  *
  * THE IDENTITY LINE IS THE COPY DEFENCE. The file itself is silent about its
  * type and id — the path carries both — so a hash over the file alone would
  * follow a copy to any other name, and an approved Requirement pasted in as
- * R-0009 would arrive already green. Prepending `type/id` makes the signature
- * a signature over THIS node at THIS address and no other.
+ * R-0009 would arrive already green. Prepending `type/id` makes the hash a
+ * hash of THIS node at THIS address and no other.
  *
- * THE DELETION PROPOSAL IS INSIDE, THE APPROVAL IS NOT. An agent proposing a
- * deletion is a change a person has not judged, so it must break the hash;
- * the approval cannot sign itself, so it is the one block left out. And the
- * payload is the CANONICAL emit, never the bytes on disk — a reformat that
- * reads back to the same node leaves an approval standing, which is exactly
- * the leniency the reader already extends to everything else.
+ * THE DELETION PROPOSAL IS INSIDE. An agent proposing a deletion is a change a
+ * person has not judged, so it must break the hash and turn the node yellow.
+ * Nothing about the approval is in the file at all — the ledger holds it — so
+ * the payload is the whole file and there is no block to leave out. And it is
+ * the CANONICAL emit, never the bytes on disk: a reformat that reads back to
+ * the same node leaves an approval standing, which is exactly the leniency the
+ * reader already extends to everything else.
  */
 export function approvalPayload(
   type: string,
