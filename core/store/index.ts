@@ -16,7 +16,6 @@
 export { readApprovalLedger, recordApproval } from "./approval-ledger.js";
 export {
   addEdge,
-  approveNodeFile,
   clearDeletionProposal,
   createNodeFile,
   deleteNodeFile,
@@ -28,7 +27,6 @@ export {
   updateNodeFile,
 } from "./file-store.js";
 export type {
-  ApprovalSigner,
   FileProblem,
   RefusedFile,
   ScaffoldedNode,

@@ -2,9 +2,9 @@ import type { RefusedFile, SpecGraph } from "../store/file-store.js";
 import {
   colorContextOf,
   colorOf,
+  type Approvals,
   type ColorSubject,
   type ColorVerdict,
-  type Seal,
 } from "./color.js";
 
 /**
@@ -31,11 +31,25 @@ import {
  * `git checkout` change a colour with nobody told about it.
  */
 
-/** One node that has a colour, and the one word for why. */
+/** One node that has a colour, the one word for why, and who last approved it. */
 export interface ReviewStatus {
   id: string;
   color: "red" | "yellow" | "green";
   reason: ColorVerdict["reason"];
+  /**
+   * The ledger's record for this node, WHATEVER THE COLOUR CAME BACK AS. A
+   * `changed` node still says who approved the earlier version, because that is
+   * the person a reviewer would go and ask, and a red one is still a node
+   * somebody once read. Only a node the ledger has no record for says nothing.
+   *
+   * REQUIRED AND NULLABLE, NEVER OPTIONAL. This shape crosses the wire as JSON,
+   * where an absent key and `undefined` are the same thing and neither survives
+   * the trip, while `null` is a value that does — so the panel can ask about the
+   * field rather than about whether the field arrived. An optional key would
+   * also make every construction of a status a spread under
+   * `exactOptionalPropertyTypes`, for a fact every status has an answer to.
+   */
+  approval: { by: string; at: string } | null;
 }
 
 /** An id with nothing behind it, and everything still pointing at it. */
@@ -73,8 +87,11 @@ function brokenOf(refusal: RefusedFile): BrokenFile {
   return { file: refusal.file, problems: [...refusal.problems] };
 }
 
-export function reviewGraph(graph: SpecGraph, seal: Seal): GraphReview {
-  const context = colorContextOf(graph, seal);
+export function reviewGraph(
+  graph: SpecGraph,
+  approvals: Approvals,
+): GraphReview {
+  const context = colorContextOf(graph, approvals);
   const statuses: ReviewStatus[] = [];
   const missing: MissingNode[] = [];
   const broken: BrokenFile[] = [];
@@ -95,7 +112,16 @@ export function reviewGraph(graph: SpecGraph, seal: Seal): GraphReview {
     }
     // A node that parsed is present and problem-free, so `missing` and
     // `malformed` cannot come back for one — every other reason is a status.
-    statuses.push({ id: node.id, color: verdict.color, reason: verdict.reason });
+    // The record is read again here rather than carried out of the chain: the
+    // chain answers a colour, and who approved it is a fact about the node that
+    // a red row is as entitled to as a green one.
+    const record = approvals.records.get(node.id);
+    statuses.push({
+      id: node.id,
+      color: verdict.color,
+      reason: verdict.reason,
+      approval: record === undefined ? null : { by: record.by, at: record.at },
+    });
   }
 
   // Both an id a node holds and an id a refused file holds are CLAIMED: there is

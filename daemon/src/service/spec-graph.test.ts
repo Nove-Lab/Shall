@@ -1043,6 +1043,37 @@ describe("checkSpec", () => {
       },
     ]);
   });
+
+  test("a ledger nobody has written yet is no problem at all", async () => {
+    const project = await newProject();
+    await node(project, "Goal", "G-0001", GOAL_BODY);
+    const check = await checkSpec(project.path);
+    assert.deepEqual(check.problems, []);
+    assert.deepEqual(check.gaps, []);
+    assert.equal(check.nodeCount, 1);
+  });
+
+  test("a ledger the check cannot read is a problem row, and the node count still holds", async () => {
+    const project = await newProject();
+    await node(project, "Goal", "G-0001", GOAL_BODY);
+    const ledger = path.join(project.path, ".shall", "ledger", "approvals.yaml");
+    await mkdir(path.dirname(ledger), { recursive: true });
+    await writeFile(ledger, "G-0001: approved\n", "utf8");
+
+    const check = await checkSpec(project.path);
+    // The one row spelled from the project root: the ledger is the spec's
+    // sibling, and it goes first — before any node file — because a person
+    // should hear that the ledger would not read before a list of files.
+    assert.deepEqual(check.problems, [
+      {
+        file: ".shall/ledger/approvals.yaml",
+        message:
+          "Every record in the approval ledger is a map of exactly approvedHash, by and at, each of them text — the record under G-0001 is not.",
+      },
+    ]);
+    assert.equal(check.nodeCount, 1);
+    assert.deepEqual(check.gaps, []);
+  });
 });
 
 describe("a hand edit the daemon never made", () => {

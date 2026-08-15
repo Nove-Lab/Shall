@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { before, describe, test } from "node:test";
-import { emitNodeFile } from "@shall/core/serialize";
+import { emitApprovalLedger, emitNodeFile } from "@shall/core/serialize";
+import type { ReviewStatus } from "@shall/core/arith";
 import { isRefusal, type Refusal } from "./errors.js";
 import { createProject } from "./projects.js";
 import { createSpecEdge, createSpecNode, updateSpecNode } from "./spec-graph.js";
@@ -18,13 +19,12 @@ import {
   restoreSpecNode,
   reviewSpec,
 } from "./spec-review.js";
-import { getApprovalKeyPath } from "../host/approval-key.js";
 import type { RegistryProject } from "../types.js";
 
 const run = promisify(execFile);
 
 /**
- * The review surface end to end: real folders, a real key under a fake home,
+ * The review surface end to end: real folders, a real ledger beside the spec,
  * and real git — `createProject` inits a repository now, so every project
  * these tests make arrives with one, and the few that need to be without take
  * theirs away by hand.
@@ -42,9 +42,9 @@ before(async () => {
   home = path.join(workspace, "home");
   await mkdir(home, { recursive: true });
   // `getShallHome` reads `os.homedir()` on every call, which is `$HOME` on
-  // POSIX — so this redirects the registry, the config and the KEY without a
-  // seam that exists only for tests. Git's own config is fenced the same way,
-  // or a machine's real identity would leak into the Shall-identity case.
+  // POSIX — so this redirects the registry and the config without a seam that
+  // exists only for tests. Git's own config is fenced the same way, or a
+  // machine's real identity would leak into the Shall-identity case.
   process.env.HOME = home;
   process.env.XDG_CONFIG_HOME = path.join(home, ".config");
   process.env.GIT_CONFIG_NOSYSTEM = "1";
@@ -71,6 +71,25 @@ async function goal(project: RegistryProject, id: string): Promise<void> {
 
 function specFile(project: RegistryProject, tail: string): string {
   return path.join(project.path, ".shall", "spec", tail);
+}
+
+function ledgerFile(project: RegistryProject): string {
+  return path.join(project.path, ".shall", "ledger", "approvals.yaml");
+}
+
+/** A status as the review serves it — every one carries the ledger's answer, null when it has none. */
+function status(
+  id: string,
+  color: ReviewStatus["color"],
+  reason: ReviewStatus["reason"],
+  approval: ReviewStatus["approval"] = null,
+): ReviewStatus {
+  return { id, color, reason, approval };
+}
+
+/** The `{by, at}` a status carries for a record the approve door returned. */
+function stamped(record: { by: string; at: string }): { by: string; at: string } {
+  return { by: record.by, at: record.at };
 }
 
 async function refused(work: Promise<unknown>): Promise<Refusal> {
@@ -111,8 +130,8 @@ describe("the review", () => {
 
     const review = await reviewSpec(project.id);
     assert.deepEqual(review.statuses, [
-      { id: "G-0001", color: "yellow", reason: "unapproved" },
-      { id: "T-0001", color: "yellow", reason: "unapproved" },
+      status("G-0001", "yellow", "unapproved"),
+      status("T-0001", "yellow", "unapproved"),
     ]);
     assert.deepEqual(review.missing, []);
     assert.deepEqual(review.broken, []);
@@ -138,8 +157,8 @@ describe("the review", () => {
     });
     let review = await reviewSpec(project.id);
     assert.deepEqual(review.statuses, [
-      { id: "J-0001", color: "yellow", reason: "unapproved" },
-      { id: "WL-0001", color: "red", reason: "orphan" },
+      status("J-0001", "yellow", "unapproved"),
+      status("WL-0001", "red", "orphan"),
     ]);
     await createSpecEdge({
       projectId: project.id,
@@ -149,8 +168,8 @@ describe("the review", () => {
     });
     review = await reviewSpec(project.id);
     assert.deepEqual(review.statuses, [
-      { id: "J-0001", color: "yellow", reason: "unapproved" },
-      { id: "WL-0001", color: "yellow", reason: "unapproved" },
+      status("J-0001", "yellow", "unapproved"),
+      status("WL-0001", "yellow", "unapproved"),
     ]);
   });
 
@@ -177,50 +196,74 @@ describe("the review", () => {
     ]);
   });
 
-  test("a key nobody can read is a refusal, never a screenful of yellow", async () => {
+  test("a ledger nobody can read is a refusal, never a screenful of yellow", async () => {
     const project = await newProject();
     await goal(project, "G-0001");
-    const keyPath = getApprovalKeyPath();
-    const held = await readFile(keyPath, "utf8");
-    try {
-      await writeFile(keyPath, "not-a-key\n", "utf8");
-      const refusal = await refused(reviewSpec(project.id));
-      assert.equal(refusal.kind, "conflict");
-      assert.ok(
-        refusal.message.startsWith(`The approval key at ${keyPath} is not the 64 hex characters Shall writes`),
-        refusal.message,
-      );
-    } finally {
-      await writeFile(keyPath, held, "utf8");
-    }
+    await mkdir(path.dirname(ledgerFile(project)), { recursive: true });
+    await writeFile(ledgerFile(project), "- G-0001\n", "utf8");
+    await says(
+      reviewSpec(project.id),
+      "conflict",
+      `Shall could not read the approval ledger at ${ledgerFile(project)} — The approval ledger is a list, not a map from node id to approval record. Nothing here is green until it reads: the ledger is Shall's own file, so restore it from git or move it aside.`,
+    );
+    await says(
+      approveSpecNode({ projectId: project.id, id: "G-0001" }),
+      "conflict",
+      `Shall could not read the approval ledger at ${ledgerFile(project)} — The approval ledger is a list, not a map from node id to approval record. Nothing was approved, because writing into a ledger nobody can read would bury what it holds; restore it from git or move it aside, and approve again.`,
+    );
+    // Byte for byte as it was: a refusal writes nothing over the file.
+    assert.equal(await readFile(ledgerFile(project), "utf8"), "- G-0001\n");
+  });
+
+  test("a project that has approved nothing has no ledger, and that is no problem", async () => {
+    const project = await newProject();
+    await goal(project, "G-0001");
+    const review = await reviewSpec(project.id);
+    assert.deepEqual(review.statuses, [status("G-0001", "yellow", "unapproved")]);
+    await assert.rejects(stat(ledgerFile(project)));
   });
 });
 
 describe("the approve door", () => {
-  test("writes the block the file did not have, and the node turns green", async () => {
+  test("writes one line in the ledger, leaves the file untouched, and the node turns green", async () => {
     const project = await newProject();
     await goal(project, "G-0001");
+    const file = specFile(project, "intent/Goal/G-0001.md");
+    const before = await stat(file);
+    const bytes = await readFile(file, "utf8");
 
     const approved = await approveSpecNode({ projectId: project.id, id: "G-0001" });
-    assert.ok(approved.approval !== undefined);
-    assert.ok(approved.approval.hash.startsWith("sha256:"));
-    assert.ok(approved.approval.tag.startsWith("hmac:"));
+    assert.ok(approved.approvedHash.startsWith("sha256:"), approved.approvedHash);
+    assert.equal(approved.by, os.userInfo().username);
+    assert.ok(Date.now() - Date.parse(approved.at) < 60_000, approved.at);
 
-    const text = await readFile(specFile(project, "intent/Goal/G-0001.md"), "utf8");
-    assert.ok(text.includes("approval:"), text);
+    // The node file: not a byte, not a stamp. The approval is nowhere in it.
+    const after = await stat(file);
+    assert.equal(after.mtimeMs, before.mtimeMs);
+    assert.equal(after.ino, before.ino);
+    assert.equal(await readFile(file, "utf8"), bytes);
+    assert.ok(!bytes.includes("approval"), bytes);
+
+    // The ledger: made by this very approve, folder and all, in canonical bytes.
+    assert.equal(
+      await readFile(ledgerFile(project), "utf8"),
+      emitApprovalLedger(new Map([["G-0001", approved]])),
+    );
 
     const review = await reviewSpec(project.id);
     assert.deepEqual(review.statuses, [
-      { id: "G-0001", color: "green", reason: "approved" },
+      status("G-0001", "green", "approved", stamped(approved)),
     ]);
   });
 
-  test("a second approval after an edit turns the node green again", async () => {
+  test("a second approval after an edit replaces the record, and the node is green again", async () => {
     const project = await newProject();
     await goal(project, "G-0001");
-    await approveSpecNode({ projectId: project.id, id: "G-0001" });
+    const first = await approveSpecNode({ projectId: project.id, id: "G-0001" });
 
-    // An agent's hand edit: the body moves, the signature stays.
+    // An agent's hand edit: the body moves, the record stays where it was and
+    // no longer fits — and the status still says who approved the version it
+    // was taken over.
     const text = await readFile(specFile(project, "intent/Goal/G-0001.md"), "utf8");
     await writeFile(
       specFile(project, "intent/Goal/G-0001.md"),
@@ -232,13 +275,19 @@ describe("the approve door", () => {
     );
     let review = await reviewSpec(project.id);
     assert.deepEqual(review.statuses, [
-      { id: "G-0001", color: "yellow", reason: "changed" },
+      status("G-0001", "yellow", "changed", stamped(first)),
     ]);
 
-    await approveSpecNode({ projectId: project.id, id: "G-0001" });
+    const second = await approveSpecNode({ projectId: project.id, id: "G-0001" });
+    assert.notEqual(second.approvedHash, first.approvedHash);
+    // One record per id: the ledger holds the second and not the first.
+    assert.equal(
+      await readFile(ledgerFile(project), "utf8"),
+      emitApprovalLedger(new Map([["G-0001", second]])),
+    );
     review = await reviewSpec(project.id);
     assert.deepEqual(review.statuses, [
-      { id: "G-0001", color: "green", reason: "approved" },
+      status("G-0001", "green", "approved", stamped(second)),
     ]);
   });
 
@@ -251,10 +300,10 @@ describe("the approve door", () => {
     );
   });
 
-  test("approves a work log, commits and all, and the list survives the signature", async () => {
+  test("approves a work log, commits and all, and the list is inside what the record names", async () => {
     // The execution band is judged like the specification, and a WorkLog's
-    // commits are inside the payload the approval signs — so they ride through
-    // the approve untouched, and a later save carries them over as well.
+    // commits are inside the payload the record's hash is taken over — so a
+    // save that carries them over unchanged still moves the hash by its body.
     const project = await newProject();
     await createSpecNode({
       projectId: project.id,
@@ -290,11 +339,10 @@ describe("the approve door", () => {
     });
 
     const approved = await approveSpecNode({ projectId: project.id, id: "WL-0001" });
-    assert.deepEqual(approved.commits, ["9f2b1c4"]);
     let review = await reviewSpec(project.id);
     assert.deepEqual(
-      review.statuses.find((status) => status.id === "WL-0001"),
-      { id: "WL-0001", color: "green", reason: "approved" },
+      review.statuses.find((entry) => entry.id === "WL-0001"),
+      status("WL-0001", "green", "approved", stamped(approved)),
     );
 
     // An ordinary save touches the body and nothing else in the frontmatter.
@@ -306,11 +354,10 @@ describe("the approve door", () => {
       body: "It went fine, then better.",
     });
     assert.deepEqual(saved.commits, ["9f2b1c4"]);
-    assert.deepEqual(saved.approval, approved.approval);
     review = await reviewSpec(project.id);
     assert.deepEqual(
-      review.statuses.find((status) => status.id === "WL-0001"),
-      { id: "WL-0001", color: "yellow", reason: "changed" },
+      review.statuses.find((entry) => entry.id === "WL-0001"),
+      status("WL-0001", "yellow", "changed", stamped(approved)),
     );
   });
 
@@ -357,9 +404,7 @@ describe("the approve door", () => {
       body: "## Statement\n\nThe system shall do the thing.",
     });
     const review = await reviewSpec(project.id);
-    assert.deepEqual(review.statuses, [
-      { id: "R-0001", color: "red", reason: "orphan" },
-    ]);
+    assert.deepEqual(review.statuses, [status("R-0001", "red", "orphan")]);
     await says(
       approveSpecNode({ projectId: project.id, id: "R-0001" }),
       "invalid",
@@ -369,30 +414,28 @@ describe("the approve door", () => {
 });
 
 describe("the deletion doors", () => {
-  test("a proposal turns the node yellow without anybody writing to it, and rejecting a clean one strips the block", async () => {
+  test("a proposal turns the node yellow without anybody writing to the ledger, and rejecting a clean one strips the block", async () => {
     const project = await newProject();
     await goal(project, "G-0001");
     const approved = await approveSpecNode({ projectId: project.id, id: "G-0001" });
-    assert.ok(approved.approval !== undefined);
 
     await writeFile(
       specFile(project, "intent/Goal/G-0001.md"),
       emitNodeFile("Goal", GOAL_VALUES, [], {
-        approval: approved.approval,
         deletionProposed: { by: "session-7", rationale: "Superseded." },
       }),
       "utf8",
     );
     let review = await reviewSpec(project.id);
     assert.deepEqual(review.statuses, [
-      { id: "G-0001", color: "yellow", reason: "changed" },
+      status("G-0001", "yellow", "changed", stamped(approved)),
     ]);
 
     const rejected = await rejectSpecDeletion({ projectId: project.id, id: "G-0001" });
     assert.equal("deletionProposed" in rejected, false);
     review = await reviewSpec(project.id);
     assert.deepEqual(review.statuses, [
-      { id: "G-0001", color: "green", reason: "approved" },
+      status("G-0001", "green", "approved", stamped(approved)),
     ]);
   });
 
@@ -400,9 +443,8 @@ describe("the deletion doors", () => {
     const project = await newProject();
     await goal(project, "G-0001");
     const approved = await approveSpecNode({ projectId: project.id, id: "G-0001" });
-    assert.ok(approved.approval !== undefined);
     const sealed = await readFile(specFile(project, "intent/Goal/G-0001.md"), "utf8");
-    await commitSpec({ projectId: project.id, message: "Seal the goal" });
+    await commitSpec({ projectId: project.id, message: "Commit the goal" });
 
     await writeFile(
       specFile(project, "intent/Goal/G-0001.md"),
@@ -410,10 +452,7 @@ describe("the deletion doors", () => {
         "Goal",
         { ...GOAL_VALUES, body: "Something else entirely." },
         [],
-        {
-          approval: approved.approval,
-          deletionProposed: { by: "session-7", rationale: "Superseded." },
-        },
+        { deletionProposed: { by: "session-7", rationale: "Superseded." } },
       ),
       "utf8",
     );
@@ -425,7 +464,7 @@ describe("the deletion doors", () => {
     );
     const review = await reviewSpec(project.id);
     assert.deepEqual(review.statuses, [
-      { id: "G-0001", color: "green", reason: "approved" },
+      status("G-0001", "green", "approved", stamped(approved)),
     ]);
   });
 
@@ -433,7 +472,6 @@ describe("the deletion doors", () => {
     const project = await newProject();
     await goal(project, "G-0001");
     const approved = await approveSpecNode({ projectId: project.id, id: "G-0001" });
-    assert.ok(approved.approval !== undefined);
 
     // No commit: the approved bytes live nowhere but the file being edited.
     await writeFile(
@@ -442,10 +480,7 @@ describe("the deletion doors", () => {
         "Goal",
         { ...GOAL_VALUES, body: "Something else entirely." },
         [],
-        {
-          approval: approved.approval,
-          deletionProposed: { by: "session-7", rationale: "Superseded." },
-        },
+        { deletionProposed: { by: "session-7", rationale: "Superseded." } },
       ),
       "utf8",
     );
@@ -456,21 +491,21 @@ describe("the deletion doors", () => {
     // Honestly yellow: the agent's edit is still a change a person has not read.
     const review = await reviewSpec(project.id);
     assert.deepEqual(review.statuses, [
-      { id: "G-0001", color: "yellow", reason: "changed" },
+      status("G-0001", "yellow", "changed", stamped(approved)),
     ]);
   });
 
-  test("rejecting over a commit made before the approval keeps the signature", async () => {
+  test("rejecting over a commit made before the approval brings those bytes back, and the ledger never moves", async () => {
     // The daemon never commits on its own, so commit-then-approve is the
-    // ordinary ordering — and the newest commit whose CONTENT the hash fits
-    // carries no approval block of its own. The rejection must reattach the
-    // STANDING signature rather than take that commit's frontmatter verbatim,
-    // or turning a proposal down would destroy the very approval it honours.
+    // ordinary ordering — and the newest commit whose CONTENT the record's
+    // hash fits predates the approval. That is fine now, and it is why the
+    // ledger is a separate file: putting the matched version back touches no
+    // approval, because no file carries one.
     const project = await newProject();
     await goal(project, "G-0001");
-    await commitSpec({ projectId: project.id, message: "Seal before approving" });
+    await commitSpec({ projectId: project.id, message: "Commit before approving" });
     const approved = await approveSpecNode({ projectId: project.id, id: "G-0001" });
-    assert.ok(approved.approval !== undefined);
+    const ledger = await readFile(ledgerFile(project), "utf8");
 
     await writeFile(
       specFile(project, "intent/Goal/G-0001.md"),
@@ -478,20 +513,17 @@ describe("the deletion doors", () => {
         "Goal",
         { ...GOAL_VALUES, body: "Something else entirely." },
         [],
-        {
-          approval: approved.approval,
-          deletionProposed: { by: "session-7", rationale: "Superseded." },
-        },
+        { deletionProposed: { by: "session-7", rationale: "Superseded." } },
       ),
       "utf8",
     );
 
     const rejected = await rejectSpecDeletion({ projectId: project.id, id: "G-0001" });
-    assert.deepEqual(rejected.approval, approved.approval);
     assert.equal(rejected.body, GOAL_VALUES.body);
+    assert.equal(await readFile(ledgerFile(project), "utf8"), ledger);
     const review = await reviewSpec(project.id);
     assert.deepEqual(review.statuses, [
-      { id: "G-0001", color: "green", reason: "approved" },
+      status("G-0001", "green", "approved", stamped(approved)),
     ]);
   });
 
@@ -522,8 +554,10 @@ describe("the deletion doors", () => {
       fromId: "G-0001",
       toId: "Q-0001",
     });
-    await commitSpec({ projectId: project.id, message: "Seal the pair" });
+    await commitSpec({ projectId: project.id, message: "Commit the pair" });
     const sealed = await readFile(specFile(project, "intent/Question/Q-0001.md"), "utf8");
+    // Approved AFTER the commit, so the ledger names the committed bytes.
+    const approved = await approveSpecNode({ projectId: project.id, id: "Q-0001" });
 
     await rm(specFile(project, "intent/Question/Q-0001.md"));
     const review = await reviewSpec(project.id);
@@ -537,8 +571,14 @@ describe("the deletion doors", () => {
       await readFile(specFile(project, "intent/Question/Q-0001.md"), "utf8"),
       sealed,
     );
+    // The record outlived the file, and the restored bytes are the bytes it
+    // names — so the node comes back green by arithmetic, nobody re-approving.
     const after = await reviewSpec(project.id);
     assert.deepEqual(after.missing, []);
+    assert.deepEqual(
+      after.statuses.find((entry) => entry.id === "Q-0001"),
+      status("Q-0001", "green", "approved", stamped(approved)),
+    );
   });
 
   test("a restore refuses a node already standing", async () => {
@@ -592,7 +632,7 @@ describe("the git doors", () => {
       repo: true,
       dirty: true,
     });
-    await commitSpec({ projectId: project.id, message: "Seal the goal" });
+    await commitSpec({ projectId: project.id, message: "Commit the goal" });
     assert.deepEqual(await readSpecGitStatus(project.id), {
       repo: true,
       dirty: false,
@@ -611,7 +651,7 @@ describe("the git doors", () => {
   test("a commit with nothing to commit is refused in a sentence", async () => {
     const project = await newProject();
     await goal(project, "G-0001");
-    await commitSpec({ projectId: project.id, message: "Seal the goal" });
+    await commitSpec({ projectId: project.id, message: "Commit the goal" });
     await says(
       commitSpec({ projectId: project.id, message: "Again" }),
       "conflict",
@@ -624,7 +664,7 @@ describe("the git doors", () => {
     await goal(project, "G-0001");
     await rm(path.join(project.path, ".git"), { recursive: true, force: true });
     await says(
-      commitSpec({ projectId: project.id, message: "Seal the goal" }),
+      commitSpec({ projectId: project.id, message: "Commit the goal" }),
       "conflict",
       `This project is in no git repository, so there is nothing to commit into — run git init in ${project.path} first.`,
     );
@@ -635,7 +675,7 @@ describe("the git doors", () => {
     await goal(project, "G-0001");
     await writeFile(path.join(project.path, "notes.txt"), "not spec\n", "utf8");
 
-    await commitSpec({ projectId: project.id, message: "Seal the goal" });
+    await commitSpec({ projectId: project.id, message: "Commit the goal" });
 
     const status = await run("git", ["status", "--porcelain"], {
       cwd: project.path,
@@ -646,7 +686,7 @@ describe("the git doors", () => {
     const subject = await run("git", ["log", "-1", "--format=%s"], {
       cwd: project.path,
     });
-    assert.equal(subject.stdout.trim(), "Seal the goal");
+    assert.equal(subject.stdout.trim(), "Commit the goal");
   });
 
   test("the approved version arrives beside the current bytes, and null when git never held it", async () => {
@@ -661,7 +701,7 @@ describe("the git doors", () => {
     assert.equal(version.approved, null);
     assert.equal(version.current, sealed);
 
-    await commitSpec({ projectId: project.id, message: "Seal the goal" });
+    await commitSpec({ projectId: project.id, message: "Commit the goal" });
     const edited = sealed.replace(
       "The spec travels with the repository.\n",
       "The spec travels with the repository, always.\n",
@@ -673,10 +713,10 @@ describe("the git doors", () => {
     assert.equal(version.current, edited);
   });
 
-  test("the approved version is the file the approve wrote, even when the matching commit predates it", async () => {
+  test("the approved version is the canonical file the record's hash names, whenever it was committed", async () => {
     const project = await newProject();
     await goal(project, "G-0001");
-    await commitSpec({ projectId: project.id, message: "Seal before approving" });
+    await commitSpec({ projectId: project.id, message: "Commit before approving" });
     await approveSpecNode({ projectId: project.id, id: "G-0001" });
     const sealed = await readFile(
       specFile(project, "intent/Goal/G-0001.md"),
@@ -689,9 +729,17 @@ describe("the git doors", () => {
     await writeFile(specFile(project, "intent/Goal/G-0001.md"), edited, "utf8");
 
     const version = await readApprovedVersion({ projectId: project.id, id: "G-0001" });
-    // Signature included: a diff against this never shows the approval block
-    // itself as a change nobody made.
+    // The commit predates the approval and matches all the same: the record
+    // names content, and the diff base is that content and nothing more.
     assert.equal(version.approved, sealed);
     assert.equal(version.current, edited);
+  });
+
+  test("a ledger nobody has written yet leaves the approved version null, not refused", async () => {
+    const project = await newProject();
+    await goal(project, "G-0001");
+    await commitSpec({ projectId: project.id, message: "Commit the goal" });
+    const version = await readApprovedVersion({ projectId: project.id, id: "G-0001" });
+    assert.equal(version.approved, null);
   });
 });

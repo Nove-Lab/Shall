@@ -21,8 +21,9 @@ export type { SpecEdge, SpecNode } from "@shall/core/graph";
  * everywhere, and this is the opposite promise.
  *
  * IT TAKES EITHER SPELLING OF AN INSTANT, because the two the daemon serves are
- * both moments to whoever is reading them: a file's mtime is a number, an
- * approval's `at` is ISO 8601, and one function is all the rule there is.
+ * both moments to whoever is reading them: a file's mtime is a number, the
+ * ledger's `at` on an approval is ISO 8601, and one function is all the rule
+ * there is.
  *
  * A DATE THAT WILL NOT PARSE IS PRINTED AS THE TEXT IT WAS. `toLocaleString` on
  * an unparseable value says "Invalid Date", which tells the reader nothing and

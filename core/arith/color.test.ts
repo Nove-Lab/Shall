@@ -5,9 +5,13 @@ import {
   type SpecEdge,
   type SpecNode,
 } from "../graph/index.js";
-import { approvalPayload, blocksOf } from "../serialize/index.js";
+import {
+  approvalPayload,
+  blocksOf,
+  type ApprovalRecord,
+} from "../serialize/index.js";
 import type { RefusedFile, SpecGraph } from "../store/file-store.js";
-import type { Seal } from "./color.js";
+import type { Approvals, PayloadHash } from "./color.js";
 import { reviewGraph, type GraphReview, type ReviewStatus } from "./review.js";
 
 /**
@@ -17,22 +21,23 @@ import { reviewGraph, type GraphReview, type ReviewStatus } from "./review.js";
  * THE GRAPHS BELOW ARE BUILT BY HAND AND NOT LOADED. No filesystem, no
  * temporary folders: `core/arith` is pure, and a test that had to write files to
  * ask what colour a node is would be testing the loader as well. What is asserted
- * is arithmetic over a graph, which is exactly what the module claims to be.
+ * is arithmetic over a graph and a ledger, which is exactly what the module
+ * claims to be.
  *
- * THE SEAL IS FAKE AND ITS HASH IS THE IDENTITY, on purpose. A real sha256 would
- * make every hash assertion a black box; with `sha256:<payload>` the tests can
- * say what the signature signs — a body, a relation, a deletion proposal — and
- * be wrong out loud when the payload changes shape. Verification is a string
- * comparison for the same reason: what is under test is the ORDER the six
- * questions are asked in, never the cryptography, which core does not do.
+ * THE HASH IS FAKE AND IT IS THE IDENTITY, on purpose. A real sha256 would make
+ * every record a black box; with `sha256:<payload>` a fixture can say what a
+ * record is taken over — a body, a relation, a deletion proposal, the node's own
+ * address — and be wrong out loud when the payload changes shape. What is under
+ * test is the ORDER the five questions are asked in and the arithmetic of two
+ * files, never the cryptography, which core does not do at all.
  */
 
-const seal: Seal = {
-  hash: (payload: string) => `sha256:${payload}`,
-  verifies: (hash: string, tag: string) => tag === `hmac:${hash}`,
-};
+const hash: PayloadHash = (payload: string) => `sha256:${payload}`;
 
 const APPROVED_AT = "2026-08-15T00:00:00Z";
+
+/** Who the fixtures approve as, and when — the `{by, at}` every record carries. */
+const APPROVER = { by: "t", at: APPROVED_AT };
 
 function node(
   type: string,
@@ -65,16 +70,28 @@ function refusal(file: string, type: string, id: string): RefusedFile {
   return { file, type, id, problems: ["A short name is required."] };
 }
 
+/** The ledger these entries amount to, with the fake hash beside it. */
+function ledgerOf(...entries: [string, ApprovalRecord][]): Approvals {
+  return { records: new Map(entries), hash };
+}
+
+/** A project nobody has approved anything in — the ledger that is not there yet. */
+const unapproved = ledgerOf();
+
 /**
- * The hash a node's approval would carry — the bytes of its own file with the
- * signature left out, over the relations that leave it.
+ * The hash a record has to name for this node: the bytes of its own file, under
+ * its own address, over the relations that leave it.
  *
- * A DELETION PROPOSAL IS INSIDE THESE BYTES and the approval is not, which is
- * `approvalPayload`'s rule and the whole reason proposing a deletion turns a
- * node yellow without a branch anywhere in the chain.
+ * A DELETION PROPOSAL IS INSIDE THESE BYTES, which is `approvalPayload`'s rule
+ * and the whole reason proposing a deletion turns a node yellow without a branch
+ * anywhere in the chain.
+ *
+ * Taken from `approvalPayload` rather than through `contentHashOf`, so that the
+ * chain and its fixture cannot drift together: a payload that changed shape has
+ * to be written into this file by hand before the greens come back.
  */
 function hashOf(node: SpecNode, edges: readonly SpecEdge[]): string {
-  return seal.hash(
+  return hash(
     approvalPayload(
       node.type,
       node.id,
@@ -85,13 +102,25 @@ function hashOf(node: SpecNode, edges: readonly SpecEdge[]): string {
   );
 }
 
-/** A node as the daemon would leave it after somebody pressed approve. */
-function approve(node: SpecNode, edges: readonly SpecEdge[] = []): SpecNode {
-  const hash = hashOf(node, edges);
-  return {
-    ...node,
-    approval: { hash, tag: `hmac:${hash}`, by: "t", at: APPROVED_AT },
-  };
+/** One line of the ledger, as the daemon leaves it after somebody pressed approve. */
+function approve(
+  node: SpecNode,
+  edges: readonly SpecEdge[] = [],
+): [string, ApprovalRecord] {
+  return [node.id, { approvedHash: hashOf(node, edges), ...APPROVER }];
+}
+
+/**
+ * One row of `statuses`, whole. Every assertion below compares a whole one, so
+ * that a field quietly added or dropped is a failure rather than a silent pass.
+ */
+function status(
+  id: string,
+  color: ReviewStatus["color"],
+  reason: ReviewStatus["reason"],
+  approval: ReviewStatus["approval"] = null,
+): ReviewStatus {
+  return { id, color, reason, approval };
 }
 
 function statusOf(review: GraphReview, id: string): ReviewStatus | undefined {
@@ -107,7 +136,7 @@ describe("red", () => {
       graphOf({
         refused: [refusal("intent/Requirement/R-0002.md", "Requirement", "R-0002")],
       }),
-      seal,
+      unapproved,
     );
     assert.deepEqual(review.broken, [
       {
@@ -126,7 +155,7 @@ describe("red", () => {
       graphOf({
         refused: [refusal("execution/WorkLog/WL-0001.md", "WorkLog", "WL-0001")],
       }),
-      seal,
+      unapproved,
     );
     assert.deepEqual(review.broken.map((file) => file.file), [
       "execution/WorkLog/WL-0001.md",
@@ -145,7 +174,7 @@ describe("red", () => {
           edge("D-0001", "AFFECTS", "R-0404"),
         ],
       }),
-      seal,
+      unapproved,
     );
     // One entry for the id, its referrers in a fixed order however the edges
     // arrived — a review that reordered itself between two reads would show a
@@ -169,7 +198,7 @@ describe("red", () => {
       graphOf({
         nodes: [node("SystemResponsibility", "SR-0001"), node("Decision", "D-0001")],
       }),
-      seal,
+      unapproved,
     );
     assert.deepEqual(review.missing, []);
     assert.deepEqual(review.broken, []);
@@ -180,13 +209,17 @@ describe("red", () => {
   });
 
   test("a node no live anchor reaches is red, even when it is approved", () => {
-    // The signature is real and the person meant it. It does not answer the
+    // The record is real and the person meant it. It does not answer the
     // question the anchor asks, which is whether this Requirement is part of
-    // the specification at all.
-    const requirement = approve(node("Requirement", "R-0001"));
-    const review = reviewGraph(graphOf({ nodes: [requirement] }), seal);
+    // the specification at all — and the row still carries their name, because
+    // who approved a node is a fact about it whatever colour it came back.
+    const requirement = node("Requirement", "R-0001");
+    const review = reviewGraph(
+      graphOf({ nodes: [requirement] }),
+      ledgerOf(approve(requirement)),
+    );
     assert.deepEqual(review.statuses, [
-      { id: "R-0001", color: "red", reason: "orphan" },
+      status("R-0001", "red", "orphan", APPROVER),
     ]);
   });
 
@@ -211,11 +244,11 @@ describe("red", () => {
           refusal("intent/Goal/G-0001.md", "Goal", "G-0001"),
         ],
       }),
-      seal,
+      unapproved,
     );
     assert.deepEqual(review.statuses, [
-      { id: "D-0001", color: "red", reason: "orphan" },
-      { id: "Q-0002", color: "red", reason: "orphan" },
+      status("D-0001", "red", "orphan"),
+      status("Q-0002", "red", "orphan"),
     ]);
     // And neither far end is missing: there is a file at both paths, so the
     // answer about them is `broken` and not a hole.
@@ -231,13 +264,12 @@ describe("red", () => {
     // a node that hangs off nothing is work thrown away.
     const review = reviewGraph(
       graphOf({ nodes: [node("Requirement", "R-0001")] }),
-      seal,
+      unapproved,
     );
-    assert.deepEqual(statusOf(review, "R-0001"), {
-      id: "R-0001",
-      color: "red",
-      reason: "orphan",
-    });
+    assert.deepEqual(
+      statusOf(review, "R-0001"),
+      status("R-0001", "red", "orphan"),
+    );
   });
 
   test("a folder that would not open is red on the screen with no node behind it", () => {
@@ -253,7 +285,7 @@ describe("red", () => {
         ],
         refused: [refusal("intent/Requirement/R-0002.md", "Requirement", "R-0002")],
       }),
-      seal,
+      unapproved,
     );
     assert.deepEqual(review.broken, [
       {
@@ -282,13 +314,12 @@ describe("anchors", () => {
           nodes: [node("ModuleDesign", "MD-0001"), node("Interface", "IF-0001")],
           edges: [edge("MD-0001", relation, "IF-0001")],
         }),
-        seal,
+        unapproved,
       );
-      assert.deepEqual(statusOf(review, "IF-0001"), {
-        id: "IF-0001",
-        color: "yellow",
-        reason: "unapproved",
-      });
+      assert.deepEqual(
+        statusOf(review, "IF-0001"),
+        status("IF-0001", "yellow", "unapproved"),
+      );
     });
   }
 
@@ -302,26 +333,24 @@ describe("anchors", () => {
         nodes: [node("Decision", "D-0001"), question],
         edges: [edge("D-0001", "RESOLVES", "Q-0001")],
       }),
-      seal,
+      unapproved,
     );
-    assert.deepEqual(statusOf(held, "D-0001"), {
-      id: "D-0001",
-      color: "yellow",
-      reason: "unapproved",
-    });
+    assert.deepEqual(
+      statusOf(held, "D-0001"),
+      status("D-0001", "yellow", "unapproved"),
+    );
 
     const loose = reviewGraph(
       graphOf({
         nodes: [node("Decision", "D-0001"), node("Term", "T-0001")],
         edges: [edge("D-0001", "MENTIONS", "T-0001")],
       }),
-      seal,
+      unapproved,
     );
-    assert.deepEqual(statusOf(loose, "D-0001"), {
-      id: "D-0001",
-      color: "red",
-      reason: "orphan",
-    });
+    assert.deepEqual(
+      statusOf(loose, "D-0001"),
+      status("D-0001", "red", "orphan"),
+    );
   });
 
   test("a rootless type is never an orphan", () => {
@@ -330,10 +359,10 @@ describe("anchors", () => {
     // written, so a Goal alone is unapproved and not broken.
     const review = reviewGraph(
       graphOf({ nodes: [node("Goal", "G-0001")] }),
-      seal,
+      unapproved,
     );
     assert.deepEqual(review.statuses, [
-      { id: "G-0001", color: "yellow", reason: "unapproved" },
+      status("G-0001", "yellow", "unapproved"),
     ]);
   });
 });
@@ -344,114 +373,202 @@ describe("yellow and green", () => {
   const responsibility = node("SystemResponsibility", "SR-0001");
   const anchoring = [edge("SR-0001", "REQUIRES", "R-0001")];
 
-  function reviewOf(requirement: SpecNode): GraphReview {
+  function reviewOf(
+    requirement: SpecNode,
+    approvals: Approvals = unapproved,
+  ): GraphReview {
     return reviewGraph(
       graphOf({ nodes: [responsibility, requirement], edges: anchoring }),
-      seal,
+      approvals,
     );
   }
 
-  test("a node with no approval block is yellow", () => {
-    assert.deepEqual(statusOf(reviewOf(node("Requirement", "R-0001")), "R-0001"), {
-      id: "R-0001",
-      color: "yellow",
-      reason: "unapproved",
-    });
-  });
-
-  test("a tag this machine's key did not make is yellow", () => {
-    // The hash is perfectly correct — an agent can compute one from the file.
-    // What it cannot make is the tag, and that is the whole of what makes green
-    // a state only a person can put a node into.
-    const base = node("Requirement", "R-0001");
-    const forged = {
-      ...base,
-      approval: {
-        hash: hashOf(base, anchoring),
-        tag: "hmac:another-machine",
-        by: "t",
-        at: APPROVED_AT,
-      },
-    };
-    assert.deepEqual(statusOf(reviewOf(forged), "R-0001"), {
-      id: "R-0001",
-      color: "yellow",
-      reason: "forged",
-    });
+  test("a node the ledger has no record for is yellow", () => {
+    assert.deepEqual(
+      statusOf(reviewOf(node("Requirement", "R-0001")), "R-0001"),
+      status("R-0001", "yellow", "unapproved"),
+    );
   });
 
   test("a body edited after approval is yellow", () => {
-    const signed = approve(node("Requirement", "R-0001"), anchoring);
-    const edited = { ...signed, body: "Something else entirely." };
-    assert.deepEqual(statusOf(reviewOf(edited), "R-0001"), {
-      id: "R-0001",
-      color: "yellow",
-      reason: "changed",
-    });
+    const approved = node("Requirement", "R-0001");
+    const edited = { ...approved, body: "Something else entirely." };
+    assert.deepEqual(
+      statusOf(reviewOf(edited, ledgerOf(approve(approved, anchoring))), "R-0001"),
+      status("R-0001", "yellow", "changed", APPROVER),
+    );
   });
 
   test("a relation added after approval is yellow", () => {
     // The relations are lines in this node's file, so they are inside what the
-    // signature signs. Adding one is an edit like any other.
-    const signed = approve(node("Requirement", "R-0001"), anchoring);
+    // record's hash is taken over. Adding one is an edit like any other.
+    const approved = node("Requirement", "R-0001");
     const review = reviewGraph(
       graphOf({
-        nodes: [responsibility, node("Term", "T-0001"), signed],
+        nodes: [responsibility, node("Term", "T-0001"), approved],
         edges: [...anchoring, edge("R-0001", "MENTIONS", "T-0001")],
       }),
-      seal,
+      ledgerOf(approve(approved, anchoring)),
     );
-    assert.deepEqual(statusOf(review, "R-0001"), {
-      id: "R-0001",
-      color: "yellow",
-      reason: "changed",
-    });
+    assert.deepEqual(
+      statusOf(review, "R-0001"),
+      status("R-0001", "yellow", "changed", APPROVER),
+    );
   });
 
   test("a deletion proposal is a change like any other, and the node turns yellow", () => {
     // There is no branch in the chain for a proposal, and there does not need
     // to be one: the block sits inside the payload, so an agent writing it
     // un-matches the hash by itself.
-    const signed = approve(node("Requirement", "R-0001"), anchoring);
+    const approved = node("Requirement", "R-0001");
     const proposed = {
-      ...signed,
+      ...approved,
       deletionProposed: { by: "agent", rationale: "Superseded by R-0002." },
     };
-    assert.deepEqual(statusOf(reviewOf(proposed), "R-0001"), {
-      id: "R-0001",
-      color: "yellow",
-      reason: "changed",
-    });
+    assert.deepEqual(
+      statusOf(reviewOf(proposed, ledgerOf(approve(approved, anchoring))), "R-0001"),
+      status("R-0001", "yellow", "changed", APPROVER),
+    );
   });
 
   test("stripping the proposal makes the hash fit again, with nothing else undone", () => {
     // Rejecting a proposed deletion is one block removed and no state repaired,
     // because no state was ever stored: the same bytes hash to the same string,
-    // and the person's signature was never touched.
-    const signed = approve(node("Requirement", "R-0001"), anchoring);
+    // and the ledger was never touched.
+    const approved = node("Requirement", "R-0001");
+    const record = approve(approved, anchoring);
+    const approvals = ledgerOf(record);
     const proposed = {
-      ...signed,
+      ...approved,
       deletionProposed: { by: "agent", rationale: "Superseded by R-0002." },
     };
     const rejected = { ...proposed, deletionProposed: undefined };
-    assert.deepEqual(statusOf(reviewOf(rejected), "R-0001"), {
-      id: "R-0001",
-      color: "green",
-      reason: "approved",
-    });
-    assert.deepEqual(rejected.approval, signed.approval);
+    assert.deepEqual(
+      statusOf(reviewOf(rejected, approvals), "R-0001"),
+      status("R-0001", "green", "approved", APPROVER),
+    );
+    // The chain reads the book and writes nothing in it, so what stands at the
+    // end is the record from before the proposal was ever written.
+    assert.deepEqual([...approvals.records], [record]);
   });
 
-  test("an approved, anchored node comes back green and says only that", () => {
-    const signed = approve(node("Requirement", "R-0001"), anchoring);
-    const review = reviewOf(signed);
-    assert.deepEqual(statusOf(review, "R-0001"), {
-      id: "R-0001",
-      color: "green",
-      reason: "approved",
-    });
+  test("an approved, anchored node comes back green and says who approved it and when", () => {
+    const approved = node("Requirement", "R-0001");
+    const review = reviewOf(approved, ledgerOf(approve(approved, anchoring)));
+    assert.deepEqual(
+      statusOf(review, "R-0001"),
+      status("R-0001", "green", "approved", APPROVER),
+    );
     assert.deepEqual(review.missing, []);
     assert.deepEqual(review.broken, []);
+  });
+
+  test("a green status carries the approver and the instant; a yellow one carries the record it no longer fits; an unapproved one carries none", () => {
+    // Three rows the panel writes three different lines under, and the
+    // difference between the middle one and the last is the whole reason the
+    // record is carried whatever the colour: "changed" has somebody to ask.
+    const green = node("Requirement", "R-0001");
+    const edited = node("Requirement", "R-0002");
+    const never = node("Requirement", "R-0003");
+    const edges = [
+      edge("SR-0001", "REQUIRES", "R-0001"),
+      edge("SR-0001", "REQUIRES", "R-0002"),
+      edge("SR-0001", "REQUIRES", "R-0003"),
+    ];
+    const review = reviewGraph(
+      graphOf({
+        nodes: [
+          responsibility,
+          green,
+          { ...edited, body: "Something else entirely." },
+          never,
+        ],
+        edges,
+      }),
+      ledgerOf(approve(green, edges), approve(edited, edges)),
+    );
+    assert.deepEqual(
+      statusOf(review, "R-0001"),
+      status("R-0001", "green", "approved", APPROVER),
+    );
+    assert.deepEqual(
+      statusOf(review, "R-0002"),
+      status("R-0002", "yellow", "changed", APPROVER),
+    );
+    assert.deepEqual(
+      statusOf(review, "R-0003"),
+      status("R-0003", "yellow", "unapproved"),
+    );
+  });
+});
+
+describe("the ledger", () => {
+  test("a record for an id that is not in the graph colours nothing and is not an error", () => {
+    // A node somebody deleted, or approved in another checkout of the same
+    // repository. The ledger is never pruned — a record outlives the node it
+    // names — so the review leaves it where it is rather than inventing a row
+    // for an id nothing on disk and nothing in any file claims.
+    const goal = node("Goal", "G-0001");
+    const review = reviewGraph(
+      graphOf({ nodes: [goal] }),
+      ledgerOf(approve(goal), approve(node("Requirement", "R-0404"))),
+    );
+    assert.deepEqual(review.statuses, [
+      status("G-0001", "green", "approved", APPROVER),
+    ]);
+    assert.deepEqual(review.missing, []);
+    assert.deepEqual(review.broken, []);
+  });
+
+  test("a record whose hash fits a different node's bytes colours nothing", () => {
+    // The same content at two addresses, and a record filed under the second
+    // that names the first's hash. The payload opens with `type/id`, so the two
+    // never hash alike and an approval cannot be moved from one node to another
+    // — which is what stops an approved node arriving green under a new name.
+    const responsibility = node("SystemResponsibility", "SR-0001");
+    const first = node("Requirement", "R-0001");
+    const twin = { ...first, id: "R-0002" };
+    const edges = [
+      edge("SR-0001", "REQUIRES", "R-0001"),
+      edge("SR-0001", "REQUIRES", "R-0002"),
+    ];
+    const review = reviewGraph(
+      graphOf({ nodes: [responsibility, first, twin], edges }),
+      ledgerOf([twin.id, { approvedHash: hashOf(first, edges), ...APPROVER }]),
+    );
+    assert.deepEqual(
+      statusOf(review, "R-0001"),
+      status("R-0001", "yellow", "unapproved"),
+    );
+    assert.deepEqual(
+      statusOf(review, "R-0002"),
+      status("R-0002", "yellow", "changed", APPROVER),
+    );
+    assert.equal(
+      review.statuses.some((held) => held.color === "green"),
+      false,
+    );
+  });
+
+  test("a record standing over a file that would not read never reaches the chain", () => {
+    // The record was taken when the file still read, and it is not wrong now —
+    // it will fit again the moment somebody repairs the frontmatter. Until
+    // then there is no node to say a colour about, so the file is broken and
+    // the review says nothing else about it.
+    const review = reviewGraph(
+      graphOf({
+        refused: [refusal("intent/Requirement/R-0002.md", "Requirement", "R-0002")],
+      }),
+      ledgerOf(approve(node("Requirement", "R-0002"))),
+    );
+    assert.deepEqual(review.statuses, []);
+    assert.deepEqual(review.missing, []);
+    assert.deepEqual(review.broken, [
+      {
+        file: "intent/Requirement/R-0002.md",
+        problems: ["A short name is required."],
+      },
+    ]);
   });
 });
 
@@ -469,37 +586,33 @@ describe("the execution band", () => {
         nodes: [journal, logged, stray],
         edges: [edge("J-0001", "LOGS", "WL-0001")],
       }),
-      seal,
+      unapproved,
     );
-    assert.deepEqual(statusOf(review, "J-0001"), {
-      id: "J-0001",
-      color: "yellow",
-      reason: "unapproved",
-    });
-    assert.deepEqual(statusOf(review, "WL-0001"), {
-      id: "WL-0001",
-      color: "yellow",
-      reason: "unapproved",
-    });
-    assert.deepEqual(statusOf(review, "WL-0002"), {
-      id: "WL-0002",
-      color: "red",
-      reason: "orphan",
-    });
+    assert.deepEqual(
+      statusOf(review, "J-0001"),
+      status("J-0001", "yellow", "unapproved"),
+    );
+    assert.deepEqual(
+      statusOf(review, "WL-0001"),
+      status("WL-0001", "yellow", "unapproved"),
+    );
+    assert.deepEqual(
+      statusOf(review, "WL-0002"),
+      status("WL-0002", "red", "orphan"),
+    );
   });
 
   test("an approved work log is green", () => {
     const journal = node("Journal", "J-0001");
     const logs = [edge("J-0001", "LOGS", "WL-0001")];
-    const signed = approve(node("WorkLog", "WL-0001"), []);
+    const log = node("WorkLog", "WL-0001");
     const review = reviewGraph(
-      graphOf({ nodes: [journal, signed], edges: logs }),
-      seal,
+      graphOf({ nodes: [journal, log], edges: logs }),
+      ledgerOf(approve(log)),
     );
-    assert.deepEqual(statusOf(review, "WL-0001"), {
-      id: "WL-0001",
-      color: "green",
-      reason: "approved",
-    });
+    assert.deepEqual(
+      statusOf(review, "WL-0001"),
+      status("WL-0001", "green", "approved", APPROVER),
+    );
   });
 });

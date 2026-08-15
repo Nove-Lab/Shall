@@ -196,8 +196,9 @@ export function SpecPlane() {
    *
    * The colours are recomputed on every read and stored nowhere, so they are
    * fetched beside the nodes and the relations rather than derived from them:
-   * nothing on this plane can work out from a node's fields whether its approval
-   * verifies. `null` is "not read yet", which is why the board does not paint.
+   * a node's fields say nothing about its approval — that lives in the ledger
+   * the daemon reads — so nothing on this plane could work a colour out for
+   * itself. `null` is "not read yet", which is why the board does not paint.
    */
   const [review, setReview] = useState<ReviewReport | null>(null);
   const [gitStatus, setGitStatus] = useState<GitStatus | null>(null);
