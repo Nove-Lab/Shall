@@ -4,7 +4,7 @@ import { reviewGraph, type GraphReview } from "@shall/core/arith";
 import {
   anchorPhrase,
   bandFolderOf,
-  isColored,
+  type NodeCommit,
   type SpecNode,
 } from "@shall/core/graph";
 import {
@@ -144,7 +144,12 @@ async function approvedVersionFor(
   specDir: string,
   node: SpecNode,
 ): Promise<{
-  values: { shortName: string; name: string; body: string };
+  values: {
+    shortName: string;
+    name: string;
+    body: string;
+    commits: readonly NodeCommit[] | undefined;
+  };
   edges: readonly { type: string; toId: string }[];
   deletionProposed: SpecNode["deletionProposed"];
 } | null> {
@@ -182,6 +187,7 @@ async function approvedVersionFor(
           shortName: reading.node.shortName,
           name: reading.node.name,
           body: reading.node.body,
+          commits: reading.node.commits,
         },
         edges: reading.edges,
         // Inside the payload, so a match carries it faithfully — in practice
@@ -228,9 +234,10 @@ export async function reviewSpec(projectId: string): Promise<GraphReview> {
  * A person turns a node green — the one manufacturer.
  *
  * The refusals run in the order a person can act on: the project, the key,
- * the file's own state, the node's existence, the band, the standing deletion
- * proposal, and last the anchor — because "fix the file" comes before "this
- * band has no approvals" and both come before "nothing reaches it yet".
+ * the file's own state, the node's existence, the standing deletion proposal,
+ * and last the anchor — because "fix the file" comes before "decide the
+ * proposal" and both come before "nothing reaches it yet". The execution band
+ * is approved like any other: a record is read by a person too.
  */
 export async function approveSpecNode(input: {
   projectId: string;
@@ -249,11 +256,6 @@ export async function approveSpecNode(input: {
   const node = graph.nodes.find((entry) => entry.id === input.id);
   if (node === undefined) {
     throw missing(`Unknown node: ${input.id}`);
-  }
-  if (!isColored(node.type)) {
-    throw invalid(
-      `${input.id} is a ${node.type}, and the execution band records what happened rather than stating what shall be, so there is nothing here to approve.`,
-    );
   }
   if (node.deletionProposed !== undefined) {
     throw conflict(
@@ -442,6 +444,7 @@ export async function restoreSpecNode(input: {
         shortName: reading.node.shortName,
         name: reading.node.name,
         body: reading.node.body,
+        commits: reading.node.commits,
       },
       reading.edges,
       blocksOf(reading.node),

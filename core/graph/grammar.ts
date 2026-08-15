@@ -18,14 +18,20 @@ export interface EdgeTriple {
 }
 
 /**
- * Every triple the canon allows: 65 rows over 33 numbered edge types.
+ * Every triple the canon allows: 62 rows over 31 numbered edge types.
+ *
+ * v5 numbered 33; #19 PRODUCED and #20 CITES went with the Commit type, whose
+ * one job — naming the commits a piece of work produced — is now a `commits:`
+ * list in the WorkLog's own frontmatter rather than a node of its own. The
+ * numbers are kept as v5 wrote them so a reader can still diff this file
+ * against the source document line by line.
  *
  * The triple is the key, never the bare name. v5 numbers `DEPENDS_ON` twice —
  * #9 Requirement→Requirement and #15 ImplementationTask→ImplementationTask — so
- * the 33 edge types live under 32 distinct names, and anything that indexes this
- * table by name alone silently drops one of the two. HAS_CRITERION, SUBMITS,
- * CITES and the fan-out families (ASSUMES, RAISES, AFFECTS, ESCALATES, MENTIONS)
- * repeat their names too, but those are one edge type with several endpoints;
+ * the 31 edge types live under 30 distinct names, and anything that indexes this
+ * table by name alone silently drops one of the two. HAS_CRITERION, SUBMITS and
+ * the fan-out families (ASSUMES, RAISES, AFFECTS, ESCALATES, MENTIONS) repeat
+ * their names too, but those are one edge type with several endpoints;
  * `DEPENDS_ON` is the one place where the same name means two different edges.
  */
 export const EDGE_GRAMMAR: readonly EdgeTriple[] = [
@@ -50,14 +56,12 @@ export const EDGE_GRAMMAR: readonly EdgeTriple[] = [
   { fromType: "ModuleDesign",         toType: "ImplementationTask",   edgeType: "ALLOCATES" },              // #14
   { fromType: "ImplementationTask",   toType: "ImplementationTask",   edgeType: "DEPENDS_ON" },             // #15 the second DEPENDS_ON
 
-  // §3-3 Execution view.
+  // §3-3 Execution view. #19 PRODUCED and #20 CITES are gone with the Commit
+  // node: a WorkLog names its commits in its own frontmatter now.
   { fromType: "Journal",              toType: "WorkLog",              edgeType: "LOGS" },                   // #16
   { fromType: "WorkLog",              toType: "Evidence",             edgeType: "SUBMITS" },                // #17
   { fromType: "WorkLog",              toType: "VerificationReport",   edgeType: "SUBMITS" },                // #17—
   { fromType: "WorkLog",              toType: "Finding",              edgeType: "RECORDS" },                // #18
-  { fromType: "WorkLog",              toType: "Commit",               edgeType: "PRODUCED" },               // #19
-  { fromType: "Evidence",             toType: "Commit",               edgeType: "CITES" },                  // #20 CITES ⊆ PRODUCED
-  { fromType: "VerificationReport",   toType: "Commit",               edgeType: "CITES" },                  // #20—
 
   // §3-4 The four gateways between views: Intent → Plan → Execution.
   { fromType: "SystemResponsibility", toType: "ModuleDesign",         edgeType: "IS_REALIZED_BY" },         // #21
@@ -89,7 +93,7 @@ export const EDGE_GRAMMAR: readonly EdgeTriple[] = [
 
   // §3-6 Domain, the global sink. MENTIONS #30 has exactly sixteen sources —
   // the rows that carry it in §4's Term column. Term, DomainEntity, Journal,
-  // Evidence, Commit, VerificationReport and Finding are not among them, and no
+  // Evidence, VerificationReport and Finding are not among them, and no
   // stated rule predicts that: it is read off the table, so it is written out.
   { fromType: "Goal",                 toType: "Term",                 edgeType: "MENTIONS" },
   { fromType: "Actor",                toType: "Term",                 edgeType: "MENTIONS" },
@@ -122,7 +126,7 @@ function distinctEdgeTypes(rows: readonly EdgeTriple[]): string[] {
 }
 
 /**
- * The 32 distinct names, in canon order. Thirty-two and not thirty-three
+ * The 30 distinct names, in canon order. Thirty and not thirty-one
  * because `DEPENDS_ON` covers two of the canon's edge types; a name alone
  * cannot tell them apart, which is why it is `EDGE_GRAMMAR` and not this list
  * that decides what is allowed. Read off the rows so the two cannot drift.

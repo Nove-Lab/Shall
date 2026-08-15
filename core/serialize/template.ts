@@ -7,7 +7,14 @@ import {
   sectionGuideFor,
   type SectionGuide,
 } from "../graph/index.js";
-import { EDGES_KEY, FENCE, NAME_KEY, SHORT_NAME_KEY } from "./emit.js";
+import {
+  COMMITS_KEY,
+  COMMITS_TYPE,
+  EDGES_KEY,
+  FENCE,
+  NAME_KEY,
+  SHORT_NAME_KEY,
+} from "./emit.js";
 
 /**
  * The starting file for a type, in its two audiences.
@@ -38,7 +45,7 @@ import { EDGES_KEY, FENCE, NAME_KEY, SHORT_NAME_KEY } from "./emit.js";
 
 /**
  * The column the key hints start in — wide enough that the two keys' hints line
- * up, and the same column in all 23 files so a person reading two of them side
+ * up, and the same column in all 22 files so a person reading two of them side
  * by side reads one shape.
  */
 const HINT_COLUMN = 23;
@@ -96,6 +103,18 @@ function startingLines(
       lines.push(`#   - type: ${firstRow.edgeType}`);
       lines.push(`#     to: ${formatNodeId(targetPrefix, 1)}`);
     }
+  }
+
+  // The one type-specific key. A WorkLog names the commits its work produced
+  // in its own frontmatter — sha and message, in the order they were made —
+  // and no other type carries the key, so no other template mentions it.
+  if (type === COMMITS_TYPE) {
+    lines.push(
+      "# The commits this work produced, in the order they were made — sha and message.",
+    );
+    lines.push(`# ${COMMITS_KEY}:`);
+    lines.push("#   - sha: 0123abc");
+    lines.push("#     message: The subject line the commit was made with");
   }
 
   return lines;

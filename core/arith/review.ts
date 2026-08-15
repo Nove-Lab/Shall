@@ -89,8 +89,8 @@ export function reviewGraph(graph: SpecGraph, seal: Seal): GraphReview {
     };
     const verdict = colorOf(subject, context);
     if (verdict === null) {
-      // The execution band, which has no colour to report. It is dropped rather
-      // than filed as a fourth kind: there is nothing to say about it.
+      // A type outside the canon, which the loader never serves as a node —
+      // kept as the honest shape of `colorOf`'s answer rather than cast away.
       continue;
     }
     // A node that parsed is present and problem-free, so `missing` and
