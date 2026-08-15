@@ -78,19 +78,22 @@ Every card carries a traffic light, computed on read — the execution band
 too, because a record is written by an agent and read by a person like any
 other node: red is an error to fix (a file that will not read, a node no live anchor
 holds, an id that is referenced but gone), yellow is a judgement still owed (no
-approval yet, a tag this machine's key did not write, changed since it was
-approved), green is both settled. The node panel is where a judgement happens —
-a full read for a new node, a line diff against the approved version for a
-changed one, and for a deletion an agent proposed (a `deletionProposed:` block
-it writes into the file's frontmatter) the rationale, the impact and two
-buttons: approve the deletion or reject it. Approving writes an `approval:`
-block signed with the machine key at `~/.shall/key`; agents can imitate the
-block but not the tag, which is why green has exactly one manufacturer. The
-daemon never commits on its own — a **Commit spec** button appears when the
-project is a git repository and the spec folder has uncommitted changes, and
-makes one commit scoped to `.shall/spec`. A file deleted by hand shows up under
-the toolbar's problems dialog with a **Restore** button that brings it back
-from git history.
+approval yet, or changed since it was approved), green is both settled. The
+node panel is where a judgement happens — a full read for a new node, a line
+diff against the approved version for a changed one, and for a deletion an
+agent proposed (a `deletionProposed:` block it writes into the file's
+frontmatter) the rationale, the impact and two buttons: approve the deletion
+or reject it. Approving writes nothing into the node's file: it puts one record
+— the hash of the node's content, who approved it and when — into the project's
+approval ledger, `.shall/ledger/approvals.yaml`, which the daemon alone writes.
+A colour is then arithmetic over two files: what the spec says now against what
+the ledger remembers, so a node file carries no claim about its own approval
+and green has exactly one manufacturer. The daemon never commits on its own — a
+**Commit spec** button appears when the project is a git repository and the
+spec folder or the ledger has uncommitted changes, and makes one commit scoped
+to `.shall/spec` and `.shall/ledger`. A file deleted by hand shows up under the
+toolbar's problems dialog with a **Restore** button that brings it back from
+git history — and if the ledger still holds its record, it comes back green.
 
 A work log names the commits its work produced in its own frontmatter — a
 `commits:` list of shas, in the order they were made — the sha and nothing
@@ -114,11 +117,15 @@ registry config, so `npx shadcn add <component>` works from `apps/web`.
   project.json                 id, display name, schema version
   .gitignore                   the shall.db files and *.tmp — Shall's own leavings
   spec/<band>/<Type>/<id>.md   the graph: one file per node
+  ledger/approvals.yaml        the approvals: node id → {approvedHash, by, at}
 ```
 
-`.shall/spec` belongs in the repository, and that is the whole point of the
-arrangement: the spec travels with the code, git holds its history and its
-merges, and a fresh clone can be read before anyone has opened it in the UI.
+`.shall/spec` and `.shall/ledger` both belong in the repository, and that is
+the whole point of the arrangement: the spec and its approvals travel with the
+code, git holds their history and their merges, and a fresh clone can be read
+— and shows the same greens — before anyone has opened it in the UI. The
+ledger appears with the first approval; a project that has approved nothing
+has none.
 The `.gitignore` Shall writes covers only its own leavings — a `shall.db` left
 behind by a version from before the spec moved into files, and the `*.tmp` a
 write leaves if it dies between writing and renaming. The 22 reference
@@ -126,16 +133,18 @@ templates are not in the project any more: they are the machine's, regenerated
 under `~/.shall/templates/`, and a set an older Shall committed into a project
 is removed on the next open.
 
-Opening or creating a project also writes one deny rule into the project's
-`.claude/settings.json` — `Read(~/.shall/**)`, the approval key's home — and
-`shall init` runs `git init` when the folder is in no repository, because git
-is the spec's only restoration material.
+Opening or creating a project also writes two deny rules into the project's
+`.claude/settings.json` — `Read(~/.shall/**)`, Shall's own home, and
+`Edit(/.shall/ledger/**)`, so an agent may read the ledger but never write it
+— and `shall init` runs `git init` when the folder is in no repository, because
+git is the spec's only restoration material.
 
 Three `shall` subcommands go on top of this: `shall init` to write that folder
 into the current directory, `shall check` to read the spec back and print what
 is wrong with it (one file and one sentence per line — problems that keep a
-file out of the graph, gaps where the graph does not hold together, and notes
-about non-canonical files; problems and gaps exit 1), and
+file out of the graph, a ledger that will not read, gaps where the graph does
+not hold together, and notes about non-canonical files; problems and gaps exit
+1), and
 `shall add-spec-node --type <Type>` to start a new node — the daemon picks the
 next free id, writes the starting file at its own path, and the command prints
 that path on its first line so an agent knows exactly where to write. One
