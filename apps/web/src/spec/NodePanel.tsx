@@ -5,7 +5,7 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from "react";
-import { Pencil, Trash2, X } from "lucide-react";
+import { Pencil, Plus, Trash2, X } from "lucide-react";
 import {
   BAND_ORDER,
   anchorPhrase,
@@ -14,6 +14,7 @@ import {
   nextIdSuggestion,
   sectionGuideFor,
   type Band,
+  type NodeCommit,
   type NodeTypeEntry,
   type SpecEdge,
   type SpecNode,
@@ -232,6 +233,34 @@ export interface NodeDraft {
   shortName: string;
   name: string;
   body: string;
+  /**
+   * A WorkLog's commits, present exactly when the form was a WorkLog's — the
+   * list is then the whole list, empty for a work log that produced none, and
+   * absent for every other type so the daemon carries or omits as its own rule
+   * says.
+   */
+  commits?: readonly NodeCommit[];
+}
+
+/**
+ * One row of the commit editor. Kept as text while it is being typed and
+ * judged only on the way out — a half-typed sha is not a refusal, it is a
+ * person mid-word — and keyed by a number of its own, because two rows may
+ * hold the same sha for as long as somebody is fixing one of them.
+ */
+interface CommitRow {
+  key: number;
+  sha: string;
+  message: string;
+}
+
+/** Empty for anything but a WorkLog, whose list the panel edits row by row. */
+function rowsOf(node: SpecNode | null): CommitRow[] {
+  return (node?.commits ?? []).map((commit, index) => ({
+    key: index,
+    sha: commit.sha,
+    message: commit.message,
+  }));
 }
 
 interface NodePanelProps {
@@ -313,6 +342,15 @@ export function NodePanel({
    * half-written specification with fresh headings.
    */
   const [bodyTouched, setBodyTouched] = useState(false);
+  /**
+   * THE WORK LOG'S COMMITS, EDITED AS ROWS. Only a WorkLog's form shows them
+   * and only a WorkLog's save sends them; the rows are kept whatever the type
+   * says, so a person who picks WorkLog, types two commits and briefly picks
+   * another type does not lose them to the switch. `nextKey` is what keeps a
+   * row's identity through a delete above it.
+   */
+  const [commits, setCommits] = useState<CommitRow[]>([]);
+  const [nextKey, setNextKey] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -361,6 +399,10 @@ export function NodePanel({
     setVersion(null);
     setVersionBusy(false);
     setVersionError(null);
+
+    const rows = rowsOf(node);
+    setCommits(rows);
+    setNextKey(rows.length);
 
     if (node) {
       setType(node.type);
@@ -548,12 +590,50 @@ export function NodePanel({
   // empty one is a node with nothing to say yet, not a refusal. The daemon's
   // emptiness rule for the names is the same trim run here, so the button is
   // off exactly when a save would be refused.
+  /**
+   * Whether the form is a WorkLog's, which is the one type that carries a
+   * commit list. Read off the type box rather than the node, so the create
+   * form grows the editor the moment WorkLog is picked.
+   */
+  const isWorkLog = type.trim() === "WorkLog";
+  /**
+   * A row half filled blocks the save the way a blank name does — the daemon
+   * would refuse it by name over the bytes, and the button should be off
+   * exactly then. A row left wholly blank is not a commit at all; it is a
+   * person who clicked Add and changed their mind, and it is dropped on the
+   * way out rather than held against them.
+   */
+  const halfFilledCommit =
+    isWorkLog &&
+    commits.some(
+      (row) =>
+        (row.sha.trim() === "") !== (row.message.trim() === ""),
+    );
   const canSave =
     type.trim() !== "" &&
     trimmedId !== "" &&
     shortName.trim() !== "" &&
     name.trim() !== "" &&
-    idProblem === null;
+    idProblem === null &&
+    !halfFilledCommit;
+
+  function addCommit() {
+    setCommits((current) => [
+      ...current,
+      { key: nextKey, sha: "", message: "" },
+    ]);
+    setNextKey((current) => current + 1);
+  }
+
+  function editCommit(key: number, patch: Partial<Pick<CommitRow, "sha" | "message">>) {
+    setCommits((current) =>
+      current.map((row) => (row.key === key ? { ...row, ...patch } : row)),
+    );
+  }
+
+  function removeCommit(key: number) {
+    setCommits((current) => current.filter((row) => row.key !== key));
+  }
 
   async function save() {
     if (!canSave || busy) {
@@ -567,14 +647,21 @@ export function NodePanel({
       // is sent is then what lands, and the panel is not showing one string
       // while the file holds another. The body goes whole — the daemon settles
       // its blank-line edges by its own one rule, and a second trim here would
-      // be a second rule about the same whitespace.
-      await onSubmit({
+      // be a second rule about the same whitespace. The commits go only from
+      // a WorkLog's form, and go whole: the list on screen is the list.
+      const draft: NodeDraft = {
         type: type.trim(),
         id: trimmedId,
         shortName: shortName.trim(),
         name: name.trim(),
         body,
-      });
+      };
+      if (isWorkLog) {
+        draft.commits = commits
+          .filter((row) => row.sha.trim() !== "" || row.message.trim() !== "")
+          .map((row) => ({ sha: row.sha.trim(), message: row.message.trim() }));
+      }
+      await onSubmit(draft);
     } catch (saveError) {
       setError(
         saveError instanceof Error
@@ -1025,6 +1112,79 @@ export function NodePanel({
                 keep, reshape or delete them.
               </p>
             </div>
+
+            {/* THE COMMITS, ROW BY ROW, ON A WORKLOG'S FORM AND NO OTHER. A
+                sha and a message per row, in the order the work made them —
+                the order is the author's fact, so rows are added at the end
+                and never sorted. The same two Inputs the rest of the form
+                uses, mono for the sha because that is what a person pastes
+                from a terminal. */}
+            {isWorkLog ? (
+              <div className="grid gap-2">
+                <Label>Commits</Label>
+                {commits.length === 0 ? (
+                  <p className="text-muted-foreground text-xs">
+                    The commits this work produced, in the order they were
+                    made. None recorded yet.
+                  </p>
+                ) : (
+                  <ul className="grid gap-2">
+                    {commits.map((row) => (
+                      <li
+                        key={row.key}
+                        className="grid grid-cols-[minmax(0,7.5rem)_minmax(0,1fr)_auto] items-center gap-2"
+                      >
+                        <Input
+                          aria-label="Commit sha"
+                          className="font-mono text-xs"
+                          placeholder="sha"
+                          spellCheck={false}
+                          value={row.sha}
+                          onChange={(event) =>
+                            editCommit(row.key, { sha: event.target.value })
+                          }
+                          onKeyDown={saveOnEnter}
+                        />
+                        <Input
+                          aria-label="Commit message"
+                          placeholder="message"
+                          value={row.message}
+                          onChange={(event) =>
+                            editCommit(row.key, { message: event.target.value })
+                          }
+                          onKeyDown={saveOnEnter}
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          aria-label="Remove commit"
+                          onClick={() => removeCommit(row.key)}
+                        >
+                          <X />
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={addCommit}
+                  >
+                    <Plus />
+                    Add commit
+                  </Button>
+                  {halfFilledCommit ? (
+                    <p className="text-destructive text-xs">
+                      Each commit needs both a sha and a message.
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
 
             {mode === "edit" && node ? (
               <Field label="Updated">

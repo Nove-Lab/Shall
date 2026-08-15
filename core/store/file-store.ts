@@ -1102,15 +1102,7 @@ function settleFields(
   };
 }
 
-/**
- * What a whole-file write hands over — the three values an edit reaches, plus
- * the WorkLog's commits when the file has them. The doors that replace a file
- * outright (revert, restore) take this; the ordinary edit takes the values and
- * carries the commits from disk.
- */
-export interface NodeFileValues extends SpecNodeValues {
-  readonly commits?: readonly NodeCommit[] | undefined;
-}
+
 
 /**
  * A new node, and the file that is it.
@@ -1136,7 +1128,7 @@ export async function createNodeFile(
     if (!isNodeType(type)) {
       throw invalid(`Unknown node type: ${type}`);
     }
-    const fields = settleFields(values, undefined);
+    const fields = settleFields(values, values.commits);
     const shape = judgeNodeId(id);
     if (shape !== null) {
       throw invalid(shape);
@@ -1256,11 +1248,12 @@ export async function updateNodeFile(
     // is too long, then told the file was unreadable all along, has been sent
     // twice for one answer.
     const held = await readNodeFile(found);
-    // The commits and the blocks ride along like the edges do: lines in this
-    // file the edit did not receive and therefore does not touch. The changed
-    // content un-matches an approval's hash by itself — that is arithmetic,
-    // not this door's job.
-    const fields = settleFields(values, held.node.commits);
+    // The blocks ride along like the edges do: lines in this file the edit did
+    // not receive and therefore does not touch. The commits are the one list
+    // an edit MAY reach — sent, they replace; left out, they ride along too.
+    // The changed content un-matches an approval's hash by itself — that is
+    // arithmetic, not this door's job.
+    const fields = settleFields(values, values.commits ?? held.node.commits);
     return writeNodeFile(
       root,
       found.type,
@@ -1362,7 +1355,7 @@ export async function clearDeletionProposal(
 export async function revertNodeFile(
   specDir: string,
   id: string,
-  values: NodeFileValues,
+  values: SpecNodeValues,
   edges: readonly NodeFileEdge[],
   blocks: NodeFileBlocks,
 ): Promise<SpecNode> {
@@ -1394,7 +1387,7 @@ export async function restoreNodeFile(
   specDir: string,
   type: string,
   id: string,
-  values: NodeFileValues,
+  values: SpecNodeValues,
   edges: readonly NodeFileEdge[],
   blocks: NodeFileBlocks,
 ): Promise<SpecNode> {

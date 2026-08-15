@@ -1,5 +1,5 @@
 import { reviewGraph } from "@shall/core/arith";
-import type { SpecEdge, SpecNode } from "@shall/core/graph";
+import type { NodeCommit, SpecEdge, SpecNode } from "@shall/core/graph";
 import {
   anchorPhrase,
   bandFolderOf,
@@ -157,6 +157,8 @@ export async function createSpecNode(input: {
   shortName: string;
   name: string;
   body: string;
+  /** A WorkLog's commits. Left out, a new node has none; on another type the reader refuses it. */
+  commits?: readonly NodeCommit[] | undefined;
 }): Promise<SpecNode> {
   const type = requireText("A node type", input.type);
   if (!isNodeType(type)) {
@@ -175,6 +177,7 @@ export async function createSpecNode(input: {
       shortName: input.shortName,
       name: input.name,
       body: input.body,
+      commits: input.commits,
     }),
   );
 }
@@ -197,6 +200,8 @@ export async function updateSpecNode(input: {
   shortName: string;
   name: string;
   body: string;
+  /** Sent, the list replaces the file's; left out, the file's list rides along. */
+  commits?: readonly NodeCommit[] | undefined;
 }): Promise<SpecNode> {
   const id = requireText("An id", input.id);
   const specDir = await specDirFor(input.projectId);
@@ -206,6 +211,7 @@ export async function updateSpecNode(input: {
       shortName: input.shortName,
       name: input.name,
       body: input.body,
+      commits: input.commits,
     }),
   );
 }

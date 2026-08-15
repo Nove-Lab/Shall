@@ -93,9 +93,11 @@ the toolbar's problems dialog with a **Restore** button that brings it back
 from git history.
 
 A work log names the commits its work produced in its own frontmatter — a
-`commits:` list of `sha` and `message`, in the order they were made — and the
-panel shows them under the specification. There is no Commit node type any
-more: two lines of fact did not need a file of their own.
+`commits:` list of `sha` and `message`, in the order they were made. The panel
+shows them under the specification, and the edit form adds, changes and
+removes them row by row (a row needs both halves; a row left blank is
+dropped). There is no Commit node type any more: two lines of fact did not
+need a file of their own.
 
 Settings edits real files: the daemon port lives in `~/.shall/config.json` and
 the display name in `<project>/.shall/project.json`. Everything else on that

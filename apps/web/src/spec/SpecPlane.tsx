@@ -484,6 +484,12 @@ export function SpecPlane() {
    * a second rule about the same text.
    */
   async function submitNode(draft: NodeDraft) {
+    // The commits travel only when the form had them — a WorkLog's form. Left
+    // off the wire, the daemon carries the file's own list over; sent, the
+    // list on screen is the list. Spread rather than passed as `undefined`,
+    // because under `exactOptionalPropertyTypes` those are two different asks.
+    const commits =
+      draft.commits === undefined ? {} : { commits: [...draft.commits] };
     if (panel.mode === "edit") {
       const updated = await api.spec.updateNode.mutate({
         projectId: project.id,
@@ -491,6 +497,7 @@ export function SpecPlane() {
         shortName: draft.shortName,
         name: draft.name,
         body: draft.body,
+        ...commits,
       });
       await load();
       openNode(updated.id);
@@ -504,6 +511,7 @@ export function SpecPlane() {
       shortName: draft.shortName,
       name: draft.name,
       body: draft.body,
+      ...commits,
     });
     await load();
     openNode(created.id);
