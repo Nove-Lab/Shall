@@ -1,7 +1,17 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent,
+} from "react";
+import { useNavigate, useSearchParams } from "react-router";
 import { ReactFlowProvider } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import {
+  ArrowLeft,
+  Ban,
   Eye,
   GitCommitVertical,
   LayoutGrid,
@@ -10,6 +20,7 @@ import {
   RotateCcw,
   Trash2,
   TriangleAlert,
+  Undo2,
   Unlink,
   Waypoints,
 } from "lucide-react";
@@ -42,7 +53,9 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EmptyState } from "@/components/EmptyState";
 import { useProject } from "@/project-context";
 import { NodePanel, type NodeDraft, type NodePanelMode } from "./NodePanel";
+import { RejectionPopover } from "./RejectionPopover";
 import {
+  closuresOf,
   deletionSentence,
   impactSentence,
   problemCount,
@@ -166,6 +179,15 @@ function refusalSentence(connect: Connect): string {
  */
 export function SpecPlane() {
   const project = useProject();
+  /**
+   * WHERE THE QUEUE SENT US, AS THE URL AND NOTHING ELSE. A card in the review
+   * queue links to `?node=<id>&mode=view|edit&back=<path>`, which makes the deep
+   * link a page a person can bookmark, reload and share rather than a message
+   * passed between two mounted components. Read once — see the effect below —
+   * because after that the panel is theirs to move.
+   */
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const [nodes, setNodes] = useState<SpecNode[]>([]);
   const [edges, setEdges] = useState<SpecEdge[]>([]);
   const [loading, setLoading] = useState(true);
@@ -191,6 +213,29 @@ export function SpecPlane() {
   const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  /**
+   * A REJECTION BEING WRITTEN FROM THE BOARD ITSELF: which node, and the two
+   * numbers the right-click landed on.
+   *
+   * THE POINT TRAVELS AND NOT THE ELEMENT, because the element is gone. A menu
+   * item unmounts the moment it is clicked, so anchoring the popover to it would
+   * anchor it to nothing; the click's client coordinates outlive it, and a
+   * zero-sized rect at that point is what Base UI takes as a virtual anchor.
+   */
+  const [rejecting, setRejecting] = useState<{
+    id: string;
+    x: number;
+    y: number;
+  } | null>(null);
+  /**
+   * A REFUSAL WITH NOWHERE OF ITS OWN TO BE SHOWN. Every other write on this
+   * plane is sent from a dialog or a panel that stays on screen to carry the
+   * daemon's sentence; the context menu's Withdraw rejection is sent from an
+   * item that is gone by the time the answer arrives, so its sentence lands in
+   * the toolbar beside the load's — the one line on this plane that is about the
+   * board as a whole.
+   */
+  const [actionError, setActionError] = useState<string | null>(null);
   /**
    * WHAT THE DAEMON SAYS ABOUT THE GRAPH, WHICH IS NOT PART OF THE GRAPH.
    *
@@ -250,6 +295,14 @@ export function SpecPlane() {
     setGitStatus(nextGitStatus);
   }, [project.id]);
 
+  /**
+   * Whether the URL's `?node=` has already been honoured. It is a ref and not
+   * state because nothing is drawn from it: every refetch hands this component a
+   * new `nodes` array, and without the latch a person who closed the panel — or
+   * moved it to another node — would have it dragged back on the next write.
+   */
+  const deepLinked = useRef(false);
+
   useEffect(() => {
     setLoading(true);
     setLoadError(null);
@@ -260,6 +313,10 @@ export function SpecPlane() {
     setPendingDelete(null);
     setCommitOpen(false);
     setProblemsOpen(false);
+    setRejecting(null);
+    setActionError(null);
+    // Another project is another URL, so its own `?node=` is honoured once too.
+    deepLinked.current = false;
     void load()
       .catch((error: unknown) =>
         setLoadError(
@@ -270,6 +327,55 @@ export function SpecPlane() {
       )
       .finally(() => setLoading(false));
   }, [load]);
+
+  /**
+   * THE QUEUE'S LINK, HONOURED ONCE, AFTER THE BOARD HAS ARRIVED.
+   *
+   * It waits for the graph rather than running beside the fetch, because a panel
+   * opened on an id the load has not delivered yet is a panel on nothing — and
+   * an id that names no node in this project is a link that has gone stale, which
+   * is answered by leaving the board as it is rather than by an error about a URL
+   * nobody typed.
+   *
+   * `mode=edit` IS A DOOR THE QUEUE NEEDS: a Question with no answer in it is
+   * routed here to be answered, and arriving in the reading pane would make that
+   * one more click on every row. Anything else — including a missing `mode` — is
+   * the reading pane, which is what a link to a node means by default.
+   */
+  useEffect(() => {
+    if (deepLinked.current) {
+      return;
+    }
+    const wanted = searchParams.get("node");
+    if (wanted === null || !nodes.some((node) => node.id === wanted)) {
+      return;
+    }
+    deepLinked.current = true;
+    if (searchParams.get("mode") === "edit") {
+      setPanel({ mode: "edit", id: wanted });
+    } else {
+      openNode(wanted);
+    }
+  }, [nodes, searchParams]);
+
+  /**
+   * WHERE THE PERSON CAME FROM, AND ONLY IF IT IS A PLACE IN THIS APP. A `back`
+   * that does not start with `/` is not a route — it is an absolute URL to
+   * somewhere else, and following one because it arrived in a query string is
+   * how a page becomes somebody's open redirect. The button is simply not there
+   * for a link that says anything else.
+   */
+  const backTo = searchParams.get("back");
+  // One slash and not two: `//host` is a protocol-relative URL that the
+  // browser would follow off-site, and `/\` is the same trick spelled for
+  // parsers that fold backslashes — neither is a route in this app.
+  const backPath =
+    backTo !== null &&
+    backTo.startsWith("/") &&
+    !backTo.startsWith("//") &&
+    !backTo.startsWith("/\\")
+      ? backTo
+      : null;
 
   const selected =
     panel.mode === "view" || panel.mode === "edit"
@@ -286,6 +392,14 @@ export function SpecPlane() {
    * lands, so even that case is identity-stable.
    */
   const signalById = useMemo(() => signalsOf(review), [review]);
+  /**
+   * THE SECOND AXIS, MEMOISED BESIDE THE FIRST AND FOR THE SAME REASON — it is a
+   * dependency of the canvas's card memo, so a map built inline would rebuild
+   * every card on every render of this plane. It holds only the criteria: a node
+   * that cannot be met has no entry, and no entry is how a card knows to draw
+   * nothing.
+   */
+  const closureById = useMemo(() => closuresOf(review), [review]);
   /** The same answers keyed for the panel, which wants the reason rather than the colour. */
   const statusById = useMemo(() => statusesById(review), [review]);
   /** Missing nodes and unreadable files together — the button and the dialog count once. */
@@ -300,6 +414,24 @@ export function SpecPlane() {
   const selectedReferrers = useMemo(
     () => (selected === null ? [] : referrersOf(edges, selected.id)),
     [edges, selected],
+  );
+  /**
+   * The claimants of the selected criterion nobody has approved yet — the
+   * plane's answer, because only the plane holds the review beside the graph.
+   * The panel's closure switch stays dark while this is non-empty, and the
+   * daemon refuses the same door with the same names.
+   */
+  const unapprovedClaimants = useMemo(
+    () =>
+      selectedReferrers
+        .filter(
+          (edge) =>
+            edge.type === "CLAIMS" &&
+            statusById.get(edge.fromId)?.color !== "green",
+        )
+        .map((edge) => edge.fromId)
+        .sort(),
+    [selectedReferrers, statusById],
   );
   const pendingReferrers = useMemo(
     () =>
@@ -321,6 +453,38 @@ export function SpecPlane() {
     menuTarget.kind === "edge"
       ? (edges.find((edge) => edge.id === menuTarget.id) ?? null)
       : null;
+  /**
+   * What the review says about the node under the pointer, and the two items it
+   * earns — named here rather than spelled inside the menu, where a nested
+   * ternary over a union would be three lines of punctuation around one word.
+   */
+  const menuStatus =
+    menuNode === null ? null : (statusById.get(menuNode.id) ?? null);
+  const menuRejected = menuStatus?.reason === "rejected";
+  const menuJudgeable =
+    menuStatus !== null &&
+    (menuStatus.color === "yellow" || menuStatus.color === "green");
+  /** The node a right-click asked to reject, resolved against the board as it stands. */
+  const rejectingNode =
+    rejecting === null
+      ? null
+      : (nodes.find((node) => node.id === rejecting.id) ?? null);
+  /**
+   * THE POINTER AS AN ANCHOR — a zero-sized rect where the click landed, which
+   * is the shape Base UI's positioner takes when there is no element to hang
+   * off. Memoised because the positioner reads it on every measurement: a fresh
+   * object per render would be a fresh anchor per render.
+   */
+  const rejectAnchor = useMemo(
+    () =>
+      rejecting === null
+        ? null
+        : {
+            getBoundingClientRect: () =>
+              new DOMRect(rejecting.x, rejecting.y, 0, 0),
+          },
+    [rejecting],
+  );
 
   /**
    * Open the create form, aimed at a column or at nothing.
@@ -333,7 +497,7 @@ export function SpecPlane() {
   /**
    * THE ONE WAY A NODE'S PANEL OPENS. A click on a card, the menu's Open, the
    * node a save just wrote and the node an edit was cancelled on are all the same
-   * act, and a Review Queue that deep-links into this plane will be the same act
+   * act, and a Review Queue that deep-links into this plane is the same act
    * again — one function to call rather than a fifth place spelling the state out.
    */
   function openNode(id: string) {
@@ -565,6 +729,127 @@ export function SpecPlane() {
   }
 
   /**
+   * THE OTHER TWO REVIEW WRITES — a person's "no", and taking it back.
+   *
+   * THEY TAKE THE ID RATHER THAN READING THE PANEL, because both are reached
+   * from the board as well as from the panel: a right-click can reject a card
+   * nobody has opened. The refusal is left to reject into the caller for the
+   * reason `approveNode` gives — the place to read the daemon's sentence is
+   * beside the control that sent it, and here that is the popover holding the
+   * rationale somebody just typed.
+   *
+   * A REJECTION NEEDS THE RATIONALE AND A WITHDRAWAL NEEDS NOTHING, which is the
+   * whole asymmetry between them: saying no is a statement somebody has to make,
+   * and taking it back is only the removal of that statement.
+   */
+  async function rejectNode(id: string, rationale: string) {
+    await api.spec.reject.mutate({ projectId: project.id, id, rationale });
+    await load();
+  }
+
+  async function withdrawRejection(id: string) {
+    await api.spec.withdrawRejection.mutate({ projectId: project.id, id });
+    await load();
+  }
+
+  /**
+   * THE PANEL'S TWO DOORS INTO THE SAME PAIR. They take no id because the panel
+   * is open on one node and the `mode` guard is the type saying so — the same
+   * shape `approveNode` above has, and the reason the id is not read out of the
+   * JSX where the union is not narrowed.
+   */
+  async function rejectPanelNode(rationale: string) {
+    if (panel.mode !== "view") {
+      return;
+    }
+
+    await rejectNode(panel.id, rationale);
+  }
+
+  async function withdrawPanelRejection() {
+    if (panel.mode !== "view") {
+      return;
+    }
+
+    await withdrawRejection(panel.id);
+  }
+
+  /**
+   * THE CRITERION'S OTHER AXIS — the two exits from the closure queue, sent from
+   * the panel and refused into it.
+   *
+   * NEITHER NAMES ANY EVIDENCE. The list judged is every living claimant of the
+   * criterion, and the daemon is what reads that list off the graph — so closing
+   * sends an id and nothing else, and this plane never assembles a set of
+   * evidence ids that could disagree with the one the write actually covers.
+   *
+   * CLOSING NEEDS NOTHING AND LEAVING OPEN NEEDS A SENTENCE, which is the same
+   * asymmetry `rejectNode` and `withdrawRejection` have and for the same reason:
+   * a signature is a signature, and a refusal is an argument the agent reads
+   * next. Both refuse into the caller — the panel's switch and the popover
+   * holding the typed rationale are where the daemon's own words belong.
+   */
+  async function closeCriterion(id: string) {
+    await api.spec.acceptClosure.mutate({ projectId: project.id, id });
+    await load();
+  }
+
+  async function leaveOpen(id: string, rationale: string) {
+    await api.spec.leaveOpen.mutate({ projectId: project.id, id, rationale });
+    await load();
+  }
+
+  /** The panel's two doors into that pair — the same shape the rejection has. */
+  async function closePanelCriterion() {
+    if (panel.mode !== "view") {
+      return;
+    }
+
+    await closeCriterion(panel.id);
+  }
+
+  async function leavePanelOpen(rationale: string) {
+    if (panel.mode !== "view") {
+      return;
+    }
+
+    await leaveOpen(panel.id, rationale);
+  }
+
+  /**
+   * The same withdrawal sent from the context menu, which has no surface of its
+   * own to be refused on — see `actionError`. The panel's own button keeps the
+   * rejecting version, because there the sentence belongs under the button.
+   */
+  function withdrawFromMenu(id: string) {
+    setActionError(null);
+    void withdrawRejection(id).catch((error: unknown) =>
+      setActionError(
+        error instanceof Error
+          ? error.message
+          : `Could not withdraw the rejection on ${id}`,
+      ),
+    );
+  }
+
+  /**
+   * WHERE THE POPOVER OPENS, TAKEN OFF THE CLICK THAT ASKED FOR IT. A menu item
+   * activated from the KEYBOARD reports no pointer at all — `clientX` and
+   * `clientY` are both 0 — and dropping the box in the window's corner is not
+   * where that person is looking, so the item's own bottom-left corner stands in
+   * for the pointer. The rect is read here, while the item is still mounted.
+   */
+  function askReject(id: string, event: MouseEvent<HTMLElement>) {
+    const box = event.currentTarget.getBoundingClientRect();
+    const pointed = event.clientX !== 0 || event.clientY !== 0;
+    setRejecting({
+      id,
+      x: pointed ? event.clientX : box.left,
+      y: pointed ? event.clientY : box.bottom,
+    });
+  }
+
+  /**
    * The approved version of one node's file beside the current one, fetched by
    * the panel when it has a diff to draw.
    *
@@ -676,13 +961,40 @@ export function SpecPlane() {
               </TabsTrigger>
             </TabsList>
           </Tabs>
-          {/* THE RIGHT-HAND GROUP, IN THE ORDER OF WHAT IT IS ABOUT: what is
-              wrong with the folder, what is uncommitted in it, and then the one
-              thing that adds to it. The first two are only there when they have
-              something to say — a Problems button reading "0 problems" and a
-              Commit button on a folder that is not a repository are both
-              furniture that never does anything. */}
+          {/* A REFUSAL THE MENU HAD NOWHERE TO PUT, in the row that is about
+              the board rather than about any one card. Truncated, because it is
+              a sentence sharing a 48px row with four buttons, and pushing them
+              off the toolbar would cost more than the tail of it is worth — the
+              whole of it is one right-click away, on the node itself. */}
+          {actionError ? (
+            <p className="text-destructive truncate text-sm">{actionError}</p>
+          ) : null}
+          {/* THE RIGHT-HAND GROUP, IN THE ORDER OF WHAT IT IS ABOUT: the way
+              back to what sent us, what is wrong with the folder, what is
+              uncommitted in it, and then the one thing that adds to it. All but
+              the last are only there when they have something to say — a
+              Problems button reading "0 problems" and a Commit button on a
+              folder that is not a repository are both furniture that never does
+              anything. */}
           <div className="ml-auto flex items-center gap-2">
+            {/* THE WAY BACK, AND ONLY WHEN SOMETHING SENT US. A person who
+                arrived from a bundle's card is part way through judging it, and
+                the queue is where the rest of that judgement is; a person who
+                opened the plane directly came from nowhere and gets no button
+                pointing at a page they were not on. It leads the group because
+                it is the one control here that is about leaving. */}
+            {backPath === null ? null : (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  void navigate(backPath);
+                }}
+              >
+                <ArrowLeft />
+                Back to review
+              </Button>
+            )}
             {problems > 0 ? (
               <Button
                 variant="outline"
@@ -790,6 +1102,7 @@ export function SpecPlane() {
                     nodes={nodes}
                     edges={edges}
                     signalById={signalById}
+                    closureById={closureById}
                     selectedId={selected?.id ?? null}
                     onSelect={openNode}
                     onBackgroundClick={closeReadPanel}
@@ -837,6 +1150,39 @@ export function SpecPlane() {
                       <Pencil />
                       Edit
                     </ContextMenuItem>
+                    {/* THE JUDGEMENT ITEMS, WHICH ARE THE COLOUR'S AND NOT THE
+                        TYPE'S. A yellow or green card can be refused — including
+                        a green one, because an approval can turn out to have
+                        been wrong — and a card already rejected offers the one
+                        door out of that. RED THAT IS NOT A REJECTION GETS
+                        NEITHER: a file that will not read and a node nothing
+                        anchors are fixes, not judgements, and the daemon refuses
+                        both doors anyway.
+
+                        Reject… opens the popover AT THE POINTER rather than in
+                        the panel, so the card being judged stays where the
+                        person was looking at it. */}
+                    {menuRejected ? (
+                      <>
+                        <ContextMenuSeparator />
+                        <ContextMenuItem
+                          onClick={() => withdrawFromMenu(menuNode.id)}
+                        >
+                          <Undo2 />
+                          Withdraw rejection
+                        </ContextMenuItem>
+                      </>
+                    ) : menuJudgeable ? (
+                      <>
+                        <ContextMenuSeparator />
+                        <ContextMenuItem
+                          onClick={(event) => askReject(menuNode.id, event)}
+                        >
+                          <Ban />
+                          Reject…
+                        </ContextMenuItem>
+                      </>
+                    ) : null}
                     {/* The execution band records what happened, and a record
                         has no Delete — the daemon refuses the call anyway. */}
                     {bandOf(menuNode.type) === "Execution" ? null : (
@@ -908,6 +1254,14 @@ export function SpecPlane() {
                   onDelete={deleteNode}
                   onApprove={approveNode}
                   onRejectDeletion={rejectDeletion}
+                  /* The panel is open ON a node, so the id is the panel's and
+                     the rationale is the popover's — the closure mark it draws
+                     beside the id is already inside `status`. */
+                  onReject={rejectPanelNode}
+                  onWithdrawRejection={withdrawPanelRejection}
+                  onCloseCriterion={closePanelCriterion}
+                  onLeaveOpen={leavePanelOpen}
+                  unapprovedClaimants={unapprovedClaimants}
                   loadApprovedVersion={loadApprovedVersion}
                 />
               </ResizablePanel>
@@ -915,6 +1269,33 @@ export function SpecPlane() {
           ) : null}
         </ResizablePanelGroup>
       </div>
+
+      {/* THE BOARD'S OWN REJECTION, MOUNTED ONLY WHILE ONE IS BEING WRITTEN —
+          the same rule the dialogs below follow, and here it also settles where
+          the popover opens: the anchor is a point that was true at the moment of
+          the click, so a stale one held open over a board that has since moved
+          would point somewhere nobody clicked.
+
+          IT IS THE SAME COMPONENT THE PANEL USES, opened by an anchor instead of
+          by a trigger. What a rejection needs — a rationale, and the daemon's
+          sentence when it is refused — does not depend on which door it came
+          through, so there is one of it.
+
+          THE NODE IS RESOLVED AGAINST THIS RENDER'S GRAPH, so a refetch that
+          removed it closes the popover instead of leaving it open on a name the
+          board no longer has. */}
+      {rejecting === null || rejectingNode === null ? null : (
+        <RejectionPopover
+          open
+          onOpenChange={(open) => {
+            if (!open) setRejecting(null);
+          }}
+          target={{ id: rejectingNode.id, name: rejectingNode.name }}
+          verb="Reject"
+          anchor={rejectAnchor}
+          onConfirm={(rationale) => rejectNode(rejecting.id, rationale)}
+        />
+      )}
 
       {/* BOTH DIALOGS ARE MOUNTED ONLY WHILE THERE IS SOMETHING TO ASK. Their
           whole content is the gesture they are about — two ids, or the row that
@@ -1045,13 +1426,13 @@ export function SpecPlane() {
         </Dialog>
       )}
 
-      {/* ONE COMMIT FOR THE WHOLE SPEC FOLDER AND THE LEDGER THAT JUDGES IT.
+      {/* ONE COMMIT FOR THE WHOLE SPEC FOLDER AND THE BOOKS THAT JUDGE IT.
           The graph is files now: a node is a file, a relation is a line in one,
           and a save writes whichever files that took. Offering to commit a node
           would be offering a half of a change that has no meaning on its own —
           the relation would go without the node it points at, or the spec would
-          go without the approvals that colour it — so the unit here is the
-          folder and the book beside it, and the person supplies only the
+          go without the judgements that colour it — so the unit here is the
+          folder and the books beside it, and the person supplies only the
           sentence. */}
       {commitOpen ? (
         <Dialog
@@ -1068,8 +1449,8 @@ export function SpecPlane() {
                   and a dialog that offered to move it would be a git client
                   growing inside a spec board. */}
               <DialogDescription>
-                Everything under .shall/spec, and the approval ledger beside it,
-                goes into one commit on the branch you are on.
+                Everything under .shall/spec, and the ledgers beside it, goes
+                into one commit on the branch you are on.
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-2">

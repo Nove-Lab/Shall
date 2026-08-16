@@ -56,6 +56,19 @@ import type { Band, SpecNode } from "./model";
 export type Signal = "red" | "yellow" | "green";
 
 /**
+ * WHETHER A CRITERION IS MET, AS A WORD — the second axis, and the same bargain
+ * the signal makes: the card carries the word, and the shape that draws it lives
+ * beside the components in `review-parts.tsx`.
+ *
+ * IT IS NOT A FOURTH SIGNAL. The colour says whether a person agreed with what a
+ * criterion demands; this says whether somebody has shown the demand is met.
+ * They are two questions with two answers, and a card that folded them into one
+ * square would be answering neither. Only `AcceptanceCriterion` has one at all —
+ * see `closure` on the card below for what its absence means.
+ */
+export type Closure = "open" | "closed";
+
+/**
  * What one card is drawn from.
  *
  * THE CARD'S WHOLE STATE IS THREE BOOLEANS, AND THEY ARE THE SELECTION'S — the
@@ -85,6 +98,18 @@ export type CardNodeData = {
    * execution band included.
    */
   readonly signal: Signal | null;
+  /**
+   * Whether this card is a criterion that has been shown to be met, and `null`
+   * for every card that is not a criterion at all.
+   *
+   * REQUIRED AND NULLABLE for the reason the signal above is, and here the null
+   * carries a fact rather than an absence of one: nothing but an
+   * `AcceptanceCriterion` is a thing that can be MET, so the question does not
+   * apply and the card draws no mark. It is a second field and not a fourth
+   * signal — approving a criterion and satisfying it are two answers, and a card
+   * that folded them into one square would give neither.
+   */
+  readonly closure: Closure | null;
   /** The node that was clicked — one card on the board, or none. */
   readonly picked: boolean;
   /** One hop from the picked card, whichever way the relation points. */
@@ -507,18 +532,19 @@ export function furniturePieces(layout: Layout): FurniturePiece[] {
  * different one would light a card the neighbourhood was not computed for. One
  * argument, one answer — `NOTHING_SELECTED` is how a caller says nobody clicked.
  *
- * NEITHER IT NOR THE SIGNAL MAP REACHES `furniturePieces`, and that asymmetry is
- * the point of having two builders: the scenery is a function of the layout alone
- * and memoises on it, so a click — or a refetched review — rebuilds the cards and
- * leaves all fifty bands, lanes and headers as the objects React Flow already
- * holds. Both arrive as maps the caller memoises for the same reason the layout
- * is memoised: a new map is fifty new card objects.
+ * NEITHER IT NOR THE REVIEW'S TWO MAPS REACHES `furniturePieces`, and that
+ * asymmetry is the point of having two builders: the scenery is a function of the
+ * layout alone and memoises on it, so a click — or a refetched review — rebuilds
+ * the cards and leaves all fifty bands, lanes and headers as the objects React
+ * Flow already holds. Both maps arrive memoised by the caller for the same reason
+ * the layout is memoised: a new map is fifty new card objects.
  */
 export function cardPieces(
   layout: Layout,
   view: SpecView,
   byId: ReadonlyMap<string, SpecNode>,
   signalById: ReadonlyMap<string, Signal>,
+  closureById: ReadonlyMap<string, Closure>,
   highlight: Highlight,
 ): CardPiece[] {
   const geometry = view === "grid" ? GEOMETRY.grid : GEOMETRY.graph;
@@ -542,6 +568,11 @@ export function cardPieces(
         // answer rather than a gap in it: nothing here decides which band a node
         // is in, so a card the daemon did not colour draws no square.
         signal: signalById.get(node.id) ?? null,
+        // A NODE WITH NO ENTRY IS NOT A CRITERION, which is the whole of what
+        // the empty answer means here: the daemon sends the mark for every
+        // criterion it colours, so the map's silence is a fact about the type
+        // and not a fact the canvas had to work out.
+        closure: closureById.get(node.id) ?? null,
         // The three questions the highlight answers, asked once per card here so
         // that no component has to know how membership is decided. `dimmed` is
         // the complement of the neighbourhood and not of the two flags above it:
