@@ -12,12 +12,13 @@ import path from "node:path";
  * markdown and talk to no daemon. Nothing up there is a secret any more, and
  * the rule stays anyway, because that home is Shall's and not the project's.
  *
- * The second keeps the approval ledger out of an agent's pen. It is the one
- * file under `.shall` that is nobody's authorship: the daemon writes it when a
- * person clicks Approve, and it is the whole of what makes green a state only a
- * person can put a node into. AN AGENT MAY READ IT — the ledger is committed
- * beside the spec, and knowing what is already approved is useful — and it may
- * not write it. `Edit(...)` is the rule that says exactly that: it covers every
+ * The second keeps the ledger folder out of an agent's pen. Its three files —
+ * approvals, rejections, acceptances — are the only things under `.shall` that
+ * are nobody's authorship: the daemon writes them when a person approves,
+ * refuses or closes, and they are the whole of what makes green, a standing red
+ * and a closed criterion states only a person can put a node into. AN AGENT MAY
+ * READ THEM — the ledgers are committed beside the spec, and knowing what is
+ * already judged, and why, is useful — and it may not write them. `Edit(...)` is the rule that says exactly that: it covers every
  * built-in tool that edits a file, the Write tool included, so it covers making
  * the file out of nothing too, and a rule path beginning with a single `/` is
  * read against the project's root rather than the filesystem's.

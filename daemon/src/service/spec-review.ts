@@ -3,8 +3,8 @@ import path from "node:path";
 import {
   contentHashOf,
   reviewGraph,
-  type Approvals,
   type GraphReview,
+  type Ledgers,
 } from "@shall/core/arith";
 import {
   anchorPhrase,
@@ -16,13 +16,17 @@ import {
   blocksOf,
   emitNodeFile,
   parseNodeFile,
+  type AcceptanceLedger,
   type ApprovalLedger,
   type ApprovalRecord,
+  type RejectionLedger,
 } from "@shall/core/serialize";
 import {
   clearDeletionProposal,
   loadGraph,
+  readAcceptanceLedger,
   readApprovalLedger,
+  readRejectionLedger,
   recordApproval,
   restoreNodeFile,
   revertNodeFile,
@@ -48,20 +52,23 @@ import { readSpecNodeFile } from "../host/project-files.js";
  * doors that resolve them — approve, reject a proposed deletion, restore a
  * missing file, and the person's own commit button.
  *
- * NOTHING HERE IS STORED. Every answer is computed from two files at the
- * moment of the ask — the spec folder, which says what each node is, and the
- * approval ledger, which remembers what a person approved — and that is the
- * whole of the storage principle: the spec is the truth, the ledger is the
- * record, a colour is arithmetic over the two, and git is the history the
- * version, restore and commit doors reach into.
+ * NOTHING HERE IS STORED. Every answer is computed at the moment of the ask
+ * from the spec folder, which says what each node is, and the three books
+ * beside it, which remember what a person approved, refused and closed — and
+ * that is the whole of the storage principle: the spec is the truth, the
+ * ledgers are the record, a colour is arithmetic over them, and git is the
+ * history the version, restore and commit doors reach into.
  *
- * GREEN HAS ONE MANUFACTURER. The approve door below is the only place a
- * ledger record is ever written, and it is reached from the web UI alone. A
- * node file says nothing about its own approval — that claim moved out of the
- * frontmatter so that the spec folder is pure authorship — and the ledger is
- * kept out of an agent's hands by a settings rule, which is convention and not
- * a sandbox: the agents' contract is file-only by architecture, and a local
- * token belongs here the day the daemon has any caller it does not trust.
+ * GREEN HAS ONE MANUFACTURER, AND SO DO RED-BY-REJECTION AND CLOSED. The
+ * approve door below and the queue's four doors in `spec-queue.ts`
+ * (`approveNodes`, `reject`, `withdrawRejection`, `acceptClosure`) are the only
+ * places a ledger record is ever written, and every one of them is reached from
+ * the web UI alone. A node file says nothing about its own judgement — that
+ * claim moved out of the frontmatter so that the spec folder is pure authorship
+ * — and the ledger folder is kept out of an agent's hands by a settings rule,
+ * which is convention and not a sandbox: the agents' contract is file-only by
+ * architecture, and a local token belongs here the day the daemon has any
+ * caller it does not trust.
  *
  * THE APPROVE DOOR HASHES OUTSIDE ANY QUEUE, AND THAT IS FINE. It hashes the
  * graph it just loaded and writes only the ledger, never the node file. A save
@@ -76,33 +83,95 @@ function toPosix(relative: string): string {
   return relative.split(path.sep).join("/");
 }
 
-/** The ledger's records and the daemon's hash, as the colour chain takes them. */
-function approvalsOf(records: ApprovalLedger): Approvals {
-  return { records, hash: payloadHash };
+/** The three books' records and the daemon's hash, as the colour chain takes them. */
+export function ledgersOf(records: {
+  approvals: ApprovalLedger;
+  rejections: RejectionLedger;
+  acceptances: AcceptanceLedger;
+}): Ledgers {
+  return { ...records, hash: payloadHash };
+}
+
+/** Where a project's three books sit — `projectSpecFor`'s answer, narrowed. */
+export interface LedgerPaths {
+  readonly ledgerFile: string;
+  readonly rejectionsFile: string;
+  readonly acceptancesFile: string;
+}
+
+/** What a casualty says after the book's own problem sentence. */
+const CASUALTY: Record<
+  "approve" | "review" | "reject" | "withdraw" | "accept",
+  string
+> = {
+  approve:
+    "Nothing was approved, because writing into a ledger nobody can read would bury what it holds; restore it from git or move it aside, and approve again.",
+  review:
+    "Nothing here is green until it reads: the ledger is Shall's own file, so restore it from git or move it aside.",
+  reject:
+    "Nothing was rejected, because writing into a ledger nobody can read would bury what it holds; restore it from git or move it aside, and reject again.",
+  withdraw:
+    "Nothing was withdrawn, because writing into a ledger nobody can read would bury what it holds; restore it from git or move it aside, and withdraw again.",
+  accept:
+    "Nothing was accepted, because writing into a ledger nobody can read would bury what it holds; restore it from git or move it aside, and accept again.",
+};
+
+/** The first book that would not read, said as a refusal — or nothing at all. */
+function requireBook(
+  book: string,
+  file: string,
+  problem: string | null,
+  casualty: keyof typeof CASUALTY,
+): void {
+  if (problem === null) {
+    return;
+  }
+  throw conflict(
+    `Shall could not read the ${book} at ${file} — ${problem} ${CASUALTY[casualty]}`,
+  );
 }
 
 /**
- * The ledger, or the refusal that says why it cannot be trusted. A LEDGER THAT
- * WILL NOT READ IS A REFUSAL, NOT A QUIET ANSWER: a review served over an
- * empty map would paint every approved node yellow, and a screenful of yellow
- * that is really "the ledger would not read" is a lie with a colour. The two
- * callers speak of different casualties — an approve that did not happen, a
- * review that cannot call anything green — so the sentence is theirs to
- * choose; the ledger's own problem sentence is carried inside either.
+ * The three books, or the refusal that says why they cannot be trusted. A
+ * LEDGER THAT WILL NOT READ IS A REFUSAL, NOT A QUIET ANSWER: a review served
+ * over an empty map would paint every approved node yellow, and a screenful of
+ * yellow that is really "the ledger would not read" is a lie with a colour. It
+ * is truer of the other two books than it was of the first — a rejection
+ * nobody can read is a red node showing green, which is the worst lie of the
+ * three — so all of them are asked and the FIRST one with a problem answers.
+ *
+ * The callers speak of different casualties — an approve that did not happen, a
+ * review that cannot call anything green, a rejection or an acceptance that was
+ * not written — so the tail sentence is theirs to choose; the book's own name
+ * and its own problem sentence are carried inside every one of them, because a
+ * person told "a ledger would not read" and not which one has to open three
+ * files to find out.
  */
-async function requireLedger(
-  ledgerFile: string,
-  casualty: "approve" | "review",
-): Promise<ApprovalLedger> {
-  const ledger = await readApprovalLedger(ledgerFile);
-  if (ledger.problem === null) {
-    return ledger.records;
-  }
-  throw conflict(
-    casualty === "approve"
-      ? `Shall could not read the approval ledger at ${ledgerFile} — ${ledger.problem} Nothing was approved, because writing into a ledger nobody can read would bury what it holds; restore it from git or move it aside, and approve again.`
-      : `Shall could not read the approval ledger at ${ledgerFile} — ${ledger.problem} Nothing here is green until it reads: the ledger is Shall's own file, so restore it from git or move it aside.`,
+export async function requireLedgers(
+  paths: LedgerPaths,
+  casualty: keyof typeof CASUALTY,
+): Promise<Ledgers> {
+  const approvals = await readApprovalLedger(paths.ledgerFile);
+  requireBook("approval ledger", paths.ledgerFile, approvals.problem, casualty);
+  const rejections = await readRejectionLedger(paths.rejectionsFile);
+  requireBook(
+    "rejection ledger",
+    paths.rejectionsFile,
+    rejections.problem,
+    casualty,
   );
+  const acceptances = await readAcceptanceLedger(paths.acceptancesFile);
+  requireBook(
+    "acceptance ledger",
+    paths.acceptancesFile,
+    acceptances.problem,
+    casualty,
+  );
+  return ledgersOf({
+    approvals: approvals.records,
+    rejections: rejections.records,
+    acceptances: acceptances.records,
+  });
 }
 
 /**
@@ -110,7 +179,7 @@ async function requireLedger(
  * so the OS user is the honest name for them; a container without a passwd
  * entry throws, and the environment still knows.
  */
-function userName(): string {
+export function userName(): string {
   try {
     const name = os.userInfo().username;
     if (name !== "") {
@@ -127,7 +196,7 @@ async function gitPresent(cwd: string): Promise<boolean> {
 }
 
 /** The node's file, relative to the spec folder — the spelling every sentence uses. */
-function fileOf(node: Pick<SpecNode, "type" | "id">): string {
+export function fileOf(node: Pick<SpecNode, "type" | "id">): string {
   return `${bandFolderOf(node.type) ?? "?"}/${node.type}/${node.id}.md`;
 }
 
@@ -273,20 +342,36 @@ function approvedFileOf(
  * cache would be a second home for a fact whose first home is two files.
  */
 export async function reviewSpec(projectId: string): Promise<GraphReview> {
-  const { specDir, ledgerFile } = await projectSpecFor(projectId);
-  const records = await requireLedger(ledgerFile, "review");
-  return reviewGraph(await loadGraph(specDir), approvalsOf(records));
+  const { specDir, ...paths } = await projectSpecFor(projectId);
+  const ledgers = await requireLedgers(paths, "review");
+  return reviewGraph(await loadGraph(specDir), ledgers);
+}
+
+/**
+ * Why a standing rejection is not a node to approve — said here once, because
+ * the single door and the queue's "approve all" both refuse with it.
+ *
+ * IT IS AN ORDER AND NOT A PROHIBITION. The colour chain asks about the
+ * rejection before it asks about the approval, so a record written now would be
+ * a green nobody would ever see: the node would stay red, the person would
+ * press again, and the ledger would fill with approvals of a refused node. The
+ * two ways out are both named, because they belong to two different people —
+ * the reviewer withdraws, or the agent fixes and the refusal lapses by itself.
+ */
+export function rejectedSentence(id: string): string {
+  return `${id} carries a standing rejection, so approving it would record a green nobody would ever see — a rejection is asked about before an approval, and the node would stay red. Withdraw the rejection first, or leave it to lapse when the node is fixed.`;
 }
 
 /**
  * A person turns a node green — the one manufacturer, and it writes one line
  * in the ledger and not a byte of the node's file.
  *
- * The refusals run in the order a person can act on: the project, the ledger,
+ * The refusals run in the order a person can act on: the project, the ledgers,
  * the file's own state, the node's existence, the standing deletion proposal,
- * and last the anchor — because "fix the file" comes before "decide the
- * proposal" and both come before "nothing reaches it yet". The execution band
- * is approved like any other: a record is read by a person too.
+ * the anchor, and last the standing rejection — because "fix the file" comes
+ * before "decide the proposal", both come before "nothing reaches it yet", and
+ * all of them come before "somebody has already refused this". The execution
+ * band is approved like any other: a record is read by a person too.
  *
  * WHAT IS HASHED IS THE NODE AS LOADED, through the same function the colour
  * chain uses, so the record written here is the record `isHashMatched` will
@@ -296,8 +381,8 @@ export async function approveSpecNode(input: {
   projectId: string;
   id: string;
 }): Promise<ApprovalRecord> {
-  const { specDir, ledgerFile } = await projectSpecFor(input.projectId);
-  const records = await requireLedger(ledgerFile, "approve");
+  const { specDir, ledgerFile, ...rest } = await projectSpecFor(input.projectId);
+  const ledgers = await requireLedgers({ ledgerFile, ...rest }, "approve");
   const graph = await loadGraph(specDir);
 
   const refused = graph.refused.find((entry) => entry.id === input.id);
@@ -315,12 +400,22 @@ export async function approveSpecNode(input: {
       `${input.id} carries a deletion an agent proposed, so approving it would record a node that is asking to be removed — approve the deletion or reject it first.`,
     );
   }
-  const review = reviewGraph(graph, approvalsOf(records));
+  const review = reviewGraph(graph, ledgers);
   const status = review.statuses.find((entry) => entry.id === input.id);
   if (status !== undefined && status.reason === "orphan") {
     throw invalid(
       `${input.id} is a ${node.type} with no live anchor — it is held to the graph by ${anchorPhrase(node.type) ?? "nothing the canon names"}, and none stands — so there is nothing yet to approve.`,
     );
+  }
+  if (status !== undefined && status.reason === "off-target") {
+    // The aim rule is grammar, and it names the seam itself; a person cannot
+    // approve over it any more than over a missing anchor.
+    throw invalid(
+      `${status.problem ?? `${input.id} is outside its task's aim`} Fix that first — there is nothing yet to approve.`,
+    );
+  }
+  if (status !== undefined && status.reason === "rejected") {
+    throw invalid(rejectedSentence(input.id));
   }
 
   const edges = graph.edges
@@ -347,10 +442,10 @@ export async function rejectSpecDeletion(input: {
   projectId: string;
   id: string;
 }): Promise<SpecNode> {
-  const { projectPath, specDir, ledgerFile } = await projectSpecFor(
+  const { projectPath, specDir, ...paths } = await projectSpecFor(
     input.projectId,
   );
-  const records = await requireLedger(ledgerFile, "review");
+  const { approvals } = await requireLedgers(paths, "review");
   const graph = await loadGraph(specDir);
 
   const node = graph.nodes.find((entry) => entry.id === input.id);
@@ -373,7 +468,7 @@ export async function rejectSpecDeletion(input: {
     projectPath,
     specDir,
     node,
-    records.get(input.id),
+    approvals.get(input.id),
   );
   if (approved !== null) {
     return served(
@@ -395,10 +490,10 @@ export async function readApprovedVersion(input: {
   projectId: string;
   id: string;
 }): Promise<{ approved: string | null; current: string }> {
-  const { projectPath, specDir, ledgerFile } = await projectSpecFor(
+  const { projectPath, specDir, ...paths } = await projectSpecFor(
     input.projectId,
   );
-  const records = await requireLedger(ledgerFile, "review");
+  const { approvals } = await requireLedgers(paths, "review");
   const graph = await loadGraph(specDir);
   const node = graph.nodes.find((entry) => entry.id === input.id);
   if (node === undefined) {
@@ -412,7 +507,7 @@ export async function readApprovedVersion(input: {
     projectPath,
     specDir,
     node,
-    records.get(input.id),
+    approvals.get(input.id),
   );
   return {
     approved: approved === null ? null : approvedFileOf(node, approved),
@@ -524,17 +619,23 @@ export async function restoreSpecNode(input: {
 }
 
 /**
- * The two paths one commit covers: the spec folder, and the FOLDER the ledger
- * sits in rather than the ledger file itself.
+ * The two paths one commit covers: the spec folder, and the FOLDER the ledgers
+ * sit in rather than any ledger file itself.
  *
- * THE FOLDER, SO THAT A LEDGER SOMEBODY DELETED BY HAND IS COMMITTED AS THE
- * DELETION IT IS. Naming the file would name a pathspec matching nothing in the
+ * THE FOLDER HOLDS THREE BOOKS NOW — approvals, rejections and acceptances —
+ * and naming it is what makes them one path instead of three. A person's
+ * judgements are one act of judging whichever book they landed in, and a
+ * commit that carried two of the three would be a spec travelling with half of
+ * what was decided about it.
+ *
+ * THE FOLDER ALSO MEANS A LEDGER SOMEBODY DELETED BY HAND IS COMMITTED AS THE
+ * DELETION IT IS. Naming a file would name a pathspec matching nothing in the
  * worktree the moment it is gone, and the removal would sit outside every
  * commit this button makes — the spec would travel without the record of what
- * was approved in it. Naming the folder keeps the deletion inside the commit,
- * where the history can say when the approvals went.
+ * was judged in it. Naming the folder keeps the deletion inside the commit,
+ * where the history can say when the records went.
  *
- * A project nobody has approved anything in has no such folder at all, which
+ * A project nobody has judged anything in has no such folder at all, which
  * `git-cli` is built for: `status` is silent under it and `commitPaths` drops
  * it before git is ever asked to stage it.
  */
@@ -551,8 +652,8 @@ function gitPathsFor(
 
 /**
  * Whether the Commit Spec button has anything to do — a change under the spec
- * folder or under the ledger beside it, because one approval and no edit is a
- * commit worth offering. No repository and no git are ordinary states here, not
+ * folder or under the ledger folder beside it, because one approval and no edit
+ * is a commit worth offering. No repository and no git are ordinary states here, not
  * refusals — the button simply is not shown.
  */
 export async function readSpecGitStatus(
@@ -571,10 +672,10 @@ export async function readSpecGitStatus(
 
 /**
  * The person's own commit — the daemon never makes one on its own. ONE commit,
- * scoped to the spec folder and the approval ledger beside it, so whatever else
+ * scoped to the spec folder and the ledger folder beside it, so whatever else
  * they have staged stays exactly as staged.
  *
- * The two travel together because they are read together: a spec whose ledger
+ * They travel together because they are read together: a spec whose ledgers
  * stayed behind clones as a graph nothing is green in, and a ledger whose spec
  * stayed behind names bytes the clone has never seen.
  */
@@ -603,7 +704,7 @@ export async function commitSpec(input: {
   const paths = gitPathsFor(root, specDir, ledgerFile);
   if (!(await isDirtyUnder(root, paths))) {
     throw conflict(
-      "The spec folder and the approval ledger hold no change to commit, so nothing was committed.",
+      "The spec folder and the ledgers hold no change to commit, so nothing was committed.",
     );
   }
   const answer = await commitPaths(root, paths, message);

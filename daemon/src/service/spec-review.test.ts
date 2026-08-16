@@ -77,14 +77,25 @@ function ledgerFile(project: RegistryProject): string {
   return path.join(project.path, ".shall", "ledger", "approvals.yaml");
 }
 
-/** A status as the review serves it — every one carries the ledger's answer, null when it has none. */
+/**
+ * A status as the review serves it — every one carries all three books' answers,
+ * null when a book has none.
+ *
+ * `rejection` and `closure` default to null because nothing in this file is
+ * refused and nothing in it is an acceptance criterion; the queue's own tests
+ * pass them. A criterion would always carry `open` or `closed` here, never null.
+ */
 function status(
   id: string,
   color: ReviewStatus["color"],
   reason: ReviewStatus["reason"],
   approval: ReviewStatus["approval"] = null,
+  rejection: ReviewStatus["rejection"] = null,
+  closure: ReviewStatus["closure"] = null,
+  leftOpen: ReviewStatus["leftOpen"] = null,
+  problem: ReviewStatus["problem"] = null,
 ): ReviewStatus {
-  return { id, color, reason, approval };
+  return { id, color, reason, approval, rejection, closure, leftOpen, problem };
 }
 
 /** The `{by, at}` a status carries for a record the approve door returned. */
@@ -707,7 +718,7 @@ describe("the git doors", () => {
     await says(
       commitSpec({ projectId: project.id, message: "Again" }),
       "conflict",
-      "The spec folder and the approval ledger hold no change to commit, so nothing was committed.",
+      "The spec folder and the ledgers hold no change to commit, so nothing was committed.",
     );
   });
 
