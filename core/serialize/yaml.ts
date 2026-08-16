@@ -2,8 +2,8 @@ import { isMap as isYamlMap, isScalar, parseDocument } from "yaml";
 import { judgeText } from "../graph/index.js";
 
 /**
- * The YAML both of Shall's files are read with — a node file's frontmatter and
- * the approval ledger — settled once, here.
+ * The YAML every file of Shall's is read with — a node file's frontmatter, and
+ * the three ledgers beside the spec folder — settled once, here.
  *
  * THE PARSE CONTRACT, IN ONE PLACE. What the `yaml` package accepts is part of
  * the file format, so its version is pinned exactly in `package.json` and its
@@ -58,14 +58,24 @@ export interface YamlReading {
   readonly rootKeys: readonly string[] | null;
 }
 
-export function readYaml(source: string): YamlReading {
-  const document = parseDocument(source, {
+/**
+ * THE OPTIONS, IN ONE CALL SITE. Everything the block above argues for is
+ * settled in this function and read by every parse in the codebase, because a
+ * second `parseDocument` with its own option object would be a second file
+ * format the day one of them was edited and the other was not.
+ */
+function parseShared(source: string) {
+  return parseDocument(source, {
     version: "1.2",
     schema: "core",
     uniqueKeys: true,
     prettyErrors: false,
     logLevel: "error",
   });
+}
+
+export function readYaml(source: string): YamlReading {
+  const document = parseShared(source);
   const [error] = document.errors;
   if (error !== undefined) {
     return {
@@ -82,6 +92,52 @@ export function readYaml(source: string): YamlReading {
       ? contents.items.map((item) => keyText(item.key))
       : null,
   };
+}
+
+/**
+ * The keys of the map at one path inside a source, spelled as `toJS()` would
+ * spell them — or null when the path leads to something that is not a map, or
+ * the document does not read at all.
+ *
+ * IT IS `rootKeys` ONE LEVEL DOWN, AND IT EXISTS FOR THE SAME ONE FACT. The
+ * acceptance ledger nests a map inside each record — evidence id to hash — and
+ * a nested key written once bare and once quoted collapses in `toJS()` exactly
+ * as a root key does. `rootKeys` cannot see it, so this walks to it.
+ *
+ * THE PATH IS WALKED BY HAND AND NOT BY `getIn`. The library's own accessor
+ * compares a path step against a key with `===` on the resolved value, so the
+ * string `"1234"` never finds a key spelled bare as the number `1234` — which
+ * is the very pair this function is here to catch. Walking the items and
+ * comparing `keyText` compares what the caller means: the key as JavaScript
+ * spells it.
+ *
+ * A path step that matches TWICE takes the first, which is enough: the caller
+ * is asking whether a twin exists, and if the step itself has a twin the map
+ * under either one is a map whose keys are worth looking at.
+ */
+export function mapKeysAt(
+  source: string,
+  path: readonly string[],
+): readonly string[] | null {
+  const document = parseShared(source);
+  if (document.errors.length > 0) {
+    return null;
+  }
+  let node: unknown = document.contents;
+  for (const step of path) {
+    if (!isYamlMap(node)) {
+      return null;
+    }
+    const item = node.items.find((entry) => keyText(entry.key) === step);
+    if (item === undefined) {
+      return null;
+    }
+    node = item.value;
+  }
+  if (!isYamlMap(node)) {
+    return null;
+  }
+  return node.items.map((item) => keyText(item.key));
 }
 
 /** A key as `toJS()` spells it: null is the empty string, everything else its text. */

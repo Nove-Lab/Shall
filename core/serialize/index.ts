@@ -7,9 +7,9 @@ import { parseNodeFile } from "./parse.js";
  * One node is one markdown file, and this module is the whole of what that
  * means: the frozen file format, the scalar rule under it, the reader that is
  * lenient about how a file was written, and the templates a person starts from.
- * The approval ledger — the one other file Shall writes, YAML and no prose —
- * is read and written here too, under the same scalar rule and the same YAML
- * contract.
+ * The three ledgers — approvals, rejections and acceptances, the files Shall
+ * writes itself, YAML and no prose — are read and written here too, under the
+ * same scalar rule, the same YAML contract and one shared root grammar.
  *
  * IT IS PURE. No filesystem, no clock, no randomness — the fs lives in
  * `core/store`, the timestamps live in `stat`, and the type and id of a node
@@ -28,6 +28,16 @@ export {
 } from "./emit.js";
 export type { NodeFileBlocks, NodeFileEdge, NodeFileFields } from "./emit.js";
 export {
+  ACCEPTANCES_FILE,
+  emitAcceptanceLedger,
+  parseAcceptanceLedger,
+} from "./acceptances.js";
+export type {
+  AcceptanceLedger,
+  AcceptanceLedgerReading,
+  AcceptanceRecord,
+} from "./acceptances.js";
+export {
   emitApprovalLedger,
   LEDGER_FILE,
   parseApprovalLedger,
@@ -37,6 +47,16 @@ export type {
   ApprovalLedgerReading,
   ApprovalRecord,
 } from "./ledger.js";
+export {
+  emitRejectionLedger,
+  parseRejectionLedger,
+  REJECTIONS_FILE,
+} from "./rejections.js";
+export type {
+  RejectionLedger,
+  RejectionLedgerReading,
+  RejectionRecord,
+} from "./rejections.js";
 export { emitScalar, isPlainSafe } from "./scalar.js";
 export { parseNodeFile } from "./parse.js";
 export type { NodeFileReading, ParsedNode } from "./parse.js";

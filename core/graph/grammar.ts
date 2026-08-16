@@ -65,9 +65,17 @@ export const EDGE_GRAMMAR: readonly EdgeTriple[] = [
 
   // §3-4 The four gateways between views: Intent → Plan → Execution.
   { fromType: "SystemResponsibility", toType: "ModuleDesign",         edgeType: "IS_REALIZED_BY" },         // #21
-  { fromType: "AcceptanceCriterion",  toType: "ImplementationTask",   edgeType: "IS_PLANNED_BY" },          // #22
-  { fromType: "ImplementationTask",   toType: "WorkLog",              edgeType: "IS_ADDRESSED_BY" },        // #23
-  { fromType: "AcceptanceCriterion",  toType: "Evidence",             edgeType: "IS_CLAIMED_BY" },          // #24
+  // #22 runs FROM the task, like #23 and #24: a task names the criterion it
+  // aims to close in its own file, so planning work never touches the
+  // criterion's file or moves its approval.
+  { fromType: "ImplementationTask",   toType: "AcceptanceCriterion",  edgeType: "TARGETS" },                // #22
+  // #23 runs FROM the work log, like #24: the work names the task it addresses
+  // in its own file, so starting work never touches the task's file or moves
+  // its approval.
+  { fromType: "WorkLog",              toType: "ImplementationTask",   edgeType: "ADDRESSES" },              // #23
+  // #24 runs FROM the evidence: a claim is the evidence's own line, so writing
+  // one never touches the criterion's file or moves its approval.
+  { fromType: "Evidence",             toType: "AcceptanceCriterion",  edgeType: "CLAIMS" },                 // #24
 
   // §3-5 Satellites. ASSUMES and RAISES attach to the five chalk nodes of §0.5
   // and to nothing else, so the five sources are written out rather than implied.

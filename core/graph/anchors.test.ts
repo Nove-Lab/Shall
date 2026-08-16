@@ -99,6 +99,15 @@ describe("anchorPhrase", () => {
     );
   });
 
+  test("joins both directions when a type is held either way, as Evidence is", () => {
+    // The row the doc comment promised would still read as one sentence: a
+    // work log reaching in, or the evidence's own claim reaching out.
+    assert.equal(
+      anchorPhrase("Evidence"),
+      "a SUBMITS relation into it or a CLAIMS relation out of it",
+    );
+  });
+
   test("has nothing to say about a type that anchors nothing", () => {
     // A caller writes the whole sentence or none of it — an empty fragment
     // dropped into one would read as a sentence with a hole in it.

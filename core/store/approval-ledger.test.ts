@@ -8,7 +8,11 @@ import {
   LEDGER_FILE,
   type ApprovalRecord,
 } from "../serialize/index.js";
-import { readApprovalLedger, recordApproval } from "./approval-ledger.js";
+import {
+  readApprovalLedger,
+  recordApproval,
+  recordApprovals,
+} from "./approval-ledger.js";
 import { isStoreRefusal } from "./refusal.js";
 
 /**
@@ -253,6 +257,62 @@ describe("the approval ledger door", () => {
       ],
     );
     assert.deepEqual(await beside(file), ["approvals.yaml"]);
+  });
+
+  test("several approvals in one turn are one write, and only those ids come back", async () => {
+    const file = await makeLedgerPath();
+    // A record already in the book, so the turn is a read-modify-write over
+    // something and not a first write.
+    await recordApproval(file, "X-0001", OTHER);
+
+    const written = await recordApprovals(file, [
+      ["G-0001", APPROVED],
+      ["R-0001", OTHER],
+    ]);
+
+    // What comes back is the entries that were asked for, read off the file,
+    // and not the record that was already there.
+    assert.deepEqual(
+      [...written.entries()],
+      [
+        ["G-0001", APPROVED],
+        ["R-0001", OTHER],
+      ],
+    );
+
+    const reading = await readApprovalLedger(file);
+    assert.deepEqual(
+      [...reading.records.keys()],
+      ["G-0001", "R-0001", "X-0001"],
+    );
+    assert.equal(
+      await bytes(file),
+      emitApprovalLedger(
+        new Map([
+          ["G-0001", APPROVED],
+          ["R-0001", OTHER],
+          ["X-0001", OTHER],
+        ]),
+      ),
+    );
+    assert.deepEqual(await beside(file), ["approvals.yaml"]);
+  });
+
+  test("a bundle approved over a ledger nobody can read writes nothing at all", async () => {
+    const file = await makeLedgerPath();
+    await mkdir(path.dirname(file), { recursive: true });
+    await writeFile(file, "- a\n", "utf8");
+
+    // All or nothing: the whole bundle is one turn, so the file the person
+    // cannot read is the file they still have.
+    const refused = await refusal(() =>
+      recordApprovals(file, [
+        ["G-0001", APPROVED],
+        ["R-0001", OTHER],
+      ]),
+    );
+    assert.equal(refused.kind, "conflict");
+    assert.equal(await bytes(file), "- a\n");
   });
 
   test("a ledger written and read back is the same map", async () => {

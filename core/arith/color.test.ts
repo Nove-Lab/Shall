@@ -8,10 +8,12 @@ import {
 import {
   approvalPayload,
   blocksOf,
+  type AcceptanceRecord,
   type ApprovalRecord,
+  type RejectionRecord,
 } from "../serialize/index.js";
 import type { RefusedFile, SpecGraph } from "../store/file-store.js";
-import type { Approvals, PayloadHash } from "./color.js";
+import type { Ledgers, PayloadHash } from "./color.js";
 import { reviewGraph, type GraphReview, type ReviewStatus } from "./review.js";
 
 /**
@@ -21,14 +23,14 @@ import { reviewGraph, type GraphReview, type ReviewStatus } from "./review.js";
  * THE GRAPHS BELOW ARE BUILT BY HAND AND NOT LOADED. No filesystem, no
  * temporary folders: `core/arith` is pure, and a test that had to write files to
  * ask what colour a node is would be testing the loader as well. What is asserted
- * is arithmetic over a graph and a ledger, which is exactly what the module
+ * is arithmetic over a graph and three ledgers, which is exactly what the module
  * claims to be.
  *
  * THE HASH IS FAKE AND IT IS THE IDENTITY, on purpose. A real sha256 would make
  * every record a black box; with `sha256:<payload>` a fixture can say what a
  * record is taken over — a body, a relation, a deletion proposal, the node's own
  * address — and be wrong out loud when the payload changes shape. What is under
- * test is the ORDER the five questions are asked in and the arithmetic of two
+ * test is the ORDER the six questions are asked in and the arithmetic of two
  * files, never the cryptography, which core does not do at all.
  */
 
@@ -38,6 +40,15 @@ const APPROVED_AT = "2026-08-15T00:00:00Z";
 
 /** Who the fixtures approve as, and when — the `{by, at}` every record carries. */
 const APPROVER = { by: "t", at: APPROVED_AT };
+
+const REJECTED_AT = "2026-08-16T00:00:00Z";
+
+/** What a refusal says, as a status carries it back. */
+const REFUSAL = {
+  by: "t",
+  at: REJECTED_AT,
+  rationale: "It says nothing about the empty case.",
+};
 
 function node(
   type: string,
@@ -70,9 +81,27 @@ function refusal(file: string, type: string, id: string): RefusedFile {
   return { file, type, id, problems: ["A short name is required."] };
 }
 
-/** The ledger these entries amount to, with the fake hash beside it. */
-function ledgerOf(...entries: [string, ApprovalRecord][]): Approvals {
-  return { records: new Map(entries), hash };
+/**
+ * The three books, with whatever a test cares about filled in and the fake hash
+ * beside them. Every book is present even when it is empty, because `Ledgers` is
+ * what the daemon builds and an absent book is not a shape it can produce.
+ */
+function booksOf(parts: {
+  approvals?: [string, ApprovalRecord][];
+  rejections?: [string, RejectionRecord][];
+  acceptances?: [string, AcceptanceRecord][];
+}): Ledgers {
+  return {
+    approvals: new Map(parts.approvals ?? []),
+    rejections: new Map(parts.rejections ?? []),
+    acceptances: new Map(parts.acceptances ?? []),
+    hash,
+  };
+}
+
+/** The books these approvals amount to, with the other two empty. */
+function ledgerOf(...entries: [string, ApprovalRecord][]): Ledgers {
+  return booksOf({ approvals: entries });
 }
 
 /** A project nobody has approved anything in — the ledger that is not there yet. */
@@ -110,6 +139,14 @@ function approve(
   return [node.id, { approvedHash: hashOf(node, edges), ...APPROVER }];
 }
 
+/** One line of the rejection ledger, taken over the node as it stands here. */
+function reject(
+  node: SpecNode,
+  edges: readonly SpecEdge[] = [],
+): [string, RejectionRecord] {
+  return [node.id, { rejectedHash: hashOf(node, edges), ...REFUSAL }];
+}
+
 /**
  * One row of `statuses`, whole. Every assertion below compares a whole one, so
  * that a field quietly added or dropped is a failure rather than a silent pass.
@@ -119,8 +156,12 @@ function status(
   color: ReviewStatus["color"],
   reason: ReviewStatus["reason"],
   approval: ReviewStatus["approval"] = null,
+  rejection: ReviewStatus["rejection"] = null,
+  closure: ReviewStatus["closure"] = null,
+  leftOpen: ReviewStatus["leftOpen"] = null,
+  problem: ReviewStatus["problem"] = null,
 ): ReviewStatus {
-  return { id, color, reason, approval };
+  return { id, color, reason, approval, rejection, closure, leftOpen, problem };
 }
 
 function statusOf(review: GraphReview, id: string): ReviewStatus | undefined {
@@ -375,11 +416,11 @@ describe("yellow and green", () => {
 
   function reviewOf(
     requirement: SpecNode,
-    approvals: Approvals = unapproved,
+    ledgers: Ledgers = unapproved,
   ): GraphReview {
     return reviewGraph(
       graphOf({ nodes: [responsibility, requirement], edges: anchoring }),
-      approvals,
+      ledgers,
     );
   }
 
@@ -437,19 +478,19 @@ describe("yellow and green", () => {
     // and the ledger was never touched.
     const approved = node("Requirement", "R-0001");
     const record = approve(approved, anchoring);
-    const approvals = ledgerOf(record);
+    const ledgers = ledgerOf(record);
     const proposed = {
       ...approved,
       deletionProposed: { by: "agent", rationale: "Superseded by R-0002." },
     };
-    const rejected = { ...proposed, deletionProposed: undefined };
+    const stripped = { ...proposed, deletionProposed: undefined };
     assert.deepEqual(
-      statusOf(reviewOf(rejected, approvals), "R-0001"),
+      statusOf(reviewOf(stripped, ledgers), "R-0001"),
       status("R-0001", "green", "approved", APPROVER),
     );
     // The chain reads the book and writes nothing in it, so what stands at the
     // end is the record from before the proposal was ever written.
-    assert.deepEqual([...approvals.records], [record]);
+    assert.deepEqual([...ledgers.approvals], [record]);
   });
 
   test("an approved, anchored node comes back green and says who approved it and when", () => {
@@ -614,5 +655,224 @@ describe("the execution band", () => {
       statusOf(review, "WL-0001"),
       status("WL-0001", "green", "approved", APPROVER),
     );
+  });
+});
+
+describe("the aim rule", () => {
+  // A criterion, a task that targets it, a work log that addresses the task,
+  // and the evidence the log submits — the four files the rule reads.
+  const criterion = node("AcceptanceCriterion", "AC-0001");
+  const other = node("AcceptanceCriterion", "AC-0002");
+  const requirement = node("Requirement", "R-0001");
+  const responsibility = node("SystemResponsibility", "SR-0001");
+  const task = node("ImplementationTask", "IT-0001");
+  const journal = node("Journal", "J-0001");
+  const log = node("WorkLog", "WL-0001");
+  const evidence = node("Evidence", "EV-0001");
+  const SPINE = [
+    edge("SR-0001", "REQUIRES", "R-0001"),
+    edge("R-0001", "HAS_CRITERION", "AC-0001"),
+    edge("R-0001", "HAS_CRITERION", "AC-0002"),
+    edge("IT-0001", "TARGETS", "AC-0001"),
+    edge("J-0001", "LOGS", "WL-0001"),
+    edge("WL-0001", "ADDRESSES", "IT-0001"),
+    edge("WL-0001", "SUBMITS", "EV-0001"),
+  ];
+  const NODES = [
+    responsibility,
+    requirement,
+    criterion,
+    other,
+    task,
+    journal,
+    log,
+    evidence,
+  ];
+  function reviewWith(...claims: SpecEdge[]): GraphReview {
+    return reviewGraph(
+      graphOf({ nodes: NODES, edges: [...SPINE, ...claims] }),
+      unapproved,
+    );
+  }
+
+  test("evidence that claims what the task targets is inside the aim, and nothing is red", () => {
+    const review = reviewWith(edge("EV-0001", "CLAIMS", "AC-0001"));
+    assert.deepEqual(statusOf(review, "WL-0001"), status("WL-0001", "yellow", "unapproved"));
+    assert.deepEqual(statusOf(review, "EV-0001"), status("EV-0001", "yellow", "unapproved"));
+  });
+
+  test("evidence that claims another criterion turns both the log and the evidence red, with the same fact said from each end", () => {
+    const review = reviewWith(edge("EV-0001", "CLAIMS", "AC-0002"));
+    assert.deepEqual(
+      statusOf(review, "WL-0001"),
+      status(
+        "WL-0001",
+        "red",
+        "off-target",
+        null,
+        null,
+        null,
+        null,
+        "WL-0001 addresses IT-0001, which targets AC-0001, but submits EV-0001, which claims AC-0002 — a work log's evidence claims only the criteria its task targets.",
+      ),
+    );
+    assert.deepEqual(
+      statusOf(review, "EV-0001"),
+      status(
+        "EV-0001",
+        "red",
+        "off-target",
+        null,
+        null,
+        null,
+        null,
+        "EV-0001 claims AC-0002, but the work log that submitted it, WL-0001, addresses IT-0001, which targets AC-0001 — a work log's evidence claims only the criteria its task targets.",
+      ),
+    );
+    // The criteria and the task themselves are not touched by it.
+    assert.equal(statusOf(review, "AC-0002")?.color, "yellow");
+    assert.equal(statusOf(review, "IT-0001")?.color, "yellow");
+  });
+
+  test("evidence that claims nothing at all is outside the aim too", () => {
+    const review = reviewWith();
+    assert.equal(statusOf(review, "WL-0001")?.reason, "off-target");
+    assert.equal(
+      statusOf(review, "EV-0001")?.problem,
+      "EV-0001 claims no criterion, but the work log that submitted it, WL-0001, addresses IT-0001, which targets AC-0001 — a work log's evidence claims only the criteria its task targets.",
+    );
+  });
+
+  test("a claim partly outside the aim is outside it — every claim has to be a target", () => {
+    const review = reviewWith(
+      edge("EV-0001", "CLAIMS", "AC-0001"),
+      edge("EV-0001", "CLAIMS", "AC-0002"),
+    );
+    assert.equal(statusOf(review, "EV-0001")?.reason, "off-target");
+    assert.ok(statusOf(review, "EV-0001")?.problem?.includes("claims AC-0001 and AC-0002"));
+  });
+
+  test("a work log under no task is under no aim, and its evidence may claim anything", () => {
+    const review = reviewGraph(
+      graphOf({
+        nodes: NODES,
+        edges: [
+          ...SPINE.filter((line) => line.type !== "ADDRESSES"),
+          edge("EV-0001", "CLAIMS", "AC-0002"),
+        ],
+      }),
+      unapproved,
+    );
+    assert.equal(statusOf(review, "WL-0001")?.reason, "unapproved");
+    assert.equal(statusOf(review, "EV-0001")?.reason, "unapproved");
+  });
+
+  test("a rule of grammar comes before the books: an approved breach is still red", () => {
+    const edges = [...SPINE, edge("EV-0001", "CLAIMS", "AC-0002")];
+    const review = reviewGraph(
+      graphOf({ nodes: NODES, edges }),
+      ledgerOf(approve(log, edges), approve(evidence, edges)),
+    );
+    assert.equal(statusOf(review, "WL-0001")?.reason, "off-target");
+    assert.equal(statusOf(review, "EV-0001")?.reason, "off-target");
+    // The approval is still carried, as it is for an orphan.
+    assert.deepEqual(statusOf(review, "WL-0001")?.approval, APPROVER);
+  });
+
+  test("a claim at a criterion no file names is a claim outside the aim, said as such", () => {
+    const review = reviewWith(edge("EV-0001", "CLAIMS", "AC-9999"));
+    assert.equal(statusOf(review, "EV-0001")?.reason, "off-target");
+    assert.ok(statusOf(review, "EV-0001")?.problem?.includes("claims AC-9999"));
+  });
+});
+
+describe("rejection", () => {
+  // The same anchor every test in this block hangs off, so that what is under
+  // test is the refusal and never the anchor.
+  const responsibility = node("SystemResponsibility", "SR-0001");
+  const anchoring = [edge("SR-0001", "REQUIRES", "R-0001")];
+
+  function reviewOf(requirement: SpecNode, ledgers: Ledgers): GraphReview {
+    return reviewGraph(
+      graphOf({ nodes: [responsibility, requirement], edges: anchoring }),
+      ledgers,
+    );
+  }
+
+  test("a refusal taken over the bytes a node still has is red, and says what was said", () => {
+    const requirement = node("Requirement", "R-0001");
+    assert.deepEqual(
+      statusOf(
+        reviewOf(
+          requirement,
+          booksOf({ rejections: [reject(requirement, anchoring)] }),
+        ),
+        "R-0001",
+      ),
+      status("R-0001", "red", "rejected", null, REFUSAL),
+    );
+  });
+
+  test("an edit lapses the refusal by arithmetic, and the record stays as history", () => {
+    // Nobody withdrew anything and nothing swept the file. The agent fixed the
+    // node, the hashes stopped matching, and the node is back in the queue —
+    // still carrying what was said about the version before, because that is
+    // the first thing a reviewer wants to read.
+    const refused = node("Requirement", "R-0001");
+    const fixed = { ...refused, body: "Now it says something about the empty case." };
+    assert.deepEqual(
+      statusOf(
+        reviewOf(fixed, booksOf({ rejections: [reject(refused, anchoring)] })),
+        "R-0001",
+      ),
+      status("R-0001", "yellow", "unapproved", null, REFUSAL),
+    );
+  });
+
+  test("a refusal over an approval wins, and neither book erased the other", () => {
+    // Approved on Friday, refused on Saturday at the very same bytes. The later
+    // word is the one on the screen, the approval is still there to be shown,
+    // and withdrawing the refusal puts the green straight back.
+    const requirement = node("Requirement", "R-0001");
+    const books = booksOf({
+      approvals: [approve(requirement, anchoring)],
+      rejections: [reject(requirement, anchoring)],
+    });
+    assert.deepEqual(
+      statusOf(reviewOf(requirement, books), "R-0001"),
+      status("R-0001", "red", "rejected", APPROVER, REFUSAL),
+    );
+    assert.deepEqual(
+      statusOf(
+        reviewOf(requirement, booksOf({ approvals: [approve(requirement, anchoring)] })),
+        "R-0001",
+      ),
+      status("R-0001", "green", "approved", APPROVER),
+    );
+  });
+
+  test("a file that will not read is told about the file, not about the refusal", () => {
+    // The three structural reds are asked first on purpose: a node nothing
+    // holds has a fix that comes before anybody's opinion of what it says.
+    const stray = node("Requirement", "R-0001");
+    const review = reviewGraph(
+      graphOf({ nodes: [stray] }),
+      booksOf({ rejections: [reject(stray)] }),
+    );
+    assert.deepEqual(review.statuses, [
+      status("R-0001", "red", "orphan", null, REFUSAL),
+    ]);
+  });
+
+  test("a rejection record for a node the graph does not have colours nothing", () => {
+    // The books are never pruned, in either direction.
+    const goal = node("Goal", "G-0001");
+    const review = reviewGraph(
+      graphOf({ nodes: [goal] }),
+      booksOf({ rejections: [reject(node("Requirement", "R-0404"))] }),
+    );
+    assert.deepEqual(review.statuses, [
+      status("G-0001", "yellow", "unapproved"),
+    ]);
   });
 });
