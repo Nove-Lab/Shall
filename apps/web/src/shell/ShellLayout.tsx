@@ -79,7 +79,14 @@ function ControlSidebar({ projectId }: { projectId: string }) {
                 <SidebarMenuItem key={panel.id}>
                   <SidebarMenuButton
                     render={<Link to={`${base}/${panel.id}`} />}
-                    isActive={pathname === `${base}/${panel.id}`}
+                    // A panel owns the pages beneath it too — a review bundle
+                    // at `/control/review-queue/<id>` is still the Review
+                    // Queue — so the match is on the prefix, with the slash
+                    // so that no panel id can be a prefix of another's.
+                    isActive={
+                      pathname === `${base}/${panel.id}` ||
+                      pathname.startsWith(`${base}/${panel.id}/`)
+                    }
                     tooltip={panel.title}
                   >
                     <Icon />

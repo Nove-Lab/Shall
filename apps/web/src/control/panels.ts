@@ -17,9 +17,14 @@ export const PANELS: PanelMeta[] = [
   {
     id: "review-queue",
     title: "Review Queue",
-    summary: "Spec changes waiting on a human decision",
+    // "Bundles", not "spec changes": the queue is not one list of spec diffs
+    // any more — a work report and a criterion waiting to be closed are
+    // decisions of a different shape, and the kind badge on each row says which.
+    summary: "Bundles waiting on a human decision",
     empty: "Nothing is waiting on a decision",
-    columns: ["Title", "Kind", "Proposed by", "Age", "Status"],
+    // The queue's own table renders these, so the headers and the cells under
+    // them are decided in one place.
+    columns: ["Kind", "Title", "Summary", "Waiting since"],
   },
   {
     id: "task-board",

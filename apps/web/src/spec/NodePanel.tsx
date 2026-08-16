@@ -1,6 +1,8 @@
 import {
   useEffect,
+  useId,
   useMemo,
+  useRef,
   useState,
   type KeyboardEvent,
   type ReactNode,
@@ -40,15 +42,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { RejectionPopover } from "./RejectionPopover";
 import {
   deletionSentence,
+  firstLine,
   impactSentence,
   type ApprovedVersion,
   type ReviewStatus,
   type StatusReason,
 } from "./review";
-import { LineDiff, Referrers, StatusDot } from "./review-parts";
+import { ClosureMark, LineDiff, Referrers, StatusDot } from "./review-parts";
 import { formatStamp } from "./spec-node";
 import { lineDiff, wholeFile, type DiffRow } from "./view/diff";
 
@@ -144,6 +149,19 @@ function statusCopy(
             ? "Someone edited this node after it was approved. The lines below are what moved."
             : `Someone edited this node after ${status.approval.by} approved it on ${formatStamp(status.approval.at)}. The lines below are what moved.`,
       };
+    // A PERSON READ THIS AND SAID NO, IN WRITING. The box names who and when;
+    // the rationale itself is drawn under it verbatim by the render, because it
+    // is the argument and not a summary of one. There is no Approve here — the
+    // daemon refuses it while the rejection stands, and the one door out is
+    // withdrawing what was said.
+    case "rejected":
+      return {
+        title: "Rejected",
+        body:
+          status.rejection === null
+            ? "Somebody rejected this node — it is the agent's turn, not the reviewer's."
+            : `Rejected by ${status.rejection.by} · ${formatStamp(status.rejection.at)}`,
+      };
     case "orphan": {
       // WHAT WOULD ANCHOR IT IS THE CANON'S ANSWER AND NOT A LIST KEPT HERE:
       // `anchorPhrase` reads the same grammar the connect dialog offers
@@ -160,6 +178,17 @@ function statusCopy(
             : `${opening} A ${node.type} is anchored by ${phrase}.`,
       };
     }
+    // THE AIM RULE: a work log under a task submits evidence only for what the
+    // task targets. The daemon composed the sentence — it names the log, the
+    // task, the criteria and the evidence, which is more than this panel holds
+    // — so it is quoted whole, from whichever end the person is standing on.
+    case "off-target":
+      return {
+        title: "Outside its task's aim",
+        body:
+          status.problem ??
+          "This node sits on a seam between a work log, its task and its evidence — the evidence claims criteria the task does not target. Fix the ADDRESSES, TARGETS or CLAIMS line first.",
+      };
     case "missing":
     case "malformed":
     case "approved":
@@ -279,18 +308,57 @@ interface NodePanelProps {
   status: ReviewStatus | null;
   /** The relations pointing AT this node — what a deletion would leave drawn to nothing. */
   referrers: SpecEdge[];
+  /**
+   * The claimants of this criterion nobody has approved yet — ids, in id order,
+   * empty for anything that is not a criterion or whose every claimant is
+   * green. THE PLANE WORKS IT OUT because only the plane holds the whole
+   * review; the panel knows its own status and its own referrers and nothing
+   * about the colour of the nodes at the far end of them. It is what keeps the
+   * closure switch dark until the last claim has been read: a claim nobody has
+   * approved is not yet a claim a person can sign a criterion off on, and the
+   * daemon refuses the same door with the same names.
+   */
+  unapprovedClaimants: readonly string[];
   onClose: () => void;
   onEdit: () => void;
   onCancelEdit: () => void;
   onSubmit: (draft: NodeDraft) => Promise<void>;
   onDelete: () => Promise<void>;
   /**
-   * The three review writes. Each REJECTS with the daemon's own sentence and is
-   * caught here, beside the button that sent it — the same contract `onSubmit`
-   * has, and the reason neither of them returns an error instead.
+   * The review writes. Each REJECTS with the daemon's own sentence and is caught
+   * here, beside the button that sent it — the same contract `onSubmit` has, and
+   * the reason none of them returns an error instead.
+   *
+   * THE TWO REJECTION DOORS ARE ABOUT DIFFERENT THINGS AND ARE NOT ONE PROP.
+   * `onRejectDeletion` answers an agent's proposal to delete the node;
+   * `onReject` is a person refusing the node's own content, and it carries the
+   * rationale because the book will not take one without it. `onWithdrawRejection`
+   * takes that back.
    */
   onApprove: () => Promise<void>;
   onRejectDeletion: () => Promise<void>;
+  onReject: (rationale: string) => Promise<void>;
+  onWithdrawRejection: () => Promise<void>;
+  /**
+   * THE CRITERION'S OTHER AXIS, WHICH IS TWO DOORS AND NOT A FIELD. Closing
+   * records an acceptance over EVERY piece of evidence claiming this criterion
+   * now — the panel names none of them and the daemon computes the list, which
+   * is why this takes nothing. Leaving it open records the opposite word about
+   * that same list, with the sentence the person typed; each door removes the
+   * other book's record.
+   *
+   * `onCloseCriterion` AND NOT `onClose`, WHICH IS ALREADY THE PANEL'S OWN DOOR
+   * a few lines above: two props called `onClose` meaning "shut this pane" and
+   * "sign off this criterion" is one rename away from a bug nobody can see at
+   * the call site.
+   *
+   * LEAVING OPEN IS NOT A REJECTION OF THE NODE. The criterion's words are not
+   * what is being refused, so its colour is untouched — the record lands in the
+   * rejection ledger under the criterion's id, and `[Withdraw rejection]` is
+   * still what takes it back.
+   */
+  onCloseCriterion: () => Promise<void>;
+  onLeaveOpen: (rationale: string) => Promise<void>;
   loadApprovedVersion: (id: string) => Promise<ApprovedVersion>;
 }
 
@@ -314,6 +382,11 @@ export function NodePanel({
   onDelete,
   onApprove,
   onRejectDeletion,
+  onReject,
+  onWithdrawRejection,
+  onCloseCriterion,
+  onLeaveOpen,
+  unapprovedClaimants,
   loadApprovedVersion,
 }: NodePanelProps) {
   const [type, setType] = useState("");
@@ -357,6 +430,38 @@ export function NodePanel({
   const [reviewBusy, setReviewBusy] = useState(false);
   const [reviewError, setReviewError] = useState<string | null>(null);
   /**
+   * Whether the rejection popover is open. It is held HERE and not inside the
+   * popover because the same component serves the plane's right-click, where
+   * there is no trigger element to own the state — one contract, controlled at
+   * both doors, rather than a component that is controlled at one and not the
+   * other.
+   */
+  const [rejectOpen, setRejectOpen] = useState(false);
+  /**
+   * THE CLOSURE AXIS HAS ITS OWN PAIR, FOR THE REASON THE REVIEW PAIR HAS ONE.
+   * A refused close is a sentence about the evidence claiming this criterion —
+   * "nothing claims it yet", "its wording is rejected" — and it belongs under
+   * the switch that sent it, not beside Approve where a reader would take it for
+   * a verdict on the words. The busy flag is separate for the same reason: it
+   * gates one control.
+   */
+  const [closureBusy, setClosureBusy] = useState(false);
+  const [closureError, setClosureError] = useState<string | null>(null);
+  /**
+   * Whether the leave-open popover is open, held here beside the rejection's
+   * flag and for the same reason: this component owns which door is asking.
+   */
+  const [leaveOpenAsking, setLeaveOpenAsking] = useState(false);
+  /**
+   * WHERE THAT POPOVER OPENS. The switch is the control being answered, so the
+   * box lands under it — and the switch is the design system's own element, so
+   * the anchor is a wrapper this file owns rather than a ref threaded through a
+   * component whose props are not ours to add to.
+   */
+  const closureAnchor = useRef<HTMLSpanElement>(null);
+  /** The switch's own id, so the word beside it is its label and not loose text. */
+  const closureId = useId();
+  /**
    * The approved version beside the current one, KEYED BY WHAT WAS ASKED FOR.
    *
    * The key is the node's id and its stamp together, so the answer to a question
@@ -389,6 +494,10 @@ export function NodePanel({
     // them would be showing one node's answer over another node's file.
     setReviewBusy(false);
     setReviewError(null);
+    setRejectOpen(false);
+    setClosureBusy(false);
+    setClosureError(null);
+    setLeaveOpenAsking(false);
     setVersion(null);
     setVersionBusy(false);
     setVersionError(null);
@@ -454,6 +563,110 @@ export function NodePanel({
    */
   const statusText =
     status === null || node === null ? null : statusCopy(status, node);
+
+  /**
+   * A REJECTION THE COLOUR NO LONGER CARRIES, WHICH IS HISTORY AND NOT A STATE.
+   *
+   * The book keeps the latest rejection whatever the node has done since, so a
+   * yellow node can carry a record from before the agent fixed it and a green
+   * one a record from before somebody approved it. `reason === "rejected"` is
+   * the only thing that says a rejection STANDS — read the record as if it were
+   * the verdict and a fixed node looks refused — so when it says otherwise this
+   * is a hearing that already happened, and it is worth exactly one line: the
+   * reviewer coming back to a resubmitted node wants to know it was here before.
+   */
+  const lapsedRejection =
+    status !== null &&
+    status.reason !== "rejected" &&
+    status.rejection !== null &&
+    (status.color === "yellow" || status.color === "green")
+      ? status.rejection
+      : null;
+
+  /**
+   * WHETHER THIS NODE CAN BE REFUSED, WHICH INCLUDES ONE THAT IS ALREADY GREEN.
+   *
+   * Yellow is the ordinary case — somebody read it and it is wrong. GREEN IS THE
+   * ONE THAT LOOKS LIKE A MISTAKE AND IS NOT: an approval can turn out to have
+   * been wrong, the colour table settles the clash the other way (a rejection
+   * beats an approval), and a surface that hid the door would make the only fix
+   * an edit to a file nobody wanted edited.
+   *
+   * RED HAS NO DOOR. A file that will not read, a node nothing anchors and a
+   * node already rejected are not judgements waiting to be made — the first two
+   * are fixes and the third has been made — and the daemon refuses all three.
+   * A node with a deletion proposed over it has its own two buttons, and a third
+   * verdict beside them would be two questions in one pane.
+   */
+  const canReject =
+    mode === "view" &&
+    node !== null &&
+    node.deletionProposed === undefined &&
+    status !== null &&
+    (status.color === "yellow" || status.color === "green");
+
+  /**
+   * THE REJECT DOOR AS ONE ELEMENT, because it is drawn in one of two places and
+   * is the same door in both: beside Approve inside the status box on a yellow
+   * node, and under the approved line on a green one, which has no box. Built
+   * once here rather than spelled twice in the render — only one of the two
+   * positions can be reached at a time, so it is never mounted twice.
+   */
+  const rejectDoor =
+    canReject && node !== null ? (
+      <RejectionPopover
+        open={rejectOpen}
+        onOpenChange={setRejectOpen}
+        target={{ id: node.id, name: node.name }}
+        verb="Reject"
+        trigger={
+          <Button
+            type="button"
+            variant="outline"
+            className="justify-self-start"
+          >
+            Reject…
+          </Button>
+        }
+        onConfirm={onReject}
+      />
+    ) : null;
+
+  /**
+   * HOW MUCH CLAIMS THIS CRITERION, COUNTED OFF THE RELATIONS POINTING AT IT.
+   *
+   * `referrers` is already the edges INTO this node, and a claimant is exactly
+   * one of those whose type is `CLAIMS` — so the count is read off the graph the
+   * panel was handed rather than asked for as a second number that could
+   * disagree with the board. EVERY CLAIMANT COUNTS, WHATEVER COLOUR IT WEARS:
+   * closing accepts the whole list, so a list of one yellow piece of evidence is
+   * still a list something can be closed over, and counting only the green ones
+   * would leave the switch dark over a criterion the daemon would happily close.
+   */
+  const claimants = referrers.filter((edge) => edge.type === "CLAIMS").length;
+  const awaiting = unapprovedClaimants.length;
+
+  /**
+   * WHY THE SWITCH IS DARK, OR HOW MUCH IS UNDER IT — one caption, because a
+   * reader looking at a control they cannot use wants the reason in the place
+   * the number would have been rather than beside it.
+   *
+   * THE TWO REFUSALS ARE THE DAEMON'S OWN AND ARE SAID BEFORE IT SAYS THEM. It
+   * refuses a close with nothing claiming the criterion, and it refuses one
+   * while the criterion's own wording stands rejected — a criterion nobody has
+   * agreed to the words of cannot be signed off as met — so the surface shuts
+   * the door and says which of the two it is.
+   */
+  const closureCaption =
+    claimants === 0
+      ? "No evidence claims this criterion yet — nothing to close over."
+      : status?.reason === "rejected"
+        ? "Its wording is rejected — closure waits until the words stand."
+        : awaiting > 0
+          ? `${unapprovedClaimants.join(", ")} ${awaiting === 1 ? "is" : "are"} awaiting approval — the switch opens once every claim is approved.`
+          : claimants === 1
+            ? "One piece of evidence claims this criterion."
+            : `${String(claimants)} pieces of evidence claim this criterion.`;
 
   /**
    * WHETHER THIS NODE HAS A COMPARISON TO SHOW, WHICH IS ALSO WHETHER ONE IS
@@ -749,6 +962,65 @@ export function NodePanel({
     }
   }
 
+  /**
+   * TAKING A REJECTION BACK, which is a write about the BOOK and not about the
+   * node — nothing in the file changes, the record leaves, and the colour is
+   * whatever the rest of the arithmetic makes it once it is gone. It shares the
+   * review pair for the same reason the two above do: it is not a save, and a
+   * refusal here must not disable the editor.
+   */
+  async function withdrawRejection() {
+    if (reviewBusy) {
+      return;
+    }
+
+    setReviewBusy(true);
+    setReviewError(null);
+    try {
+      await onWithdrawRejection();
+    } catch (withdrawError) {
+      setReviewError(
+        withdrawError instanceof Error
+          ? withdrawError.message
+          : "Could not withdraw the rejection",
+      );
+    } finally {
+      setReviewBusy(false);
+    }
+  }
+
+  /**
+   * CLOSING THE CRITERION, WHICH NAMES NO EVIDENCE. The list judged is every
+   * living piece of evidence claiming it, whatever colour each one wears, and
+   * the daemon is what reads that list — so there is nothing to pick here and
+   * nothing to send but the id the panel is already open on.
+   *
+   * ITS OWN PAIR AND NOT THE REVIEW ONE: see `closureBusy` above. The daemon
+   * refuses this for reasons the panel cannot always know it should have shut
+   * the switch for — the last claimant deleted under another session, a
+   * rejection written since the last read — and its words are the ones that say
+   * which, so they are kept verbatim under the row.
+   */
+  async function closeCriterion() {
+    if (closureBusy) {
+      return;
+    }
+
+    setClosureBusy(true);
+    setClosureError(null);
+    try {
+      await onCloseCriterion();
+    } catch (closeError) {
+      setClosureError(
+        closeError instanceof Error
+          ? closeError.message
+          : "Could not close the criterion",
+      );
+    } finally {
+      setClosureBusy(false);
+    }
+  }
+
   /** Enter saves from a one-line field. A prose box keeps its newlines. */
   function saveOnEnter(event: KeyboardEvent<HTMLInputElement>) {
     if (event.key === "Enter") {
@@ -869,73 +1141,265 @@ export function NodePanel({
                 the sentence, no Approve and no diff. There is exactly one
                 question open on this node then, it is the card above, and a
                 second button offering to sign off the very text somebody is
-                asking to remove would be two decisions in one pane. */}
-            {status === null ? null : status.color === "green" ? (
-              <div className="flex items-center gap-1.5">
-                <StatusDot color="green" />
-                <span className="text-muted-foreground text-sm">
-                  {status.approval === null
-                    ? "Approved"
-                    : `Approved by ${status.approval.by} · ${formatStamp(status.approval.at)}`}
-                </span>
-              </div>
-            ) : statusText === null ? null : (
-              <div className="grid gap-2 rounded-md border p-3">
-                <div className="flex items-center gap-1.5">
-                  <StatusDot color={status.color} />
-                  <span className="text-sm font-medium">
-                    {statusText.title}
-                  </span>
-                </div>
-                <p className="text-muted-foreground text-sm">
-                  {statusText.body}
-                </p>
-                {wantsDiff ? (
-                  <div className="grid gap-2">
-                    {versionBusy ? (
-                      <p className="text-muted-foreground text-sm">
-                        Reading the approved version…
-                      </p>
-                    ) : versionError !== null ? (
-                      <p className="text-destructive text-sm">{versionError}</p>
-                    ) : rows === null ? null : (
-                      <>
-                        {shown?.approved === null ? (
-                          <p className="text-muted-foreground text-sm">
-                            Git no longer holds the version this was approved at,
-                            so there is nothing to compare against. This is the
-                            file as it stands.
+                asking to remove would be two decisions in one pane.
+
+                A REJECTION IS THAT SAME BOX WITH SOMEBODY'S ARGUMENT INSIDE IT,
+                and it is the one verdict here that quotes a person rather than
+                describing a state. A rejection the colour no longer carries
+                leaves the box entirely and becomes one line under it: history is
+                not a state, and drawing it as one would make a fixed node look
+                refused. */}
+            {status === null ? null : (
+              <div className="grid gap-2">
+                {status.color === "green" ? (
+                  <>
+                    <div className="flex items-center gap-1.5">
+                      <StatusDot color="green" />
+                      <span className="text-muted-foreground text-sm">
+                        {status.approval === null
+                          ? "Approved"
+                          : `Approved by ${status.approval.by} · ${formatStamp(status.approval.at)}`}
+                      </span>
+                    </div>
+                    {/* AN APPROVED NODE STILL HAS ONE DOOR, and it is here
+                        rather than in a box: green is not a thing to deal with,
+                        so it keeps its one muted line and the door sits under
+                        it at the same weight it has beside Approve. */}
+                    {rejectDoor}
+                  </>
+                ) : statusText === null ? null : (
+                  <div className="grid gap-2 rounded-md border p-3">
+                    <div className="flex items-center gap-1.5">
+                      <StatusDot color={status.color} />
+                      <span className="text-sm font-medium">
+                        {statusText.title}
+                      </span>
+                    </div>
+                    <p className="text-muted-foreground text-sm">
+                      {statusText.body}
+                    </p>
+                    {/* THE RATIONALE VERBATIM, LINE BREAKS AND ALL — the same
+                        promise the deletion proposal above makes about the same
+                        kind of text. It is the argument the agent will read
+                        next and the whole of what a person is deciding to take
+                        back; reflowing it would be this panel editing evidence.
+                        Not markdown, for the reason the proposal's is not: this
+                        is a sentence somebody wrote, not a document. */}
+                    {status.reason === "rejected" ? (
+                      <div className="grid gap-2">
+                        {status.rejection === null ? null : (
+                          <p className="text-sm whitespace-pre-wrap">
+                            {status.rejection.rationale}
+                          </p>
+                        )}
+                        {/* THE ONE DOOR OUT, AND IT IS NOT APPROVE. While the
+                            rejection stands the daemon refuses an approval and
+                            says so — the honest button is the one that takes
+                            back what was said, after which the node is whatever
+                            colour the rest of the arithmetic makes it. */}
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="justify-self-start"
+                          disabled={reviewBusy}
+                          onClick={() => void withdrawRejection()}
+                        >
+                          {reviewBusy ? "Withdrawing…" : "Withdraw rejection"}
+                        </Button>
+                        {reviewError ? (
+                          <p className="text-destructive text-sm">
+                            {reviewError}
                           </p>
                         ) : null}
-                        <LineDiff rows={rows} />
-                      </>
-                    )}
-                  </div>
-                ) : null}
-                {node.deletionProposed === undefined &&
-                APPROVABLE.has(status.reason) ? (
-                  <div className="grid gap-2">
-                    <Button
-                      type="button"
-                      className="justify-self-start"
-                      disabled={reviewBusy}
-                      onClick={() => void approve()}
-                    >
-                      {reviewBusy ? "Approving…" : "Approve"}
-                    </Button>
-                    {reviewError ? (
-                      <p className="text-destructive text-sm">{reviewError}</p>
+                      </div>
+                    ) : null}
+                    {wantsDiff ? (
+                      <div className="grid gap-2">
+                        {versionBusy ? (
+                          <p className="text-muted-foreground text-sm">
+                            Reading the approved version…
+                          </p>
+                        ) : versionError !== null ? (
+                          <p className="text-destructive text-sm">
+                            {versionError}
+                          </p>
+                        ) : rows === null ? null : (
+                          <>
+                            {shown?.approved === null ? (
+                              <p className="text-muted-foreground text-sm">
+                                Git no longer holds the version this was
+                                approved at, so there is nothing to compare
+                                against. This is the file as it stands.
+                              </p>
+                            ) : null}
+                            <LineDiff rows={rows} />
+                          </>
+                        )}
+                      </div>
+                    ) : null}
+                    {/* THE TWO ANSWERS SIDE BY SIDE, and the second one is why
+                        this is a row and not a button. Agreeing and refusing
+                        are the same size of decision on the same text, so they
+                        sit at the same place with the same weight — the refusal
+                        outlined, because it is the one that asks for a sentence
+                        before it can be sent. */}
+                    {node.deletionProposed === undefined &&
+                    (APPROVABLE.has(status.reason) || rejectDoor !== null) ? (
+                      <div className="grid gap-2">
+                        <div className="flex items-center gap-2">
+                          {APPROVABLE.has(status.reason) ? (
+                            <Button
+                              type="button"
+                              disabled={reviewBusy}
+                              onClick={() => void approve()}
+                            >
+                              {reviewBusy ? "Approving…" : "Approve"}
+                            </Button>
+                          ) : null}
+                          {rejectDoor}
+                        </div>
+                        {reviewError ? (
+                          <p className="text-destructive text-sm">
+                            {reviewError}
+                          </p>
+                        ) : null}
+                      </div>
                     ) : null}
                   </div>
-                ) : null}
+                )}
+                {/* WHAT WAS SAID LAST TIME, IN ONE LINE AND UNDER THE VERDICT.
+                    It is history and not a state — the colour above is the
+                    state — so it is drawn at the weight of a caption and gets
+                    its first line only: a reviewer who wants the whole argument
+                    has the card the agent answered it on. */}
+                {lapsedRejection === null ? null : (
+                  <span className="text-muted-foreground text-xs">
+                    {`Previously rejected by ${lapsedRejection.by} · ${formatStamp(lapsedRejection.at)}: ${firstLine(lapsedRejection.rationale)}`}
+                  </span>
+                )}
               </div>
             )}
+
+            {/* THE SECOND AXIS, AS THE ONE CONTROL THAT MOVES IT — and it is
+                under the status box because it is a different question about
+                the same node: the box above says whether the words are agreed
+                to, this says whether the demand is met.
+
+                A SWITCH AND NOT TWO BUTTONS, BECAUSE THERE ARE TWO STATES AND
+                THE QUEUE HAS TWO EXITS. Closing accepts every piece of evidence
+                claiming the criterion now; leaving it open refuses that same
+                list in writing. Each door removes the other book's word, so the
+                honest drawing is one thing with two positions rather than two
+                controls that can both look pressed.
+
+                ONLY THE OFF DIRECTION ASKS FOR A SENTENCE, and that asymmetry
+                is the whole of why this is not a plain controlled switch. "Met"
+                is a signature; "not met" is an argument the agent reads next,
+                and the daemon will not take it without one — so the switch does
+                not move on the way back, the popover opens on it, and the state
+                stays whatever `status` says until a write actually lands.
+
+                A CRITERION AND NOTHING ELSE. `status.closure` is null for every
+                other type, which is the daemon saying the question does not
+                apply — nothing here works out for itself what can be closed.
+
+                AND IT GOES QUIET UNDER A DELETION PROPOSAL, like the status box
+                above it: there is one question open on this node then, it is the
+                card at the top, and a switch offering to sign off a criterion
+                somebody is asking to remove would be two decisions in one pane. */}
+            {status !== null &&
+            status.closure !== null &&
+            node.deletionProposed === undefined ? (
+              <div className="grid gap-2">
+                <span className="text-muted-foreground text-xs font-medium">
+                  Closure
+                </span>
+                <div className="flex items-center gap-2">
+                  <span ref={closureAnchor} className="flex items-center">
+                    <Switch
+                      id={closureId}
+                      checked={status.closure === "closed"}
+                      disabled={
+                        closureBusy ||
+                        reviewBusy ||
+                        claimants === 0 ||
+                        awaiting > 0 ||
+                        status.reason === "rejected"
+                      }
+                      onCheckedChange={(next: boolean) => {
+                        if (next) {
+                          void closeCriterion();
+                          return;
+                        }
+                        setLeaveOpenAsking(true);
+                      }}
+                    />
+                  </span>
+                  <Label htmlFor={closureId}>
+                    {closureBusy
+                      ? "Closing…"
+                      : status.closure === "closed"
+                        ? "Closed"
+                        : "Open"}
+                  </Label>
+                </div>
+                <span className="text-muted-foreground text-xs">
+                  {closureCaption}
+                </span>
+                {closureError === null ? null : (
+                  <p className="text-destructive text-sm">{closureError}</p>
+                )}
+                {/* THE STANDING WORD THAT THIS IS NOT MET, DRAWN WHOLE. It is a
+                    person's sentence written for the agent — the same kind of
+                    text the deletion proposal carries and quoted under the same
+                    promise: line breaks and all, not markdown, because it is an
+                    argument somebody wrote and not a document. The line above it
+                    is who and when, at a caption's weight. */}
+                {status.leftOpen === null ? null : (
+                  <>
+                    <span className="text-muted-foreground text-xs">
+                      {`Left open by ${status.leftOpen.by} · ${formatStamp(status.leftOpen.at)}: ${firstLine(status.leftOpen.rationale)}`}
+                    </span>
+                    <p className="text-sm whitespace-pre-wrap">
+                      {status.leftOpen.rationale}
+                    </p>
+                  </>
+                )}
+                {/* NO TRIGGER, BECAUSE THE SWITCH IS THE TRIGGER. It opens on
+                    the gesture that tried to turn the criterion back to open,
+                    anchored to the control that gesture landed on; cancelling
+                    writes nothing and the switch — controlled by `status` — has
+                    not moved. */}
+                <RejectionPopover
+                  open={leaveOpenAsking}
+                  onOpenChange={setLeaveOpenAsking}
+                  target={{ id: node.id, name: node.name }}
+                  verb="Leave open"
+                  anchor={closureAnchor}
+                  onConfirm={onLeaveOpen}
+                />
+              </div>
+            ) : null}
 
             <Field label="Type">
               <Badge variant="secondary">{node.type}</Badge>
             </Field>
+            {/* THE MARK BESIDE THE ID, WHICH IS A CRITERION'S SECOND ANSWER
+                and wears the traffic light's own two colours — `ClosureMark`
+                carries why. It is drawn in this row in BOTH modes and on the
+                card on the canvas, so the three places a criterion's id appears
+                give one answer; `status` is where that answer comes from, and a
+                node that is not a criterion has none. Here it also repeats what
+                the switch above already says, which is the point: this is the
+                row a person reads the id off, and the id and its state belong
+                together wherever they are drawn. */}
             <Field label="ID">
-              <span className="font-mono text-xs break-all">{node.id}</span>
+              <div className="flex items-center gap-1.5">
+                <span className="font-mono text-xs break-all">{node.id}</span>
+                {status === null || status.closure === null ? null : (
+                  <ClosureMark state={status.closure} />
+                )}
+              </div>
             </Field>
             <Field label="Short name">
               <span className="text-sm">{node.shortName}</span>
@@ -1008,7 +1472,14 @@ export function NodePanel({
                   <Badge variant="secondary">{node.type}</Badge>
                 </Field>
                 <Field label="ID">
-                  <span className="font-mono text-xs break-all">{node.id}</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-mono text-xs break-all">
+                      {node.id}
+                    </span>
+                    {status === null || status.closure === null ? null : (
+                      <ClosureMark state={status.closure} />
+                    )}
+                  </div>
                 </Field>
               </>
             ) : (

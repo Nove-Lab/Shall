@@ -44,6 +44,7 @@ import {
   cardPieces,
   furniturePieces,
   graphIdOfCard,
+  type Closure,
   type Signal,
 } from "./view/furniture";
 import { highlightFor } from "./view/highlight";
@@ -113,6 +114,15 @@ interface SpecGraphProps {
    * arm for a board nothing changed on.
    */
   signalById: ReadonlyMap<string, Signal>;
+  /**
+   * The mark beside a criterion's id — open or closed — for the nodes that have
+   * one. A node with no entry is not a criterion and draws none.
+   *
+   * IT ARRIVES MEMOISED FROM THE PLANE for the reason `signalById` does: it is a
+   * dependency of the `cards` memo below, and a map rebuilt per render of the
+   * plane rebuilds every card object with it.
+   */
+  closureById: ReadonlyMap<string, Closure>;
   selectedId: string | null;
   onSelect: (id: string) => void;
   /**
@@ -167,6 +177,7 @@ export function SpecGraph({
   nodes,
   edges,
   signalById,
+  closureById,
   selectedId,
   onSelect,
   onBackgroundClick,
@@ -254,8 +265,8 @@ export function SpecGraph({
 
   /** The cards, which are the same call plus the two things a click or a refetch moves. */
   const cards = useMemo(
-    () => cardPieces(layout, view, byId, signalById, highlight),
-    [layout, view, byId, signalById, highlight],
+    () => cardPieces(layout, view, byId, signalById, closureById, highlight),
+    [layout, view, byId, signalById, closureById, highlight],
   );
 
   const flowNodes = useMemo<CanvasNode[]>(

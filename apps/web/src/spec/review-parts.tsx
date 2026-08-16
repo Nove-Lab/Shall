@@ -1,11 +1,13 @@
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import type { Closure } from "./review";
 import type { DiffKind, DiffRow } from "./view/diff";
 import type { Signal } from "./view/furniture";
 
 /**
- * THE THREE THINGS THE REVIEW SURFACE DRAWS IN MORE THAN ONE PLACE: the signal
- * square, the list of relations pointing at a node, and a line diff.
+ * THE FOUR THINGS THE REVIEW SURFACE DRAWS IN MORE THAN ONE PLACE: the signal
+ * square, the closure mark, the list of relations pointing at a node, and a
+ * line diff.
  *
  * THEY ARE HERE BECAUSE THE CARD AND THE PANEL BOTH NEED THEM AND MUST NOT
  * IMPORT EACH OTHER. The dot is on every card on the canvas and at the head of
@@ -19,7 +21,9 @@ import type { Signal } from "./view/furniture";
  */
 
 /**
- * THE VERDICT'S PAINT, AND IT IS THE ONLY PLACE A COLOUR IS NAMED.
+ * THE VERDICT'S PAINT. WITH `CLOSURE_CLASS` BELOW IT, THE TWO PLACES A COLOUR IS
+ * NAMED — and there are two rather than one because a criterion's second axis is
+ * now painted too, in these same values.
  *
  * THEY ARE TAILWIND PALETTE VALUES AND NOT THEME TOKENS, which is a departure
  * from the rest of this app and is the same one the card's placeholder square
@@ -49,6 +53,58 @@ export const SIGNAL_CLASS: Record<Signal, string> = {
  */
 export function StatusDot({ color }: { color: Signal }) {
   return <span className={cn("size-2.25 shrink-0", SIGNAL_CLASS[color])} />;
+}
+
+/**
+ * WHETHER A CRITERION IS MET — THE SECOND AXIS, AND IT IS A SECOND TRAFFIC LIGHT.
+ *
+ * Registration is the square: somebody read this criterion and agreed that it
+ * says the right thing. Satisfaction is this badge: somebody signed off that the
+ * demand is met by everything now claiming it. A criterion can be green and open
+ * for a whole release and neither answer is wrong — the two axes are asked of
+ * different things — but OPEN IS THE STATE THE PROJECT IS TRYING TO LEAVE, and a
+ * muted outline said that at the weight of a footnote. So it wears red until it
+ * is closed, and green when it is, IN THE SAME TWO PALETTE VALUES THE SQUARE
+ * USES: two lights on one board that disagreed about what red means would be
+ * two vocabularies. That is why this map sits beside `SIGNAL_CLASS` and why
+ * these two are the only places on the surface a colour is named.
+ *
+ * `Record<Closure, string>` for the reason the signal map gives: a third state
+ * is a compile error here rather than a badge in no class at all.
+ */
+export const CLOSURE_CLASS: Record<Closure, string> = {
+  open: "bg-red-500 text-white",
+  closed: "bg-emerald-500 text-white",
+};
+
+/**
+ * THE WORD IS THE ANNOUNCEMENT AND THERE IS NO SECOND ONE. The badge says
+ * "Open" or "Closed" in text a reader lands on directly, so nothing here is
+ * hidden behind an sr-only span the way the old tick needed — the shape WAS the
+ * statement then, and the statement is now the label.
+ *
+ * `border-transparent` because the base badge carries a border and the fill is
+ * what this variant is: a border in the default colour around a red badge reads
+ * as an outline the palette did not ask for.
+ *
+ * `className` IS FOR THE ONE CALLER WITH A HEIGHT BUDGET. The canvas card is
+ * 44px with a 16px `text-xs` row in it and the badge's own `h-5` is 20px, so the
+ * board passes `h-4 px-1.5` and nothing else does — the panel and the queue rows
+ * have the room and take the default, which keeps the badge one size in the
+ * places a person reads it slowly.
+ */
+export function ClosureMark({
+  state,
+  className,
+}: {
+  state: Closure;
+  className?: string;
+}) {
+  return (
+    <Badge className={cn(CLOSURE_CLASS[state], "border-transparent", className)}>
+      {state === "closed" ? "Closed" : "Open"}
+    </Badge>
+  );
 }
 
 /**

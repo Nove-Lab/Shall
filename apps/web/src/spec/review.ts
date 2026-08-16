@@ -1,6 +1,6 @@
 import type { api } from "@/api";
 import type { SpecEdge } from "./spec-node";
-import type { Signal } from "./view/furniture";
+import type { Closure, Signal } from "./view/furniture";
 
 /**
  * WHAT THE DAEMON SAYS ABOUT THE GRAPH, IN THE SHAPES THIS SURFACE READS IT IN.
@@ -29,6 +29,49 @@ export type ApprovedVersion = Awaited<
   ReturnType<typeof api.spec.approvedVersion.query>
 >;
 export type GitStatus = Awaited<ReturnType<typeof api.spec.gitStatus.query>>;
+
+/**
+ * THE QUEUE'S OWN SHAPES, DERIVED THE SAME WAY AND FOR THE SAME REASON.
+ *
+ * A bundle is a discriminated union on the wire, so the three arms are pulled
+ * out with `Extract` rather than re-spelled: `core/arith/bundles.ts` is where
+ * the union is decided, and a kind renamed there is a compile error at these
+ * four lines instead of a card that silently never matches.
+ *
+ * THE MEMBER IS TAKEN OFF ONE ARM AND IS THE SAME TYPE ON ALL THREE. The daemon
+ * declares `AcClosureBundle.evidence` as `EvidenceMember extends BundleMember`,
+ * so reading the member shape off the spec-approval arm names the common half
+ * exactly, and `EvidenceMember` names the half that carries the work log.
+ */
+export type ReviewQueue = Awaited<
+  ReturnType<typeof api.spec.reviewQueue.query>
+>;
+export type ReviewBundle = ReviewQueue["bundles"][number];
+export type BundleKind = ReviewBundle["kind"];
+export type SpecApprovalBundle = Extract<
+  ReviewBundle,
+  { kind: "spec-approval" }
+>;
+export type WorkReportBundle = Extract<ReviewBundle, { kind: "work-report" }>;
+export type AcClosureBundle = Extract<ReviewBundle, { kind: "ac-closure" }>;
+/** One row of a bundle: a node, its colour, and what the two books say about it. */
+export type BundleMember = SpecApprovalBundle["members"][number];
+/** A claimant, which is a member with the work log that submitted it. */
+export type EvidenceMember = AcClosureBundle["evidence"][number];
+/** What a rejection leaves in the book — the daemon hands the record straight back. */
+export type RejectionRecord = Awaited<
+  ReturnType<typeof api.spec.reject.mutate>
+>;
+
+/**
+ * WHETHER A CRITERION IS MET, RE-EXPORTED AND NOT RE-DECLARED.
+ *
+ * It is `view/furniture.ts`'s word, for the same reason `Signal` is: a card
+ * carries it, and `view/` may not import a wire type. Everything on this surface
+ * that is not the canvas reads it from here, so there is one import for a
+ * verdict and one for the mark beside it — and still exactly one declaration.
+ */
+export type { Closure };
 
 /**
  * NO COLOURS YET — the board before the first review lands, as one shared value
@@ -69,6 +112,43 @@ export function signalsOf(
   return signals;
 }
 
+/**
+ * NO MARKS YET, as one shared value — `NO_SIGNALS` above carries the reason, and
+ * it is the same reason: this map is a dependency of the card memo, so a fresh
+ * empty one per render would be fifty new cards on a board nothing changed on.
+ */
+export const NO_CLOSURES: ReadonlyMap<string, Closure> = new Map();
+
+/**
+ * THE SECOND AXIS, KEYED BY ID — and only the nodes it means anything for.
+ *
+ * A status whose `closure` is `null` is not a criterion at all, so it is left
+ * OUT of the map rather than entered against a third word: a card asks the map
+ * whether to draw a mark, and "no entry" is that answer. The one word the daemon
+ * did send travels through unread — nothing here works a closure out for itself,
+ * exactly as `signalsOf` works no colour out.
+ *
+ * IT IS THE OTHER LINE WHERE THE WIRE MEETS THE CANVAS, and it is the crossing
+ * for the same reason `signalsOf` is: `core/arith/review.ts` names the answer
+ * and `view/furniture.ts` names what a card can wear, and a third state added to
+ * either is a compile error at this `set` rather than a mark silently not drawn.
+ */
+export function closuresOf(
+  report: ReviewReport | null,
+): ReadonlyMap<string, Closure> {
+  if (report === null) {
+    return NO_CLOSURES;
+  }
+
+  const closures = new Map<string, Closure>();
+  for (const status of report.statuses) {
+    if (status.closure !== null) {
+      closures.set(status.id, status.closure);
+    }
+  }
+  return closures;
+}
+
 /** The same list keyed by id, for the panel — which wants the reason, not the colour. */
 export function statusesById(
   report: ReviewReport | null,
@@ -99,6 +179,19 @@ export function referrersOf(
  * a node say it in these words, because there is one answer and it does not
  * depend on which door the person came through.
  */
+/**
+ * THE FIRST LINE OF A RATIONALE, for the places it is QUOTED rather than shown —
+ * the caption under a verdict for a rejection that no longer stands, and the
+ * closure card's history rows. A caption that grew to twelve lines would bury
+ * the node it is about; nothing is lost, because a standing rejection is drawn
+ * whole wherever it stands. It cuts on the author's own line break rather than
+ * at a character count, so the quote never stops mid-word. One helper for both
+ * surfaces, so the queue and the panel cannot quote the same sentence two ways.
+ */
+export function firstLine(text: string): string {
+  return text.split("\n", 1)[0] ?? text;
+}
+
 export function deletionSentence(id: string): string {
   return `${id} leaves the graph, and the relations that start at it go with it. Relations that point at it stay behind, drawn to a node that is no longer there. This cannot be undone.`;
 }
