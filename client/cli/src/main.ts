@@ -227,8 +227,8 @@ function count(amount: number, one: string, many: string): string {
  *
  * The count goes first even when something is broken, because what a problem
  * costs is exactly the difference between the folder and this number — with
- * one exception the daemon spells from the project root, the approval ledger,
- * which costs no node and every green.
+ * one exception the daemon spells from the project root — a ledger that will
+ * not read, which costs no node and every judgement.
  */
 async function check(url: string): Promise<void> {
   const result = await connect(url).spec.check.query({ path: process.cwd() });
