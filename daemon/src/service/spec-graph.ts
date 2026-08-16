@@ -11,7 +11,12 @@ import {
   NODE_TYPES,
   permittedEdgeTypes,
 } from "@shall/core/graph";
-import { isCanonical, LEDGER_FILE } from "@shall/core/serialize";
+import {
+  ACCEPTANCES_FILE,
+  isCanonical,
+  LEDGER_FILE,
+  REJECTIONS_FILE,
+} from "@shall/core/serialize";
 import type { FileProblem, SpecGraph } from "@shall/core/store";
 import {
   addEdge,
@@ -19,7 +24,9 @@ import {
   deleteNodeFile,
   isStoreRefusal,
   loadGraph,
+  readAcceptanceLedger,
   readApprovalLedger,
+  readRejectionLedger,
   removeEdge,
   scaffoldNodeFile,
   updateNodeFile,
@@ -29,7 +36,9 @@ import { payloadHash } from "../host/hash.js";
 import { requireRegistryProject } from "./projects.js";
 import {
   findProjectRootAbove,
+  getProjectAcceptancesPath,
   getProjectLedgerPath,
+  getProjectRejectionsPath,
   getProjectShallPath,
   getProjectSpecPath,
   pathExists,
@@ -37,10 +46,14 @@ import {
 } from "../host/project-files.js";
 
 /**
- * The project a `spec.*` procedure works in: its path on disk, its spec
- * folder and its approval ledger — exported because the review service needs
- * all three (git wants the project, the store wants the spec, the colours want
- * the ledger).
+ * The project a `spec.*` procedure works in: its path on disk, its spec folder
+ * and the three books beside it — exported because the review service needs
+ * every one of them (git wants the project, the store wants the spec, the
+ * colours want all three ledgers).
+ *
+ * `ledgerFile` is the approvals, unqualified, because it was the only book when
+ * the name was chosen and every caller of it still means that one. The other
+ * two say which they are.
  *
  * The registry outlives the folder it points at — a project gets moved,
  * deleted, or checked out somewhere else and the entry stays behind. It
@@ -49,9 +62,13 @@ import {
  * empty and a silent lie for one that was deleted. This is what tells the two
  * apart, in the words the picker uses.
  */
-export async function projectSpecFor(
-  projectId: string,
-): Promise<{ projectPath: string; specDir: string; ledgerFile: string }> {
+export async function projectSpecFor(projectId: string): Promise<{
+  projectPath: string;
+  specDir: string;
+  ledgerFile: string;
+  rejectionsFile: string;
+  acceptancesFile: string;
+}> {
   const project = await requireRegistryProject(projectId);
   if (!(await pathExists(getProjectShallPath(project.path)))) {
     throw missing(`Not a Shall project: ${project.path}`);
@@ -60,6 +77,8 @@ export async function projectSpecFor(
     projectPath: project.path,
     specDir: getProjectSpecPath(project.path),
     ledgerFile: getProjectLedgerPath(project.path),
+    rejectionsFile: getProjectRejectionsPath(project.path),
+    acceptancesFile: getProjectAcceptancesPath(project.path),
   };
 }
 
@@ -451,8 +470,9 @@ export interface SpecCheck {
  *
  * THREE LISTS, AND THE DIFFERENCE IS WHAT EACH COSTS. A problem is a file left
  * out of the graph: something in it is wrong and the graph is smaller than the
- * folder until somebody fixes it — or the approval ledger, when it will not
- * read, which is one file nothing green can be known without. A gap is a hole the graph holds while every
+ * folder until somebody fixes it — or one of the three ledgers, when it will
+ * not read, which are the files nothing green, red-by-rejection or closed can
+ * be known without. A gap is a hole the graph holds while every
  * file reads — a relation kept toward an id nothing answers to — so the node is
  * still in the count and the graph still does not hold together until somebody
  * restores the missing file or re-anchors the survivor. A note is a file that
@@ -476,6 +496,10 @@ export async function checkSpec(startPath: string): Promise<SpecCheck> {
   const specDir = getProjectSpecPath(root);
   const graph = await loadGraph(specDir);
   const ledger = await readApprovalLedger(getProjectLedgerPath(root));
+  const rejections = await readRejectionLedger(getProjectRejectionsPath(root));
+  const acceptances = await readAcceptanceLedger(
+    getProjectAcceptancesPath(root),
+  );
 
   // The gaps: the graph's holes, computed by the same arithmetic the review
   // serves — over the real ledger and the real hash, so the check and the
@@ -489,8 +513,15 @@ export async function checkSpec(startPath: string): Promise<SpecCheck> {
     const type = typeById.get(id) ?? "?";
     return `${bandFolderOf(type) ?? "?"}/${type}/${id}.md`;
   };
+  // A book that would not read contributes NO records to the arithmetic, and
+  // says so in the problem list below instead. It is the same bargain the
+  // approvals have always made here: the check is a report and not a door, so
+  // it goes on to count the graph rather than refusing the whole run — and the
+  // row it prints is what tells the person why the colours below it are thin.
   const review = reviewGraph(graph, {
-    records: ledger.records,
+    approvals: ledger.records,
+    rejections: rejections.records,
+    acceptances: acceptances.records,
     hash: payloadHash,
   });
   const gaps: FileProblem[] = [];
@@ -503,6 +534,12 @@ export async function checkSpec(startPath: string): Promise<SpecCheck> {
     }
   }
   for (const status of review.statuses) {
+    if (status.reason === "off-target" && status.problem !== null) {
+      // The aim rule: a seam between a work log, its task and its evidence,
+      // filed under the node the sentence is about — both ends carry one.
+      gaps.push({ file: fileFor(status.id), message: status.problem });
+      continue;
+    }
     if (status.reason !== "orphan") {
       continue;
     }
@@ -537,18 +574,25 @@ export async function checkSpec(startPath: string): Promise<SpecCheck> {
   notes.sort((a, b) => (a.file === b.file ? 0 : a.file < b.file ? -1 : 1));
 
   // A ledger that will not read is a problem like a file that will not read:
-  // an error to fix, and the check exits 1 on it. It is the one row in this
+  // an error to fix, and the check exits 1 on it. These are the rows in this
   // list spelled from the PROJECT root rather than the spec folder — the
-  // ledger is the spec's sibling, and `../ledger/approvals.yaml` is a spelling
-  // nobody would type — and it goes first, because a person should hear that
-  // the ledger would not read before a list of node files.
+  // ledgers are the spec's siblings, and `../ledger/approvals.yaml` is a
+  // spelling nobody would type — and they go first, because a person should
+  // hear that a book would not read before a list of node files. All three are
+  // asked, in the order they were added to the design, so a folder with two bad
+  // books names both rather than sending the person back for a second run.
+  const books: FileProblem[] = [];
+  for (const [file, problem] of [
+    [LEDGER_FILE, ledger.problem],
+    [REJECTIONS_FILE, rejections.problem],
+    [ACCEPTANCES_FILE, acceptances.problem],
+  ] as const) {
+    if (problem !== null) {
+      books.push({ file: `.shall/${file}`, message: problem });
+    }
+  }
   const problems: FileProblem[] =
-    ledger.problem === null
-      ? graph.problems
-      : [
-          { file: `.shall/${LEDGER_FILE}`, message: ledger.problem },
-          ...graph.problems,
-        ];
+    books.length === 0 ? graph.problems : [...books, ...graph.problems];
 
   return {
     root,

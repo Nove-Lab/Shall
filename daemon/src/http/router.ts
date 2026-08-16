@@ -27,6 +27,14 @@ import {
   updateSpecNode,
 } from "../service/spec-graph.js";
 import {
+  acceptSpecClosure,
+  approveSpecNodes,
+  leaveSpecOpen,
+  rejectSpecNode,
+  reviewQueue,
+  withdrawSpecRejection,
+} from "../service/spec-queue.js";
+import {
   approveSpecNode,
   commitSpec,
   readApprovedVersion,
@@ -200,6 +208,22 @@ export const appRouter = t.router({
     // by architecture, and the guard is that convention plus the deny rule
     // over the ledger; a local token belongs here the day the daemon has a
     // caller it does not trust.
+    //
+    // The review queue's own doors sit beside them and are the same kind of
+    // thing said three ways. `reviewQueue` computes the bundles on every ask
+    // and stores nothing. `reject` and `withdrawRejection` are the second book
+    // — a person says in writing what is wrong, and takes it back.
+    // `acceptClosure` and `leaveOpen` are the third — a criterion closed over
+    // everything that claims it, or left open with a reason; each removes the
+    // other book's word in the same act.
+    // `approveNodes` is [Approve all]: one bundle, one turn, all or nothing.
+    // Every one of them is the person's, never an agent's, for the reason
+    // above.
+    //
+    // `ids` and `evidence` are arrays of strings and the schema asks nothing
+    // more of them than that, which is the same bargain every field here
+    // makes: whether an id is blank, unknown or the wrong type of node is the
+    // service's sentence, written for a person to read.
     review: procedure
       .input(z.object({ projectId: z.string().min(1) }))
       .query(({ input }) => reviewSpec(input.projectId)),
@@ -221,6 +245,41 @@ export const appRouter = t.router({
     commitSpec: procedure
       .input(z.object({ projectId: z.string().min(1), message: z.string() }))
       .mutation(({ input }) => commitSpec(input)),
+    reviewQueue: procedure
+      .input(z.object({ projectId: z.string().min(1) }))
+      .query(({ input }) => reviewQueue(input.projectId)),
+    reject: procedure
+      .input(
+        z.object({
+          projectId: z.string().min(1),
+          id: z.string(),
+          rationale: z.string(),
+        }),
+      )
+      .mutation(({ input }) => rejectSpecNode(input)),
+    withdrawRejection: procedure
+      .input(z.object({ projectId: z.string().min(1), id: z.string() }))
+      .mutation(({ input }) => withdrawSpecRejection(input)),
+    approveNodes: procedure
+      .input(
+        z.object({
+          projectId: z.string().min(1),
+          ids: z.array(z.string()),
+        }),
+      )
+      .mutation(({ input }) => approveSpecNodes(input)),
+    acceptClosure: procedure
+      .input(z.object({ projectId: z.string().min(1), id: z.string() }))
+      .mutation(({ input }) => acceptSpecClosure(input)),
+    leaveOpen: procedure
+      .input(
+        z.object({
+          projectId: z.string().min(1),
+          id: z.string(),
+          rationale: z.string(),
+        }),
+      )
+      .mutation(({ input }) => leaveSpecOpen(input)),
   }),
 });
 

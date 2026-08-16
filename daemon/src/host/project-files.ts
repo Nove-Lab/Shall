@@ -11,7 +11,12 @@ import {
 } from "node:fs/promises";
 import path from "node:path";
 import { bandFolderOf, NODE_TYPES } from "@shall/core/graph";
-import { emitTemplate, LEDGER_FILE } from "@shall/core/serialize";
+import {
+  ACCEPTANCES_FILE,
+  emitTemplate,
+  LEDGER_FILE,
+  REJECTIONS_FILE,
+} from "@shall/core/serialize";
 import type { ProjectMetadata } from "../types.js";
 import { getShallHome, isShallHomePath } from "./shall-home.js";
 
@@ -53,6 +58,25 @@ export function getProjectSpecPath(projectPath: string): string {
  */
 export function getProjectLedgerPath(projectPath: string): string {
   return path.join(getProjectShallPath(projectPath), LEDGER_FILE);
+}
+
+/**
+ * The rejection ledger, beside the approvals in the same folder: one YAML map
+ * from node id to the latest refusal a person wrote down. It arrives the same
+ * way — nothing makes it ahead of time, the first rejection makes it, and a
+ * project nobody has refused anything in has no such file.
+ */
+export function getProjectRejectionsPath(projectPath: string): string {
+  return path.join(getProjectShallPath(projectPath), REJECTIONS_FILE);
+}
+
+/**
+ * The acceptance ledger, the third book in that folder: one YAML map from an
+ * acceptance criterion's id to the evidence a person closed it on. Same
+ * manners as the other two — made by the first closing and by nothing else.
+ */
+export function getProjectAcceptancesPath(projectPath: string): string {
+  return path.join(getProjectShallPath(projectPath), ACCEPTANCES_FILE);
 }
 
 /**

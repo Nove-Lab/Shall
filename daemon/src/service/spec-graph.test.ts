@@ -1044,6 +1044,58 @@ describe("checkSpec", () => {
     ]);
   });
 
+  test("a work log whose evidence claims outside its task's aim is a gap at both ends", async () => {
+    // The aim rule is grammar: it names the seam under the log and under the
+    // evidence, in words a person can act on from either file.
+    const project = await newProject();
+    for (const [type, id] of [
+      ["Goal", "G-0001"],
+      ["Actor", "A-0001"],
+      ["UseCase", "UC-0001"],
+      ["Scenario", "SC-0001"],
+      ["SystemResponsibility", "SR-0001"],
+      ["Requirement", "R-0001"],
+      ["AcceptanceCriterion", "AC-0001"],
+      ["AcceptanceCriterion", "AC-0002"],
+      ["ImplementationTask", "IT-0001"],
+      ["Journal", "J-0001"],
+      ["WorkLog", "WL-0001"],
+      ["Evidence", "EV-0001"],
+    ] as const) {
+      await node(project, type, id, GOAL_BODY);
+    }
+    for (const [type, fromId, toId] of [
+      ["PURSUED_BY", "G-0001", "A-0001"],
+      ["PERFORMS", "A-0001", "UC-0001"],
+      ["DETAILS", "UC-0001", "SC-0001"],
+      ["DERIVES_RESPONSIBILITY", "SC-0001", "SR-0001"],
+      ["REQUIRES", "SR-0001", "R-0001"],
+      ["HAS_CRITERION", "R-0001", "AC-0001"],
+      ["HAS_CRITERION", "R-0001", "AC-0002"],
+      ["TARGETS", "IT-0001", "AC-0001"],
+      ["LOGS", "J-0001", "WL-0001"],
+      ["ADDRESSES", "WL-0001", "IT-0001"],
+      ["SUBMITS", "WL-0001", "EV-0001"],
+      ["CLAIMS", "EV-0001", "AC-0002"],
+    ] as const) {
+      await createSpecEdge({ projectId: project.id, type, fromId, toId });
+    }
+    const check = await checkSpec(project.path);
+    assert.deepEqual(check.problems, []);
+    assert.deepEqual(check.gaps, [
+      {
+        file: "execution/Evidence/EV-0001.md",
+        message:
+          "EV-0001 claims AC-0002, but the work log that submitted it, WL-0001, addresses IT-0001, which targets AC-0001 — a work log's evidence claims only the criteria its task targets.",
+      },
+      {
+        file: "execution/WorkLog/WL-0001.md",
+        message:
+          "WL-0001 addresses IT-0001, which targets AC-0001, but submits EV-0001, which claims AC-0002 — a work log's evidence claims only the criteria its task targets.",
+      },
+    ]);
+  });
+
   test("a ledger nobody has written yet is no problem at all", async () => {
     const project = await newProject();
     await node(project, "Goal", "G-0001", GOAL_BODY);
@@ -1073,6 +1125,48 @@ describe("checkSpec", () => {
     ]);
     assert.equal(check.nodeCount, 1);
     assert.deepEqual(check.gaps, []);
+  });
+
+  test("the other two books are read as well, and each names itself", async () => {
+    const project = await newProject();
+    await node(project, "Goal", "G-0001", GOAL_BODY);
+    const ledgerDir = path.join(project.path, ".shall", "ledger");
+    await mkdir(ledgerDir, { recursive: true });
+    await writeFile(
+      path.join(ledgerDir, "rejections.yaml"),
+      "- G-0001\n",
+      "utf8",
+    );
+
+    let check = await checkSpec(project.path);
+    assert.deepEqual(check.problems, [
+      {
+        file: ".shall/ledger/rejections.yaml",
+        message:
+          "The rejection ledger is a list, not a map from node id to rejection record.",
+      },
+    ]);
+    // The graph is still counted whole: an unreadable book is one row, not a
+    // reason to stop reading the folder.
+    assert.equal(check.nodeCount, 1);
+    assert.deepEqual(check.gaps, []);
+
+    // Two bad books name both, in the order the books were read, so nobody is
+    // sent back for a second run to hear about the second one.
+    await writeFile(
+      path.join(ledgerDir, "acceptances.yaml"),
+      "- AC-0001\n",
+      "utf8",
+    );
+    check = await checkSpec(project.path);
+    assert.deepEqual(
+      check.problems.map((problem) => problem.file),
+      [".shall/ledger/rejections.yaml", ".shall/ledger/acceptances.yaml"],
+    );
+    assert.equal(
+      check.problems[1]?.message,
+      "The acceptance ledger is a list, not a map from node id to acceptance record.",
+    );
   });
 });
 

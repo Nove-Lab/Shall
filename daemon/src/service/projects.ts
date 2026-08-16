@@ -93,7 +93,7 @@ export async function openProject(
   // with Shall now, and a stale copy in the repository would teach an agent a
   // format the daemon no longer writes — and the agent settings gain the two
   // deny rules that keep Shall's own home out of an agent's reading and the
-  // approval ledger out of its pen.
+  // ledgers out of its pen.
   //
   // NONE IS A CONDITION OF OPENING. All four are conveniences — so a folder
   // Shall may read but not write into (a read-only mount, a checkout owned by

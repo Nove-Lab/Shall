@@ -169,8 +169,8 @@ export async function repositoryRoot(startPath: string): Promise<string | null> 
  *
  * A PATH THAT IS NOWHERE IS NOT AN ERROR HERE. `status` under a pathspec that
  * matches nothing is silent and exits 0 — unlike `add` and `commit`, which both
- * refuse one — so the approval ledger's folder can be asked about on every
- * glance at a project that has never approved anything and has no such folder
+ * refuse one — so the ledger folder can be asked about on every
+ * glance at a project that has never judged anything and has no such folder
  * yet. Only a path outside the repository fails at all, and that reads as not
  * dirty like every other failure here — the last paragraph below.
  *
@@ -245,8 +245,8 @@ const SHALL_IDENTITY = [
  * THE PATHS ARE FILTERED DOWN TO THE ONES THAT ACTUALLY MOVED, BECAUSE GIT
  * REFUSES A PATHSPEC THAT NAMES NOTHING. `add -A -- <path>` is fatal on a
  * pathspec matching neither the worktree nor the index — a folder that is not
- * there at all, which is exactly the approval ledger of a project nobody has
- * approved anything in — and it takes the whole `add` down with it; `commit --
+ * there at all, which is exactly the ledger folder of a project nobody has
+ * judged anything in — and it takes the whole `add` down with it; `commit --
  * <path>` fails on a pathspec the index and HEAD have never heard of, an
  * untracked empty folder included. A path with a change in it is by
  * construction known to both, so filtering by `isDirtyUnder` leaves only
