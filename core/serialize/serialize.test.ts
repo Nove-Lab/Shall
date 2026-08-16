@@ -7,6 +7,11 @@ import {
   sectionGuideFor,
   type SpecEdge,
 } from "../graph/index.js";
+import {
+  emitAcceptanceLedger,
+  parseAcceptanceLedger,
+  type AcceptanceRecord,
+} from "./acceptances.js";
 import { approvalPayload, emitNodeFile } from "./emit.js";
 import {
   emitApprovalLedger,
@@ -14,8 +19,14 @@ import {
   type ApprovalRecord,
 } from "./ledger.js";
 import { parseNodeFile } from "./parse.js";
+import {
+  emitRejectionLedger,
+  parseRejectionLedger,
+  type RejectionRecord,
+} from "./rejections.js";
 import { emitScalar, isPlainSafe } from "./scalar.js";
 import { emitScaffold, emitTemplate } from "./template.js";
+import { mapKeysAt } from "./yaml.js";
 import { isCanonical } from "./index.js";
 
 /**
@@ -1478,39 +1489,51 @@ name:                  # required · one line
     );
   });
 
-  test("the Evidence template, which the canon gives no outgoing relation", () => {
+  test("the VerificationReport template, which the canon gives no outgoing relation", () => {
     // The other branch of the relation block, as a golden rather than as a
     // substring check: a type with no outgoing edge says so in one line and
     // ships no commented-out `edges:` example, because there is nothing it
-    // could show. Evidence has been that type since CITES left with the Commit
-    // node — what it testifies about is named by the work log and the
-    // criterion that reach it, never by a line of its own.
+    // could show. VerificationReport is the one type left in that branch —
+    // what it testifies about is named by the work log that submitted it,
+    // never by a line of its own.
     assert.equal(
-      emitTemplate("Evidence"),
+      emitTemplate("VerificationReport"),
       `---
-# Evidence — the starting shape of a Evidence node.
-# \`shall add-spec-node --type Evidence\` writes this file into the project at
-# .shall/spec/execution/Evidence/<id>.md with the next free id as its name.
+# VerificationReport — the starting shape of a VerificationReport node.
+# \`shall add-spec-node --type VerificationReport\` writes this file into the project at
+# .shall/spec/execution/VerificationReport/<id>.md with the next free id as its name.
 # (Writing it there by hand works too: the FILENAME is the id and the FOLDER
 # is the type, so neither is repeated inside. An id uses letters, digits,
-# dots, hyphens and underscores, at most 64 characters — EV-0001 is the shape
+# dots, hyphens and underscores, at most 64 characters — VR-0001 is the shape
 # Shall suggests.)
 short_name:            # required · one line
 name:                  # required · one line
 # Everything below the closing fence is the specification: free markdown,
 # read back exactly as written. The headings that follow are a starting
 # shape, not a rule — keep them, reshape them or write your own.
-#   ## Claim
-#   ## Verdict — Pending · Approved · Rejected
-# From a Evidence the canon allows no outgoing relations.
+#   ## Testimony
+#   ## Coverage
+#   ## Trigger
+# From a VerificationReport the canon allows no outgoing relations.
 ---
 
-## Claim
+## Testimony
 
-## Verdict
+## Coverage
+
+## Trigger
 `,
     );
-    assert.equal(emitTemplate("Evidence").includes("# edges:"), false);
+    assert.equal(emitTemplate("VerificationReport").includes("# edges:"), false);
+  });
+
+  test("the Evidence template shows the one line it may write: its claim", () => {
+    // The claim is the evidence's own line since #24 turned round — an agent
+    // starting an evidence file sees where to aim it, and the criterion's file
+    // is never touched by a claim being made.
+    const text = emitTemplate("Evidence");
+    assert.ok(text.includes("# From a Evidence the canon allows:\n#   CLAIMS -> AcceptanceCriterion\n"), text);
+    assert.ok(text.includes("# edges:\n#   - type: CLAIMS\n#     to: AC-0001\n"), text);
   });
 
   test("the WorkLog template shows where its commits go", () => {
@@ -2312,5 +2335,684 @@ describe("the approval ledger", () => {
       assert.equal(reading.records.get("G-0001")?.by, value, JSON.stringify(entry.value));
       assert.equal(emitApprovalLedger(reading.records), written);
     }
+  });
+});
+
+/**
+ * The rejection ledger — the second book, held as goldens for the same reason
+ * the first one is. Its shape is the approval ledger's plus one field, and the
+ * cases below are deliberately the same cases in the same order, because the
+ * two readers share a root and a reader that drifts is a reader that stopped
+ * sharing it.
+ */
+describe("the rejection ledger", () => {
+  /** One line, and plain: nothing in it is an indicator or a number. */
+  const SHORT = "The acceptance criteria do not say what happens on a declined card.";
+  /** Three lines, which is what a Textarea gives back and what `\n` is for. */
+  const LONG = [
+    "Two things:",
+    "- the log is not attached",
+    "- the command is not the one in the plan",
+  ].join("\n");
+
+  const RECORD: RejectionRecord = {
+    rejectedHash:
+      "sha256:9f2b1c0000000000000000000000000000000000000000000000000000000000",
+    by: "yjshin",
+    at: "2026-08-16T09:12:33.412Z",
+    rationale: SHORT,
+  };
+  const OTHER: RejectionRecord = {
+    rejectedHash: "sha256:aa",
+    by: "someone",
+    at: "2026-08-16T10:00:00.000Z",
+    rationale: LONG,
+  };
+  const LEDGER = [
+    "EV-0002:",
+    "  rejectedHash: sha256:aa",
+    "  by: someone",
+    '  at: "2026-08-16T10:00:00.000Z"',
+    '  rationale: "Two things:\\n- the log is not attached\\n- the command is not the one in the plan"',
+    "R-0001:",
+    "  rejectedHash: sha256:9f2b1c0000000000000000000000000000000000000000000000000000000000",
+    "  by: yjshin",
+    '  at: "2026-08-16T09:12:33.412Z"',
+    "  rationale: The acceptance criteria do not say what happens on a declined card.",
+    "",
+  ].join("\n");
+
+  test("a ledger reads back as one record per id, and nothing else", () => {
+    const reading = parseRejectionLedger(LEDGER);
+    assert.equal(reading.problem, null);
+    assert.deepEqual(
+      [...reading.records.entries()],
+      [
+        ["EV-0002", OTHER],
+        ["R-0001", RECORD],
+      ],
+    );
+  });
+
+  test("an absent ledger and an empty one are the same nothing", () => {
+    for (const text of ["", "\n", "# nothing rejected yet\n"]) {
+      const reading = parseRejectionLedger(text);
+      assert.equal(reading.problem, null, JSON.stringify(text));
+      assert.equal(reading.records.size, 0);
+    }
+    assert.equal(emitRejectionLedger(new Map()), "");
+  });
+
+  test("the ids are written in byte order, and the file is a fixpoint", () => {
+    const records = new Map<string, RejectionRecord>([
+      ["R-0001", RECORD],
+      ["EV-0002", OTHER],
+    ]);
+    const written = emitRejectionLedger(records);
+    assert.equal(written, LEDGER);
+    const reading = parseRejectionLedger(written);
+    assert.equal(reading.problem, null);
+    assert.equal(emitRejectionLedger(reading.records), written);
+  });
+
+  test("a hand-written ledger in another spelling reads, and comes back canonical", () => {
+    const loose = [
+      "# rejections",
+      `EV-0002: { rejectedHash: 'sha256:aa', by: someone, at: '2026-08-16T10:00:00.000Z', rationale: "Two things:\\n- the log is not attached\\n- the command is not the one in the plan" }`,
+      "'R-0001':",
+      "    at: 2026-08-16T09:12:33.412Z",
+      "    by: yjshin",
+      // A literal block is how a person would write three lines by hand, and it
+      // comes back as the one quoted scalar the emitter writes.
+      "    rationale: |-",
+      `      ${SHORT}`,
+      "    rejectedHash: sha256:9f2b1c0000000000000000000000000000000000000000000000000000000000",
+      "",
+    ].join("\n");
+    const reading = parseRejectionLedger(loose);
+    assert.equal(reading.problem, null);
+    assert.equal(emitRejectionLedger(reading.records), LEDGER);
+  });
+
+  test("a rationale of several lines round-trips, quoted, with the breaks escaped", () => {
+    const written = emitRejectionLedger(new Map([["R-0001", OTHER]]));
+    assert.ok(
+      written.includes(
+        '  rationale: "Two things:\\n- the log is not attached\\n- the command is not the one in the plan"\n',
+      ),
+      written,
+    );
+    // The bytes hold a backslash and an n, and the value holds a line break.
+    assert.ok(!written.includes("\n- the log"), written);
+    assert.equal(
+      parseRejectionLedger(written).records.get("R-0001")?.rationale,
+      LONG,
+    );
+  });
+
+  test("an id that reads as a number is quoted, and comes back the string it is", () => {
+    const records = new Map<string, RejectionRecord>([["1234", RECORD]]);
+    const written = emitRejectionLedger(records);
+    assert.ok(written.startsWith('"1234":\n'), written);
+    const reading = parseRejectionLedger(written);
+    assert.equal(reading.problem, null);
+    assert.deepEqual([...reading.records.keys()], ["1234"]);
+  });
+
+  test("a record of anything but the four fields is one sentence about that id", () => {
+    const shape =
+      "Every record in the rejection ledger is a map of rejectedHash, by, at and rationale, each of them text — with an evidence map from evidence id to hash, holding at least one entry, when it leaves a criterion open — the record under R-0001 is not.";
+    for (const text of [
+      "R-0001:\n  rejectedHash: sha256:aa\n  by: yjshin\n  at: x\n",
+      "R-0001:\n  rejectedHash: sha256:aa\n  by: yjshin\n  at: x\n  rationale: why\n  note: looks fine\n",
+      "R-0001:\n  rejectedHash: sha256:aa\n  by: yjshin\n  at: 12\n  rationale: why\n",
+      // A rationale written as an empty value is null and not text, which is a
+      // shape and not a blank — the blank is the empty string, below.
+      "R-0001:\n  rejectedHash: sha256:aa\n  by: yjshin\n  at: x\n  rationale:\n",
+      "R-0001: rejected\n",
+      "R-0001:\n  - rejectedHash: sha256:aa\n",
+      // An evidence map that is empty, null, a list or holds a non-hash: the
+      // fifth key is allowed only as the map a left-open criterion needs.
+      "R-0001:\n  rejectedHash: sha256:aa\n  evidence:\n  by: yjshin\n  at: x\n  rationale: why\n",
+      "R-0001:\n  rejectedHash: sha256:aa\n  evidence: {}\n  by: yjshin\n  at: x\n  rationale: why\n",
+      "R-0001:\n  rejectedHash: sha256:aa\n  evidence: []\n  by: yjshin\n  at: x\n  rationale: why\n",
+      "R-0001:\n  rejectedHash: sha256:aa\n  evidence:\n    EV-0001: 12\n  by: yjshin\n  at: x\n  rationale: why\n",
+    ]) {
+      assert.equal(parseRejectionLedger(text).problem, shape, text);
+    }
+  });
+
+  test("a criterion left open carries the evidence it was judged on, and reads back the same", () => {
+    // The fifth key: every claimant at the moment of the judgement, id → hash,
+    // written between the hash and the by/at like the acceptance ledger's map,
+    // sorted, quoted where an id would read as a number, and refused if two
+    // spellings of one id are both written.
+    const record: RejectionRecord = {
+      rejectedHash: "sha256:ac",
+      by: "yjshin",
+      at: "2026-08-16T11:00:00.000Z",
+      rationale: "The log covers the happy path only.",
+      evidence: new Map([
+        ["EV-0002", "sha256:bb"],
+        ["EV-0001", "sha256:aa"],
+      ]),
+    };
+    const written = emitRejectionLedger(new Map([["AC-0001", record]]));
+    assert.equal(
+      written,
+      [
+        "AC-0001:",
+        "  rejectedHash: sha256:ac",
+        "  evidence:",
+        "    EV-0001: sha256:aa",
+        "    EV-0002: sha256:bb",
+        "  by: yjshin",
+        '  at: "2026-08-16T11:00:00.000Z"',
+        "  rationale: The log covers the happy path only.",
+        "",
+      ].join("\n"),
+    );
+    const reading = parseRejectionLedger(written);
+    assert.equal(reading.problem, null);
+    assert.deepEqual(reading.records.get("AC-0001"), record);
+    assert.equal(emitRejectionLedger(reading.records), written);
+    // A node rejection beside it has no map, and the two live in one book.
+    const both = emitRejectionLedger(
+      new Map([
+        ["AC-0001", record],
+        ["R-0001", { rejectedHash: "sha256:rr", by: "yjshin", at: "x", rationale: "No." }],
+      ]),
+    );
+    const back = parseRejectionLedger(both);
+    assert.equal(back.problem, null);
+    assert.equal(back.records.get("R-0001")?.evidence, undefined);
+    assert.equal(back.records.get("AC-0001")?.evidence?.size, 2);
+    // Twin keys inside the map, and an entry that names no node.
+    assert.equal(
+      parseRejectionLedger(
+        "AC-0001:\n  rejectedHash: sha256:ac\n  evidence:\n    1234: sha256:aa\n    \"1234\": sha256:bb\n  by: yjshin\n  at: x\n  rationale: why\n",
+      ).problem,
+      "1234 is written twice under AC-0001 in the rejection ledger, once bare and once quoted — YAML reads two keys and Shall one id, and a criterion left open names one hash for each piece of evidence.",
+    );
+    assert.equal(
+      parseRejectionLedger(
+        "AC-0001:\n  rejectedHash: sha256:ac\n  evidence:\n    CON: sha256:aa\n  by: yjshin\n  at: x\n  rationale: why\n",
+      ).problem,
+      'Under AC-0001, "CON" is not a node id. CON is a reserved device name on Windows, so no file can be named after it. Choose another id.',
+    );
+  });
+
+  test("a blank value in a record is named under its id", () => {
+    const rest = "  at: x\n  rationale: why\n";
+    assert.equal(
+      parseRejectionLedger(`R-0001:\n  rejectedHash: sha256:aa\n  by: ''\n${rest}`).problem,
+      "Under R-0001, a rejecter is required.",
+    );
+    assert.equal(
+      parseRejectionLedger(`R-0001:\n  rejectedHash: '  '\n  by: yjshin\n${rest}`).problem,
+      "Under R-0001, a rejected hash is required.",
+    );
+    assert.equal(
+      parseRejectionLedger(
+        'R-0001:\n  rejectedHash: sha256:aa\n  by: yjshin\n  at: "a\\tb"\n  rationale: why\n',
+      ).problem,
+      "Under R-0001, a rejection instant cannot contain a control character.",
+    );
+  });
+
+  test("a rationale that is blank is refused, because a rejection is its reason", () => {
+    for (const rationale of ["''", "'   '", '"\\n\\n"']) {
+      assert.equal(
+        parseRejectionLedger(
+          `R-0001:\n  rejectedHash: sha256:aa\n  by: yjshin\n  at: x\n  rationale: ${rationale}\n`,
+        ).problem,
+        "Under R-0001, a rationale is required.",
+        rationale,
+      );
+    }
+  });
+
+  test("a rationale carrying what no text file can carry is refused in the body's own words", () => {
+    // The label is `judgeBody`'s and not this book's: the rationale is judged by
+    // the very function a node's specification goes through, so that a sentence
+    // the panel can save is a sentence this file accepts.
+    assert.equal(
+      parseRejectionLedger(
+        `R-0001:\n  rejectedHash: sha256:aa\n  by: yjshin\n  at: x\n  rationale: "a\\u0000b"\n`,
+      ).problem,
+      "Under R-0001, the specification cannot contain a NUL character.",
+    );
+  });
+
+  test("an id written twice is refused, because a rejection has one latest", () => {
+    const twice = `${LEDGER}R-0001:\n  rejectedHash: sha256:bb\n  by: later\n  at: x\n  rationale: again\n`;
+    assert.equal(
+      parseRejectionLedger(twice).problem,
+      "The rejection ledger is not YAML Shall can read: Map keys must be unique.",
+    );
+  });
+
+  test("an id written once bare and once quoted is refused, though YAML calls them different keys", () => {
+    const record = "  rejectedHash: sha256:aa\n  by: a\n  at: x\n  rationale: why\n";
+    for (const [bare, id] of [
+      ["1234", "1234"],
+      ["true", "true"],
+    ] as const) {
+      assert.equal(
+        parseRejectionLedger(`${bare}:\n${record}"${id}":\n${record}`).problem,
+        `${id} is written twice in the rejection ledger, once bare and once quoted — YAML reads two keys and Shall one id, and a rejection has one latest record.`,
+        bare,
+      );
+    }
+  });
+
+  test("a blank id is refused, because a record belongs to a node", () => {
+    const record = "  rejectedHash: sha256:aa\n  by: a\n  at: x\n  rationale: why\n";
+    assert.equal(
+      parseRejectionLedger(`~:\n${record}`).problem,
+      "A record in the rejection ledger names no node id.",
+    );
+    assert.equal(
+      parseRejectionLedger(`CON:\n${record}`).problem,
+      'The rejection ledger names "CON", which is not a node id. CON is a reserved device name on Windows, so no file can be named after it. Choose another id.',
+    );
+  });
+
+  test("a ledger that is a list is refused as the shape it is", () => {
+    assert.equal(
+      parseRejectionLedger("- R-0001\n").problem,
+      "The rejection ledger is a list, not a map from node id to rejection record.",
+    );
+    assert.equal(
+      parseRejectionLedger("rejected\n").problem,
+      "The rejection ledger is text, not a map from node id to rejection record.",
+    );
+  });
+
+  test("a second document inside the ledger is refused rather than silently dropped", () => {
+    assert.equal(
+      parseRejectionLedger(
+        `${LEDGER}---\nX-1:\n  rejectedHash: sha256:cc\n  by: c\n  at: z\n  rationale: why\n`,
+      ).problem,
+      'The rejection ledger is not YAML Shall can read: a "..." or "---" line inside it ends the ledger early, so the records after that line belong to nobody.',
+    );
+  });
+
+  test("a ledger that is not YAML at all is refused in the library's own words", () => {
+    const reading = parseRejectionLedger("R-0001: [\n");
+    assert.ok(
+      reading.problem?.startsWith("The rejection ledger is not YAML Shall can read: "),
+      reading.problem ?? "",
+    );
+    assert.equal(reading.records.size, 0);
+  });
+
+  test("every corpus value survives a whole ledger as a rationale", () => {
+    for (const entry of SCALARS) {
+      const written = emitRejectionLedger(
+        new Map([["R-0001", { ...RECORD, rationale: entry.value }]]),
+      );
+      const reading = parseRejectionLedger(written);
+      assert.equal(reading.problem, null, JSON.stringify(entry.value));
+      assert.equal(
+        reading.records.get("R-0001")?.rationale,
+        entry.value,
+        JSON.stringify(entry.value),
+      );
+      assert.equal(emitRejectionLedger(reading.records), written);
+    }
+  });
+});
+
+/**
+ * The acceptance ledger — the third book, and the only one with a map inside a
+ * record. Everything the other two claim is claimed again here, plus what the
+ * nesting brings with it: an evidence id is a node id, an evidence hash is an
+ * identity, an acceptance names at least one of them, and a nested key written
+ * twice is caught where `toJS()` would have hidden it.
+ */
+describe("the acceptance ledger", () => {
+  const RECORD: AcceptanceRecord = {
+    acHash:
+      "sha256:9f2b1c0000000000000000000000000000000000000000000000000000000000",
+    evidence: new Map([
+      ["EV-0001", "sha256:aa"],
+      ["EV-0002", "sha256:bb"],
+    ]),
+    by: "yjshin",
+    at: "2026-08-16T09:12:33.412Z",
+  };
+  const OTHER: AcceptanceRecord = {
+    acHash: "sha256:cc",
+    evidence: new Map([["EV-0003", "sha256:dd"]]),
+    by: "someone",
+    at: "2026-08-16T10:00:00.000Z",
+  };
+  const LEDGER = [
+    "AC-0001:",
+    "  acHash: sha256:9f2b1c0000000000000000000000000000000000000000000000000000000000",
+    "  evidence:",
+    "    EV-0001: sha256:aa",
+    "    EV-0002: sha256:bb",
+    "  by: yjshin",
+    '  at: "2026-08-16T09:12:33.412Z"',
+    "AC-0002:",
+    "  acHash: sha256:cc",
+    "  evidence:",
+    "    EV-0003: sha256:dd",
+    "  by: someone",
+    '  at: "2026-08-16T10:00:00.000Z"',
+    "",
+  ].join("\n");
+
+  test("a ledger reads back as one record per id, and nothing else", () => {
+    const reading = parseAcceptanceLedger(LEDGER);
+    assert.equal(reading.problem, null);
+    assert.deepEqual(
+      [...reading.records.entries()],
+      [
+        ["AC-0001", RECORD],
+        ["AC-0002", OTHER],
+      ],
+    );
+  });
+
+  test("an absent ledger and an empty one are the same nothing", () => {
+    for (const text of ["", "\n", "# nothing closed yet\n"]) {
+      const reading = parseAcceptanceLedger(text);
+      assert.equal(reading.problem, null, JSON.stringify(text));
+      assert.equal(reading.records.size, 0);
+    }
+    assert.equal(emitAcceptanceLedger(new Map()), "");
+  });
+
+  test("the ids are written in byte order, inside and out, and the file is a fixpoint", () => {
+    const records = new Map<string, AcceptanceRecord>([
+      ["AC-0002", OTHER],
+      [
+        "AC-0001",
+        {
+          ...RECORD,
+          // Handed in the other way round, so the sort is what the bytes owe.
+          evidence: new Map([
+            ["EV-0002", "sha256:bb"],
+            ["EV-0001", "sha256:aa"],
+          ]),
+        },
+      ],
+    ]);
+    const written = emitAcceptanceLedger(records);
+    assert.equal(written, LEDGER);
+    const reading = parseAcceptanceLedger(written);
+    assert.equal(reading.problem, null);
+    assert.equal(emitAcceptanceLedger(reading.records), written);
+  });
+
+  test("a hand-written ledger in another spelling reads, and comes back canonical", () => {
+    const loose = [
+      "# acceptances",
+      "AC-0002: { acHash: 'sha256:cc', evidence: { EV-0003: sha256:dd }, by: someone, at: '2026-08-16T10:00:00.000Z' }",
+      "'AC-0001':",
+      "    at: 2026-08-16T09:12:33.412Z",
+      "    evidence:",
+      "        'EV-0002': sha256:bb",
+      "        EV-0001: sha256:aa",
+      "    by: yjshin",
+      "    acHash: sha256:9f2b1c0000000000000000000000000000000000000000000000000000000000",
+      "",
+    ].join("\n");
+    const reading = parseAcceptanceLedger(loose);
+    assert.equal(reading.problem, null);
+    assert.equal(emitAcceptanceLedger(reading.records), LEDGER);
+  });
+
+  test("an id that reads as a number is quoted, outside and inside", () => {
+    const records = new Map<string, AcceptanceRecord>([
+      ["1234", { ...RECORD, evidence: new Map([["5678", "sha256:aa"]]) }],
+    ]);
+    const written = emitAcceptanceLedger(records);
+    assert.ok(written.startsWith('"1234":\n'), written);
+    assert.ok(written.includes('    "5678": sha256:aa\n'), written);
+    const reading = parseAcceptanceLedger(written);
+    assert.equal(reading.problem, null);
+    assert.deepEqual([...reading.records.keys()], ["1234"]);
+    assert.deepEqual(
+      [...(reading.records.get("1234")?.evidence.entries() ?? [])],
+      [["5678", "sha256:aa"]],
+    );
+  });
+
+  test("a record of anything but the four fields is one sentence about that id", () => {
+    const shape =
+      "Every record in the acceptance ledger is a map of exactly acHash, evidence, by and at — evidence a map from evidence id to hash with at least one entry — the record under AC-0001 is not.";
+    for (const text of [
+      "AC-0001:\n  acHash: sha256:aa\n  by: yjshin\n  at: x\n",
+      "AC-0001:\n  acHash: sha256:aa\n  evidence:\n    EV-0001: sha256:bb\n  by: yjshin\n  at: x\n  note: fine\n",
+      "AC-0001:\n  acHash: 12\n  evidence:\n    EV-0001: sha256:bb\n  by: yjshin\n  at: x\n",
+      "AC-0001: closed\n",
+      "AC-0001:\n  - acHash: sha256:aa\n",
+    ]) {
+      assert.equal(parseAcceptanceLedger(text).problem, shape, text);
+    }
+  });
+
+  test("an acceptance that names no evidence is refused, however the emptiness is spelled", () => {
+    const shape =
+      "Every record in the acceptance ledger is a map of exactly acHash, evidence, by and at — evidence a map from evidence id to hash with at least one entry — the record under AC-0001 is not.";
+    for (const evidence of [
+      // Nothing under the key, which is null and not a map.
+      "  evidence:\n",
+      "  evidence: {}\n",
+      "  evidence: []\n",
+      "  evidence: none\n",
+      // A map whose value is not a hash is not a map from id to hash.
+      "  evidence:\n    EV-0001:\n",
+      "  evidence:\n    EV-0001: 12\n",
+    ]) {
+      const text = `AC-0001:\n  acHash: sha256:aa\n${evidence}  by: yjshin\n  at: x\n`;
+      assert.equal(parseAcceptanceLedger(text).problem, shape, evidence);
+    }
+    // And the emitter writes an empty map as an empty key, which is exactly
+    // what the reader above refuses — so a record that should not exist cannot
+    // survive a write, which is the store's read-back check.
+    const written = emitAcceptanceLedger(
+      new Map([["AC-0001", { ...RECORD, evidence: new Map() }]]),
+    );
+    assert.ok(written.includes("  evidence:\n  by: yjshin\n"), written);
+    assert.equal(parseAcceptanceLedger(written).problem, shape);
+  });
+
+  test("a blank value in a record is named under its id", () => {
+    const evidence = "  evidence:\n    EV-0001: sha256:bb\n";
+    assert.equal(
+      parseAcceptanceLedger(`AC-0001:\n  acHash: '  '\n${evidence}  by: yjshin\n  at: x\n`).problem,
+      "Under AC-0001, an accepted hash is required.",
+    );
+    assert.equal(
+      parseAcceptanceLedger(`AC-0001:\n  acHash: sha256:aa\n${evidence}  by: ''\n  at: x\n`).problem,
+      "Under AC-0001, an acceptor is required.",
+    );
+    assert.equal(
+      parseAcceptanceLedger(
+        `AC-0001:\n  acHash: sha256:aa\n${evidence}  by: yjshin\n  at: "a\\tb"\n`,
+      ).problem,
+      "Under AC-0001, an acceptance instant cannot contain a control character.",
+    );
+    assert.equal(
+      parseAcceptanceLedger(
+        "AC-0001:\n  acHash: sha256:aa\n  evidence:\n    EV-0001: '  '\n  by: yjshin\n  at: x\n",
+      ).problem,
+      "Under AC-0001, an evidence hash is required.",
+    );
+  });
+
+  test("an evidence key that is not a node id is refused by name", () => {
+    assert.equal(
+      parseAcceptanceLedger(
+        "AC-0001:\n  acHash: sha256:aa\n  evidence:\n    CON: sha256:bb\n  by: yjshin\n  at: x\n",
+      ).problem,
+      'Under AC-0001, "CON" is not a node id. CON is a reserved device name on Windows, so no file can be named after it. Choose another id.',
+    );
+    assert.equal(
+      parseAcceptanceLedger(
+        "AC-0001:\n  acHash: sha256:aa\n  evidence:\n    ~: sha256:bb\n  by: yjshin\n  at: x\n",
+      ).problem,
+      "Under AC-0001, an evidence entry names no node id.",
+    );
+  });
+
+  test("an evidence id written once bare and once quoted is refused, inside the record", () => {
+    for (const [bare, id] of [
+      ["1234", "1234"],
+      ["true", "true"],
+    ] as const) {
+      const text = [
+        "AC-0001:",
+        "  acHash: sha256:aa",
+        "  evidence:",
+        `    ${bare}: sha256:bb`,
+        `    "${id}": sha256:cc`,
+        "  by: yjshin",
+        "  at: x",
+        "",
+      ].join("\n");
+      assert.equal(
+        parseAcceptanceLedger(text).problem,
+        `${id} is written twice under AC-0001 in the acceptance ledger, once bare and once quoted — YAML reads two keys and Shall one id, and an acceptance names one hash for each piece of evidence.`,
+        bare,
+      );
+    }
+  });
+
+  test("an id written twice is refused, because an acceptance has one latest", () => {
+    const twice = `${LEDGER}AC-0001:\n  acHash: sha256:ee\n  evidence:\n    EV-0009: sha256:ff\n  by: later\n  at: x\n`;
+    assert.equal(
+      parseAcceptanceLedger(twice).problem,
+      "The acceptance ledger is not YAML Shall can read: Map keys must be unique.",
+    );
+  });
+
+  test("an id written once bare and once quoted is refused at the root too", () => {
+    const record = "  acHash: sha256:aa\n  evidence:\n    EV-0001: sha256:bb\n  by: a\n  at: x\n";
+    assert.equal(
+      parseAcceptanceLedger(`1234:\n${record}"1234":\n${record}`).problem,
+      "1234 is written twice in the acceptance ledger, once bare and once quoted — YAML reads two keys and Shall one id, and an acceptance has one latest record.",
+    );
+  });
+
+  test("a blank id is refused, because a record belongs to a criterion", () => {
+    const record = "  acHash: sha256:aa\n  evidence:\n    EV-0001: sha256:bb\n  by: a\n  at: x\n";
+    assert.equal(
+      parseAcceptanceLedger(`~:\n${record}`).problem,
+      "A record in the acceptance ledger names no node id.",
+    );
+    assert.equal(
+      parseAcceptanceLedger(`CON:\n${record}`).problem,
+      'The acceptance ledger names "CON", which is not a node id. CON is a reserved device name on Windows, so no file can be named after it. Choose another id.',
+    );
+  });
+
+  test("a ledger that is a list is refused as the shape it is", () => {
+    assert.equal(
+      parseAcceptanceLedger("- AC-0001\n").problem,
+      "The acceptance ledger is a list, not a map from node id to acceptance record.",
+    );
+    assert.equal(
+      parseAcceptanceLedger("closed\n").problem,
+      "The acceptance ledger is text, not a map from node id to acceptance record.",
+    );
+  });
+
+  test("a second document inside the ledger is refused rather than silently dropped", () => {
+    assert.equal(
+      parseAcceptanceLedger(
+        `${LEDGER}---\nAC-0009:\n  acHash: sha256:ee\n  evidence:\n    EV-0009: sha256:ff\n  by: c\n  at: z\n`,
+      ).problem,
+      'The acceptance ledger is not YAML Shall can read: a "..." or "---" line inside it ends the ledger early, so the records after that line belong to nobody.',
+    );
+  });
+
+  test("a ledger that is not YAML at all is refused in the library's own words", () => {
+    const reading = parseAcceptanceLedger("AC-0001: [\n");
+    assert.ok(
+      reading.problem?.startsWith("The acceptance ledger is not YAML Shall can read: "),
+      reading.problem ?? "",
+    );
+    assert.equal(reading.records.size, 0);
+  });
+
+  test("every corpus value survives a whole ledger as an evidence hash", () => {
+    for (const entry of SCALARS) {
+      const value = entry.value.trim();
+      if (value === "" || /\p{Cc}/u.test(value)) {
+        continue;
+      }
+      const written = emitAcceptanceLedger(
+        new Map([
+          ["AC-0001", { ...RECORD, evidence: new Map([["EV-0001", value]]) }],
+        ]),
+      );
+      const reading = parseAcceptanceLedger(written);
+      assert.equal(reading.problem, null, JSON.stringify(entry.value));
+      assert.equal(
+        reading.records.get("AC-0001")?.evidence.get("EV-0001"),
+        value,
+        JSON.stringify(entry.value),
+      );
+      assert.equal(emitAcceptanceLedger(reading.records), written);
+    }
+  });
+});
+
+/**
+ * `mapKeysAt` — the one fact `toJS()` loses, asked about one level down.
+ *
+ * The pair below is the whole reason the walk is written by hand: to the library
+ * these are a number key and a string key, to JavaScript they are one property,
+ * and to `getIn` — which compares a path step with `===` — a numeric key is not
+ * reachable by the string that spells it at all.
+ */
+describe("mapKeysAt", () => {
+  const NESTED = [
+    "AC-0001:",
+    "  evidence:",
+    "    1234: sha256:aa",
+    '    "1234": sha256:bb',
+    "  by: yjshin",
+    "",
+  ].join("\n");
+
+  test("a nested key spelled bare and quoted is two keys, where toJS sees one", () => {
+    assert.deepEqual(mapKeysAt(NESTED, ["AC-0001", "evidence"]), ["1234", "1234"]);
+    const collapsed: unknown = parseDocument(NESTED, {
+      version: "1.2",
+      schema: "core",
+      uniqueKeys: true,
+      logLevel: "silent",
+    }).toJS();
+    assert.deepEqual(
+      Object.keys(
+        (collapsed as Record<string, Record<string, unknown>>)["AC-0001"]?.[
+          "evidence"
+        ] as Record<string, unknown>,
+      ),
+      ["1234"],
+    );
+  });
+
+  test("a path step is matched by the text of the key, numbers and all", () => {
+    const numeric = "1234:\n  evidence:\n    EV-0001: sha256:aa\n";
+    assert.deepEqual(mapKeysAt(numeric, ["1234", "evidence"]), ["EV-0001"]);
+    assert.deepEqual(mapKeysAt(NESTED, []), ["AC-0001"]);
+    assert.deepEqual(mapKeysAt(NESTED, ["AC-0001"]), ["evidence", "by"]);
+  });
+
+  test("a path that leads to anything but a map is null, and so is a source that does not read", () => {
+    assert.equal(mapKeysAt(NESTED, ["AC-0001", "by"]), null);
+    assert.equal(mapKeysAt(NESTED, ["AC-0001", "missing"]), null);
+    assert.equal(mapKeysAt(NESTED, ["AC-0001", "evidence", "1234"]), null);
+    assert.equal(mapKeysAt("- a\n", []), null);
+    assert.equal(mapKeysAt("AC-0001: [\n", ["AC-0001"]), null);
+    assert.equal(mapKeysAt("", []), null);
   });
 });

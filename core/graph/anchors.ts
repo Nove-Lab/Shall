@@ -25,9 +25,10 @@ import { bandOf, type NodeTypeName } from "./canon.js";
  * `Journal` is the fourth: it is where the execution record starts, and
  * nothing in the canon points at a journal. The rest of the execution band is
  * anchored like everything else — a work log by the journal that logs it or
- * the task it addresses, and the evidence, reports and findings by the work
- * log that submitted or recorded them — because a record nothing reaches is
- * as much a card left lying on the canvas as a requirement nothing requires.
+ * the task it addresses, the reports and findings by the work log that
+ * submitted or recorded them, and evidence by that work log or by the
+ * criterion its own claim reaches — because a record nothing reaches is as
+ * much a card left lying on the canvas as a requirement nothing requires.
  *
  * Nothing here reads a file, a database or a clock, so it is as safe in a
  * browser bundle as the rest of `core/graph`.
@@ -37,7 +38,11 @@ import { bandOf, type NodeTypeName } from "./canon.js";
  * Which way the anchoring relation runs, seen FROM THE NODE. `in` is the usual
  * one — the canon flows downward and a node is held by whatever above it
  * reaches down. `out` is the satellite `Decision`, which is held by the
- * question it answers rather than by anything that points at it.
+ * question it answers rather than by anything that points at it — and, since
+ * the aim, the addressing and the claim became the lower node's own lines, an
+ * `ImplementationTask` held by the criterion it targets, a `WorkLog` held by
+ * the task it addresses and an `Evidence` held by the criterion it claims to
+ * satisfy.
  */
 export type AnchorDirection = "in" | "out";
 
@@ -76,18 +81,20 @@ export const ANCHOR_RULES: readonly AnchorRule[] = [
   { type: "Constraint",           anchors: [{ direction: "in", edgeType: "HAS_CONSTRAINT" }] },
 
   // Plan. The two-anchor rows are here: a contract may be exposed or consumed,
-  // and a task may be allocated by a module or planned from a criterion.
+  // and a task by the module that allocates it or by the criterion its own
+  // TARGETS line aims at.
   { type: "ModuleDesign",         anchors: [{ direction: "in", edgeType: "IS_REALIZED_BY" }] },
   { type: "Interface",            anchors: [{ direction: "in", edgeType: "EXPOSES" }, { direction: "in", edgeType: "CONSUMES" }] },
   { type: "DataSchema",           anchors: [{ direction: "in", edgeType: "CARRIES" }] },
-  { type: "ImplementationTask",   anchors: [{ direction: "in", edgeType: "ALLOCATES" }, { direction: "in", edgeType: "IS_PLANNED_BY" }] },
+  { type: "ImplementationTask",   anchors: [{ direction: "in", edgeType: "ALLOCATES" }, { direction: "out", edgeType: "TARGETS" }] },
 
   // Execution. The journal is the root of the record; everything below it is
-  // held by the work log that submitted or recorded it, and a work log by the
-  // journal that logs it or the task it addresses — either will do.
+  // held by the work log that submitted or recorded it, a work log by the
+  // journal that logs it or by the task its own ADDRESSES line reaches, and
+  // evidence also by the criterion its own CLAIMS line reaches — either will do.
   { type: "Journal",              anchors: [] },
-  { type: "WorkLog",              anchors: [{ direction: "in", edgeType: "LOGS" }, { direction: "in", edgeType: "IS_ADDRESSED_BY" }] },
-  { type: "Evidence",             anchors: [{ direction: "in", edgeType: "SUBMITS" }, { direction: "in", edgeType: "IS_CLAIMED_BY" }] },
+  { type: "WorkLog",              anchors: [{ direction: "in", edgeType: "LOGS" }, { direction: "out", edgeType: "ADDRESSES" }] },
+  { type: "Evidence",             anchors: [{ direction: "in", edgeType: "SUBMITS" }, { direction: "out", edgeType: "CLAIMS" }] },
   { type: "VerificationReport",   anchors: [{ direction: "in", edgeType: "SUBMITS" }] },
   { type: "Finding",              anchors: [{ direction: "in", edgeType: "RECORDS" }] },
 

@@ -8,36 +8,54 @@ import {
 import {
   approvalPayload,
   blocksOf,
+  type AcceptanceLedger,
   type ApprovalLedger,
   type NodeFileEdge,
   type ParsedNode,
+  type RejectionLedger,
 } from "../serialize/index.js";
 import type { SpecGraph } from "../store/file-store.js";
 
 /**
- * The colour of one node: red for a hole in the specification, yellow for a
- * change nobody has read, green for a node a person approved and nothing has
- * touched since.
+ * The colour of one node: red for a hole in the specification or a refusal
+ * somebody wrote down, yellow for a change nobody has read, green for a node a
+ * person approved and nothing has touched since.
  *
- * FIVE PREDICATES AND ONE ORDER. Each question below is asked on its own and
+ * SIX PREDICATES AND ONE ORDER. Each question below is asked on its own and
  * answers about one fact — is the file there, does it parse, does anything hold
- * it, has a person approved it, does that approval still fit the bytes.
- * `colorOf` is the ORDER those questions are asked in and it holds no judgement
- * of its own: every rule about what is wrong lives in a predicate, so a rule can
- * be read, tested and changed in one place, and the composition stays a list of
- * ifs a person can check against the spec.
+ * it, has a person refused it at these bytes, has a person approved it, does
+ * that approval still fit the bytes. `colorOf` is the ORDER those questions are
+ * asked in and it holds no judgement of its own: every rule about what is wrong
+ * lives in a predicate, so a rule can be read, tested and changed in one place,
+ * and the composition stays a list of ifs a person can check against the spec.
  *
  * A COLOUR IS THE ARITHMETIC OF TWO FILES: what the spec says now, hashed as it
- * stands, against what the ledger remembers, which is the hash a person
- * approved. Nothing is signed and nothing needs to be — the node file is pure
- * authorship and the ledger is the daemon's own book — so green is an equality
- * between two files and never a claim stored inside one of them. That is what
- * lets it be recomputed on every read, and why a hand edit or a `git checkout`
- * moves a colour with nobody told about it.
+ * stands, against what a ledger remembers, which is the hash a person judged.
+ * Nothing is signed and nothing needs to be — the node file is pure authorship
+ * and the ledgers are the daemon's own books — so green is an equality between
+ * two files and never a claim stored inside one of them. That is what lets it be
+ * recomputed on every read, and why a hand edit or a `git checkout` moves a
+ * colour with nobody told about it.
  *
  * THE ORDER IS THE PRODUCT. A node that is both unanchored and unapproved is
  * told about the anchor, because approving a node that hangs off nothing is
  * work thrown away — the chain answers the first thing that is wrong and stops.
+ * The aim rule sits right after the anchor for the same reason: it is grammar,
+ * a seam in the graph a person cannot approve over, and it is answered before
+ * any book is opened.
+ *
+ * A REJECTION IS THE SAME ARITHMETIC POINTED THE OTHER WAY, which is why it
+ * needs no branch of its own beyond one predicate. The record names the hash of
+ * the content that was refused, so the moment an agent fixes the node the hashes
+ * stop matching, the rejection stops standing on its own, and the node is yellow
+ * again with nothing swept and nobody told. A LAPSED REJECTION IS NOT DELETED —
+ * it is the history of a hearing, and a panel is entitled to show it as one.
+ * AND A REJECTION OVER AN APPROVAL WINS, because it is asked first: the two
+ * books never erase each other, a node may stand in both, and the order here is
+ * the whole of what decides between them. A person who approved a node and then
+ * refused it at the same bytes has changed their mind, and the later word is the
+ * one on the screen; withdrawing the rejection puts the green back untouched,
+ * because the approval was never written over.
  *
  * A DELETION PROPOSAL NEEDS NO BRANCH HERE, and that is the design rather than
  * an omission. The proposal sits INSIDE the content a record's hash is taken
@@ -49,7 +67,7 @@ import type { SpecGraph } from "../store/file-store.js";
  * repaired.
  *
  * THIS MODULE IS PURE AND BROWSER-SAFE. No filesystem, no clock, no crypto: the
- * graph arrives as data, the ledger's records arrive as data beside it, and the
+ * graph arrives as data, the ledgers' records arrive as data beside it, and the
  * one call core cannot make itself — a sha256 — arrives as a function. The same
  * graph, the same records and the same hash always give the same colour, which
  * is what lets the panel in the browser and the daemon on the socket answer
@@ -61,7 +79,7 @@ import type { SpecGraph } from "../store/file-store.js";
  * have been a lie. The daemon now hashes the graph it has just loaded and writes
  * only the ledger, so a save can land in between. What that costs is one yellow:
  * a record names content and not a moment, so a record taken over bytes that
- * have since moved reads as "changed" and the person approves again. What it
+ * have since moved reads as "changed" and the person judges again. What it
  * cannot cost is a false green, because green is that equality and nothing else.
  */
 
@@ -71,21 +89,30 @@ import type { SpecGraph } from "../store/file-store.js";
  *
  * Injected rather than imported so that this module never names a crypto
  * library and keeps its promise to run anywhere. The daemon holds the one
- * implementation, and every hash the ledger remembers was written with it.
+ * implementation, and every hash the ledgers remember was written with it.
  */
 export type PayloadHash = (payload: string) => string;
 
 /**
- * What the chain knows about approvals: the ledger's records, and the hash that
- * turns a node into the string a record names.
+ * The three books a judgement is read out of, and the hash that turns a node
+ * into the string a record names.
  *
- * The two travel as one because neither answers anything alone — a record is a
+ * THEY TRAVEL AS ONE BECAUSE NONE OF THEM ANSWERS ANYTHING ALONE — a record is a
  * hash, and what that hash is over is a question only the function can answer.
  * One parameter is also one fixture in a test and one thing for the daemon to
  * build beside the graph it just read.
+ *
+ * THREE BOOKS AND NOT ONE TABLE WITH A VERDICT COLUMN. Approval, rejection and
+ * acceptance are three different acts by a person, they lapse under different
+ * arithmetic, and one of them — the acceptance — is about a criterion and its
+ * evidence rather than about a node's own bytes. Kept apart, each file is a
+ * diff a person can read, and writing in one can never lose a fact recorded in
+ * another.
  */
-export interface Approvals {
-  readonly records: ApprovalLedger;
+export interface Ledgers {
+  readonly approvals: ApprovalLedger;
+  readonly rejections: RejectionLedger;
+  readonly acceptances: AcceptanceLedger;
   readonly hash: PayloadHash;
 }
 
@@ -111,8 +138,20 @@ export interface ColorSubject {
 }
 
 /**
+ * A node that loaded, as the chain asks about it: present, problem-free, and
+ * itself.
+ *
+ * Written once here rather than spelled out at each of the three call sites,
+ * because a subject assembled by hand is a place where `present: false` can be
+ * typed by accident and turn a healthy node into a hole.
+ */
+export function livingSubject(node: SpecNode): ColorSubject {
+  return { id: node.id, type: node.type, present: true, node, problems: [] };
+}
+
+/**
  * Everything a colour question needs about the REST of the graph, indexed once,
- * and the book the approvals are read out of.
+ * and the books the judgements are read out of.
  *
  * A review colours every node in the project, and each of them asks which edges
  * touch it — so the maps are built once and the whole pass is linear instead of
@@ -121,9 +160,17 @@ export interface ColorSubject {
 export interface ColorContext {
   /** The ids that parsed. An edge to anything else reaches nothing. */
   readonly living: ReadonlySet<string>;
+  /**
+   * The nodes themselves, by id — the one lookup the edge indexes cannot
+   * answer. Closure asks it for the evidence a record names, and the review
+   * queue asks it for the far end of every edge it walks; both would otherwise
+   * scan `graph.nodes` per question, and both need the NODE and not merely the
+   * fact that the id is living.
+   */
+  readonly nodes: ReadonlyMap<string, SpecNode>;
   readonly incoming: ReadonlyMap<string, readonly SpecEdge[]>;
   readonly outgoing: ReadonlyMap<string, readonly SpecEdge[]>;
-  readonly approvals: Approvals;
+  readonly ledgers: Ledgers;
 }
 
 function index(map: Map<string, SpecEdge[]>, key: string, edge: SpecEdge): void {
@@ -136,7 +183,7 @@ function index(map: Map<string, SpecEdge[]>, key: string, edge: SpecEdge): void 
 }
 
 /**
- * The graph, indexed for colouring, with the ledger carried in beside it.
+ * The graph, indexed for colouring, with the ledgers carried in beside it.
  *
  * DANGLING EDGES ARE IN HERE ON PURPOSE. The loader keeps a relation whose
  * target no file answers to, and it is exactly what makes a hole visible: the
@@ -147,11 +194,13 @@ function index(map: Map<string, SpecEdge[]>, key: string, edge: SpecEdge): void 
  */
 export function colorContextOf(
   graph: SpecGraph,
-  approvals: Approvals,
+  ledgers: Ledgers,
 ): ColorContext {
   const living = new Set<string>();
+  const nodes = new Map<string, SpecNode>();
   for (const node of graph.nodes) {
     living.add(node.id);
+    nodes.set(node.id, node);
   }
   const incoming = new Map<string, SpecEdge[]>();
   const outgoing = new Map<string, SpecEdge[]>();
@@ -159,7 +208,7 @@ export function colorContextOf(
     index(incoming, edge.toId, edge);
     index(outgoing, edge.fromId, edge);
   }
-  return { living, incoming, outgoing, approvals };
+  return { living, nodes, incoming, outgoing, ledgers };
 }
 
 /** Nothing indexed under an id is no edges, not a missing entry to guard against. */
@@ -171,14 +220,34 @@ function edgesOf(
 }
 
 /**
+ * This node's outgoing relations as its own file writes them — the shape a
+ * content hash is taken over.
+ *
+ * Dangling ones included, and that is the point: they are lines in this file, so
+ * they are content the way the body is. One spelling, because three callers ask
+ * the same question — the approval hash, the rejection hash and the closure's
+ * hash of a piece of evidence — and three spellings that drifted apart would
+ * disagree about what a node IS.
+ */
+export function writtenEdgesOf(
+  node: SpecNode,
+  context: ColorContext,
+): NodeFileEdge[] {
+  return edgesOf(context.outgoing, node.id).map((edge) => ({
+    type: edge.type,
+    toId: edge.toId,
+  }));
+}
+
+/**
  * The hash a record would have to name for this node as it stands.
  *
- * THE CHAIN AND THE APPROVE DOOR HASH THE SAME THING, which is why this is one
- * function both call rather than two spellings of one formula. The daemon takes
- * it over the graph it has just loaded and writes the answer into the ledger;
- * `isHashMatched` takes it again on every read and compares. Two spellings that
- * drifted apart would turn every approval yellow the moment it was made, and
- * nothing would say which of the two halves was wrong.
+ * THE CHAIN AND THE JUDGEMENT DOORS HASH THE SAME THING, which is why this is
+ * one function they all call rather than several spellings of one formula. The
+ * daemon takes it over the graph it has just loaded and writes the answer into a
+ * ledger; `isHashMatched` and `isRejected` take it again on every read and
+ * compare. Two spellings that drifted apart would turn every approval yellow the
+ * moment it was made, and nothing would say which of the two halves was wrong.
  *
  * THE EDGES ARE THE NODE'S OUTGOING RELATIONS EXACTLY AS WRITTEN IN ITS FILE,
  * dangling ones included. They are lines in this file, so they are content the
@@ -199,7 +268,15 @@ export function contentHashOf(
  * writes the words, this says which words.
  */
 export type ColorVerdict =
-  | { readonly color: "red"; readonly reason: "missing" | "malformed" | "orphan" }
+  | {
+      readonly color: "red";
+      readonly reason:
+        | "missing"
+        | "malformed"
+        | "orphan"
+        | "off-target"
+        | "rejected";
+    }
   | { readonly color: "yellow"; readonly reason: "unapproved" | "changed" }
   | { readonly color: "green"; readonly reason: "approved" };
 
@@ -228,7 +305,7 @@ export function isMissing(
  * allow between these two types — was already asked by the loader, which put its
  * sentences in `problems` and left the file out of the graph. There is nothing
  * for this predicate to look up; it reads the answer the loader already wrote.
- * The parameter stays so that all five predicates are one shape and the chain
+ * The parameter stays so that all six predicates are one shape and the chain
  * can call them without remembering which is which.
  */
 export function hasSchemaViolation(
@@ -285,9 +362,231 @@ export function isOrphan(
   return !anchors.some((anchor) => isAnchorLive(node, anchor, context));
 }
 
+/* ------------------------------------------------------------------ *
+ * The aim rule
+ * ------------------------------------------------------------------ */
+
+/** The four relations the aim rule reads — canon edges #17, #22, #23, #24. */
+const SUBMITS = "SUBMITS";
+const TARGETS = "TARGETS";
+const ADDRESSES = "ADDRESSES";
+const CLAIMS = "CLAIMS";
+
+/**
+ * One breach of the aim rule, named at both ends: the work log, the evidence it
+ * submitted, the tasks the log addresses, what those tasks target, and what the
+ * evidence claims. Enough for a sentence a person can act on from either node.
+ */
+export interface OffTarget {
+  readonly workLogId: string;
+  readonly evidenceId: string;
+  readonly tasks: readonly string[];
+  readonly targets: readonly string[];
+  readonly claims: readonly string[];
+}
+
+/** The ids at the far end of this node's outgoing edges of one type, as written. */
+function writtenTargetsOf(
+  id: string,
+  edgeType: string,
+  context: ColorContext,
+): string[] {
+  const ids: string[] = [];
+  for (const edge of edgesOf(context.outgoing, id)) {
+    if (edge.type === edgeType) {
+      ids.push(edge.toId);
+    }
+  }
+  return ids.sort(compareIds);
+}
+
+function compareIds(a: string, b: string): number {
+  return a === b ? 0 : a < b ? -1 : 1;
+}
+
+/**
+ * The tasks a work log addresses (living ones — a line at a task nobody has
+ * written is a hole the missing rule already names) and, together, everything
+ * those tasks target, as written.
+ */
+function aimOf(
+  workLogId: string,
+  context: ColorContext,
+): { tasks: string[]; targets: string[] } {
+  const tasks = writtenTargetsOf(workLogId, ADDRESSES, context).filter((id) =>
+    context.living.has(id),
+  );
+  const targets = new Set<string>();
+  for (const task of tasks) {
+    for (const target of writtenTargetsOf(task, TARGETS, context)) {
+      targets.add(target);
+    }
+  }
+  return { tasks, targets: [...targets].sort(compareIds) };
+}
+
+/** Whether one piece of evidence's claims all fall inside an aim. */
+function breachOf(
+  workLogId: string,
+  evidenceId: string,
+  aim: { tasks: string[]; targets: string[] },
+  context: ColorContext,
+): OffTarget | null {
+  const claims = writtenTargetsOf(evidenceId, CLAIMS, context);
+  const inside =
+    claims.length > 0 && claims.every((claim) => aim.targets.includes(claim));
+  return inside
+    ? null
+    : { workLogId, evidenceId, tasks: aim.tasks, targets: aim.targets, claims };
+}
+
+/**
+ * THE AIM RULE: a work log that addresses a task submits evidence only for the
+ * criteria that task targets.
+ *
+ * It is the one rule of the canon that reads three files at once — the log's
+ * `ADDRESSES`, the task's `TARGETS`, the evidence's `CLAIMS` — and it is a
+ * rule of GRAMMAR and not of judgement: it decides red, before anybody is
+ * asked to approve anything, the way an orphan does. Work done under a task
+ * that produces evidence for some other criterion, or evidence for nothing at
+ * all, is work the plan cannot account for, and the person who would otherwise
+ * be asked to approve it should be shown the seam instead.
+ *
+ * BOTH ENDS GO RED, because either file may be the one to fix — the log's
+ * `ADDRESSES` line, the task's `TARGETS` line or the evidence's `CLAIMS` line —
+ * and a person standing on either node should read the same sentence. A work
+ * log that addresses no task is under no aim and is never red for this; an
+ * evidence submitted by no such log is not either. Where several breaches
+ * exist the first in id order is named; fixing it surfaces the next.
+ *
+ * Read off written edges, dangling ones included: a claim at a criterion no
+ * file names is still a claim outside the aim, and a task's target that is
+ * missing is still the target the plan wrote — the missing rule says its own
+ * sentence about the id.
+ */
+export function offTargetOf(
+  subject: ColorSubject,
+  context: ColorContext,
+): OffTarget | null {
+  const node = subject.node;
+  if (node === null) {
+    return null;
+  }
+  if (node.type === "WorkLog") {
+    const aim = aimOf(node.id, context);
+    if (aim.tasks.length === 0) {
+      return null;
+    }
+    for (const evidenceId of writtenTargetsOf(node.id, SUBMITS, context)) {
+      const evidence = context.nodes.get(evidenceId);
+      if (evidence === undefined || evidence.type !== "Evidence") {
+        continue;
+      }
+      const breach = breachOf(node.id, evidenceId, aim, context);
+      if (breach !== null) {
+        return breach;
+      }
+    }
+    return null;
+  }
+  if (node.type === "Evidence") {
+    const submitters = edgesOf(context.incoming, node.id)
+      .filter((edge) => edge.type === SUBMITS && context.living.has(edge.fromId))
+      .map((edge) => edge.fromId)
+      .sort(compareIds);
+    for (const workLogId of submitters) {
+      const aim = aimOf(workLogId, context);
+      if (aim.tasks.length === 0) {
+        continue;
+      }
+      const breach = breachOf(workLogId, node.id, aim, context);
+      if (breach !== null) {
+        return breach;
+      }
+    }
+    return null;
+  }
+  return null;
+}
+
+/** The predicate the chain calls — the breach, as a yes or a no. */
+export function isOffTarget(
+  subject: ColorSubject,
+  context: ColorContext,
+): boolean {
+  return offTargetOf(subject, context) !== null;
+}
+
+/** "AC-0001" / "AC-0001 and AC-0002" / "no criterion". */
+function listOf(ids: readonly string[]): string {
+  if (ids.length === 0) {
+    return "no criterion";
+  }
+  if (ids.length === 1) {
+    return ids[0] ?? "";
+  }
+  return `${ids.slice(0, -1).join(", ")} and ${ids[ids.length - 1] ?? ""}`;
+}
+
+/**
+ * The breach as one sentence, from the point of view of the node it is drawn
+ * under — the same fact said from the log's side and from the evidence's, so
+ * that a person can act on it wherever they meet it.
+ */
+export function offTargetSentence(subjectId: string, breach: OffTarget): string {
+  const tasks = breach.tasks.join(", ");
+  const rule =
+    "a work log's evidence claims only the criteria its task targets.";
+  if (subjectId === breach.workLogId) {
+    return `${breach.workLogId} addresses ${tasks}, which targets ${listOf(breach.targets)}, but submits ${breach.evidenceId}, which claims ${listOf(breach.claims)} — ${rule}`;
+  }
+  return `${breach.evidenceId} claims ${listOf(breach.claims)}, but the work log that submitted it, ${breach.workLogId}, addresses ${tasks}, which targets ${listOf(breach.targets)} — ${rule}`;
+}
+
+/* ------------------------------------------------------------------ *
+ * The books
+ * ------------------------------------------------------------------ */
+
+/**
+ * Whether a person's refusal of this node still stands — a record for the id,
+ * taken over the bytes the node has NOW.
+ *
+ * IT IS THE SAME EQUALITY AS `isHashMatched`, READ THE OTHER WAY. An approval
+ * that fits says "this is what I read and I am happy with it"; a rejection that
+ * fits says "this is what I read and it is not right yet". Both are a hash
+ * beside a node, so both lapse the moment the node moves — which is the whole
+ * mechanism by which an agent's fix takes a node out of the red without anybody
+ * pressing anything, and by which a stale refusal cannot go on blocking work
+ * that was already done.
+ *
+ * A RECORD THAT NO LONGER FITS IS NOT AN ERROR AND IS NOT SWEPT. It is history:
+ * this node was refused once, and here is what was said. `ReviewStatus` carries
+ * it whatever the colour for exactly that reason.
+ */
+export function isRejected(
+  subject: ColorSubject,
+  context: ColorContext,
+): boolean {
+  const node = subject.node;
+  const record = context.ledgers.rejections.get(subject.id);
+  if (node === null || record === undefined) {
+    return false;
+  }
+  // A record carrying an evidence map is a criterion LEFT OPEN — a judgement
+  // about the list of evidence claiming it and not about the criterion's own
+  // words — so it colours nothing here; `closure.ts` reads those.
+  if (record.evidence !== undefined) {
+    return false;
+  }
+  return (
+    record.rejectedHash ===
+    contentHashOf(node, writtenEdgesOf(node, context), context.ledgers.hash)
+  );
+}
+
 /**
  * Whether a person has ever approved this node — one lookup, by id, in the
- * ledger's records.
+ * approval ledger's records.
  *
  * IT ASKS NOTHING ABOUT THE NODE'S CONTENT, which is the next predicate's
  * question and not this one's. A record whose hash stopped fitting still answers
@@ -299,7 +598,7 @@ export function hasApproval(
   subject: ColorSubject,
   context: ColorContext,
 ): boolean {
-  return context.approvals.records.has(subject.id);
+  return context.ledgers.approvals.has(subject.id);
 }
 
 /**
@@ -325,16 +624,13 @@ export function isHashMatched(
   context: ColorContext,
 ): boolean {
   const node = subject.node;
-  const record = context.approvals.records.get(subject.id);
+  const record = context.ledgers.approvals.get(subject.id);
   if (node === null || record === undefined) {
     return false;
   }
-  const edges = edgesOf(context.outgoing, node.id).map((edge) => ({
-    type: edge.type,
-    toId: edge.toId,
-  }));
   return (
-    record.approvedHash === contentHashOf(node, edges, context.approvals.hash)
+    record.approvedHash ===
+    contentHashOf(node, writtenEdgesOf(node, context), context.ledgers.hash)
   );
 }
 
@@ -344,9 +640,16 @@ export function isHashMatched(
  * Null is not a colour and not an absence of information — it is a subject the
  * question does not apply to, which today is only a type the canon does not
  * have. Every canon type is coloured, the execution band included: a work log
- * is written by an agent and read by a person, and the same three questions
- * apply to it as to a requirement. An id nothing claims has no type to ask
- * about, so it goes through: a hole is a hole whatever was supposed to fill it.
+ * is written by an agent and read by a person, and the same questions apply to
+ * it as to a requirement. An id nothing claims has no type to ask about, so it
+ * goes through: a hole is a hole whatever was supposed to fill it.
+ *
+ * THE REJECTION IS ASKED AFTER THE THREE STRUCTURAL REDS AND BEFORE THE TWO
+ * YELLOWS. After, because a node whose file will not read or that hangs off
+ * nothing has a fix that comes first and a refusal of its content would be the
+ * wrong sentence to show. Before, because a refusal is the LATER word about a
+ * node somebody may well have approved earlier, and the queue's whole rule is
+ * that a rejected node is the agent's turn rather than the reviewer's.
  */
 export function colorOf(
   subject: ColorSubject,
@@ -363,6 +666,12 @@ export function colorOf(
   }
   if (isOrphan(subject, context)) {
     return { color: "red", reason: "orphan" };
+  }
+  if (isOffTarget(subject, context)) {
+    return { color: "red", reason: "off-target" };
+  }
+  if (isRejected(subject, context)) {
+    return { color: "red", reason: "rejected" };
   }
   if (!hasApproval(subject, context)) {
     return { color: "yellow", reason: "unapproved" };

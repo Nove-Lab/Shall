@@ -1,13 +1,11 @@
-import { judgeNodeId } from "../graph/index.js";
-import { emitScalar } from "./scalar.js";
 import {
-  describeValue,
-  isMap,
-  judgeIdentity,
-  readStringMap,
-  readYaml,
-  type YamlError,
-} from "./yaml.js";
+  compare,
+  lowerFirst,
+  readLedgerRoot,
+  type LedgerGrammar,
+} from "./ledger-common.js";
+import { emitScalar } from "./scalar.js";
+import { judgeIdentity, readStringMap } from "./yaml.js";
 
 /**
  * The approval ledger — `.shall/ledger/approvals.yaml` — as bytes, and bytes
@@ -41,6 +39,14 @@ import {
  * the exact tuple — because a ledger half-read is a screen half-green, and the
  * store's own rule is that a file it cannot read back is a file it does not
  * write over.
+ *
+ * ITS ROOT IS READ BY `ledger-common.ts`, WHICH THIS FILE IS THE ORIGIN OF. The
+ * BOM, the line endings, the map check and the twin-key check were written here
+ * first and moved out when the second and third books arrived; they are shared
+ * by import and the words are handed back in as `GRAMMAR` below. THE BYTES AND
+ * THE SENTENCES OF THIS BOOK ARE FROZEN — the golden tests spell them out
+ * character by character, because these files are in other people's git history
+ * and a byte that moves is a diff on a day nobody approved anything.
  */
 
 /** Where the ledger lives, under a project's `.shall` folder. */
@@ -76,19 +82,12 @@ const RECORD_KEYS = ["approvedHash", "by", "at"] as const;
 const RECORD_SHAPE =
   "Every record in the approval ledger is a map of exactly approvedHash, by and at, each of them text";
 
-/**
- * Byte order, not locale order — the same choice `core/store` makes, for the
- * same reason: ids are ASCII, and a ledger sorted by the daemon's locale would
- * put its own bytes at the mercy of an environment variable. Sorted, so the
- * same records are always the same file and two people's approvals of two
- * different nodes merge without a conflict.
- */
-function compare(a: string, b: string): number {
-  if (a === b) {
-    return 0;
-  }
-  return a < b ? -1 : 1;
-}
+/** The three words the shared root reader makes this book's sentences out of. */
+const GRAMMAR: LedgerGrammar = {
+  noun: "approval ledger",
+  recordNoun: "approval record",
+  latest: "an approval has one latest record",
+};
 
 /**
  * The ledger as Shall writes it: ids in byte order, each record's three keys
@@ -113,22 +112,6 @@ export function emitApprovalLedger(records: ApprovalLedger): string {
   return lines.length === 0 ? "" : `${lines.join("\n")}\n`;
 }
 
-/**
- * The library's own message, except where the library is talking to a
- * programmer — see `parse.ts` for the same clause in the node file's words.
- */
-function describeParseError(error: YamlError): string {
-  if (error.code === "MULTIPLE_DOCS") {
-    return 'a "..." or "---" line inside it ends the ledger early, so the records after that line belong to nobody';
-  }
-  return error.message;
-}
-
-/** "An approver is required." → "an approver is required." — for after "Under X,". */
-function lowerFirst(sentence: string): string {
-  return sentence.charAt(0).toLowerCase() + sentence.slice(1);
-}
-
 function refused(problem: string): ApprovalLedgerReading {
   return { records: new Map(), problem };
 }
@@ -138,58 +121,19 @@ function refused(problem: string): ApprovalLedgerReading {
  *
  * The order the checks run in is the order a person can act on: whether it is
  * YAML at all, whether it is a map, whether every key is a node id written
- * once, and only then whether every record has the shape and the values. The
- * first thing wrong is the whole answer — a ledger is one fact about the
- * project, and it either reads or it does not.
+ * once — all of that in `readLedgerRoot` — and only then whether every record
+ * has the shape and the values, which is this file's own half. The first thing
+ * wrong is the whole answer: a ledger is one fact about the project, and it
+ * either reads or it does not.
  */
 export function parseApprovalLedger(text: string): ApprovalLedgerReading {
-  // A leading byte-order mark and CRLF are tolerated and settled here, as the
-  // node file's reader settles them, so the file's own re-read matches what
-  // was written.
-  const source = text.replace(/^\uFEFF/, "").replace(/\r\n?/g, "\n");
-  const reading = readYaml(source);
-  if (reading.error !== null) {
-    return refused(
-      `The approval ledger is not YAML Shall can read: ${describeParseError(reading.error)}.`,
-    );
-  }
-  // An empty file is a ledger with nothing in it, not an error: nobody has
-  // approved anything yet, and the first approval writes the first bytes.
-  if (reading.value === null || reading.value === undefined) {
-    return { records: new Map(), problem: null };
-  }
-  if (!isMap(reading.value)) {
-    return refused(
-      `The approval ledger is ${describeValue(reading.value)}, not a map from node id to approval record.`,
-    );
-  }
-
-  // The one fact `toJS()` loses: an id written once bare and once quoted —
-  // `1234` and `"1234"`, `true` and `"true"` — is two keys to YAML and one
-  // property to JavaScript. Caught off the document's own key list, so a fact
-  // with two homes is refused here as it is in a node file. A key that spells
-  // no id at all (`~:`) is not a twin of anything; it is refused by name below.
-  const seen = new Set<string>();
-  for (const key of reading.rootKeys ?? []) {
-    if (key !== "" && seen.has(key)) {
-      return refused(
-        `${key} is written twice in the approval ledger, once bare and once quoted — YAML reads two keys and Shall one id, and an approval has one latest record.`,
-      );
-    }
-    seen.add(key);
+  const root = readLedgerRoot(text, GRAMMAR);
+  if (root.problem !== null) {
+    return refused(root.problem);
   }
 
   const records = new Map<string, ApprovalRecord>();
-  for (const [id, value] of Object.entries(reading.value)) {
-    if (id === "") {
-      return refused("A record in the approval ledger names no node id.");
-    }
-    const judgedId = judgeNodeId(id);
-    if (judgedId !== null) {
-      return refused(
-        `The approval ledger names ${JSON.stringify(id)}, which is not a node id. ${judgedId}`,
-      );
-    }
+  for (const [id, value] of root.entries) {
     const held = readStringMap(value, RECORD_KEYS);
     if (held === null) {
       return refused(`${RECORD_SHAPE} — the record under ${id} is not.`);
