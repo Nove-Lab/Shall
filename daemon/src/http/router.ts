@@ -44,6 +44,7 @@ import {
   restoreSpecNode,
   reviewSpec,
 } from "../service/spec-review.js";
+import { boardAt, statusSpec } from "../service/spec-status.js";
 
 const t = initTRPC.create();
 
@@ -190,15 +191,46 @@ export const appRouter = t.router({
         await removeSpecEdge(input);
         return { ok: true as const };
       }),
-    // The two procedures that name a PATH instead of a project, because they
+    // The four procedures that name a PATH instead of a project, because they
     // answer for a folder nobody has opened yet: a fresh clone is in no
-    // registry, and `shall check` and `shall add-spec-node` have to work in it
-    // the moment it lands. The schemas ask only that the strings be strings —
-    // whether anything is there, whether it is a Shall project, and whether
-    // the type is one of the canon's are the service's sentences.
+    // registry, and `shall check`, `shall status`, `shall board` and
+    // `shall add-spec-node` have to work in it the moment it lands. The
+    // schemas ask only that the strings be strings — whether anything is
+    // there, whether it is a Shall project, and whether the type is one of the
+    // canon's are the service's sentences.
+    //
+    // THE PATH IS THE CALLER'S CWD AND NOT THE DAEMON'S, which is what
+    // `scope` is resolved against: one daemon serves every checkout on the
+    // machine, and it stands in none of them.
+    //
+    // `scope` is `.optional()` rather than `.default([])` because the default
+    // is already written down: an empty list is the whole spec, and
+    // `checkSpec` and `statusSpec` say so in their own signatures. A
+    // `.default([])` here would spell that same fact a second time, in a place
+    // neither service reads — so the day somebody moved the default, one of the
+    // two spellings would be a lie and the schema's would be the one that won.
     check: procedure
+      .input(
+        z.object({
+          path: z.string().min(1),
+          scope: z.array(z.string()).optional(),
+        }),
+      )
+      .query(({ input }) => checkSpec(input.path, input.scope)),
+    status: procedure
+      .input(
+        z.object({
+          path: z.string().min(1),
+          scope: z.array(z.string()).optional(),
+        }),
+      )
+      .query(({ input }) => statusSpec(input.path, input.scope)),
+    // No scope: the board is an ordering of the whole project — what is ready
+    // depends on chains that run through every band — so a narrowed one would
+    // be a different question with the same name.
+    board: procedure
       .input(z.object({ path: z.string().min(1) }))
-      .query(({ input }) => checkSpec(input.path)),
+      .query(({ input }) => boardAt(input.path)),
     scaffold: procedure
       .input(z.object({ path: z.string().min(1), type: z.string() }))
       .mutation(({ input }) => scaffoldSpecNode(input)),

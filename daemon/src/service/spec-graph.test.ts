@@ -1166,6 +1166,140 @@ describe("checkSpec", () => {
       "The acceptance ledger is a list, not a map from node id to acceptance record.",
     );
   });
+
+  test("a scope narrows what is reported and leaves the counts whole", async () => {
+    const project = await newProject();
+    await node(project, "Requirement", "R-0001", REQUIREMENT_BODY);
+    await node(project, "Requirement", "R-0002", REQUIREMENT_BODY);
+    await node(project, "AcceptanceCriterion", "AC-0001", CRITERION_BODY);
+
+    const check = await checkSpec(project.path, [
+      "intent/Requirement/R-0001.md",
+    ]);
+    assert.deepEqual(check.scope, ["intent/Requirement/R-0001.md"]);
+    assert.deepEqual(
+      check.gaps.map((gap) => gap.file),
+      ["intent/Requirement/R-0001.md"],
+    );
+    // What the folder holds, not what was asked about: the count line is the
+    // difference between the graph and the folder, and a scope moves neither.
+    assert.equal(check.nodeCount, 3);
+    assert.deepEqual(check.problems, []);
+  });
+
+  test("a scope takes a whole type folder, however the path is spelled", async () => {
+    const project = await newProject();
+    await node(project, "Requirement", "R-0001", REQUIREMENT_BODY);
+    await node(project, "AcceptanceCriterion", "AC-0001", CRITERION_BODY);
+    // Two files that read perfectly well and are not written the way Shall
+    // writes them, one in the folder asked about and one outside it. Only the
+    // first draws a note, which is the loop that opens a file per node not
+    // opening the second.
+    for (const file of [
+      "intent/Requirement/R-0001.md",
+      "intent/AcceptanceCriterion/AC-0001.md",
+    ]) {
+      const target = path.join(
+        project.path,
+        ".shall",
+        "spec",
+        ...file.split("/"),
+      );
+      const canonical = await readFile(target, "utf8");
+      await writeFile(
+        target,
+        canonical.replace("---\n", "---\n# left here by hand\n"),
+        "utf8",
+      );
+    }
+
+    for (const asked of [
+      // Absolute, spec-relative with the folder named, and spec-relative with
+      // the trailing slash a shell's completion leaves behind.
+      path.join(project.path, ".shall", "spec", "intent", "Requirement"),
+      ".shall/spec/intent/Requirement",
+      "intent/Requirement/",
+    ]) {
+      const check = await checkSpec(project.path, [asked]);
+      assert.deepEqual(check.scope, ["intent/Requirement"], asked);
+      assert.deepEqual(
+        check.notes.map((note) => note.file),
+        ["intent/Requirement/R-0001.md"],
+        asked,
+      );
+      assert.deepEqual(
+        check.gaps.map((gap) => gap.file),
+        ["intent/Requirement/R-0001.md"],
+        asked,
+      );
+    }
+  });
+
+  test("a ledger that will not read is named whatever the scope excludes", async () => {
+    const project = await newProject();
+    await node(project, "Goal", "G-0001", GOAL_BODY);
+    const ledger = path.join(project.path, ".shall", "ledger", "approvals.yaml");
+    await mkdir(path.dirname(ledger), { recursive: true });
+    await writeFile(ledger, "G-0001: approved\n", "utf8");
+
+    // A band with nothing in it: the spec rows are all out of scope, and the
+    // book's row is not a spec row — an unreadable book poisons every
+    // judgement in the folder, so it is never out of scope. The folder is made
+    // by hand because the store makes one on the first node written into it,
+    // and a scope naming a folder that is not there is refused.
+    await mkdir(path.join(project.path, ".shall", "spec", "domain"), {
+      recursive: true,
+    });
+    const check = await checkSpec(project.path, ["domain"]);
+    assert.deepEqual(check.problems, [
+      {
+        file: ".shall/ledger/approvals.yaml",
+        message:
+          "Every record in the approval ledger is a map of exactly approvedHash, by and at, each of them text — the record under G-0001 is not.",
+      },
+    ]);
+    assert.deepEqual(check.gaps, []);
+    assert.deepEqual(check.notes, []);
+    assert.equal(check.nodeCount, 1);
+  });
+
+  test("a scope naming nothing is refused, not answered with a clean run", async () => {
+    const project = await newProject();
+    await node(project, "Requirement", "R-0001", REQUIREMENT_BODY);
+    // Unscoped, this project fails: the requirement hangs off nothing. That is
+    // what makes the silence dangerous — served empty, the same misspelling
+    // would print a count line and exit 0 over a graph with a hole in it.
+    assert.ok((await checkSpec(project.path)).gaps.length > 0);
+    await says(
+      checkSpec(project.path, ["intnet"]),
+      "invalid",
+      "--scope names nothing under .shall/spec: intnet",
+    );
+    await says(
+      checkSpec(project.path, ["/"]),
+      "invalid",
+      "--scope names a path outside .shall/spec: /",
+    );
+  });
+
+  test("a folder's own row stays when the scope points inside it", async () => {
+    const project = await newProject();
+    await node(project, "Requirement", "R-0001", REQUIREMENT_BODY);
+    // A type folder in the wrong band: the file below it is not in the graph,
+    // and the row that says why is filed under the folder above it.
+    const stray = path.join(project.path, ".shall", "spec", "plan", "Goal");
+    await mkdir(stray, { recursive: true });
+    await writeFile(path.join(stray, "G-0001.md"), "not read\n", "utf8");
+
+    const check = await checkSpec(project.path, ["plan/Goal/G-0001.md"]);
+    assert.deepEqual(check.problems, [
+      {
+        file: "plan/Goal",
+        message:
+          "plan/Goal is a Goal folder in the wrong band — a Goal lives in intent/Goal. Every node file inside it is left out until the folder moves.",
+      },
+    ]);
+  });
 });
 
 describe("a hand edit the daemon never made", () => {

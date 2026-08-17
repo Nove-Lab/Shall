@@ -56,6 +56,17 @@ import { conflict, invalid, type StoreRefusal } from "./refusal.js";
  */
 
 /**
+ * WHAT TO DO ABOUT A BOOK THAT WILL NOT READ, in the words every refusal ends
+ * with. A ledger is not somebody's authorship to be corrected in place: it is
+ * Shall's own file, so the repair is git's or the person's, never a rewrite by
+ * the door that found it. Said once here because the daemon's own refusals end
+ * the same way, and a repair that changed in one of the two would be a repair
+ * nobody could follow.
+ */
+export const RESTORE_THE_BOOK =
+  "the ledger is Shall's own file, so restore it from git or move it aside.";
+
+/**
  * One book, as this door needs to know it: what to call it in a sentence, and
  * the two pure functions that are its format.
  *
@@ -147,7 +158,7 @@ export async function updateLedger<R>(
     const reading = await readLedger(file, codec);
     if (reading.problem !== null) {
       throw conflict(
-        `${reading.problem} Nothing was written over it — the ledger is Shall's own file, so restore it from git or move it aside.`,
+        `${reading.problem} Nothing was written over it — ${RESTORE_THE_BOOK}`,
       );
     }
 

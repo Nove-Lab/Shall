@@ -48,6 +48,7 @@ export type {
   SpecGraph,
 } from "./file-store.js";
 export { describeFailure as describeFileFailure } from "./files.js";
+export { RESTORE_THE_BOOK } from "./ledger-door.js";
 export { isStoreRefusal, StoreRefusal } from "./refusal.js";
 export type { RefusalKind } from "./refusal.js";
 /** The ledgers' own shapes, named here so a caller of a door has one import. */

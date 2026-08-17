@@ -226,9 +226,10 @@ function edgesOf(
  * content hash is taken over.
  *
  * Dangling ones included, and that is the point: they are lines in this file, so
- * they are content the way the body is. One spelling, because three callers ask
- * the same question — the approval hash, the rejection hash and the closure's
- * hash of a piece of evidence — and three spellings that drifted apart would
+ * they are content the way the body is. One spelling, because four callers ask
+ * the same question — the approval hash, the rejection hash, the closure's hash
+ * of a piece of evidence, and the status surface, which hands the same list to
+ * a person instead of to a digest — and four spellings that drifted apart would
  * disagree about what a node IS.
  */
 export function writtenEdgesOf(

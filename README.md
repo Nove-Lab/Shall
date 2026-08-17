@@ -268,20 +268,83 @@ is removed on the next open.
 
 Opening or creating a project also writes two deny rules into the project's
 `.claude/settings.json` — `Read(~/.shall/**)`, Shall's own home, and
-`Edit(/.shall/ledger/**)`, so an agent may read the ledgers but never write them
-— and `shall init` runs `git init` when the folder is in no repository, because
-git is the spec's only restoration material.
+`Edit(/.shall/ledger/**)`, the books only the daemon writes — and `shall init`
+runs `git init` when the folder is in no repository, because git is the spec's
+only restoration material.
 
-Three `shall` subcommands go on top of this: `shall init` to write that folder
-into the current directory, `shall check` to read the spec back and print what
-is wrong with it (one file and one line each — problems that keep a
-file out of the graph, a ledger of the three that will not read, gaps where the graph does
-not hold together, and notes about non-canonical files; problems and gaps exit
-1), and
-`shall add-spec-node --type <Type>` to start a new node — the daemon picks the
-next free id, writes the starting file at its own path, and the command prints
-that path on its first line so an agent knows exactly where to write. One
-command for all 22 types; the type argument is resolved case-insensitively.
+## The `shall` command
+
+Five subcommands go on top of `.shall/`, and between them they are what an
+agent sees of a project without opening the browser. None of them reads a spec
+file: each starts or reuses the daemon and asks it, because the daemon is the
+one process that reads spec files for Shall — and a terminal that worked out a
+colour for itself would be a second implementation of the colour chain, stale
+the day a rule moves. The four that need a project already there find it by
+walking up from the directory you are standing in, the way `git` does.
+
+- `shall init` writes that folder into the current directory.
+- `shall check [--scope <path>]…` reads the spec back and says how much the
+  folder holds, then what is wrong with it, one file and one line each —
+  problems that keep a file out of the graph, a ledger of the three that will
+  not read, gaps where the graph does not hold together, and notes about
+  non-canonical files. Problems and gaps exit 1. It still says nothing about who
+  approved what: that is the review's, and `shall status` is why it can stay
+  that way. One gap turns on a judgement all the same — a work log filed under a
+  task that is still blocked, and a chain nobody has agreed to yet is one of the
+  ways a task stays blocked.
+- `shall status [--scope <path>]…` counts the reds, yellows and greens and then
+  gives the colour node by node — why it is that colour in one word, the
+  sentence a rule of the graph wrote against it, a standing rejection's
+  rationale whole, the reason a subject was left open, a criterion's open or
+  closed mark, a task's blocked, ready or done — and ends with the ids nothing
+  answers to and the files that would not read. A deletion an agent proposed and
+  the relations a file writes ride in the `--json` answer rather than the
+  printed rows. It reads the ledgers' verdict and manufactures none of it, and
+  when one of the three books will not read it refuses the whole run and names
+  the book: `check` can report that as a row and go on counting, but every
+  colour here is counted out of the books, and a screenful of yellow that is
+  really an unreadable ledger is a lie with a colour.
+- `shall board` is the Task Board in a terminal: Fix Spec and Implement, the
+  same two lists the panel draws, computed from the graph and the ledgers on
+  every read — and refused outright, like `status`, when a book will not read.
+- `shall add-spec-node --type <Type>` starts a new node — the daemon picks the
+  next free id, writes the starting file at its own path, and the command prints
+  that path on its first line so an agent knows exactly where to write. One
+  command for all 22 types; the type argument is resolved case-insensitively,
+  and one the canon does not have is refused with the whole list.
+
+A scope is a file, a folder, or the spec-relative prefix the rows are printed in
+(`intent/Goal`), given as many times as there are places you care about, and it
+narrows what is reported and nothing else. The graph is read whole either way,
+because an anchor or the far end of a relation is usually in some other folder
+and a narrowed read would answer a different question in the same words; a
+check's counts stay whole-project for the same reason — the count is what the
+folder holds, the lists are what you asked about. The exit code is decided after
+the narrowing, so a scoped check passes or fails on that scope's account:
+`shall check --scope intent` exits 0 while another band is full of gaps, which
+is what a build script pointed at one folder is asking for. A ledger that will
+not read is reported whatever the scope, because it sits beside the spec folder
+rather than inside it and a book nobody can read poisons every judgement in the
+project. A scope also carries the rows filed against the folders ABOVE it: a
+folder that would not list, or one whose name is no type, is the answer to why
+nothing is there, and it would be a strange narrowing that hid it.
+
+Each of the five takes `--json`, and then stdout is exactly one object and
+nothing else: the answer, or `{"error": …}` carrying the sentence the call was
+refused with. The exit code is 1 only when the call itself failed or `check`
+found problems or gaps — a red node, a standing refusal and an empty board are
+answers, not errors, so a caller branches on the content and never on the code.
+That is the machine-readable contract an agent's tooling consumes.
+
+`shall help` is the sixth command and the one that starts nothing: it prints to
+stdout the screen those five shapes are quoted from, and `shall --help` is the
+same command. The contract above begins once the words parse, and a line this
+client cannot read never gets that far — an option a command does not take, a
+`--scope` with no path after it, a word that is no command at all. Each is
+answered on stderr with the one shape that would have worked, or with that whole
+screen for a name nothing answers to, and exits 1 before a daemon is started or
+a folder is read, whatever `--json` was in the line.
+
 There is no `shall approve`, `shall reject` or `shall close` and never will be:
 a judgement is made by a person in the browser.
 
@@ -305,8 +368,9 @@ bun run dev --host
 
 `bun run typecheck` builds `core` first, because cross-package imports resolve
 through built `dist/`. `bun run test` does the same and then runs the package
-suites — the file format's golden bytes, the loader's refusals, and the door
-sentences the panel shows.
+suites — the file format's golden bytes, the loader's refusals, the door
+sentences the panel shows, and the words the command line reads before any of it
+is started.
 
 ## Production-shaped local run
 
