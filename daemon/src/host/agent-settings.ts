@@ -1,6 +1,6 @@
-import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
+import { writeByRename } from "./atomic-write.js";
 
 /**
  * The two lines Shall writes into somebody else's agent configuration, so that
@@ -16,12 +16,17 @@ import path from "node:path";
  * approvals, rejections, acceptances — are the only things under `.shall` that
  * are nobody's authorship: the daemon writes them when a person approves,
  * refuses or closes, and they are the whole of what makes green, a standing red
- * and a closed criterion states only a person can put a node into. AN AGENT MAY
- * READ THEM — the ledgers are committed beside the spec, and knowing what is
- * already judged, and why, is useful — and it may not write them. `Edit(...)` is the rule that says exactly that: it covers every
- * built-in tool that edits a file, the Write tool included, so it covers making
- * the file out of nothing too, and a rule path beginning with a single `/` is
- * read against the project's root rather than the filesystem's.
+ * and a closed criterion states only a person can put a node into. `Edit(...)`
+ * is the rule that says exactly that: it covers every built-in tool that edits
+ * a file, the Write tool included, so it covers making the file out of nothing
+ * too, and a rule path beginning with a single `/` is read against the
+ * project's root rather than the filesystem's.
+ *
+ * ONLY THE WRITE IS DENIED, AND ONLY THE WRITE CAN BE. Reading is asked not to
+ * happen rather than stopped, in the page Shall writes beside this file: a book
+ * is one input to a colour and never the colour, and why nobody may work one
+ * out for themselves is argued over `statusSpec` in `service/spec-status.ts`.
+ * `shall status` and `shall board` are the answer an agent wanted.
  *
  * THIS IS CONVENTION DEFENCE, NOT A SANDBOX. Nothing here enforces anything: an
  * agent that ignores the file — a different tool, a patched one, a shell
@@ -43,32 +48,6 @@ export const AGENT_DENY_RULES = [
 
 function getAgentSettingsPath(projectPath: string): string {
   return path.join(projectPath, ".claude", "settings.json");
-}
-
-/**
- * A name no other write is using, which the pid alone is not: a pid is constant
- * for the life of a process, so two opens of one project inside one daemon would
- * pick the same temporary name and one would truncate the other's bytes. The pid
- * says WHO left a stray file behind, the random tail says which write.
- */
-function temporaryName(target: string): string {
-  return `${target}.${process.pid}.${randomUUID().slice(0, 8)}.tmp`;
-}
-
-/**
- * Written beside the target and moved onto it, so an agent starting up never
- * reads half a settings file, and swept up if the write fails so a crash leaves
- * no litter in somebody's `.claude` folder.
- */
-async function writeByRename(target: string, text: string): Promise<void> {
-  const temporary = temporaryName(target);
-  try {
-    await writeFile(temporary, text, "utf8");
-    await rename(temporary, target);
-  } catch (error) {
-    await rm(temporary, { force: true });
-    throw error;
-  }
 }
 
 /** Two-space JSON with a trailing newline — what an editor and `git` expect. */

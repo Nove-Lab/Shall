@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import {
   access,
   mkdir,
@@ -18,6 +17,7 @@ import {
   REJECTIONS_FILE,
 } from "@shall/core/serialize";
 import type { ProjectMetadata } from "../types.js";
+import { temporaryName, writeByRename } from "./atomic-write.js";
 import { getShallHome, isShallHomePath } from "./shall-home.js";
 
 export async function pathExists(targetPath: string): Promise<boolean> {
@@ -26,6 +26,26 @@ export async function pathExists(targetPath: string): Promise<boolean> {
     return true;
   } catch {
     return false;
+  }
+}
+
+/**
+ * Whether a path is there at all, which is not the same question as whether
+ * this process may look at it.
+ *
+ * `pathExists` answers no to both, and for its callers that is right: a folder
+ * Shall cannot enter is one it cannot use either way. It is wrong for anything
+ * that turns the answer into a sentence, because "there is nothing there" is a
+ * lie about a folder somebody else owns — so this one answers yes to everything
+ * except a path that genuinely is not there, and leaves the reason to whoever
+ * tries to read it.
+ */
+export async function isReachable(targetPath: string): Promise<boolean> {
+  try {
+    await access(targetPath);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code !== "ENOENT";
   }
 }
 
@@ -159,36 +179,6 @@ export async function readProjectMetadata(
   return JSON.parse(
     await readFile(getProjectMetadataPath(projectPath), "utf8"),
   ) as unknown;
-}
-
-/**
- * A name no other write is using, which the pid alone is not.
- *
- * A pid is constant for the life of a process, so two writes to one target
- * inside one daemon — two tabs opening the same project, a double click on the
- * picker, `shall init` racing the browser — pick the same temporary name: one
- * truncates the other's bytes and the loser renames a file that has already
- * been moved away. The pid is kept because it says WHO left a stray file
- * behind; the random tail says which write. `*.tmp` still matches, so the
- * ignore rule below does not change.
- */
-function temporaryName(target: string): string {
-  return `${target}.${process.pid}.${randomUUID().slice(0, 8)}.tmp`;
-}
-
-/**
- * Written beside the target and moved onto it, so nothing ever reads half a
- * file, and swept up if the write fails so a crash leaves no litter.
- */
-async function writeByRename(target: string, text: string): Promise<void> {
-  const temporary = temporaryName(target);
-  try {
-    await writeFile(temporary, text, "utf8");
-    await rename(temporary, target);
-  } catch (error) {
-    await rm(temporary, { force: true });
-    throw error;
-  }
 }
 
 export async function writeProjectMetadata(

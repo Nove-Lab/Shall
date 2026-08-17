@@ -1,3 +1,4 @@
+import path from "node:path";
 import { missingSentence, reviewGraph, type Ledgers } from "@shall/core/arith";
 import type { SpecEdge, SpecNode } from "@shall/core/graph";
 import {
@@ -45,6 +46,7 @@ import {
   getProjectRejectionsPath,
   getProjectShallPath,
   getProjectSpecPath,
+  isReachable,
   pathExists,
   readSpecNodeFile,
 } from "../host/project-files.js";
@@ -58,6 +60,35 @@ import {
  * `ledgerFile` is the approvals, unqualified, because it was the only book when
  * the name was chosen and every caller of it still means that one. The other
  * two say which they are.
+ */
+export interface SpecPaths {
+  projectPath: string;
+  specDir: string;
+  ledgerFile: string;
+  rejectionsFile: string;
+  acceptancesFile: string;
+}
+
+/**
+ * The layout, spelled from a project root and asking nothing else.
+ *
+ * IT IS WHAT THE TWO FAMILIES OF PROCEDURE SHARE. A door that names a project
+ * id finds its root in the registry, a door that names a path walks up to one,
+ * and from there both are looking at the same five addresses — so the addresses
+ * are written down here once and neither family can drift from the other.
+ */
+export function specPathsOf(root: string): SpecPaths {
+  return {
+    projectPath: root,
+    specDir: getProjectSpecPath(root),
+    ledgerFile: getProjectLedgerPath(root),
+    rejectionsFile: getProjectRejectionsPath(root),
+    acceptancesFile: getProjectAcceptancesPath(root),
+  };
+}
+
+/**
+ * The same layout for a project the registry knows by id.
  *
  * The registry outlives the folder it points at — a project gets moved,
  * deleted, or checked out somewhere else and the entry stays behind. It
@@ -66,24 +97,31 @@ import {
  * empty and a silent lie for one that was deleted. This is what tells the two
  * apart, in the words the picker uses.
  */
-export async function projectSpecFor(projectId: string): Promise<{
-  projectPath: string;
-  specDir: string;
-  ledgerFile: string;
-  rejectionsFile: string;
-  acceptancesFile: string;
-}> {
+export async function projectSpecFor(projectId: string): Promise<SpecPaths> {
   const project = await requireRegistryProject(projectId);
   if (!(await pathExists(getProjectShallPath(project.path)))) {
     throw missing(`Not a Shall project: ${project.path}`);
   }
-  return {
-    projectPath: project.path,
-    specDir: getProjectSpecPath(project.path),
-    ledgerFile: getProjectLedgerPath(project.path),
-    rejectionsFile: getProjectRejectionsPath(project.path),
-    acceptancesFile: getProjectAcceptancesPath(project.path),
-  };
+  return specPathsOf(project.path);
+}
+
+/**
+ * The project folder holding a path, or the refusal that says there is none —
+ * the one door every path-taking procedure comes in through.
+ *
+ * THE REFUSAL NAMES THE PATH THE CALLER STOOD IN, not the folder that is
+ * missing: the caller is a person or an agent in a terminal, and the path they
+ * typed is the only address they can act on. Said once here, because `check`,
+ * `status`, `board` and `add-spec-node` all say it.
+ */
+export async function projectRootAt(startPath: string): Promise<string> {
+  const root = await findProjectRootAbove(startPath);
+  if (root === null) {
+    throw missing(
+      `Not a Shall project: ${startPath} — no folder here or above it holds a .shall/project.json.`,
+    );
+  }
+  return root;
 }
 
 async function specDirFor(projectId: string): Promise<string> {
@@ -406,13 +444,7 @@ export async function scaffoldSpecNode(input: {
     throw invalid(`Unknown node type: ${asked}. ${canonTypesSentence()}`);
   }
 
-  const root = await findProjectRootAbove(input.path);
-  if (root === null) {
-    throw missing(
-      `Not a Shall project: ${input.path} — no folder here or above it holds a .shall/project.json.`,
-    );
-  }
-
+  const root = await projectRootAt(input.path);
   const scaffolded = await served(
     scaffoldNodeFile(getProjectSpecPath(root), type),
   );
@@ -427,6 +459,13 @@ export async function scaffoldSpecNode(input: {
 /** What a check found: how big the graph is, what it refused, where it does not hold, and what it merely noticed. */
 export interface SpecCheck {
   root: string;
+  /**
+   * The scope as it was resolved — spec-relative paths, and empty for the whole
+   * folder. It is answered back because a caller spells a scope in whatever way
+   * suits where they are standing, and the only way to see that `--scope ../ac`
+   * landed where they meant is to read where it landed.
+   */
+  scope: string[];
   nodeCount: number;
   edgeCount: number;
   problems: FileProblem[];
@@ -437,6 +476,163 @@ export interface SpecCheck {
 /** The node's file, relative to the spec folder — the spelling every sentence uses. */
 export function fileOf(node: { readonly type: string; readonly id: string }): string {
   return `${bandFolderOf(node.type) ?? "?"}/${node.type}/${node.id}.md`;
+}
+
+/** The spec folder's address from the project root — the spelling a person reads in a path. */
+const SPEC_FOLDER = ".shall/spec";
+
+/** The path under the spec folder, `/`-separated — or null when it is not under it at all. */
+function insideSpec(specDir: string, target: string): string | null {
+  const relative = path.relative(specDir, target);
+  if (
+    relative === ".." ||
+    relative.startsWith(`..${path.sep}`) ||
+    path.isAbsolute(relative)
+  ) {
+    return null;
+  }
+  return relative.split(path.sep).join("/");
+}
+
+/**
+ * ONE SCOPE ENTRY, RESOLVED TO A PATH UNDER THE SPEC FOLDER.
+ *
+ * A scope is typed from wherever the person is standing, so one entry arrives
+ * in any of three spellings and all three mean a file or a folder of the spec:
+ * an absolute path, a path relative to the CLI's own cwd — which is
+ * `startPath`, never the daemon's — or the spec-relative spelling `intent/Goal`
+ * that every row of a check and a status is printed in, with or without
+ * `.shall/spec/` in front of it.
+ *
+ * THE THREE ARE TRIED IN THE ORDER THAT CANNOT MISREAD ONE FOR ANOTHER.
+ * `.shall/spec/` is stripped first, because a caller who writes it means the
+ * spec folder and nothing else, wherever they are standing. An absolute path is
+ * itself. What is left is read against the cwd first — a person who typed a
+ * folder they can see means the one they can see — and only when that lands
+ * outside the spec is it read as spec-relative, which is what makes `intent`
+ * work from the project root and `..` work from inside a type folder.
+ *
+ * AN ENTRY THAT NAMES NOTHING IS REFUSED, which is what the stat at the bottom
+ * is for. A scope is a narrowing a person asked for, so a misspelling —
+ * `--scope intnet` — resolves to a prefix no file on disk can match and every
+ * list comes back empty: `shall check` prints its count line and exits 0 over a
+ * project full of holes, which is a build gate that can never fail. Silence is
+ * the one answer a narrowing must not give, and one stat per entry is what it
+ * costs to say "you asked about nowhere" instead.
+ */
+async function scopePrefixOf(
+  specDir: string,
+  startPath: string,
+  asked: string,
+): Promise<string> {
+  // The trailing slash is taken off first, because `/` is nothing but its own
+  // trailing slash: stripping the leading `./` ahead of it would reduce a bare
+  // `./` — which means here — to the same emptiness.
+  const spelled = asked
+    .split(path.sep)
+    .join("/")
+    .replace(/\/+$/, "")
+    .replace(/^(?:\.\/)+/, "");
+  if (spelled === "") {
+    // All that is left of `/` once its slash is gone. It is the filesystem
+    // root, which is outside the spec folder like every other path above it —
+    // and read any further it would resolve to the spec folder itself and
+    // silently widen the narrowing into the whole project.
+    throw invalid(`--scope names a path outside .shall/spec: ${asked}`);
+  }
+  let resolved: string;
+  if (spelled === SPEC_FOLDER || spelled.startsWith(`${SPEC_FOLDER}/`)) {
+    resolved = path.resolve(
+      specDir,
+      spelled.slice(SPEC_FOLDER.length).replace(/^\//, ""),
+    );
+  } else if (path.isAbsolute(spelled)) {
+    resolved = spelled;
+  } else {
+    const fromCwd = path.resolve(startPath, spelled);
+    resolved =
+      insideSpec(specDir, fromCwd) === null
+        ? path.resolve(specDir, spelled)
+        : fromCwd;
+  }
+  const inside = insideSpec(specDir, resolved);
+  if (inside === null) {
+    throw invalid(`--scope names a path outside .shall/spec: ${asked}`);
+  }
+  // A NARROWING THAT SELECTS NOTHING IS A TYPO, NOT AN ANSWER. `--scope intnet`
+  // would otherwise match no file, print a whole-project count and exit 0 over a
+  // folder full of holes — a build gate that can never fail. A path Shall may
+  // not look at is a different matter and is let through: the loader files a row
+  // saying the folder would not read, and that row is the answer.
+  if (!(await isReachable(resolved))) {
+    throw invalid(`--scope names nothing under .shall/spec: ${asked}`);
+  }
+  return inside;
+}
+
+/**
+ * The scope a caller asked for, as paths under the spec folder.
+ *
+ * AN EMPTY LIST IS THE WHOLE SPEC and not an empty answer: a caller who named
+ * no folder asked about every one of them. An entry that names nothing is the
+ * opposite case and refuses, one function up.
+ *
+ * The entries are resolved one after another rather than all at once, so the
+ * entry somebody is told about is the first one they spelled wrong and not
+ * whichever stat happened to come back first.
+ */
+export async function scopePrefixesOf(
+  specDir: string,
+  startPath: string,
+  scope: readonly string[],
+): Promise<string[]> {
+  const prefixes: string[] = [];
+  for (const asked of scope) {
+    prefixes.push(await scopePrefixOf(specDir, startPath, asked));
+  }
+  return prefixes;
+}
+
+/**
+ * WHETHER ONE FILE IS INSIDE THE SCOPE — the rule spelled once, because both
+ * path-taking readers apply it and a check that disagreed with a status about
+ * which files it looked at would be two answers to one question.
+ *
+ * A prefix takes the file it names exactly and everything in the folder below
+ * it, so `intent` takes `intent/Goal/G-0001.md` and never `intention/…`. A
+ * prefix that resolved to nothing is the spec folder itself, which holds every
+ * file there is — the same answer an empty list gives by naming nothing. And
+ * it takes the folders ABOVE it as well, for the reason beneath.
+ */
+export function isInScope(file: string, prefixes: readonly string[]): boolean {
+  return (
+    prefixes.length === 0 ||
+    prefixes.some(
+      (prefix) =>
+        prefix === "" ||
+        file === prefix ||
+        file.startsWith(`${prefix}/`) ||
+        isFolderAbove(file, prefix),
+    )
+  );
+}
+
+/**
+ * Whether a row's own file is a FOLDER the scope points inside — `.` for the
+ * spec folder, `intent` for a band, `intent/Goal` for a type folder, and the
+ * folder in a band whose name is no type the canon has.
+ *
+ * A ROW ABOUT A FOLDER IS THE ANSWER TO "WHY IS NOTHING HERE". Those rows say a
+ * folder would not list, or is not the folder it looks like, and that nothing
+ * inside it is read — which is precisely why the files a scope was pointed at
+ * are not in the graph. A scope inside such a folder is the one moment the row
+ * has to be printed, and dropping it would answer a narrowed question with the
+ * silence the narrowing itself caused.
+ */
+function isFolderAbove(file: string, prefix: string): boolean {
+  // The spec folder's own row is filed under `.`, which is above every prefix
+  // there can be, and `./` is a spelling no row and no prefix ever carries.
+  return file === "." || prefix.startsWith(`${file}/`);
 }
 
 /** The three books' records and the daemon's hash, as the colour chain takes them. */
@@ -474,22 +670,36 @@ export function ledgersOf(records: {
  * Problems and gaps both fail the check, and that is deliberate pressure: a
  * spec mid-authoring exits 1 until its holes close, which is the check doing
  * its job and not a severity to demote.
+ *
+ * A SCOPE NARROWS WHAT IS REPORTED AND NOT WHAT IS READ — with one exception
+ * that is the whole reason the exception exists. The graph is loaded whole,
+ * because a relation's other end is in some other folder and a node's anchor
+ * usually is too, so a scope that hid them would answer a different question
+ * about the file it was pointed at. What it does hide is the note loop, which
+ * opens every node file a SECOND time to compare its bytes against the ones
+ * Shall would have written — `loadGraph` read all of them a few lines below,
+ * so the scope saves the second read and never the first. That is worth having
+ * because an editor hook calls this on every save, and paying twice over a node
+ * nobody asked about is the cost that adds up. The counts stay whole-project
+ * for the same reason the graph is: they are what the folder holds, not what
+ * was asked about.
+ *
+ * THE LEDGER ROWS ARE NEVER OUT OF SCOPE. They live beside the spec folder
+ * rather than inside it, and a book nobody can read poisons every judgement
+ * about every node — so the row saying so is printed whatever was asked about.
  */
-export async function checkSpec(startPath: string): Promise<SpecCheck> {
-  const root = await findProjectRootAbove(startPath);
-  if (root === null) {
-    throw missing(
-      `Not a Shall project: ${startPath} — no folder here or above it holds a .shall/project.json.`,
-    );
-  }
-
-  const specDir = getProjectSpecPath(root);
+export async function checkSpec(
+  startPath: string,
+  scope: readonly string[] = [],
+): Promise<SpecCheck> {
+  const root = await projectRootAt(startPath);
+  const { specDir, ledgerFile, rejectionsFile, acceptancesFile } =
+    specPathsOf(root);
+  const prefixes = await scopePrefixesOf(specDir, startPath, scope);
   const graph = await loadGraph(specDir);
-  const ledger = await readApprovalLedger(getProjectLedgerPath(root));
-  const rejections = await readRejectionLedger(getProjectRejectionsPath(root));
-  const acceptances = await readAcceptanceLedger(
-    getProjectAcceptancesPath(root),
-  );
+  const ledger = await readApprovalLedger(ledgerFile);
+  const rejections = await readRejectionLedger(rejectionsFile);
+  const acceptances = await readAcceptanceLedger(acceptancesFile);
 
   // The gaps: the graph's holes, computed by the same arithmetic the review
   // serves — over the real ledger and the real hash, so the check and the
@@ -550,14 +760,22 @@ export async function checkSpec(startPath: string): Promise<SpecCheck> {
   // is not also un-canonical: it has a louder thing wrong with it, and a person
   // told both would be told to fix a formatting difference in a file that is not
   // in the graph at all.
+  //
+  // THE SCOPE IS APPLIED HERE, BEFORE THE READ, and that is the whole point of
+  // it: everything else in this function is arithmetic over a graph already in
+  // memory, and this is the loop that opens each node's file again.
   const notes: FileProblem[] = [];
   for (const node of graph.nodes) {
+    const file = fileOf(node);
+    if (!isInScope(file, prefixes)) {
+      continue;
+    }
     const text = await readSpecNodeFile(specDir, node.type, node.id);
     if (text === null || isCanonical(node.type, `${node.id}.md`, text)) {
       continue;
     }
     notes.push({
-      file: fileOf(node),
+      file,
       message: `${node.id}.md is valid but not canonical — a save from the UI will rewrite it and drop comments and ordering.`,
     });
   }
@@ -584,17 +802,22 @@ export async function checkSpec(startPath: string): Promise<SpecCheck> {
       books.push({ file: `.shall/${file}`, message: problem });
     }
   }
-  const problems: FileProblem[] =
-    books.length === 0 ? graph.problems : [...books, ...graph.problems];
+  const problems: FileProblem[] = [
+    ...books,
+    ...graph.problems.filter((problem) => isInScope(problem.file, prefixes)),
+  ];
 
   return {
     root,
+    scope: prefixes,
     nodeCount: graph.nodes.length,
     // The live relations — a dangling line is a gap above, not a thing the
     // count-line claims the graph holds.
     edgeCount: liveEdges(graph).length,
     problems,
-    gaps,
+    // Sorted above, then narrowed: a gap is filed under the file somebody
+    // opens to fix it, and that file is what the scope is about.
+    gaps: gaps.filter((gap) => isInScope(gap.file, prefixes)),
     notes,
   };
 }

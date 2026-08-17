@@ -25,6 +25,7 @@ import {
   readApprovalLedger,
   readRejectionLedger,
   recordApproval,
+  RESTORE_THE_BOOK,
   restoreNodeFile,
   revertNodeFile,
   type SpecGraph,
@@ -88,23 +89,32 @@ export interface LedgerPaths {
   readonly acceptancesFile: string;
 }
 
+/**
+ * How the reader gets the book back — the tail the three READING casualties
+ * end in.
+ *
+ * They differ in what cannot be told apart while the book is unreadable and
+ * agree word for word on the repair, because the repair is a fact about the
+ * FILE and not about who was asking — so the repair comes from core, where the
+ * door that refuses a write already ends its own sentence with it, and the day
+ * it changes it cannot change in one place and not the other.
+ */
 /** What a casualty says after the book's own problem sentence. */
 const CASUALTY: Record<
-  "approve" | "review" | "reject" | "withdraw" | "accept" | "board",
+  "approve" | "review" | "reject" | "withdraw" | "accept" | "board" | "status",
   string
 > = {
   approve:
     "Nothing was approved, because writing into a ledger nobody can read would bury what it holds; restore it from git or move it aside, and approve again.",
-  review:
-    "Nothing here is green until it reads: the ledger is Shall's own file, so restore it from git or move it aside.",
+  review: `Nothing here is green until it reads: ${RESTORE_THE_BOOK}`,
   reject:
     "Nothing was rejected, because writing into a ledger nobody can read would bury what it holds; restore it from git or move it aside, and reject again.",
   withdraw:
     "Nothing was withdrawn, because writing into a ledger nobody can read would bury what it holds; restore it from git or move it aside, and withdraw again.",
   accept:
     "Nothing was accepted, because writing into a ledger nobody can read would bury what it holds; restore it from git or move it aside, and accept again.",
-  board:
-    "Nothing on the board can be trusted until it reads — what needs fixing, what is finished and what is ready to work on are all counted out of the ledgers; the ledger is Shall's own file, so restore it from git or move it aside.",
+  board: `Nothing on the board can be trusted until it reads — what needs fixing, what is finished and what is ready to work on are all counted out of the ledgers; ${RESTORE_THE_BOOK}`,
+  status: `Nothing here can be told apart until it reads — every colour, every rejection and every closure is counted out of the ledgers; ${RESTORE_THE_BOOK}`,
 };
 
 /** The first book that would not read, said as a refusal — or nothing at all. */

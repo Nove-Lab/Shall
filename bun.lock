@@ -51,6 +51,9 @@
         "@shall/daemon": "workspace:*",
         "@trpc/client": "latest",
       },
+      "devDependencies": {
+        "tsx": "^4.23.12",
+      },
     },
     "core": {
       "name": "@shall/core",
