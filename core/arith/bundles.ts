@@ -1,7 +1,9 @@
 import {
   anchorsFor,
+  closureKindOf,
   layerOf,
   type Band,
+  type ClosureSubject,
   type NodeTypeName,
   type SpecNode,
 } from "../graph/index.js";
@@ -92,7 +94,11 @@ import { reviewGraph, type ReviewStatus } from "./review.js";
  * The wire
  * ------------------------------------------------------------------ */
 
-export type BundleKind = "spec-approval" | "work-report" | "ac-closure";
+export type BundleKind =
+  | "spec-approval"
+  | "work-report"
+  | "ac-closure"
+  | "task-closure";
 
 /**
  * One node on a bundle's list, with everything a row needs and nothing a card
@@ -192,10 +198,45 @@ export interface AcClosureBundle {
   history: { evidenceId: string; by: string; at: string; rationale: string }[];
 }
 
+/**
+ * A work log that addressed the task, with the commits it produced — the same
+ * thread back to git the evidence rows carry, one hop shorter because the log
+ * is the claimant here rather than what submitted one.
+ */
+export interface WorkLogMember extends BundleMember {
+  commits: string[];
+}
+
+/**
+ * A TASK WAITING TO BE CALLED DONE, on the work that addressed it.
+ *
+ * IT IS THE CRITERION'S BUNDLE WITH THE OTHER SUBJECT IN IT: the same question
+ * — is this list enough — asked about work instead of about evidence, so the
+ * shape is the same shape and only the nouns move. What it adds is `targets`:
+ * the criteria this task aimed to close, with their own marks, because "is the
+ * task done" is a question a person answers partly by looking at whether what
+ * it was for has closed.
+ */
+export interface TaskClosureBundle {
+  kind: "task-closure";
+  id: string;
+  taskId: string;
+  title: string;
+  since: number;
+  task: BundleMember;
+  /** Every living work log addressing the task, id order. */
+  workLogs: WorkLogMember[];
+  /** Context only: the living criteria the task TARGETS, and where each stands. */
+  targets: { id: string; name: string; closure: "open" | "closed" | null }[];
+  /** The latest hearing per work log, oldest first — the criterion bundle's rule. */
+  history: { workLogId: string; by: string; at: string; rationale: string }[];
+}
+
 export type ReviewBundle =
   | SpecApprovalBundle
   | WorkReportBundle
-  | AcClosureBundle;
+  | AcClosureBundle
+  | TaskClosureBundle;
 
 export interface ReviewQueue {
   bundles: ReviewBundle[];
@@ -769,73 +810,150 @@ function submittersOf(
   return submitters;
 }
 
+/** The prefix and kind each closure subject's bundle is built under. */
+const CLOSURE_BUNDLE: Readonly<
+  Record<ClosureSubject, { readonly kind: BundleKind; readonly prefix: string }>
+> = {
+  criterion: { kind: "ac-closure", prefix: "closure" },
+  task: { kind: "task-closure", prefix: "completion" },
+};
+
 /**
- * A CRITERION IS ASKED ABOUT WHEN SOMETHING CLAIMS IT, EVERY CLAIMANT IS
- * APPROVED, AND NOBODY HAS SAID A WORD ABOUT THIS LIST — `closureAsks` is the
- * whole condition. A claim nobody has read yet is not a claim a person can
- * judge the criterion on, so a criterion with a yellow claimant is open and off
- * the queue until that claimant is approved (which is what brings it here);
- * the list itself is still everything attached, so the closing that follows is
- * over all of it. The two exits are the two words, and either one takes the
- * criterion out of the queue until the criterion or the list changes.
+ * THE LATEST HEARING PER CLAIMANT — everything claiming the subject now, plus
+ * everything the record it is closed on names, that a person has ever refused.
+ * A claimant that was accepted and later refused is part of the hearing even
+ * though it no longer claims anything.
  */
-function closureBundleFor(scan: Scan, ac: SpecNode): AcClosureBundle | null {
-  const held = scan.status.get(ac.id);
-  if (held === undefined || !closureAsks(ac, scan.context)) {
-    return null;
-  }
-  // The one place the two axes touch: a criterion whose own WORDING a person
-  // has refused is not asked whether it is met — the words have to stand
-  // before anything can be judged against them. Yellow is not that: an
-  // unapproved criterion is still a criterion, and its list can be judged.
-  if (held.reason === "rejected") {
-    return null;
-  }
-  const claimants = claimantsOf(ac.id, scan.context);
-  const shown = claimants.map((claimant) => claimant.id).sort(compare);
-
-  const evidence: EvidenceMember[] = [];
-  for (const id of shown) {
-    const member = memberOf(scan, id);
-    if (member === null) {
-      continue;
-    }
-    evidence.push({ ...member, submittedBy: submittersOf(scan, id) });
-  }
-  const criterion = memberOf(scan, ac.id);
-  if (criterion === null) {
-    return null;
-  }
-
-  // Everything that claims this criterion now, plus everything the record it is
-  // closed on names — a piece of evidence that was accepted and later refused is
-  // part of the hearing even though it no longer claims anything.
-  const heard = new Set<string>(claimants.map((claimant) => claimant.id));
-  for (const id of scan.context.ledgers.acceptances.get(ac.id)?.evidence.keys() ??
-    []) {
+function hearingsOf(
+  scan: Scan,
+  subjectId: string,
+  claimantIds: readonly string[],
+): { id: string; by: string; at: string; rationale: string }[] {
+  const heard = new Set<string>(claimantIds);
+  for (const id of scan.context.ledgers.acceptances
+    .get(subjectId)
+    ?.claimants.keys() ?? []) {
     heard.add(id);
   }
-  const history: AcClosureBundle["history"] = [];
+  const hearings: { id: string; by: string; at: string; rationale: string }[] =
+    [];
   for (const id of [...heard].sort(compare)) {
     const rejection = scan.status.get(id)?.rejection;
     if (rejection === undefined || rejection === null) {
       continue;
     }
-    history.push({ evidenceId: id, ...rejection });
+    hearings.push({ id, ...rejection });
   }
-  history.sort(
-    (a, b) => compare(a.at, b.at) || compare(a.evidenceId, b.evidenceId),
-  );
+  hearings.sort((a, b) => compare(a.at, b.at) || compare(a.id, b.id));
+  return hearings;
+}
 
+/** The living criteria a task aims to close, with where each of them stands. */
+function targetsOf(
+  scan: Scan,
+  taskId: string,
+): { id: string; name: string; closure: "open" | "closed" | null }[] {
+  const targets: { id: string; name: string; closure: "open" | "closed" | null }[] =
+    [];
+  for (const edge of scan.context.outgoing.get(taskId) ?? []) {
+    if (edge.type !== "TARGETS" || !scan.context.living.has(edge.toId)) {
+      continue;
+    }
+    const criterion = scan.context.nodes.get(edge.toId);
+    if (criterion === undefined) {
+      continue;
+    }
+    targets.push({
+      id: criterion.id,
+      name: criterion.name,
+      closure: scan.status.get(criterion.id)?.closure ?? null,
+    });
+  }
+  targets.sort((a, b) => compare(a.id, b.id));
+  return targets;
+}
+
+/**
+ * A SUBJECT IS ASKED ABOUT WHEN SOMETHING CLAIMS IT, EVERY CLAIMANT IS
+ * APPROVED, AND NOBODY HAS SAID A WORD ABOUT THIS LIST — `closureAsks` is the
+ * whole condition, and it is the same condition for both subjects. A claim
+ * nobody has read yet is not a claim a person can judge on, so a criterion with
+ * a yellow piece of evidence, or a task with an unread work log, is open and
+ * off the queue until that claimant is approved (which is what brings it here);
+ * the list itself is still everything attached, so the closing that follows is
+ * over all of it. The two exits are the two words, and either one takes the
+ * subject out of the queue until the subject or the list changes.
+ *
+ * ONE BUILDER, TWO ARMS. Everything above the return — the guard, the rows, the
+ * hearing, `since` — is one path; only the last statement names the fields for
+ * the subject it is about.
+ */
+function closureBundleFor(
+  scan: Scan,
+  subject: SpecNode,
+): AcClosureBundle | TaskClosureBundle | null {
+  const kind = closureKindOf(subject.type);
+  const held = scan.status.get(subject.id);
+  // WHERE THE TWO AXES TOUCH IS INSIDE `closureAsks` AND NOT HERE. A subject
+  // whose own words are not agreed — unapproved, edited since, refused — is not
+  // asked whether it is met: there is nothing settled to be met AGAINST. This
+  // used to be a rejected-only guard at this line, and the gap it left showed
+  // up on a screen as a yellow task wearing a green Done.
+  if (kind === null || held === undefined || !closureAsks(subject, scan.context)) {
+    return null;
+  }
+  const claimants = claimantsOf(subject.id, scan.context);
+  const shown = claimants.map((claimant) => claimant.id).sort(compare);
+  const seat = memberOf(scan, subject.id);
+  if (seat === null) {
+    return null;
+  }
+  const rows: BundleMember[] = [];
+  for (const id of shown) {
+    const member = memberOf(scan, id);
+    if (member !== null) {
+      rows.push(member);
+    }
+  }
+  const hearings = hearingsOf(scan, subject.id, shown);
+  const id = `${CLOSURE_BUNDLE[kind.kind].prefix}:${subject.id}`;
+  const title = `${subject.id} ${subject.name}`;
+  const since = sinceOf(scan, [subject.id, ...shown]);
+
+  if (kind.kind === "task") {
+    return {
+      kind: "task-closure",
+      id,
+      taskId: subject.id,
+      title,
+      since,
+      task: seat,
+      workLogs: rows.map((row) => ({
+        ...row,
+        commits: [...(scan.context.nodes.get(row.id)?.commits ?? [])],
+      })),
+      targets: targetsOf(scan, subject.id),
+      history: hearings.map(({ id: workLogId, ...rest }) => ({
+        workLogId,
+        ...rest,
+      })),
+    };
+  }
   return {
     kind: "ac-closure",
-    id: `closure:${ac.id}`,
-    acId: ac.id,
-    title: `${ac.id} ${ac.name}`,
-    since: sinceOf(scan, [ac.id, ...shown]),
-    ac: criterion,
-    evidence,
-    history,
+    id,
+    acId: subject.id,
+    title,
+    since,
+    ac: seat,
+    evidence: rows.map((row) => ({
+      ...row,
+      submittedBy: submittersOf(scan, row.id),
+    })),
+    history: hearings.map(({ id: evidenceId, ...rest }) => ({
+      evidenceId,
+      ...rest,
+    })),
   };
 }
 
@@ -845,14 +963,27 @@ function closureBundleFor(scan: Scan, ac: SpecNode): AcClosureBundle | null {
 
 /** Every member row of a bundle, whichever kind it is. */
 function seatsOf(bundle: ReviewBundle): BundleMember[] {
-  return bundle.kind === "ac-closure"
-    ? [bundle.ac, ...bundle.evidence]
-    : bundle.members;
+  switch (bundle.kind) {
+    case "ac-closure":
+      return [bundle.ac, ...bundle.evidence];
+    case "task-closure":
+      return [bundle.task, ...bundle.workLogs];
+    default:
+      return bundle.members;
+  }
 }
 
-/** ac-closure, then spec-approval, then work-report. */
+/**
+ * The two closures first, then approval, then the report.
+ *
+ * The criterion comes before the task for the reason the scan order puts
+ * `AcceptanceCriterion` above `ImplementationTask`: the canon reads downwards,
+ * and whether the criteria a task aimed at have closed is part of what a person
+ * reads before saying the task is done.
+ */
 const KIND_ORDER: readonly BundleKind[] = [
   "ac-closure",
+  "task-closure",
   "spec-approval",
   "work-report",
 ];
@@ -952,13 +1083,15 @@ export function reviewBundles(
     keep(subgraphBundle(scan, "spec-approval", node.id, [node.id]));
   }
 
-  // 3. AC closure, on its own axis: a criterion here is green and already out of
-  //    the approval queue, and what is waiting is the question of whether it is
-  //    met. Nothing is marked covered — closure is not approval.
-  for (const ac of nodes.filter(
-    (node) => node.type === "AcceptanceCriterion",
-  )) {
-    const bundle = closureBundleFor(scan, ac);
+  // 3. Closure, on its own axis: a subject here is out of the approval queue,
+  //    and what is waiting is the question of whether it is met — a criterion on
+  //    its evidence, a task on the work that addressed it. Nothing is marked
+  //    covered: closure is not approval.
+  for (const node of nodes) {
+    if (closureKindOf(node.type) === null) {
+      continue;
+    }
+    const bundle = closureBundleFor(scan, node);
     if (bundle !== null) {
       bundles.push(bundle);
     }

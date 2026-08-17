@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from "react-router";
 import { ControlOverview } from "@/control/ControlOverview";
 import { PanelDetail } from "@/control/PanelDetail";
 import { ReviewBundlePage } from "@/control/review-queue/ReviewBundlePage";
+import { TaskItemPage } from "@/control/task-board/TaskItemPage";
 import { HomeScreen } from "@/home/HomeScreen";
 import { SettingsScreen } from "@/settings/SettingsScreen";
 import { ControlLayout } from "@/shell/ControlLayout";
@@ -30,6 +31,7 @@ export function App() {
             path="review-queue/:bundleId"
             element={<ReviewBundlePage />}
           />
+          <Route path="task-board/:itemId" element={<TaskItemPage />} />
           <Route path=":panelId" element={<PanelDetail />} />
         </Route>
         <Route path="spec" element={<SpecPlane />} />

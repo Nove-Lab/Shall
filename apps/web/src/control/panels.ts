@@ -29,9 +29,15 @@ export const PANELS: PanelMeta[] = [
   {
     id: "task-board",
     title: "Task Board",
-    summary: "Work agents have picked up from the spec graph",
-    empty: "No agent has picked up work yet",
-    columns: ["Task", "Status", "Assignee", "Note"],
+    summary: "What the spec needs fixed, and what is ready to work on",
+    // "Work on" and not "start": a task somebody is already logging against is
+    // on this board too, with the work shown beside it.
+    empty: "Nothing is ready to work on — check the Review Queue",
+    // ONE TABLE OVER BOTH HALVES, and the Kind column is what tells them apart
+    // — the queue's own arrangement, for the same reason: a person scanning
+    // this page is asking "what is there", and two tables would ask them to
+    // scan twice. What each row IS stays in the row's own page.
+    columns: ["Kind", "Item", "Summary", "Since"],
   },
   {
     id: "activity-feed",

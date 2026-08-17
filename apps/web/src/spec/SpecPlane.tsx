@@ -11,6 +11,7 @@ import { ReactFlowProvider } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import {
   ArrowLeft,
+  CircleHelp,
   Ban,
   Eye,
   GitCommitVertical,
@@ -24,7 +25,11 @@ import {
   Unlink,
   Waypoints,
 } from "lucide-react";
-import { bandOf, permittedEdgeTypes } from "@shall/core/graph";
+import {
+  bandOf,
+  closureKindOf,
+  permittedEdgeTypes,
+} from "@shall/core/graph";
 import { api } from "@/api";
 import { Button } from "@/components/ui/button";
 import {
@@ -53,9 +58,11 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EmptyState } from "@/components/EmptyState";
 import { useProject } from "@/project-context";
 import { NodePanel, type NodeDraft, type NodePanelMode } from "./NodePanel";
+import { MetamodelDialog } from "./metamodel/MetamodelDialog";
 import { RejectionPopover } from "./RejectionPopover";
 import {
   closuresOf,
+  taskStatesOf,
   deletionSentence,
   impactSentence,
   problemCount,
@@ -249,6 +256,12 @@ export function SpecPlane() {
   const [gitStatus, setGitStatus] = useState<GitStatus | null>(null);
   /** The commit dialog, with the pair every dialog on this plane keeps of its own. */
   const [commitOpen, setCommitOpen] = useState(false);
+  /**
+   * Whether the metamodel reference is open. It is NOT in the project-change
+   * reset below: that list is dialogs about a node, a relation or a folder in
+   * the project being left, and the canon belongs to no project.
+   */
+  const [metamodelOpen, setMetamodelOpen] = useState(false);
   const [commitMessage, setCommitMessage] = useState("");
   const [commitBusy, setCommitBusy] = useState(false);
   const [commitError, setCommitError] = useState<string | null>(null);
@@ -400,6 +413,12 @@ export function SpecPlane() {
    * nothing.
    */
   const closureById = useMemo(() => closuresOf(review), [review]);
+  /**
+   * Blocked, ready or done, per task — the board's own answer, memoised beside
+   * the other two for the reason they are: it is a dependency of the card memo
+   * inside the canvas, and a fresh map per render rebuilds every card.
+   */
+  const taskStateById = useMemo(() => taskStatesOf(review), [review]);
   /** The same answers keyed for the panel, which wants the reason rather than the colour. */
   const statusById = useMemo(() => statusesById(review), [review]);
   /** Missing nodes and unreadable files together — the button and the dialog count once. */
@@ -421,18 +440,22 @@ export function SpecPlane() {
    * The panel's closure switch stays dark while this is non-empty, and the
    * daemon refuses the same door with the same names.
    */
-  const unapprovedClaimants = useMemo(
-    () =>
-      selectedReferrers
-        .filter(
-          (edge) =>
-            edge.type === "CLAIMS" &&
-            statusById.get(edge.fromId)?.color !== "green",
-        )
-        .map((edge) => edge.fromId)
-        .sort(),
-    [selectedReferrers, statusById],
-  );
+  const unapprovedClaimants = useMemo(() => {
+    // WHICH RELATION CLAIMS THIS NODE IS THE CANON'S ANSWER AND NOT THIS
+    // FILE'S: `CLAIMS` into a criterion, `ADDRESSES` into a task. A node that
+    // is neither has no claimants and no switch.
+    const claim = closureKindOf(selected?.type ?? "")?.claim;
+    if (claim === undefined) {
+      return [];
+    }
+    return selectedReferrers
+      .filter(
+        (edge) =>
+          edge.type === claim && statusById.get(edge.fromId)?.color !== "green",
+      )
+      .map((edge) => edge.fromId)
+      .sort();
+  }, [selected, selectedReferrers, statusById]);
   const pendingReferrers = useMemo(
     () =>
       pendingDelete === null || pendingDelete.kind !== "node"
@@ -961,6 +984,21 @@ export function SpecPlane() {
               </TabsTrigger>
             </TabsList>
           </Tabs>
+          {/* THE CANON ITSELF, ONE CLICK AWAY. It sits beside the view tabs
+              because it is the other control on this row about READING the
+              board, and deliberately not in the right-hand group: everything
+              there is about this folder and all but one appears only when it
+              has something to say, while this button is always there and says
+              nothing about the project. */}
+          <Button
+            variant="ghost"
+            size="icon"
+            title="Spec graph metamodel"
+            aria-label="Spec graph metamodel"
+            onClick={() => setMetamodelOpen(true)}
+          >
+            <CircleHelp />
+          </Button>
           {/* A REFUSAL THE MENU HAD NOWHERE TO PUT, in the row that is about
               the board rather than about any one card. Truncated, because it is
               a sentence sharing a 48px row with four buttons, and pushing them
@@ -1103,6 +1141,7 @@ export function SpecPlane() {
                     edges={edges}
                     signalById={signalById}
                     closureById={closureById}
+                    taskStateById={taskStateById}
                     selectedId={selected?.id ?? null}
                     onSelect={openNode}
                     onBackgroundClick={closeReadPanel}
@@ -1586,6 +1625,10 @@ export function SpecPlane() {
             <DialogFooter showCloseButton />
           </DialogContent>
         </Dialog>
+      ) : null}
+
+      {metamodelOpen ? (
+        <MetamodelDialog onClose={() => setMetamodelOpen(false)} />
       ) : null}
     </main>
   );

@@ -19,6 +19,7 @@ import {
 import { EmptyState } from "@/components/EmptyState";
 import { panelById } from "./panels";
 import { ReviewQueue } from "./review-queue/ReviewQueue";
+import { TaskBoard } from "./task-board/TaskBoard";
 import { useProject } from "@/project-context";
 
 export function PanelDetail() {
@@ -55,13 +56,15 @@ export function PanelDetail() {
         </div>
       </div>
 
-      {/* ONE PANEL IS BUILT AND THE OTHER THREE ARE STILL THE PLACEHOLDER, and
+      {/* TWO PANELS ARE BUILT AND THE OTHER TWO ARE STILL THE PLACEHOLDER, and
           the difference is exactly this branch. The header above is shared —
           the crumb, the title and the summary are the panel's own metadata,
           not the queue's — so the built panel takes over from the card down
           and nothing is written twice. */}
       {panel.id === "review-queue" ? (
         <ReviewQueue panel={panel} />
+      ) : panel.id === "task-board" ? (
+        <TaskBoard panel={panel} />
       ) : (
         <Card>
           <CardContent className="p-0">

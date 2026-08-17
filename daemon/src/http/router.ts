@@ -1,6 +1,7 @@
 import { TRPCError, initTRPC } from "@trpc/server";
 import { z } from "zod";
 import { isRefusal, type RefusalKind } from "../service/errors.js";
+import { taskBoard } from "../service/spec-board.js";
 import {
   createProject,
   getProject,
@@ -245,6 +246,9 @@ export const appRouter = t.router({
     commitSpec: procedure
       .input(z.object({ projectId: z.string().min(1), message: z.string() }))
       .mutation(({ input }) => commitSpec(input)),
+    taskBoard: procedure
+      .input(z.object({ projectId: z.string().min(1) }))
+      .query(({ input }) => taskBoard(input.projectId)),
     reviewQueue: procedure
       .input(z.object({ projectId: z.string().min(1) }))
       .query(({ input }) => reviewQueue(input.projectId)),

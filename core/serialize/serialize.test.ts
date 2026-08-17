@@ -2461,7 +2461,7 @@ describe("the rejection ledger", () => {
 
   test("a record of anything but the four fields is one sentence about that id", () => {
     const shape =
-      "Every record in the rejection ledger is a map of rejectedHash, by, at and rationale, each of them text — with an evidence map from evidence id to hash, holding at least one entry, when it leaves a criterion open — the record under R-0001 is not.";
+      "Every record in the rejection ledger is a map of rejectedHash, by, at and rationale, each of them text — with one map of what was left open over it, evidence for a criterion or workLogs for a task, holding at least one entry and never both — the record under R-0001 is not.";
     for (const text of [
       "R-0001:\n  rejectedHash: sha256:aa\n  by: yjshin\n  at: x\n",
       "R-0001:\n  rejectedHash: sha256:aa\n  by: yjshin\n  at: x\n  rationale: why\n  note: looks fine\n",
@@ -2482,6 +2482,51 @@ describe("the rejection ledger", () => {
     }
   });
 
+  test("a task left open carries the work logs it was judged on, under their own key", () => {
+    // The other book's other arm: the same map, named for what it holds, and a
+    // record carrying both names refused rather than guessed at.
+    const record: RejectionRecord = {
+      rejectedHash: "sha256:it",
+      by: "yjshin",
+      at: "2026-08-17T10:02:11.913Z",
+      rationale: "WL-0003 stops at the happy path; the retry is not shown.",
+      leftOpen: {
+        kind: "task",
+        claimants: new Map([["WL-0003", "sha256:22"]]),
+      },
+    };
+    const written = emitRejectionLedger(new Map([["IT-0007", record]]));
+    assert.equal(
+      written,
+      [
+        "IT-0007:",
+        "  rejectedHash: sha256:it",
+        "  workLogs:",
+        "    WL-0003: sha256:22",
+        "  by: yjshin",
+        '  at: "2026-08-17T10:02:11.913Z"',
+        "  rationale: WL-0003 stops at the happy path; the retry is not shown.",
+        "",
+      ].join("\n"),
+    );
+    const reading = parseRejectionLedger(written);
+    assert.equal(reading.problem, null);
+    assert.deepEqual(reading.records.get("IT-0007"), record);
+    assert.equal(emitRejectionLedger(reading.records), written);
+    assert.equal(
+      parseRejectionLedger(
+        "IT-0007:\n  rejectedHash: sha256:it\n  evidence:\n    EV-0001: sha256:aa\n  workLogs:\n    WL-0003: sha256:22\n  by: yjshin\n  at: x\n  rationale: why\n",
+      ).problem,
+      "Every record in the rejection ledger is a map of rejectedHash, by, at and rationale, each of them text — with one map of what was left open over it, evidence for a criterion or workLogs for a task, holding at least one entry and never both — the record under IT-0007 is not.",
+    );
+    assert.equal(
+      parseRejectionLedger(
+        "IT-0007:\n  rejectedHash: sha256:it\n  workLogs:\n    1234: sha256:aa\n    \"1234\": sha256:bb\n  by: yjshin\n  at: x\n  rationale: why\n",
+      ).problem,
+      "1234 is written twice under IT-0007 in the rejection ledger, once bare and once quoted — YAML reads two keys and Shall one id, and a task left open names one hash for each work log.",
+    );
+  });
+
   test("a criterion left open carries the evidence it was judged on, and reads back the same", () => {
     // The fifth key: every claimant at the moment of the judgement, id → hash,
     // written between the hash and the by/at like the acceptance ledger's map,
@@ -2492,10 +2537,13 @@ describe("the rejection ledger", () => {
       by: "yjshin",
       at: "2026-08-16T11:00:00.000Z",
       rationale: "The log covers the happy path only.",
-      evidence: new Map([
-        ["EV-0002", "sha256:bb"],
-        ["EV-0001", "sha256:aa"],
-      ]),
+      leftOpen: {
+        kind: "criterion",
+        claimants: new Map([
+          ["EV-0002", "sha256:bb"],
+          ["EV-0001", "sha256:aa"],
+        ]),
+      },
     };
     const written = emitRejectionLedger(new Map([["AC-0001", record]]));
     assert.equal(
@@ -2525,8 +2573,8 @@ describe("the rejection ledger", () => {
     );
     const back = parseRejectionLedger(both);
     assert.equal(back.problem, null);
-    assert.equal(back.records.get("R-0001")?.evidence, undefined);
-    assert.equal(back.records.get("AC-0001")?.evidence?.size, 2);
+    assert.equal(back.records.get("R-0001")?.leftOpen, undefined);
+    assert.equal(back.records.get("AC-0001")?.leftOpen?.claimants.size, 2);
     // Twin keys inside the map, and an entry that names no node.
     assert.equal(
       parseRejectionLedger(
@@ -2673,9 +2721,10 @@ describe("the rejection ledger", () => {
  */
 describe("the acceptance ledger", () => {
   const RECORD: AcceptanceRecord = {
-    acHash:
+    kind: "criterion",
+    subjectHash:
       "sha256:9f2b1c0000000000000000000000000000000000000000000000000000000000",
-    evidence: new Map([
+    claimants: new Map([
       ["EV-0001", "sha256:aa"],
       ["EV-0002", "sha256:bb"],
     ]),
@@ -2683,8 +2732,9 @@ describe("the acceptance ledger", () => {
     at: "2026-08-16T09:12:33.412Z",
   };
   const OTHER: AcceptanceRecord = {
-    acHash: "sha256:cc",
-    evidence: new Map([["EV-0003", "sha256:dd"]]),
+    kind: "criterion",
+    subjectHash: "sha256:cc",
+    claimants: new Map([["EV-0003", "sha256:dd"]]),
     by: "someone",
     at: "2026-08-16T10:00:00.000Z",
   };
@@ -2734,7 +2784,7 @@ describe("the acceptance ledger", () => {
         {
           ...RECORD,
           // Handed in the other way round, so the sort is what the bytes owe.
-          evidence: new Map([
+          claimants: new Map([
             ["EV-0002", "sha256:bb"],
             ["EV-0001", "sha256:aa"],
           ]),
@@ -2768,7 +2818,7 @@ describe("the acceptance ledger", () => {
 
   test("an id that reads as a number is quoted, outside and inside", () => {
     const records = new Map<string, AcceptanceRecord>([
-      ["1234", { ...RECORD, evidence: new Map([["5678", "sha256:aa"]]) }],
+      ["1234", { ...RECORD, claimants: new Map([["5678", "sha256:aa"]]) }],
     ]);
     const written = emitAcceptanceLedger(records);
     assert.ok(written.startsWith('"1234":\n'), written);
@@ -2777,14 +2827,103 @@ describe("the acceptance ledger", () => {
     assert.equal(reading.problem, null);
     assert.deepEqual([...reading.records.keys()], ["1234"]);
     assert.deepEqual(
-      [...(reading.records.get("1234")?.evidence.entries() ?? [])],
+      [...(reading.records.get("1234")?.claimants.entries() ?? [])],
       [["5678", "sha256:aa"]],
+    );
+  });
+
+  test("a task closes under its own two key names, beside a criterion in one book", () => {
+    // THE SAME RECORD SHAPE, WRITTEN FOR WHAT IT HOLDS. A criterion is closed on
+    // evidence and a task on the work that addressed it, so the keys say which —
+    // and the criterion's bytes are exactly what they were before tasks existed,
+    // which is what keeps every acceptances.yaml already on disk readable.
+    const task: AcceptanceRecord = {
+      kind: "task",
+      subjectHash: "sha256:11",
+      claimants: new Map([
+        ["WL-0009", "sha256:33"],
+        ["WL-0003", "sha256:22"],
+      ]),
+      by: "yjshin",
+      at: "2026-08-17T09:41:02.108Z",
+    };
+    const written = emitAcceptanceLedger(
+      new Map([
+        ["IT-0007", task],
+        ["AC-0001", RECORD],
+      ]),
+    );
+    assert.equal(
+      written,
+      [
+        "AC-0001:",
+        "  acHash: sha256:9f2b1c0000000000000000000000000000000000000000000000000000000000",
+        "  evidence:",
+        "    EV-0001: sha256:aa",
+        "    EV-0002: sha256:bb",
+        "  by: yjshin",
+        '  at: "2026-08-16T09:12:33.412Z"',
+        "IT-0007:",
+        "  taskHash: sha256:11",
+        "  workLogs:",
+        "    WL-0003: sha256:22",
+        "    WL-0009: sha256:33",
+        "  by: yjshin",
+        '  at: "2026-08-17T09:41:02.108Z"',
+        "",
+      ].join("\n"),
+    );
+    const reading = parseAcceptanceLedger(written);
+    assert.equal(reading.problem, null);
+    assert.deepEqual([...reading.records.keys()], ["AC-0001", "IT-0007"]);
+    assert.deepEqual(reading.records.get("IT-0007"), task);
+    assert.deepEqual(reading.records.get("AC-0001"), RECORD);
+    assert.equal(emitAcceptanceLedger(reading.records), written);
+  });
+
+  test("a record naming both closed things, or one of each, is refused", () => {
+    // Guessing which half a hand-edit meant would close something on a list
+    // nobody chose, so the whole record is refused and the sentence says why.
+    const shape =
+      "Every record in the acceptance ledger is a map of exactly by, at and one closed thing — acHash with an evidence map for a criterion, or taskHash with a workLogs map for a task — the map holding at least one entry, and never both — the record under AC-0001 is not.";
+    for (const text of [
+      // both hashes
+      "AC-0001:\n  acHash: sha256:aa\n  taskHash: sha256:bb\n  evidence:\n    EV-0001: sha256:cc\n  by: yjshin\n  at: x\n",
+      // both maps
+      "AC-0001:\n  acHash: sha256:aa\n  evidence:\n    EV-0001: sha256:cc\n  workLogs:\n    WL-0001: sha256:dd\n  by: yjshin\n  at: x\n",
+      // crossed: a criterion's hash with a task's map
+      "AC-0001:\n  acHash: sha256:aa\n  workLogs:\n    WL-0001: sha256:dd\n  by: yjshin\n  at: x\n",
+      // crossed the other way
+      "AC-0001:\n  taskHash: sha256:aa\n  evidence:\n    EV-0001: sha256:cc\n  by: yjshin\n  at: x\n",
+    ]) {
+      assert.equal(parseAcceptanceLedger(text).problem, shape, text);
+    }
+  });
+
+  test("a task's work logs are defended and named as work logs", () => {
+    assert.equal(
+      parseAcceptanceLedger(
+        "IT-0007:\n  taskHash: sha256:aa\n  workLogs:\n    1234: sha256:bb\n    \"1234\": sha256:cc\n  by: yjshin\n  at: x\n",
+      ).problem,
+      "1234 is written twice under IT-0007 in the acceptance ledger, once bare and once quoted — YAML reads two keys and Shall one id, and an acceptance names one hash for each work log.",
+    );
+    assert.equal(
+      parseAcceptanceLedger(
+        "IT-0007:\n  taskHash: sha256:aa\n  workLogs:\n    ~: sha256:bb\n  by: yjshin\n  at: x\n",
+      ).problem,
+      "Under IT-0007, a work log entry names no node id.",
+    );
+    assert.equal(
+      parseAcceptanceLedger(
+        "IT-0007:\n  taskHash: sha256:aa\n  workLogs:\n    WL-0003: '  '\n  by: yjshin\n  at: x\n",
+      ).problem,
+      "Under IT-0007, a work log hash is required.",
     );
   });
 
   test("a record of anything but the four fields is one sentence about that id", () => {
     const shape =
-      "Every record in the acceptance ledger is a map of exactly acHash, evidence, by and at — evidence a map from evidence id to hash with at least one entry — the record under AC-0001 is not.";
+      "Every record in the acceptance ledger is a map of exactly by, at and one closed thing — acHash with an evidence map for a criterion, or taskHash with a workLogs map for a task — the map holding at least one entry, and never both — the record under AC-0001 is not.";
     for (const text of [
       "AC-0001:\n  acHash: sha256:aa\n  by: yjshin\n  at: x\n",
       "AC-0001:\n  acHash: sha256:aa\n  evidence:\n    EV-0001: sha256:bb\n  by: yjshin\n  at: x\n  note: fine\n",
@@ -2798,7 +2937,7 @@ describe("the acceptance ledger", () => {
 
   test("an acceptance that names no evidence is refused, however the emptiness is spelled", () => {
     const shape =
-      "Every record in the acceptance ledger is a map of exactly acHash, evidence, by and at — evidence a map from evidence id to hash with at least one entry — the record under AC-0001 is not.";
+      "Every record in the acceptance ledger is a map of exactly by, at and one closed thing — acHash with an evidence map for a criterion, or taskHash with a workLogs map for a task — the map holding at least one entry, and never both — the record under AC-0001 is not.";
     for (const evidence of [
       // Nothing under the key, which is null and not a map.
       "  evidence:\n",
@@ -2816,7 +2955,7 @@ describe("the acceptance ledger", () => {
     // what the reader above refuses — so a record that should not exist cannot
     // survive a write, which is the store's read-back check.
     const written = emitAcceptanceLedger(
-      new Map([["AC-0001", { ...RECORD, evidence: new Map() }]]),
+      new Map([["AC-0001", { ...RECORD, claimants: new Map() }]]),
     );
     assert.ok(written.includes("  evidence:\n  by: yjshin\n"), written);
     assert.equal(parseAcceptanceLedger(written).problem, shape);
@@ -2949,13 +3088,13 @@ describe("the acceptance ledger", () => {
       }
       const written = emitAcceptanceLedger(
         new Map([
-          ["AC-0001", { ...RECORD, evidence: new Map([["EV-0001", value]]) }],
+          ["AC-0001", { ...RECORD, claimants: new Map([["EV-0001", value]]) }],
         ]),
       );
       const reading = parseAcceptanceLedger(written);
       assert.equal(reading.problem, null, JSON.stringify(entry.value));
       assert.equal(
-        reading.records.get("AC-0001")?.evidence.get("EV-0001"),
+        reading.records.get("AC-0001")?.claimants.get("EV-0001"),
         value,
         JSON.stringify(entry.value),
       );

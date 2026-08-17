@@ -21,10 +21,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { NODE_TYPES, type CanvasNode } from "./canvas-nodes";
 import { FloatingConnectionLine } from "./FloatingConnectionLine";
 import {
-  ARROW_END,
-  ARROW_LIT,
-  DOMAIN_DASH,
   EDGE_TYPES,
+  floatingEdgeOf,
   type FloatingEdge,
 } from "./FloatingEdge";
 import {
@@ -36,15 +34,13 @@ import {
   revealScroll,
   scrolledViewport,
 } from "./view/camera";
-import { floatingEndpoints } from "./view/edge-geometry";
-import { routeAroundCards, type RoutedPath } from "./view/edge-routing";
+import { routedEdges } from "./view/edges";
 import {
-  Z,
-  cardNodeId,
   cardPieces,
   furniturePieces,
   graphIdOfCard,
   type Closure,
+  type TaskState,
   type Signal,
 } from "./view/furniture";
 import { highlightFor } from "./view/highlight";
@@ -55,7 +51,7 @@ import {
   typeAtPoint,
   type Layout,
 } from "./view/layout";
-import { sinksIntoDomain, type SpecEdge, type SpecNode } from "./view/model";
+import type { SpecEdge, SpecNode } from "./view/model";
 
 /**
  * THE SPEC CANVAS: one React Flow instance, two layout functions.
@@ -123,6 +119,14 @@ interface SpecGraphProps {
    * plane rebuilds every card object with it.
    */
   closureById: ReadonlyMap<string, Closure>;
+  /**
+   * The word each implementation task wears — blocked, ready or done. A node
+   * with no entry is not a task and draws no badge.
+   *
+   * IT ARRIVES MEMOISED FROM THE PLANE for the reason the two maps above do:
+   * it is a dependency of the `cards` memo below.
+   */
+  taskStateById: ReadonlyMap<string, TaskState>;
   selectedId: string | null;
   onSelect: (id: string) => void;
   /**
@@ -178,6 +182,7 @@ export function SpecGraph({
   edges,
   signalById,
   closureById,
+  taskStateById,
   selectedId,
   onSelect,
   onBackgroundClick,
@@ -265,8 +270,17 @@ export function SpecGraph({
 
   /** The cards, which are the same call plus the two things a click or a refetch moves. */
   const cards = useMemo(
-    () => cardPieces(layout, view, byId, signalById, closureById, highlight),
-    [layout, view, byId, signalById, closureById, highlight],
+    () =>
+      cardPieces(
+        layout,
+        view,
+        byId,
+        signalById,
+        closureById,
+        taskStateById,
+        highlight,
+      ),
+    [layout, view, byId, signalById, closureById, taskStateById, highlight],
   );
 
   const flowNodes = useMemo<CanvasNode[]>(
@@ -329,134 +343,28 @@ export function SpecGraph({
    * door would mean looking both cards up a second time to learn something
    * neither the click nor the camera can change.
    */
-  const routed = useMemo<
-    { edge: SpecEdge; route: RoutedPath; dashed: boolean }[]
-  >(() => {
-    const geometry = view === "grid" ? GEOMETRY.grid : GEOMETRY.graph;
-    const placed = new Map(
-      layout.placements.map((placement) => [placement.id, placement]),
-    );
-    const boxes = layout.placements.map((placement) => ({
-      id: placement.id,
-      box: {
-        x: placement.x,
-        y: placement.y,
-        width: geometry.cardWidth,
-        height: geometry.cardHeight,
-      },
-    }));
-
-    const built: { edge: SpecEdge; route: RoutedPath; dashed: boolean }[] = [];
-    for (const edge of edges) {
-      const source = placed.get(edge.fromId);
-      const target = placed.get(edge.toId);
-      if (source === undefined || target === undefined) continue;
-
-      const ends = floatingEndpoints(source, target, geometry, view);
-      const route = routeAroundCards({
-        start: { x: ends.sx, y: ends.sy },
-        startSide: ends.sourceSide,
-        end: { x: ends.tx, y: ends.ty },
-        endSide: ends.targetSide,
-        offset: ends.offset,
-        obstacles: boxes
-          .filter((card) => card.id !== edge.fromId && card.id !== edge.toId)
-          .map((card) => card.box),
-      });
-
-      /* WHAT IS DASHED IS A BAND CROSSING AND NOT A LIST OF EDGE TYPES. A
-         relation that ENDS in Domain having started outside it is explanatory —
-         it says what something means rather than how the work is built — so it
-         is drawn quieter than the engineering relations around it. MENTIONS into
-         Term and REPRESENTS into DomainEntity are the two the canon has today
-         and both dash; DENOTES and RELATES_TO stay solid because they begin and
-         end inside Domain and never cross into it. Naming those four here would
-         be a second roster to keep in step with the canon's, and it would answer
-         wrongly for the fifth. `sinksIntoDomain` holds the rule.
-
-         BOTH BANDS ARE ALREADY IN HAND: the layout calls `bandOf` when it places
-         a card, and `Placement.band` is that same answer, so this costs no
-         lookup. */
-      built.push({
-        edge,
-        route,
-        dashed: sinksIntoDomain(source.band, target.band),
-      });
-    }
-    return built;
-  }, [edges, layout, view]);
+  const routed = useMemo(
+    () =>
+      routedEdges(
+        layout.placements,
+        edges,
+        view === "grid" ? GEOMETRY.grid : GEOMETRY.graph,
+        view,
+      ),
+    [edges, layout, view],
+  );
 
   /**
-   * THE SAME RELATIONS, PAINTED FOR THIS SELECTION — the second half of the split
-   * above, and the only part a click re-runs.
-   *
-   * The three questions are asked of the `Highlight` and not of the graph: a
-   * relation is lit when the selection is one of its ends, pushed back when
-   * something else is selected and it is not, and at rest when nobody has
-   * clicked. The first is a lookup in a set `view/highlight.ts` built in one pass;
-   * the second is its complement, and it is a complement of INCIDENCE and not of
-   * the neighbourhood — the relation between two neighbours of the selected node,
-   * if the graph has one, joins two lit cards and is itself not part of the
-   * neighbourhood, which is the difference between one hop and two.
-   *
-   * THE ARROWHEAD IS PICKED HERE AND NOT IN THE COMPONENT because React Flow
-   * builds a marker's `<defs>` from the edge object's own `markerEnd` before any
-   * edge component runs — `FloatingEdge.tsx` carries both objects and the reason.
-   *
-   * SO IS THE Z, AND FOR THE SAME KIND OF REASON: it is a property of the edge
-   * OBJECT — the library reads it off the object and writes it onto the `<svg>`
-   * wrapper it puts around the whole edge — so a component that wanted to change
-   * it would be changing something rendered above it. `Z` in `view/furniture.ts`
-   * is the one table the whole paint order is read from, cards included, which is
-   * what makes `litEdge` above `card` a statement rather than two numbers that
-   * happen to compare the right way.
-   *
-   * AND THE LIFT IS WHAT MAKES THE LABEL EXCEPTION WORTH ANYTHING. An incident
-   * relation writes its name even where the route has no room — the user asked
-   * for exactly that — and `BaseEdge` draws that name inside the same `<svg>` as
-   * the line, so at the resting z it would be printed UNDER whichever card the
-   * route runs past. Lifted, the name is on top of the board and the transparent
-   * background lets the card show through it.
-   *
-   * THE DASH IS THE ONE THING PUT ON `style` RATHER THAN ON `data`, and that is
-   * the library's own division: `style` is written straight onto the `<path>`,
-   * which is where a `stroke-dasharray` has to land. It is handed over as the
-   * edge's own style rather than decided in the component so that the component
-   * keeps its one job — turning a route into a `d` — and so that the OTHER dash
-   * can outrank it there. A route the router could not clear is a defect in the
-   * drawing and wins over a statement about the graph; `FloatingEdgePath` spreads
-   * this style first and `UNROUTED_DASH` after it, which is that precedence
-   * written down.
+   * THE SAME RELATIONS, PAINTED FOR THIS SELECTION — the second half of the
+   * split above, and the only part a click re-runs. What each edge object
+   * carries, and why the marker, the z and the dash are decided on the OBJECT
+   * rather than inside the component, is written on `floatingEdgeOf`.
    */
   const flowEdges = useMemo<FloatingEdge[]>(
     () =>
-      routed.map(({ edge, route, dashed }) => {
-        const incident = highlight.edges.has(edge.id);
-        return {
-          id: edge.id,
-          // The two cards as the CANVAS keys them: React Flow resolves these
-          // against its node lookup to find the handles an edge hangs off, and a
-          // relation whose ends it cannot find is not drawn at all.
-          source: cardNodeId(edge.fromId),
-          target: cardNodeId(edge.toId),
-          type: "floating",
-          // The relation's TYPE travels on `data` rather than in the library's
-          // own `label`: in this grammar a relation is its type and its
-          // direction, and a line carrying neither is half a statement.
-          data: {
-            route,
-            edgeType: edge.type,
-            incident,
-            dimmed: highlight.selected !== null && !incident,
-          },
-          markerEnd: incident ? ARROW_LIT : ARROW_END,
-          zIndex: incident ? Z.litEdge : Z.edge,
-          // Spread rather than passed: `exactOptionalPropertyTypes` will not
-          // give `undefined` to an optional `style`, and "no style" and "an
-          // empty style" are different asks.
-          ...(dashed ? { style: { strokeDasharray: DOMAIN_DASH } } : {}),
-        };
-      }),
+      routed.map(({ edge, route, dashed }) =>
+        floatingEdgeOf(edge, edge.type, route, dashed, highlight),
+      ),
     [routed, highlight],
   );
 

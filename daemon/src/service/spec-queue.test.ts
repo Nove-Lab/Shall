@@ -15,7 +15,12 @@ import {
 } from "@shall/core/serialize";
 import { isRefusal, type Refusal } from "./errors.js";
 import { createProject } from "./projects.js";
-import { createSpecEdge, createSpecNode, removeSpecEdge } from "./spec-graph.js";
+import {
+  createSpecEdge,
+  createSpecNode,
+  removeSpecEdge,
+  updateSpecNode,
+} from "./spec-graph.js";
 import {
   acceptSpecClosure,
   approveSpecNodes,
@@ -663,14 +668,14 @@ describe("the accept door", () => {
     const before = await fileState(acFile);
 
     const closed = await acceptSpecClosure({ projectId: project.id, id: "AC-0001" });
-    assert.ok(closed.acHash.startsWith("sha256:"), closed.acHash);
+    assert.ok(closed.subjectHash.startsWith("sha256:"), closed.subjectHash);
     assert.equal(closed.by, os.userInfo().username);
     assert.ok(Date.now() - Date.parse(closed.at) < 60_000, closed.at);
     assert.deepEqual(
-      closed.evidence.map((entry) => entry.id),
+      closed.claimants.map((entry: { id: string; hash: string }) => entry.id),
       ["EV-0001"],
     );
-    assert.ok(closed.evidence[0]?.hash.startsWith("sha256:"));
+    assert.ok(closed.claimants[0]?.hash.startsWith("sha256:"));
 
     // Neither file moved: a closing is a record about a criterion and a list,
     // and a word in none of their files.
@@ -682,9 +687,10 @@ describe("the accept door", () => {
           [
             "AC-0001",
             {
-              acHash: closed.acHash,
-              evidence: new Map(
-                closed.evidence.map((entry) => [entry.id, entry.hash]),
+              kind: "criterion" as const,
+              subjectHash: closed.subjectHash,
+              claimants: new Map(
+                closed.claimants.map((entry: { id: string; hash: string }) => [entry.id, entry.hash]),
               ),
               by: closed.by,
               at: closed.at,
@@ -737,29 +743,91 @@ describe("the accept door", () => {
     await withdrawSpecRejection({ projectId: project.id, id: "EV-0003" });
     const closed = await acceptSpecClosure({ projectId: project.id, id: "AC-0001" });
     assert.deepEqual(
-      closed.evidence.map((entry) => entry.id),
+      closed.claimants.map((entry: { id: string; hash: string }) => entry.id),
       ["EV-0001", "EV-0002", "EV-0003"],
     );
     assert.equal((await statusFor(project, "AC-0001")).closure, "closed");
   });
 
-  test("closes a criterion nobody has approved yet — the axes do not meet", async () => {
-    // Every claimant read, the criterion itself still yellow: closable.
+  test("refuses a criterion nobody has approved yet — both sides have to be green", async () => {
+    // EVERY CLAIMANT READ IS NOT ENOUGH. "Met" is a statement about words
+    // somebody agreed to, and a criterion still being edited has nothing
+    // settled for the evidence to be met against. Reported from a screen as
+    // the other subject: a green, closed task was edited, went yellow, and
+    // could still be closed — leaving a yellow node wearing a green Done.
     const project = await project7();
     await approveSpecNodes({ projectId: project.id, ids: ["EV-0001"] });
-    const closed = await acceptSpecClosure({ projectId: project.id, id: "AC-0001" });
-    assert.deepEqual(closed.evidence.map((entry) => entry.id), ["EV-0001"]);
-    const status = await statusFor(project, "AC-0001");
-    assert.equal(status.color, "yellow");
-    assert.equal(status.closure, "closed");
+    const sentence =
+      "AC-0001 is not approved yet — a criterion is closed, or left open, only once a person has agreed to what it demands, and there is nothing settled for the evidence to be met against until then. Approve it, and the question comes back with it.";
+    await says(
+      acceptSpecClosure({ projectId: project.id, id: "AC-0001" }),
+      "invalid",
+      sentence,
+    );
+    await says(
+      leaveSpecOpen({ projectId: project.id, id: "AC-0001", rationale: "No." }),
+      "invalid",
+      sentence,
+    );
+    await assert.rejects(stat(acceptancesAt(project)));
+    assert.equal((await statusFor(project, "AC-0001")).closure, "open");
+
+    // Approving it is the whole of what was missing.
+    await approveSpecNodes({ projectId: project.id, ids: ["AC-0001"] });
+    await acceptSpecClosure({ projectId: project.id, id: "AC-0001" });
+    assert.equal((await statusFor(project, "AC-0001")).closure, "closed");
   });
 
-  test("a node that is not a criterion is refused by type", async () => {
+  test("refuses a task whose own words moved after it was closed", async () => {
+    // The reported sequence, walked end to end: close it green, edit it, and
+    // the closing lapses by arithmetic — the mark is open again — while the
+    // door refuses to write a new one until it is read.
+    const project = await project7();
+    await node(project, "ModuleDesign", "MD-0001");
+    await edge(project, "IS_REALIZED_BY", "SR-0001", "MD-0001");
+    await node(project, "ImplementationTask", "IT-0001");
+    await edge(project, "ALLOCATES", "MD-0001", "IT-0001");
+    await edge(project, "TARGETS", "IT-0001", "AC-0001");
+    await edge(project, "ADDRESSES", "WL-0001", "IT-0001");
+    await approveSpecNodes({
+      projectId: project.id,
+      ids: [...EVERY_ID, "MD-0001", "IT-0001"],
+    });
+    await acceptSpecClosure({ projectId: project.id, id: "IT-0001" });
+    assert.equal((await statusFor(project, "IT-0001")).closure, "closed");
+
+    await updateSpecNode({
+      projectId: project.id,
+      id: "IT-0001",
+      shortName: "it-0001",
+      name: "The node called IT-0001",
+      body: "A wider scope than the one that was signed off.",
+    });
+    const moved = await statusFor(project, "IT-0001");
+    assert.equal(moved.color, "yellow");
+    assert.equal(moved.closure, "open");
+    assert.equal(moved.taskState, "blocked");
+
+    await says(
+      acceptSpecClosure({ projectId: project.id, id: "IT-0001" }),
+      "invalid",
+      "IT-0001 is not approved yet — a task is closed, or left open, only once a person has agreed to what it asks for, and until then there is nothing settled for the work to be done against. Approve it, and the question comes back with it.",
+    );
+    // And the queue asks the approval question alone until it is answered.
+    assert.deepEqual(
+      (await reviewQueue(project.id)).bundles
+        .map((bundle) => bundle.id)
+        .filter((id) => id.endsWith("IT-0001")),
+      ["spec:IT-0001"],
+    );
+  });
+
+  test("a node that is neither a criterion nor a task is refused by type", async () => {
     const project = await greenProject();
     await says(
       acceptSpecClosure({ projectId: project.id, id: "R-0001" }),
       "invalid",
-      "R-0001 is a Requirement, and only an AcceptanceCriterion is a thing that can be closed or left open — evidence is shown against a criterion and against nothing else.",
+      "R-0001 is a Requirement, and only an AcceptanceCriterion or an ImplementationTask is a thing that can be closed or left open — evidence is shown against a criterion, work against a task, and against nothing else.",
     );
     await says(
       acceptSpecClosure({ projectId: project.id, id: "AC-9999" }),
@@ -771,6 +839,12 @@ describe("the accept door", () => {
   test("a criterion nothing claims is nothing to close, and nothing to leave open", async () => {
     const project = await newProject();
     await chain(project);
+    // Approved, so the refusal below is about the empty list and not about the
+    // criterion's own words.
+    await approveSpecNodes({
+      projectId: project.id,
+      ids: CHAIN.map(([, id]) => id),
+    });
     const sentence =
       "Nothing claims AC-0001 yet — a criterion is closed, or left open, over the evidence attached to it, and there is none. An Evidence node draws a CLAIMS relation at the criterion in its own file.";
     await says(
@@ -836,7 +910,10 @@ describe("the leave-open door", () => {
       id: "AC-0001",
       rationale: "The log shows the request and not the response.",
     });
-    assert.deepEqual(word.evidence.map((entry) => entry.id), ["EV-0001"]);
+    assert.deepEqual(
+      word.claimants.map((entry) => entry.id),
+      ["EV-0001"],
+    );
     assert.equal(word.rationale, "The log shows the request and not the response.");
     assert.equal(
       await readFile(rejectionsAt(project), "utf8"),
@@ -845,8 +922,13 @@ describe("the leave-open door", () => {
           [
             "AC-0001",
             {
-              rejectedHash: word.acHash,
-              evidence: new Map(word.evidence.map((entry) => [entry.id, entry.hash])),
+              rejectedHash: word.subjectHash,
+              leftOpen: {
+                kind: "criterion" as const,
+                claimants: new Map(
+                  word.claimants.map((entry) => [entry.id, entry.hash]),
+                ),
+              },
               by: word.by,
               at: word.at,
               rationale: word.rationale,
@@ -1177,5 +1259,147 @@ describe("the commit button", () => {
     });
     assert.ok(!porcelain.stdout.includes(".shall/spec"), porcelain.stdout);
     assert.ok(!porcelain.stdout.includes(".shall/ledger"), porcelain.stdout);
+  });
+});
+
+/**
+ * THE OTHER CLOSURE SUBJECT, over the same folders and the same doors.
+ *
+ * A task is closed on the WORK that addressed it, exactly as a criterion is
+ * closed on the evidence claiming it, and everything below is the criterion's
+ * own block asked about a task: one book written, the other emptied, the
+ * unread claimant named, the wording refusal respected.
+ */
+describe("closing a task", () => {
+  /** The plan side: a module, the task under it, and a log addressing it. */
+  async function planned(): Promise<RegistryProject> {
+    const project = await project7();
+    await node(project, "ModuleDesign", "MD-0001");
+    await edge(project, "IS_REALIZED_BY", "SR-0001", "MD-0001");
+    await node(project, "ImplementationTask", "IT-0001");
+    await edge(project, "ALLOCATES", "MD-0001", "IT-0001");
+    await edge(project, "TARGETS", "IT-0001", "AC-0001");
+    await edge(project, "ADDRESSES", "WL-0001", "IT-0001");
+    await approveSpecNodes({
+      projectId: project.id,
+      ids: [...EVERY_ID, "MD-0001", "IT-0001"],
+    });
+    return project;
+  }
+
+  test("writes the task's own two key names, and nothing else moves", async () => {
+    const project = await planned();
+    const taskFile = specFile(project, "ImplementationTask", "IT-0001");
+    const before = await fileState(taskFile);
+
+    const closed = await acceptSpecClosure({ projectId: project.id, id: "IT-0001" });
+    assert.equal(closed.kind, "task");
+    assert.deepEqual(
+      closed.claimants.map((entry) => entry.id),
+      ["WL-0001"],
+    );
+    assert.deepEqual(await fileState(taskFile), before);
+    const book = await readFile(acceptancesAt(project), "utf8");
+    assert.ok(book.includes("IT-0001:\n  taskHash: "), book);
+    assert.ok(book.includes("  workLogs:\n    WL-0001: "), book);
+    assert.equal(await statusFor(project, "IT-0001").then((s) => s.closure), "closed");
+    assert.equal(
+      await statusFor(project, "IT-0001").then((s) => s.taskState),
+      "done",
+    );
+  });
+
+  test("the queue asks about it, and stops once a word is written", async () => {
+    const project = await planned();
+    // The criterion is asked about too — EV-0001 claims it — and the two
+    // closures sit side by side, the criterion first.
+    const before = await reviewQueue(project.id);
+    assert.deepEqual(
+      before.bundles.map((bundle) => bundle.id),
+      ["closure:AC-0001", "completion:IT-0001"],
+    );
+    await acceptSpecClosure({ projectId: project.id, id: "IT-0001" });
+    assert.deepEqual(
+      (await reviewQueue(project.id)).bundles.map((bundle) => bundle.id),
+      ["closure:AC-0001"],
+    );
+  });
+
+  test("leaving it open writes the other book and empties this one", async () => {
+    const project = await planned();
+    await acceptSpecClosure({ projectId: project.id, id: "IT-0001" });
+    const word = await leaveSpecOpen({
+      projectId: project.id,
+      id: "IT-0001",
+      rationale: "WL-0001 stops at the happy path; the retry is not shown.",
+    });
+    assert.equal(word.kind, "task");
+    assert.equal(await readFile(acceptancesAt(project), "utf8"), "");
+    const book = await readFile(rejectionsAt(project), "utf8");
+    assert.ok(book.includes("IT-0001:\n  rejectedHash: "), book);
+    assert.ok(book.includes("  workLogs:\n    WL-0001: "), book);
+    // The left-open word is not a rejection of the task's own wording: the
+    // colour is untouched and only the closure axis heard it.
+    const status = await statusFor(project, "IT-0001");
+    assert.equal(status.color, "green");
+    assert.equal(status.closure, "open");
+    assert.equal(status.leftOpen?.rationale, word.rationale);
+    assert.equal(status.rejection, null);
+    assert.equal(status.taskState, "ready");
+  });
+
+  test("refuses while a work log addressing it is unread", async () => {
+    const project = await planned();
+    await node(project, "WorkLog", "WL-0002");
+    await edge(project, "LOGS", "J-0001", "WL-0002");
+    await edge(project, "ADDRESSES", "WL-0002", "IT-0001");
+    await says(
+      acceptSpecClosure({ projectId: project.id, id: "IT-0001" }),
+      "invalid",
+      "WL-0002 addresses IT-0001 and is not approved yet — a task is closed, or left open, only over work a person has read. Approve it first (or reject it and have it fixed), and the task comes back to the queue.",
+    );
+  });
+
+  test("refuses a task nothing addresses, and one whose wording is refused", async () => {
+    const project = await planned();
+    await removeSpecEdge({
+      projectId: project.id,
+      id: formatEdgeId("WL-0001", "ADDRESSES", "IT-0001"),
+    });
+    await says(
+      acceptSpecClosure({ projectId: project.id, id: "IT-0001" }),
+      "invalid",
+      "Nothing addresses IT-0001 yet — a task is closed, or left open, over the work attached to it, and there is none. A WorkLog draws an ADDRESSES relation at the task in its own file.",
+    );
+
+    const second = await planned();
+    await rejectSpecNode({
+      projectId: second.id,
+      id: "IT-0001",
+      rationale: "The scope is two tasks in one.",
+    });
+    await says(
+      acceptSpecClosure({ projectId: second.id, id: "IT-0001" }),
+      "invalid",
+      "IT-0001 carries a standing rejection of its own wording, and a task is closed or left open only once its wording stands — withdraw that rejection first, or leave it to lapse when the task is fixed.",
+    );
+  });
+
+  test("asks again when another log addresses it", async () => {
+    const project = await planned();
+    await acceptSpecClosure({ projectId: project.id, id: "IT-0001" });
+    await node(project, "WorkLog", "WL-0002");
+    await edge(project, "LOGS", "J-0001", "WL-0002");
+    await edge(project, "ADDRESSES", "WL-0002", "IT-0001");
+    // A different list, so the record lapses: open again, and off the queue
+    // only until the new log is read.
+    assert.equal(await statusFor(project, "IT-0001").then((s) => s.closure), "open");
+    await approveSpecNodes({ projectId: project.id, ids: ["WL-0002"] });
+    assert.equal(
+      (await reviewQueue(project.id)).bundles.some(
+        (bundle) => bundle.id === "completion:IT-0001",
+      ),
+      true,
+    );
   });
 });

@@ -1,9 +1,10 @@
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import { cn } from "@/lib/utils";
-import { ClosureMark, StatusDot } from "./review-parts";
+import { ClosureMark, StatusDot, TaskStateMark } from "./review-parts";
 import type {
   BandNodeData,
   CardNodeData,
+  TypeNodeData,
   ColumnNodeData,
   LaneNodeData,
 } from "./view/furniture";
@@ -122,7 +123,13 @@ export type CardNode = Node<CardNodeData, "spec">;
 export type ColumnNode = Node<ColumnNodeData, "column">;
 export type BandNode = Node<BandNodeData, "band">;
 export type LaneNode = Node<LaneNodeData, "lane">;
-export type CanvasNode = CardNode | ColumnNode | BandNode | LaneNode;
+export type TypeNode = Node<TypeNodeData, "type">;
+export type CanvasNode =
+  | CardNode
+  | ColumnNode
+  | BandNode
+  | LaneNode
+  | TypeNode;
 
 /**
  * BOTH HANDLES COVER THE WHOLE CARD AND NEITHER IS VISIBLE. A relation may be
@@ -216,50 +223,63 @@ const WHOLE_CARD_HANDLE =
  * order and no drag can start, drop `isConnectableEnd={false}` and no drag can
  * land.
  */
+/**
+ * THE CARD'S BOX, SHARED BY THE TWO THINGS THAT DRAW ONE.
+ *
+ * `relative` is declared rather than inherited: the handles are `inset-0`, an
+ * inset resolves against the nearest positioned ancestor, and without this that
+ * is React Flow's own node wrapper — the same box today, and not the same
+ * guarantee.
+ *
+ * `transition` and not `transition-colors`: the highlight moves the ring and
+ * the fade as well as the border, and Tailwind's bare `transition` is the list
+ * that carries all three. It carries no size — width and height are inline
+ * styles from the layout, and a card that eased into a new box would be drawn
+ * somewhere its relations are not.
+ *
+ * IT IS ONE CONSTANT BECAUSE THERE ARE TWO CARDS NOW — the graph's, and the
+ * metamodel popup's one-line type card. They are the same shape saying two
+ * different things, and a second copy of this string would be the first place
+ * the two pictures drifted apart.
+ */
+export const CARD_SHELL =
+  "bg-card text-card-foreground relative flex flex-col rounded-md border px-2 py-1.25 transition";
+
+/**
+ * THE THREE STATES OF THE ONE-HOP HIGHLIGHT, loudest first, and the hierarchy is
+ * the message: the clicked card wears the ring, a neighbour wears the same
+ * accent quieter and nothing else, and a card the selection does not reach keeps
+ * its resting border and fades.
+ *
+ * A NEIGHBOUR GETS NO RING ON PURPOSE. It is the answer to "what does this
+ * touch", not a second selection, and two ringed cards on a board read as two
+ * things open. The hover accent is dropped where a neighbour already wears one —
+ * the card is still clickable, and the border it would move to is the border it
+ * already has.
+ *
+ * THE RESTING BORDER IS `--muted-foreground` AT HALF AND NOT `--border`, which
+ * is about reading rather than about the highlight. `--border` drew this box at
+ * a 0.08 step in lightness against a card id set at full `--card-foreground` —
+ * the id was the only thing on the card you could see, and the card itself was a
+ * rumour. Half of `--muted-foreground` is a 0.21 step in light and 0.27 in dark:
+ * a hairline you can follow around all four sides at a glance, and still a grey
+ * rather than a box drawn in the text's own ink. It matters most in the dark
+ * theme, where `--card` and the canvas behind it are the SAME token.
+ */
+export function cardBorder(picked: boolean, neighbour: boolean): string {
+  return picked
+    ? "border-primary ring-ring/50 ring-3"
+    : neighbour
+      ? "border-primary/60"
+      : "border-muted-foreground/50 hover:border-primary/40";
+}
+
 export function SpecNodeCard({ data }: NodeProps<CardNode>) {
   return (
     <div
       className={cn(
-        // `relative` is declared rather than inherited: the handles are
-        // `inset-0`, an inset resolves against the nearest positioned ancestor,
-        // and without this that is React Flow's own node wrapper — the same box
-        // today, and not the same guarantee.
-        //
-        // `transition` and not `transition-colors`: the highlight moves the ring
-        // and the fade as well as the border, and Tailwind's bare `transition`
-        // is the list that carries all three. It carries no size — width and
-        // height are inline styles from the layout, and a card that eased into a
-        // new box would be drawn somewhere its relations are not.
-        "bg-card text-card-foreground relative flex flex-col rounded-md border px-2 py-1.25 transition",
-        /* THE THREE STATES OF THE ONE-HOP HIGHLIGHT, loudest first, and the
-           hierarchy is the message: the clicked card wears the ring, a neighbour
-           wears the same accent quieter and nothing else, and a card the
-           selection does not reach keeps its resting border and fades.
-
-           A NEIGHBOUR GETS NO RING ON PURPOSE. It is the answer to "what does
-           this touch", not a second selection, and two ringed cards on a board
-           read as two things open. The hover accent is dropped where a neighbour
-           already wears one — the card is still clickable, and the border it
-           would move to is the border it already has. */
-        /* THE RESTING BORDER IS `--muted-foreground` AT HALF AND NOT `--border`,
-           which is the one change here that is about reading rather than about
-           the highlight. `--border` drew this box at a 0.08 step in lightness
-           against a card id set at full `--card-foreground` — the id was the
-           only thing on the card you could see, and the card itself was a rumour.
-           Half of `--muted-foreground` is a 0.21 step in light and 0.27 in dark,
-           against the 0.08 and 0.10 `--border` gave: a hairline you can follow
-           around all four sides at a glance, and still a grey rather than a box
-           drawn in the text's own ink.
-
-           IT MATTERS MOST IN THE DARK THEME, where `--card` and the canvas
-           behind it are the SAME token — a card there is a rectangle its border
-           alone distinguishes from the surface, and that border was a 10%-alpha
-           white. */
-        data.picked
-          ? "border-primary ring-ring/50 ring-3"
-          : data.neighbour
-            ? "border-primary/60"
-            : "border-muted-foreground/50 hover:border-primary/40",
+        CARD_SHELL,
+        cardBorder(data.picked, data.neighbour),
         data.dimmed && RECEDED,
       )}
       style={{ width: data.width, height: data.height }}
@@ -303,7 +323,13 @@ export function SpecNodeCard({ data }: NodeProps<CardNode>) {
             is a 16px `text-xs` line inside a 44px card the layout declared, and
             a badge at its own height would push every card on the board taller.
             Both are stock utilities — no new style, only a smaller one. */}
-        {data.closure === null ? null : (
+        {/* ONE MARK PER CARD AND THE TYPE DECIDES WHICH. A criterion wears
+            open/closed; a task wears blocked/ready/done, which already says
+            whether it is closed and says what that means for work. Drawing
+            both on a task would be two answers to one question in one row. */}
+        {data.taskState !== null ? (
+          <TaskStateMark state={data.taskState} className="h-4 px-1.5" />
+        ) : data.closure === null ? null : (
           <ClosureMark state={data.closure} className="h-4 px-1.5" />
         )}
       </div>
@@ -325,6 +351,53 @@ export function SpecNodeCard({ data }: NodeProps<CardNode>) {
         isConnectableEnd={false}
         className={WHOLE_CARD_HANDLE}
         title="drag to relate"
+      />
+    </div>
+  );
+}
+
+/**
+ * ONE TYPE OF THE CANON, DRAWN AS A CARD — the metamodel popup's node, and the
+ * only other thing on this surface that wears `CARD_SHELL`.
+ *
+ * IT IS ONE LINE AND THE GRAPH'S IS TWO, which is the whole difference. A card
+ * on the board names a NODE, so it carries an id and a short name and a verdict;
+ * this names a TYPE, which has nothing to be judged and nothing to be short for.
+ * Same box, same border, same three highlight states — so the popup reads as the
+ * same picture at a smaller size rather than as a second diagram language.
+ *
+ * ITS HANDLES ARE INERT AND STILL EXIST, and both halves matter. React Flow
+ * finds an edge's ends by querying `.source`/`.target` inside the node, so a
+ * card with no handles is a card no relation can reach — the popup would draw
+ * twenty-two boxes and no lines. `isConnectable={false}` keeps the bounds and
+ * drops the `connectionindicator` class, which is what carries `pointer-events`
+ * and the crosshair cursor: nothing on this canvas can start a drag, so nothing
+ * offers to. The DOM order trick the board's pair depends on is irrelevant here
+ * for the same reason, and there is no `title`.
+ */
+export function TypeCardNode({ data }: NodeProps<TypeNode>) {
+  return (
+    <div
+      className={cn(
+        CARD_SHELL,
+        "justify-center",
+        cardBorder(data.picked, data.neighbour),
+        data.dimmed && RECEDED,
+      )}
+      style={{ width: data.width, height: data.height }}
+    >
+      <Handle
+        type="target"
+        position={Position.Left}
+        isConnectable={false}
+        className={WHOLE_CARD_HANDLE}
+      />
+      <span className="truncate font-mono text-xs">{data.type}</span>
+      <Handle
+        type="source"
+        position={Position.Right}
+        isConnectable={false}
+        className={WHOLE_CARD_HANDLE}
       />
     </div>
   );
@@ -505,6 +578,7 @@ export function LaneRunBlock({ data }: NodeProps<LaneNode>) {
  * type React Flow silently has no component for.
  */
 export const NODE_TYPES = {
+  type: TypeCardNode,
   spec: SpecNodeCard,
   column: ColumnHeaderNode,
   band: BandNodeBlock,

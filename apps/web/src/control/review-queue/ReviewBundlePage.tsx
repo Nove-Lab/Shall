@@ -34,6 +34,7 @@ import { ClosureMark, StatusDot } from "@/spec/review-parts";
 import {
   firstLine,
   type AcClosureBundle,
+  type TaskClosureBundle,
   type BundleMember,
   type EvidenceMember,
   type ReviewBundle,
@@ -431,6 +432,13 @@ export function ReviewBundlePage() {
           onReject={rejectNode}
           {...rowProps}
         />
+      ) : bundle.kind === "task-closure" ? (
+        <TaskClosureCard
+          bundle={bundle}
+          nodeById={nodeById}
+          onReject={rejectNode}
+          {...rowProps}
+        />
       ) : bundle.kind === "work-report" ? (
         <ReportCard
           bundle={bundle}
@@ -495,13 +503,20 @@ function PrimaryAction({
    */
   const [leaveOpenAsking, setLeaveOpenAsking] = useState(false);
 
-  if (bundle.kind === "ac-closure") {
+  if (bundle.kind === "ac-closure" || bundle.kind === "task-closure") {
+    // THE TWO SUBJECTS SHARE THE PAIR OF DOORS. What is closed differs — a
+    // criterion on its evidence, a task on the work that addressed it — and
+    // both are one id and one word, so the buttons are the same buttons.
+    const subject =
+      bundle.kind === "ac-closure"
+        ? { id: bundle.acId, name: bundle.ac.name }
+        : { id: bundle.taskId, name: bundle.task.name };
     return (
       <div className="flex flex-wrap items-center gap-2">
         <Button
           type="button"
           disabled={busy}
-          onClick={() => onClose(bundle.acId)}
+          onClick={() => onClose(subject.id)}
         >
           {busy ? "Closing…" : "Close"}
         </Button>
@@ -513,14 +528,14 @@ function PrimaryAction({
         <RejectionPopover
           open={leaveOpenAsking}
           onOpenChange={setLeaveOpenAsking}
-          target={{ id: bundle.acId, name: bundle.ac.name }}
+          target={subject}
           verb="Leave open"
           trigger={
             <Button type="button" variant="outline">
               Leave open…
             </Button>
           }
-          onConfirm={(rationale) => onLeaveOpen(bundle.acId, rationale)}
+          onConfirm={(rationale) => onLeaveOpen(subject.id, rationale)}
         />
       </div>
     );
@@ -541,7 +556,7 @@ function PrimaryAction({
 }
 
 /* ------------------------------------------------------------------ *
- * The pieces the three cards share
+ * The pieces the four cards share
  * ------------------------------------------------------------------ */
 
 /** What every card hands its rows, so the four are written once. */
@@ -938,6 +953,108 @@ function ClosureCard({
             {bundle.history.map((entry) => (
               <p key={`${entry.evidenceId}:${entry.at}`} className={CAPTION}>
                 <span className="font-mono">{entry.evidenceId}</span>
+                {` · ${entry.by} · ${formatStamp(entry.at)} · ${firstLine(entry.rationale)}`}
+              </p>
+            ))}
+          </CollapsibleContent>
+        </Collapsible>
+      )}
+    </div>
+  );
+}
+
+/**
+ * A TASK WAITING TO BE CALLED DONE — the criterion card asked about work.
+ *
+ * IT IS THE SAME DECISION IN THE SAME SHAPE, which is why this reads as a
+ * mirror rather than as a second design: the subject at the top, the list it is
+ * closed over beneath, the hearings under that, and the same two doors. What it
+ * adds is the strip of criteria the task aimed at, because "is this done" is a
+ * question a person answers partly by looking at whether what it was for has
+ * closed — and those marks are context and never buttons: closing a criterion
+ * is its own card in this queue.
+ *
+ * THE COMMITS ARE THE THREAD BACK TO GIT, one hop shorter than the evidence
+ * card's: there the log is what SUBMITTED the claimant, here the log IS the
+ * claimant, so its commits sit on its own row.
+ */
+function TaskClosureCard({
+  bundle,
+  nodeById,
+  ...wiring
+}: {
+  bundle: TaskClosureBundle;
+  nodeById: ReadonlyMap<string, SpecNode>;
+} & RowWiring) {
+  const [historyOpen, setHistoryOpen] = useState(false);
+
+  return (
+    <div className="grid gap-4">
+      <NodeDocument
+        heading={
+          <div className="flex flex-wrap items-center gap-2">
+            <StatusDot color={bundle.task.color} />
+            <span className="font-mono text-xs break-all">{bundle.taskId}</span>
+            <Badge variant="secondary">{bundle.task.type}</Badge>
+            <span className="text-sm">{bundle.task.name}</span>
+          </div>
+        }
+        node={nodeById.get(bundle.taskId) ?? null}
+      />
+
+      <p className={CAPTION}>
+        Everything addressing this task — closing accepts the whole list
+      </p>
+      {bundle.workLogs.map((member) => (
+        <MemberRow
+          key={member.id}
+          member={member}
+          node={nodeById.get(member.id) ?? null}
+          verb="Reject"
+          canApprove={false}
+          canReject={false}
+          showLabel="Show the work"
+          hideLabel="Hide the work"
+          caption={
+            member.commits.length === 0 ? null : (
+              <p className={CAPTION}>
+                {`commits ${member.commits.join(", ")}`}
+              </p>
+            )
+          }
+          {...wiring}
+        />
+      ))}
+
+      {/* WHAT THE TASK WAS FOR, AND WHERE EACH OF THOSE STANDS. Read-only: a
+          criterion is closed on its own card, over its own evidence. */}
+      {bundle.targets.length === 0 ? null : (
+        <div className={BOX}>
+          <p className={CAPTION}>What this task aimed to close</p>
+          {bundle.targets.map((target) => (
+            <div key={target.id} className="flex flex-wrap items-center gap-2">
+              <span className="font-mono text-xs break-all">{target.id}</span>
+              <span className="text-sm">{target.name}</span>
+              {target.closure === null ? null : (
+                <ClosureMark state={target.closure} />
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {bundle.history.length === 0 ? null : (
+        <Collapsible open={historyOpen} onOpenChange={setHistoryOpen}>
+          <CollapsibleTrigger
+            render={<Button type="button" variant="ghost" size="sm" />}
+          >
+            {historyOpen ? <ChevronDown /> : <ChevronRight />}
+            {`History (latest hearing per work log) (${String(bundle.history.length)})`}
+          </CollapsibleTrigger>
+          <CollapsibleContent className="grid gap-1 pt-2">
+            {bundle.history.map((entry) => (
+              <p key={`${entry.workLogId}:${entry.at}`} className={CAPTION}>
+                <span className="font-mono">{entry.workLogId}</span>
                 {` · ${entry.by} · ${formatStamp(entry.at)} · ${firstLine(entry.rationale)}`}
               </p>
             ))}

@@ -11,7 +11,14 @@ import {
   type ReviewQueue,
   type ReviewStatus,
 } from "@shall/core/arith";
-import { anchorPhrase, judgeBody, type SpecNode } from "@shall/core/graph";
+import {
+  closureKindOf,
+  judgeBody,
+  orphanStem,
+  type ClosureKind,
+  type ClosureSubject,
+  type SpecNode,
+} from "@shall/core/graph";
 import type { ApprovalRecord, RejectionRecord } from "@shall/core/serialize";
 import {
   loadGraph,
@@ -120,7 +127,7 @@ export async function reviewQueue(projectId: string): Promise<ReviewQueue> {
 
 /** The sentence for a node the graph holds by nothing, said the way approve says it. */
 function orphanSentence(node: SpecNode): string {
-  return `${node.id} is a ${node.type} with no live anchor — it is held to the graph by ${anchorPhrase(node.type) ?? "nothing the canon names"}, and none stands — fix that first; a rejection is a judgement on a node the graph holds.`;
+  return `${orphanStem(node.id, node.type)} — fix that first; a rejection is a judgement on a node the graph holds.`;
 }
 
 /**
@@ -260,7 +267,7 @@ function blockerFor(
   if (status !== undefined && status.reason === "orphan") {
     return {
       kind: "invalid",
-      message: `${id} is a ${node.type} with no live anchor — it is held to the graph by ${anchorPhrase(node.type) ?? "nothing the canon names"}, and none stands — so there is nothing yet to approve.`,
+      message: `${orphanStem(id, node.type)} — so there is nothing yet to approve.`,
     };
   }
   if (status !== undefined && status.reason === "off-target") {
@@ -364,64 +371,121 @@ export async function approveSpecNodes(input: {
  * Close a criterion, or leave it open
  * ------------------------------------------------------------------ */
 
-/** An acceptance as it crosses the wire: a list, because a Map is not JSON. */
+/** A closing as it crosses the wire: a list, because a Map is not JSON. */
 export interface AcceptedClosure {
-  acHash: string;
-  evidence: { id: string; hash: string }[];
+  /** Which thing was closed — the same tag the ledger's record carries. */
+  kind: ClosureSubject;
+  subjectHash: string;
+  claimants: { id: string; hash: string }[];
   by: string;
   at: string;
 }
 
 /**
- * The criterion a closure door was pointed at, and everything claiming it — or
- * the refusal that says why there is nothing to judge. Both doors below ask the
- * same questions in the same order: does the id name a node, is it a
- * criterion, does anything claim it, has every claimant been approved. The
- * criterion's OWN colour is not asked about — a person may close or leave open
- * a criterion whose wording is still yellow; the mark says "met on what is
- * attached", not "agreed" — but the claimants' colours are: a claim nobody has
- * read is not yet a claim a person can judge the criterion on, so the door
- * waits, exactly as the queue does, until the last claimant is green.
+ * THE WORDS EACH SUBJECT'S REFUSALS ARE SAID IN, written out per kind rather
+ * than assembled from fragments.
+ *
+ * A refusal is a sentence a person reads at the moment they are stopped, and
+ * the two subjects are stopped for the same reasons in different words: one is
+ * about evidence shown against a criterion, the other about work done against a
+ * task. Two whole sentences side by side are a thing a reader can check against
+ * the screen; a sentence built out of nouns picked from a table is not.
  */
-function criterionFor(
+const WORDS: Readonly<
+  Record<
+    ClosureSubject,
+    {
+      readonly nothingClaims: (id: string) => string;
+      readonly unread: (id: string, unread: readonly string[]) => string;
+      readonly wordingRefused: (id: string) => string;
+      readonly unapproved: (id: string) => string;
+      readonly rationaleRequired: string;
+    }
+  >
+> = {
+  criterion: {
+    nothingClaims: (id) =>
+      `Nothing claims ${id} yet — a criterion is closed, or left open, over the evidence attached to it, and there is none. An Evidence node draws a CLAIMS relation at the criterion in its own file.`,
+    unread: (id, unread) => {
+      const one = unread.length === 1;
+      return `${unread.join(", ")} ${one ? "claims" : "claim"} ${id} and ${one ? "is" : "are"} not approved yet — a criterion is closed, or left open, only over evidence a person has read. Approve ${one ? "it" : "them"} first (or reject ${one ? "it" : "them"} and have ${one ? "it" : "them"} fixed), and the criterion comes back to the queue.`;
+    },
+    wordingRefused: (id) =>
+      `${id} carries a standing rejection of its own wording, and a criterion is closed or left open only once its wording stands — withdraw that rejection first, or leave it to lapse when the criterion is fixed.`,
+    unapproved: (id) =>
+      `${id} is not approved yet — a criterion is closed, or left open, only once a person has agreed to what it demands, and there is nothing settled for the evidence to be met against until then. Approve it, and the question comes back with it.`,
+    rationaleRequired:
+      "A rationale is required — what the evidence does not show, and what would.",
+  },
+  task: {
+    nothingClaims: (id) =>
+      `Nothing addresses ${id} yet — a task is closed, or left open, over the work attached to it, and there is none. A WorkLog draws an ADDRESSES relation at the task in its own file.`,
+    unread: (id, unread) => {
+      const one = unread.length === 1;
+      return `${unread.join(", ")} ${one ? "addresses" : "address"} ${id} and ${one ? "is" : "are"} not approved yet — a task is closed, or left open, only over work a person has read. Approve ${one ? "it" : "them"} first (or reject ${one ? "it" : "them"} and have ${one ? "it" : "them"} fixed), and the task comes back to the queue.`;
+    },
+    wordingRefused: (id) =>
+      `${id} carries a standing rejection of its own wording, and a task is closed or left open only once its wording stands — withdraw that rejection first, or leave it to lapse when the task is fixed.`,
+    unapproved: (id) =>
+      `${id} is not approved yet — a task is closed, or left open, only once a person has agreed to what it asks for, and until then there is nothing settled for the work to be done against. Approve it, and the question comes back with it.`,
+    rationaleRequired:
+      "A rationale is required — what the work does not show, and what would.",
+  },
+};
+
+/**
+ * The subject a closure door was pointed at, its kind, and everything claiming
+ * it — or the refusal that says why there is nothing to judge. Both doors below
+ * ask the same questions in the same order: does the id name a node, is it a
+ * thing that can be closed, does anything claim it, has every claimant been
+ * approved. The subject's OWN colour is not asked about — a person may close or
+ * leave open a task whose wording is still yellow; the mark says "done on what
+ * is attached", not "agreed" — but the claimants' colours are: work nobody has
+ * read is not yet work a person can judge the task on, so the door waits,
+ * exactly as the queue does, until the last claimant is green.
+ */
+function subjectFor(
   loadedProject: Loaded,
   id: string,
-): { ac: SpecNode; list: ReadonlyMap<string, string> } {
-  const ac = loadedProject.context.nodes.get(id);
-  if (ac === undefined) {
+): { subject: SpecNode; kind: ClosureKind; list: ReadonlyMap<string, string> } {
+  const subject = loadedProject.context.nodes.get(id);
+  if (subject === undefined) {
     throw missing(`Unknown node: ${id}`);
   }
-  if (ac.type !== "AcceptanceCriterion") {
+  const kind = closureKindOf(subject.type);
+  if (kind === null) {
     throw invalid(
-      `${id} is a ${ac.type}, and only an AcceptanceCriterion is a thing that can be closed or left open — evidence is shown against a criterion and against nothing else.`,
+      `${id} is a ${subject.type}, and only an AcceptanceCriterion or an ImplementationTask is a thing that can be closed or left open — evidence is shown against a criterion, work against a task, and against nothing else.`,
     );
+  }
+  const words = WORDS[kind.kind];
+  // THE SUBJECT'S OWN COLOUR IS THE FIRST GATE, and the two sentences it can
+  // refuse with are in the order a person needs them: a standing rejection says
+  // what to do about itself, and everything else that is not green says the
+  // same thing in one word — approve it first.
+  //
+  // IT USED NOT TO BE ASKED AT ALL, and the gap showed up on a screen: a green,
+  // closed task was edited, went yellow, and could still be closed — leaving a
+  // yellow node wearing a green Done. "Met" is a statement about words somebody
+  // has agreed to, so there has to be an agreement before there can be one.
+  const status = loadedProject.statuses.get(id);
+  if (status?.reason === "rejected") {
+    throw invalid(words.wordingRefused(id));
+  }
+  if (status?.color !== "green") {
+    throw invalid(words.unapproved(id));
   }
   const list = claimantHashesOf(id, loadedProject.context);
   if (list.size === 0) {
-    throw invalid(
-      `Nothing claims ${id} yet — a criterion is closed, or left open, over the evidence attached to it, and there is none. An Evidence node draws a CLAIMS relation at the criterion in its own file.`,
-    );
+    throw invalid(words.nothingClaims(id));
   }
   const unread = unapprovedClaimantsOf(id, loadedProject.context).map(
     (claimant) => claimant.id,
   );
   if (unread.length > 0) {
-    const one = unread.length === 1;
-    throw invalid(
-      `${unread.join(", ")} ${one ? "claims" : "claim"} ${id} and ${one ? "is" : "are"} not approved yet — a criterion is closed, or left open, only over evidence a person has read. Approve ${one ? "it" : "them"} first (or reject ${one ? "it" : "them"} and have ${one ? "it" : "them"} fixed), and the criterion comes back to the queue.`,
-    );
+    throw invalid(words.unread(id, unread));
   }
-  return { ac, list };
-}
-
-/**
- * The one place the two axes touch, said once for both doors: a criterion whose
- * own wording a person has refused is not judged for closure until the words
- * stand again — and the leave-open record shares the refusal's key, so writing
- * one over the other would silently un-refuse the wording.
- */
-function wordingRefused(id: string): string {
-  return `${id} carries a standing rejection of its own wording, and a criterion is closed or left open only once its wording stands — withdraw that rejection first, or leave it to lapse when the criterion is fixed.`;
+  return { subject, kind, list };
 }
 
 /**
@@ -429,17 +493,19 @@ function wordingRefused(id: string): string {
  * rationale, the list a leaving-open was judged on.
  */
 function projected(record: {
-  acHash: string;
-  evidence: ReadonlyMap<string, string>;
+  kind: ClosureSubject;
+  subjectHash: string;
+  claimants: ReadonlyMap<string, string>;
   by: string;
   at: string;
 }): AcceptedClosure {
   return {
-    acHash: record.acHash,
+    kind: record.kind,
+    subjectHash: record.subjectHash,
     // A Map is not JSON, so the record's own shape stops at core's edge and
     // what leaves here is a list in id order — the order a panel would have had
     // to impose anyway, imposed once, here.
-    evidence: [...record.evidence]
+    claimants: [...record.claimants]
       .map(([id, hash]) => ({ id, hash }))
       .sort((a, b) => (a.id === b.id ? 0 : a.id < b.id ? -1 : 1)),
     by: record.by,
@@ -479,19 +545,21 @@ export async function acceptSpecClosure(input: {
 }): Promise<AcceptedClosure> {
   const loadedProject = await loaded(input.projectId, "accept");
   const { spec, context, statuses } = loadedProject;
-  const { ac, list } = criterionFor(loadedProject, input.id);
-  if (statuses.get(input.id)?.reason === "rejected") {
-    throw invalid(wordingRefused(input.id));
-  }
+  const { subject, kind, list } = subjectFor(loadedProject, input.id);
 
   const standingWord = context.ledgers.rejections.get(input.id);
-  if (standingWord !== undefined && standingWord.evidence !== undefined) {
+  if (standingWord !== undefined && standingWord.leftOpen !== undefined) {
     await served(withdrawRejection(spec.rejectionsFile, input.id));
   }
   const record = await served(
     recordAcceptance(spec.acceptancesFile, input.id, {
-      acHash: contentHashOf(ac, writtenEdgesOf(ac, context), context.ledgers.hash),
-      evidence: new Map(list),
+      kind: kind.kind,
+      subjectHash: contentHashOf(
+        subject,
+        writtenEdgesOf(subject, context),
+        context.ledgers.hash,
+      ),
+      claimants: new Map(list),
       by: userName(),
       at: new Date().toISOString(),
     }),
@@ -522,20 +590,14 @@ export async function leaveSpecOpen(input: {
 }): Promise<AcceptedClosure & { rationale: string }> {
   const loadedProject = await loaded(input.projectId, "reject");
   const { spec, context, statuses } = loadedProject;
-  const { ac, list } = criterionFor(loadedProject, input.id);
-
-  if (statuses.get(input.id)?.reason === "rejected") {
-    throw invalid(wordingRefused(input.id));
-  }
+  const { subject, kind, list } = subjectFor(loadedProject, input.id);
   const rationale = judgeBody(input.rationale);
   const [problem] = rationale.problems;
   if (problem !== undefined) {
     throw invalid(problem);
   }
   if (rationale.value === "") {
-    throw invalid(
-      "A rationale is required — what the evidence does not show, and what would.",
-    );
+    throw invalid(WORDS[kind.kind].rationaleRequired);
   }
 
   if (context.ledgers.acceptances.has(input.id)) {
@@ -543,8 +605,12 @@ export async function leaveSpecOpen(input: {
   }
   const record = await served(
     recordRejection(spec.rejectionsFile, input.id, {
-      rejectedHash: contentHashOf(ac, writtenEdgesOf(ac, context), context.ledgers.hash),
-      evidence: new Map(list),
+      rejectedHash: contentHashOf(
+        subject,
+        writtenEdgesOf(subject, context),
+        context.ledgers.hash,
+      ),
+      leftOpen: { kind: kind.kind, claimants: new Map(list) },
       by: userName(),
       at: new Date().toISOString(),
       rationale: rationale.value,
@@ -552,8 +618,9 @@ export async function leaveSpecOpen(input: {
   );
   return {
     ...projected({
-      acHash: record.rejectedHash,
-      evidence: record.evidence ?? new Map(),
+      kind: kind.kind,
+      subjectHash: record.rejectedHash,
+      claimants: record.leftOpen?.claimants ?? new Map(),
       by: record.by,
       at: record.at,
     }),

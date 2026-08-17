@@ -88,18 +88,20 @@ function reject(
   return [held.id, { rejectedHash: hashOf(held, edges), ...REFUSAL }];
 }
 
-/** One closing, over the criterion and the evidence exactly as they stand here. */
+/** One closing, over the subject and its claimants exactly as they stand here. */
 function accept(
-  ac: SpecNode,
-  evidence: readonly SpecNode[],
+  subject: SpecNode,
+  claimants: readonly SpecNode[],
   edges: readonly SpecEdge[],
+  kind: "criterion" | "task" = "criterion",
 ): [string, AcceptanceRecord] {
   return [
-    ac.id,
+    subject.id,
     {
-      acHash: hashOf(ac, edges),
-      evidence: new Map(
-        evidence.map((held) => [held.id, hashOf(held, edges)] as const),
+      kind,
+      subjectHash: hashOf(subject, edges),
+      claimants: new Map(
+        claimants.map((held) => [held.id, hashOf(held, edges)] as const),
       ),
       ...ACCEPTOR,
     },
@@ -207,8 +209,9 @@ describe("a standing acceptance", () => {
         [
           criterion.id,
           {
-            acHash: hashOf(criterion, edges),
-            evidence: new Map([["EV-0404", "sha256:whatever"]]),
+            kind: "criterion" as const,
+            subjectHash: hashOf(criterion, edges),
+            claimants: new Map([["EV-0404", "sha256:whatever"]]),
             ...ACCEPTOR,
           },
         ],
@@ -234,19 +237,23 @@ describe("a standing acceptance", () => {
   });
 });
 
-/** One leaving-open, over the criterion and the evidence exactly as they stand here. */
+/** One leaving-open, over the subject and its claimants exactly as they stand here. */
 function leaveOpen(
-  ac: SpecNode,
-  evidence: readonly SpecNode[],
+  subject: SpecNode,
+  claimants: readonly SpecNode[],
   edges: readonly SpecEdge[],
+  kind: "criterion" | "task" = "criterion",
 ): [string, RejectionRecord] {
   return [
-    ac.id,
+    subject.id,
     {
-      rejectedHash: hashOf(ac, edges),
-      evidence: new Map(
-        evidence.map((held) => [held.id, hashOf(held, edges)] as const),
-      ),
+      rejectedHash: hashOf(subject, edges),
+      leftOpen: {
+        kind,
+        claimants: new Map(
+          claimants.map((held) => [held.id, hashOf(held, edges)] as const),
+        ),
+      },
       ...REFUSAL,
     },
   ];
@@ -393,13 +400,46 @@ describe("what the queue asks about", () => {
       booksOf({ approvals: [approve(criterion, edges), approve(evidence, edges)] }),
     );
     assert.equal(closureAsks(criterion, context), true);
-    // The criterion's own colour is not asked about — an unapproved criterion
-    // with an approved claimant is still asked.
+  });
+
+  test("does not ask while the criterion's own words are unread", () => {
+    // BOTH SIDES HAVE TO BE GREEN. "Met" is a statement about words somebody
+    // agreed to; a criterion still being edited has nothing settled to be met
+    // against, and closing over one is what produced a yellow node wearing a
+    // green Done.
+    const { graph, edges } = world(evidence);
     const yellowCriterion = colorContextOf(
       graph,
       booksOf({ approvals: [approve(evidence, edges)] }),
     );
-    assert.equal(closureAsks(criterion, yellowCriterion), true);
+    assert.equal(closureAsks(criterion, yellowCriterion), false);
+    assert.equal(closureOf(criterion, yellowCriterion), "open");
+
+    // Approving it is what brings the question — nothing else moved.
+    const settled = colorContextOf(
+      graph,
+      booksOf({ approvals: [approve(criterion, edges), approve(evidence, edges)] }),
+    );
+    assert.equal(closureAsks(criterion, settled), true);
+  });
+
+  test("a record made while everything was green keeps standing", () => {
+    // THE GATE IS ON ASKING AND NOT ON STANDING. Nothing sweeps a closed
+    // criterion when the graph moves around it — and editing the criterion
+    // itself moves its hash, which reopens it by arithmetic, so the forbidden
+    // state cannot be reached the long way round either.
+    const { graph, edges } = world(evidence);
+    const ledgers = booksOf({
+      approvals: [approve(criterion, edges), approve(evidence, edges)],
+      acceptances: [accept(criterion, [evidence], edges)],
+    });
+    assert.equal(markOf(graph, ledgers, "AC-0001"), "closed");
+    const reworded = { ...criterion, body: "Something else entirely." };
+    const moved = graphOf(
+      [responsibility, requirement, reworded, journal, workLog, evidence],
+      edges,
+    );
+    assert.equal(markOf(moved, ledgers, "AC-0001"), "open");
   });
 
   test("does not ask while a claimant is unapproved — the criterion is simply open", () => {

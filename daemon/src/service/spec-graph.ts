@@ -10,6 +10,7 @@ import {
   judgeText,
   NODE_TYPES,
   permittedEdgeTypes,
+  orphanStem,
 } from "@shall/core/graph";
 import {
   ACCEPTANCES_FILE,
@@ -546,7 +547,7 @@ export async function checkSpec(startPath: string): Promise<SpecCheck> {
     const type = typeById.get(status.id) ?? "?";
     gaps.push({
       file: fileFor(status.id),
-      message: `${status.id} is a ${type} with no live anchor — it is held to the graph by ${anchorPhrase(type) ?? "nothing the canon names"}, and none stands. Draw the relation, or remove the node.`,
+      message: `${orphanStem(status.id, type)}. Draw the relation, or remove the node.`,
     });
   }
   gaps.sort((a, b) => (a.file === b.file ? 0 : a.file < b.file ? -1 : 1));

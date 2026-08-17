@@ -47,9 +47,10 @@ after(async () => {
 });
 
 const CLOSED: AcceptanceRecord = {
-  acHash:
+  kind: "criterion" as const,
+  subjectHash:
     "sha256:9f2b1c0000000000000000000000000000000000000000000000000000000000",
-  evidence: new Map([
+  claimants: new Map([
     ["EV-0001", "sha256:aa"],
     ["EV-0002", "sha256:bb"],
   ]),
@@ -58,8 +59,9 @@ const CLOSED: AcceptanceRecord = {
 };
 
 const OTHER: AcceptanceRecord = {
-  acHash: "sha256:cc",
-  evidence: new Map([["EV-0003", "sha256:dd"]]),
+  kind: "criterion" as const,
+  subjectHash: "sha256:cc",
+  claimants: new Map([["EV-0003", "sha256:dd"]]),
   by: "someone",
   at: "2026-08-16T10:00:00.000Z",
 };
@@ -135,8 +137,9 @@ describe("the acceptance ledger door", () => {
     await recordAcceptance(file, "AC-0001", CLOSED);
 
     const later: AcceptanceRecord = {
-      acHash: "sha256:ee",
-      evidence: new Map([["EV-0001", "sha256:ff"]]),
+      kind: "criterion" as const,
+      subjectHash: "sha256:ee",
+      claimants: new Map([["EV-0001", "sha256:ff"]]),
       by: "yjshin",
       at: "2026-08-16T12:00:00.000Z",
     };
@@ -194,7 +197,7 @@ describe("the acceptance ledger door", () => {
     const reading = await readAcceptanceLedger(file);
     assert.deepEqual([...reading.records.keys()], ["AC-0001", "AC-0002"]);
     assert.deepEqual(
-      [...(reading.records.get("AC-0001")?.evidence.entries() ?? [])],
+      [...(reading.records.get("AC-0001")?.claimants.entries() ?? [])],
       [
         ["EV-0001", "sha256:aa"],
         ["EV-0002", "sha256:bb"],
@@ -210,12 +213,12 @@ describe("the acceptance ledger door", () => {
     // exist — an `invalid`, because this is Shall failing at its own job and
     // not somebody's file being in the way.
     const answer = await refusal(() =>
-      recordAcceptance(file, "AC-0001", { ...CLOSED, evidence: new Map() }),
+      recordAcceptance(file, "AC-0001", { ...CLOSED, claimants: new Map() }),
     );
     assert.deepEqual(answer, {
       kind: "invalid",
       message:
-        "Shall emitted an acceptance ledger it could not read back — Every record in the acceptance ledger is a map of exactly acHash, evidence, by and at — evidence a map from evidence id to hash with at least one entry — the record under AC-0001 is not.",
+        "Shall emitted an acceptance ledger it could not read back — Every record in the acceptance ledger is a map of exactly by, at and one closed thing — acHash with an evidence map for a criterion, or taskHash with a workLogs map for a task — the map holding at least one entry, and never both — the record under AC-0001 is not.",
     });
     await assert.rejects(() => readFile(file, "utf8"));
   });
@@ -228,7 +231,7 @@ describe("the acceptance ledger door", () => {
       ],
       [
         "AC-0001: 3\n",
-        "Every record in the acceptance ledger is a map of exactly acHash, evidence, by and at — evidence a map from evidence id to hash with at least one entry — the record under AC-0001 is not.",
+        "Every record in the acceptance ledger is a map of exactly by, at and one closed thing — acHash with an evidence map for a criterion, or taskHash with a workLogs map for a task — the map holding at least one entry, and never both — the record under AC-0001 is not.",
       ],
     ] as const) {
       const file = await makeLedgerPath();
@@ -290,8 +293,9 @@ describe("the acceptance ledger door", () => {
       [
         "1234",
         {
-          acHash: "sha256:99",
-          evidence: new Map([["5678", "sha256:88"]]),
+          kind: "criterion" as const,
+          subjectHash: "sha256:99",
+          claimants: new Map([["5678", "sha256:88"]]),
           by: "someone else",
           at: "2026-08-16T13:00:00.000Z",
         },

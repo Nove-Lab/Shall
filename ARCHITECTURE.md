@@ -32,11 +32,12 @@ daemon 하나가 돌고, 사람은 localhost 웹 화면에서 스펙을 보고 �
 - **spec/은 순수 저작물이다.** 노드 파일 안에는 자기 판정 상태에 대한 어떤 주장도
   없다. 판정은 파일 밖, 데몬만 쓰는 장부 세 권에 산다 — `.shall/ledger/approvals.yaml`
   (nodeId → `{approvedHash, by, at}`), `rejections.yaml`(nodeId → `{rejectedHash, by,
-  at, rationale}` — AC를 "열어 둔" 기록은 같은 키 아래 `evidence: {id → hash}`를 하나
-  더 실어 노드 반려와 구분한다), `acceptances.yaml`(acId → `{acHash, evidence: {id →
-  hash}, by, at}`) — 각각 노드당 최신 레코드 하나. 승인과 반려는 서로를 지우지
-  않지만, 닫힘의 두 말(closed / left open)은 AC마다 한 권에만 산다 — 닫으면
-  rejections에서 지우고, 열어 두면 acceptances에서 지운다. 옛 `approval:` 블록이 파일에
+  at, rationale}` — 무언가를 "열어 둔" 기록은 같은 키 아래 맵을 하나 더 실어 노드
+  반려와 구분한다: AC면 `evidence: {id → hash}`, task면 `workLogs: {id → hash}`),
+  `acceptances.yaml`(acId → `{acHash, evidence: {id → hash}, by, at}` 또는 taskId →
+  `{taskHash, workLogs: {id → hash}, by, at}`) — 각각 노드당 최신 레코드 하나. 승인과
+  반려는 서로를 지우지 않지만, 닫힘의 두 말(closed / left open)은 주체마다 한 권에만
+  산다 — 닫으면 rejections에서 지우고, 열어 두면 acceptances에서 지운다. 옛 `approval:` 블록이 파일에
   남아 있으면 낯선 키처럼 이름으로 거부된다.
 - **판정의 제조자는 사람 하나다.** 노드의 색은 저장되지 않고 매번 계산된다 —
   red는 고칠 오류(missing·문법 위반·고아) 또는 **유효한 반려**(rejectedHash = 현재
@@ -245,8 +246,14 @@ core에서 파일시스템을 만지는 유일한 모듈이고, 노드가 어느
   삭제 제안은 페이로드 안에 있어 전용 분기가 없다: 적으면 changed, 벗기면 도로
   green. spec에 없는 id의 레코드는 무시된다 — 삭제된 노드의 이력이고, 복원되면
   내용이 맞는 한 그대로다
-- 닫힘(`closure.ts`) — AC의 open/closed와, 큐가 물어야 하는지. 판정은 **목록**에
-  대한 것이다: 그 AC를 CLAIMS하는 살아있는 증거 전부의 id→hash. acceptance 기록이 있고
+- **닫힘의 주체는 둘이다**(`core/graph/closure-kinds.ts`) — AC는 그것을 CLAIMS하는
+  Evidence로, ImplementationTask는 그것을 ADDRESSES하는 WorkLog로 닫힌다. 어떤 타입이
+  어떤 관계로 닫히는지는 `ANCHOR_RULES`와 같은 성격의 canon 사실이라 core/graph의 표
+  한 곳에 있고, 산술은 주체에서 그 표를 읽는다 — 두 주체가 두 코드 경로가 아니라
+  목록만 다른 하나다. 레코드는 자기가 무엇을 닫았는지(kind)를 함께 들고, 종류가
+  다른 레코드는 hash가 맞아도 서지 않는다
+- 닫힘(`closure.ts`) — 주체의 open/closed와, 큐가 물어야 하는지. 판정은 **목록**에
+  대한 것이다: 그 주체를 claim하는 살아있는 노드 전부의 id→hash. acceptance 기록이 있고
   **AC의 hash가 그대로**이고 **기록된 목록이 지금 목록과 같으면**(같은 id, 같은 hash,
   더도 덜도 없이) closed; rejections에 `evidence` 목록을 실은 기록이 같은 두 조건으로
   서면 "left open"(마크는 open, 사유가 함께); 둘 다 아니면 아무도 이 목록에 대해 말한
@@ -329,13 +336,16 @@ core에서 파일시스템을 만지는 유일한 모듈이고, 노드가 어느
 - 스펙 프로시저 — 노드·엣지 읽기와 쓰기 다섯, 리뷰 표면 일곱(`review`·`approve`·
   `rejectDeletion`·`approvedVersion`·`restoreNode`·`gitStatus`·`commitSpec`), 그리고
   리뷰 큐의 여섯(`reviewQueue`·`reject`·`withdrawRejection`·`approveNodes`·
-  `acceptClosure`·`leaveOpen`). 문장과 순서가 door의 것이고, 거부 종류(`invalid`·
+  `acceptClosure`·`leaveOpen`), 그리고 보드의 하나(`taskBoard`). 문장과 순서가 door의 것이고, 거부 종류(`invalid`·
   `conflict`·`missing`)가 여기서 상태 코드를 얻는다. `approve`·`approveNodes`가 green의,
   `reject`가 반려 red의, `acceptClosure`가 closed의, `leaveOpen`이 left-open의 유일한
   제조 경로다 — 각각 장부에 레코드를 쓰고 노드 파일은 건드리지 않는다.
   `approveNodes`는 전부-아니면-무다: 가드를 전부 지난 뒤 한 번 쓰고, 하나라도 막히면
   막힌 것을 전부 나열하며 아무것도 안 쓴다. `acceptClosure`는 id 하나를 받아 **지금 그
-  AC를 CLAIMS하는 증거 전부**로 닫고, `leaveOpen`은 같은 목록에 사유를 붙여 열어 둔다;
+  주체를 claim하는 것 전부**로 닫고(AC면 CLAIMS하는 증거, task면 ADDRESSES하는 작업
+  기록), `leaveOpen`은 같은 목록에 사유를 붙여 열어 둔다; `taskBoard`는 아무것도 쓰지
+  않는 읽기 하나다 — 보드의 모든 열이 장부에서 세어지므로 장부가 안 읽히면 통째로
+  거부한다;
   둘 다 상대 장부의 기록을 먼저 지우고 쓴다(사이에서 실패하면 아무 말도 없는 상태 =
   큐가 다시 묻는 안전한 쪽). 증거가 하나도 없거나, 증거 중 green이 아닌 것이 있거나(그
   id를 이름해 거부), AC의 문구가 반려 중이면 둘 다 거부.
@@ -368,17 +378,24 @@ core에서 파일시스템을 만지는 유일한 모듈이고, 노드가 어느
 localhost 브라우저 화면. 사람의 관찰·편집 표면.
 
 - Control plane — review queue · task board · activity · vitals. 전부 core/arith
-  계산 결과의 표시. **Review Queue**가 채워졌다: 목록은 `[종류 배지] 제목 — 요약
+  계산 결과의 표시. **Task Board**도 채워졌다: 위가 Fix Spec(모든 red — 사람의 반려가
+  먼저, rationale은 **전문**; 그다음 문법 red, 구멍, 안 읽히는 파일), 아래가
+  Implement(미완료 ∧ 선행 전부 닫힘 ∧ 상향 사슬 all-green인 task만 — 조건 미달은 이유
+  없이 아예 안 보인다). 두 열 다 저장 없음. **Review Queue**가 채워졌다: 목록은 `[종류 배지] 제목 — 요약
   수치` 한 줄씩(AC closure → Spec approval → Work report, 오래된 것 먼저), 카드는
   전면에 판정 재료(뿌리의 diff/전문, Journal 본문, AC 본문)·멤버 목록(노드마다
   diff/전문, [Approve]·[Reject…]·[Open in Spec Plane])·접힌 무수정 확인 목록·번들 버튼
-  하나 또는 둘([Approve all]/[Accept report]/[Close]+[Leave open…]). 반려는 인라인
+  하나 또는 둘([Approve all]/[Accept report]/[Close]+[Leave open…]). 번들은 네 종류다 —
+  AC closure · Task closure(그 task를 ADDRESSES하는 WorkLog 목록, 겨냥한 AC들의 마크를
+  문맥으로) · Spec approval · Work report. 반려는 인라인
   팝오버 — 대상 id·이름, 필수 rationale, 확정/취소 — 이고 카드의 행 우클릭과 스펙
   플레인 카드 우클릭 어디서든 같은 팝오버다. 판정 직후 카드는 큐를 다시 계산하고,
   방금 내린 반려는 페이지의 '최근 판정' 줄에 [Undo]로 남는다. task board·activity·
-  vitals는 아직 예약석
+  activity·vitals는 아직 예약석
 - Spec plane — 그래프 캔버스(React Flow)와 노드 상세, 그리고 리뷰 표면. 카드마다
-  신호등이 색을 달고 AC는 id 옆에 빨간 Open/초록 Closed 배지를 하나 더 달며, 노드
+  신호등이 색을 달고, AC는 id 옆에 빨간 Open/초록 Closed 배지를, ImplementationTask는
+  같은 자리에 Blocked/Ready/Done 배지를(회색 둘·윤곽선 초록 하나 — Ready 집합은 Task
+  Board의 Implement 열과 같은 술어다) 하나 더 달며, 노드
   패널이 판정 재료와 버튼을 같은 화면에 둔다: 미승인은 전문이 곧 재료, 승인 후 변경은
   승인본 대비 라인 diff, 삭제 제안은 사유·영향과 승인/반려 두 버튼, 반려 중이면
   rationale과 [Withdraw rejection], 이전 반려가 있으면 그 rationale 한 줄, green은
@@ -427,9 +444,12 @@ MCP 서버 · webhook 수신 · 외부 cron · 추론 클라이언트와 그 게
 - **승인 페이로드** — `<type>/<id>` 한 줄 + 정칙 파일, sha256. 이 정의가 바뀌면
   장부의 모든 레코드가 yellow로 돌아간다
 - **장부 세 권** — `.shall/ledger/approvals.yaml`(nodeId → `{approvedHash, by, at}`),
-  `rejections.yaml`(nodeId → `{rejectedHash, by, at, rationale}`), `acceptances.yaml`
-  (acId → `{acHash, evidence: {evId → hash}, by, at}`), id 바이트 순, 파일 형식과 같은
-  스칼라 규칙과 yaml 계약. 뒤의 두 권은 2026-08-16의 리뷰 큐 라운드에 얼었다
+  `rejections.yaml`(nodeId → `{rejectedHash, by, at, rationale}`, 열어 둔 기록이면
+  `evidence:` 또는 `workLogs:` 맵 하나를 더), `acceptances.yaml`(acId → `{acHash,
+  evidence: {evId → hash}, by, at}` 또는 taskId → `{taskHash, workLogs: {wlId → hash},
+  by, at}`), id 바이트 순, 파일 형식과 같은 스칼라 규칙과 yaml 계약. 뒤의 두 권은
+  2026-08-16의 리뷰 큐 라운드에 얼었고, task 쪽 두 키는 2026-08-17에 나란히 얼었다 —
+  criterion 레코드의 바이트는 그대로다
 - **엣지 #22·#23·#24의 방향** — `ImplementationTask —TARGETS→ AcceptanceCriterion`,
   `WorkLog —ADDRESSES→ ImplementationTask`, `Evidence —CLAIMS→ AcceptanceCriterion`
   (2026-08-16에 옛 `IS_PLANNED_BY`·`IS_ADDRESSED_BY`·`IS_CLAIMED_BY`를 뒤집었다). 문법의

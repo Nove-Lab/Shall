@@ -1,6 +1,6 @@
 import type { SpecView } from "./edge-geometry";
 import type { Highlight } from "./highlight";
-import { GEOMETRY, type Layout } from "./layout";
+import { GEOMETRY, type BandHeader, type Layout, type Placement } from "./layout";
 import type { Band, SpecNode } from "./model";
 
 /**
@@ -69,6 +69,17 @@ export type Signal = "red" | "yellow" | "green";
 export type Closure = "open" | "closed";
 
 /**
+ * WHETHER A TASK IS SOMEBODY'S TO START, AS A WORD — the third thing a card can
+ * carry, and the same bargain the two above make: the card holds the word and
+ * the shape that draws it lives beside the components in `review-parts.tsx`.
+ *
+ * IT IS NOT A FOURTH SIGNAL EITHER. The square says whether the task was read
+ * and agreed to; this says whether the work it names can be picked up now. Only
+ * `ImplementationTask` has one at all.
+ */
+export type TaskState = "blocked" | "ready" | "done";
+
+/**
  * What one card is drawn from.
  *
  * THE CARD'S WHOLE STATE IS THREE BOOLEANS, AND THEY ARE THE SELECTION'S — the
@@ -110,11 +121,37 @@ export type CardNodeData = {
    * that folded them into one square would give neither.
    */
   readonly closure: Closure | null;
+  /**
+   * The word this task wears — and `null` for every card that is not a task.
+   *
+   * REQUIRED AND NULLABLE for the reason the two above are, and here the null
+   * carries the same kind of fact: nothing but an `ImplementationTask` is a
+   * thing that can be blocked, ready or done.
+   */
+  readonly taskState: TaskState | null;
   /** The node that was clicked — one card on the board, or none. */
   readonly picked: boolean;
   /** One hop from the picked card, whichever way the relation points. */
   readonly neighbour: boolean;
   /** Outside the neighbourhood while something else is picked. Faded, never hidden. */
+  readonly dimmed: boolean;
+  readonly width: number;
+  readonly height: number;
+};
+
+/**
+ * What one TYPE card is drawn from — the metamodel popup's node.
+ *
+ * It carries no node, no verdict and no mark: a type is not a thing anybody
+ * approves. What it shares with a card is the three highlight booleans and its
+ * declared box, for the reason `CardNodeData` gives — membership is a rule, and
+ * a rule evaluated inside a React component is a rule nothing can execute
+ * without a browser.
+ */
+export type TypeNodeData = {
+  readonly type: string;
+  readonly picked: boolean;
+  readonly neighbour: boolean;
   readonly dimmed: boolean;
   readonly width: number;
   readonly height: number;
@@ -326,6 +363,23 @@ export type FurniturePiece =
  * and it is NOT a `Piece`: a card is pointer-live, it anchors relations, and it
  * carries three spellings of its box rather than one.
  */
+/**
+ * One TYPE card, in the same shape as a graph card — declared beside it rather
+ * than through `Piece`, because a card is not scenery: it is clickable, so it
+ * carries no `SCENERY` pointer style and no `selectable: false`.
+ */
+export type TypeCardPiece = {
+  readonly id: string;
+  readonly type: "type";
+  readonly position: { readonly x: number; readonly y: number };
+  readonly width: number;
+  readonly height: number;
+  readonly measured: { readonly width: number; readonly height: number };
+  readonly data: TypeNodeData;
+  readonly draggable: false;
+  readonly zIndex: number;
+};
+
 export type CardPiece = {
   readonly id: string;
   readonly type: "spec";
@@ -391,28 +445,37 @@ export type CardPiece = {
  * rules lanes, so a `view === "grid" ? … : …` on that path was choosing between
  * one real answer and one that could never be reached.
  */
-export function furniturePieces(layout: Layout): FurniturePiece[] {
-  const pieces: FurniturePiece[] = [];
+/**
+ * THE BANDS' OWN STRIPS, taken out of `furniturePieces` because a second canvas
+ * draws bands and nothing else: the metamodel popup has four bands, no lanes and
+ * no column headers, and a `Layout` fabricated to carry them would have to
+ * declare a `view` it is not in.
+ *
+ * The first band draws no top rule — a rule separates two bands, and the board
+ * opens on content.
+ */
+export function bandPieces(bands: readonly BandHeader[]): FurniturePiece[] {
+  return bands.map((band, index) => ({
+    id: `band:${band.band}`,
+    type: "band" as const,
+    position: { x: band.x, y: band.y },
+    measured: { width: band.width, height: band.height },
+    data: {
+      band: band.band,
+      width: band.width,
+      height: band.height,
+      ruled: index > 0,
+    },
+    draggable: false,
+    selectable: false,
+    connectable: false,
+    zIndex: Z.band,
+    style: SCENERY,
+  }));
+}
 
-  for (const [index, band] of layout.bands.entries()) {
-    pieces.push({
-      id: `band:${band.band}`,
-      type: "band",
-      position: { x: band.x, y: band.y },
-      measured: { width: band.width, height: band.height },
-      data: {
-        band: band.band,
-        width: band.width,
-        height: band.height,
-        ruled: index > 0,
-      },
-      draggable: false,
-      selectable: false,
-      connectable: false,
-      zIndex: Z.band,
-      style: SCENERY,
-    });
-  }
+export function furniturePieces(layout: Layout): FurniturePiece[] {
+  const pieces: FurniturePiece[] = [...bandPieces(layout.bands)];
 
   /**
    * THE EMPTY GRID, one lane per sub-column. It is furniture and never content:
@@ -545,6 +608,7 @@ export function cardPieces(
   byId: ReadonlyMap<string, SpecNode>,
   signalById: ReadonlyMap<string, Signal>,
   closureById: ReadonlyMap<string, Closure>,
+  taskStateById: ReadonlyMap<string, TaskState>,
   highlight: Highlight,
 ): CardPiece[] {
   const geometry = view === "grid" ? GEOMETRY.grid : GEOMETRY.graph;
@@ -573,6 +637,11 @@ export function cardPieces(
         // criterion it colours, so the map's silence is a fact about the type
         // and not a fact the canvas had to work out.
         closure: closureById.get(node.id) ?? null,
+        // A NODE WITH NO ENTRY IS NOT A TASK, the same bargain the mark above
+        // makes. A task carries BOTH answers on the wire — its closure and its
+        // word — and the card draws the word, because "Done" says the closure
+        // and says what it means for work.
+        taskState: taskStateById.get(node.id) ?? null,
         // The three questions the highlight answers, asked once per card here so
         // that no component has to know how membership is decided. `dimmed` is
         // the complement of the neighbourhood and not of the two flags above it:
@@ -593,4 +662,44 @@ export function cardPieces(
   }
 
   return cards;
+}
+
+/**
+ * THE METAMODEL'S CARDS — one per type, sized by its own board, wearing the
+ * same three highlight booleans a graph card wears.
+ *
+ * IT DECLARES `measured` LIKE `cardPieces` DOES, and for the identical reason:
+ * React Flow paints a node `visibility: hidden` until it has measured it, and
+ * on the rebuild path a node with no declared size can stay hidden. See
+ * `cardPieces` above for the whole account.
+ */
+export function typeCardPieces(
+  placements: readonly Placement[],
+  geometry: { readonly cardWidth: number; readonly cardHeight: number },
+  highlight: Highlight,
+): TypeCardPiece[] {
+  return placements.map((placement) => ({
+    // The canvas's own id, so a type named like a piece of scenery cannot
+    // displace one — the same defence `cardNodeId` gives the graph.
+    id: cardNodeId(placement.id),
+    type: "type" as const,
+    position: { x: placement.x, y: placement.y },
+    width: geometry.cardWidth,
+    height: geometry.cardHeight,
+    measured: { width: geometry.cardWidth, height: geometry.cardHeight },
+    data: {
+      type: placement.type,
+      picked: highlight.selected === placement.id,
+      neighbour:
+        highlight.selected !== null &&
+        highlight.selected !== placement.id &&
+        highlight.nodes.has(placement.id),
+      dimmed:
+        highlight.selected !== null && !highlight.nodes.has(placement.id),
+      width: geometry.cardWidth,
+      height: geometry.cardHeight,
+    },
+    draggable: false,
+    zIndex: Z.card,
+  }));
 }

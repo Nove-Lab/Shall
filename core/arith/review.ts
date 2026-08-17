@@ -1,6 +1,7 @@
-import type { SpecNode } from "../graph/index.js";
+import { closureKindOf, type SpecNode } from "../graph/index.js";
 import type { RefusedFile, SpecGraph } from "../store/file-store.js";
 import { closureOf, closureVerdictOf } from "./closure.js";
+import { isClosableTask, taskStateOf, type ColorAt } from "./task-state.js";
 import {
   type ColorContext,
   colorContextOf,
@@ -71,10 +72,11 @@ export interface ReviewStatus {
    * rejected before, and here is what was said", which is the one thing a
    * reviewer looking at a resubmitted node wants to read first.
    *
-   * A CRITERION LEFT OPEN IS NOT A REJECTION OF THE CRITERION, and it does not
-   * arrive here: a rejection-ledger record that carries an evidence map is a
-   * judgement about the list of evidence and lives in `leftOpen` below, so this
-   * field is null for it and the node's colour is untouched by it.
+   * A SUBJECT LEFT OPEN IS NOT A REJECTION OF THAT SUBJECT, and it does not
+   * arrive here: a rejection-ledger record that carries a claimant map is a
+   * judgement about the list — the evidence claiming a criterion, the work
+   * addressing a task — and lives in `leftOpen` below, so this field is null
+   * for it and the node's colour is untouched by it.
    *
    * REQUIRED AND NULLABLE, NEVER OPTIONAL, for the reason written above.
    */
@@ -104,6 +106,19 @@ export interface ReviewStatus {
    * REQUIRED AND NULLABLE, NEVER OPTIONAL, for the reason written above.
    */
   leftOpen: { by: string; at: string; rationale: string } | null;
+  /**
+   * WHETHER THIS IMPLEMENTATION TASK CAN BE PICKED UP — blocked, ready or done
+   * — and null for every type that is not one, because the question does not
+   * apply to them.
+   *
+   * IT IS THE BOARD'S OWN ANSWER AND NOT A SECOND OPINION. `task-state.ts` says
+   * which word a task wears, the Task Board's Implement column is exactly the
+   * `ready` ones, and this field is what lets the Spec plane draw the same
+   * answer beside the task's id without asking a different question.
+   *
+   * REQUIRED AND NULLABLE, NEVER OPTIONAL, for the reason written above.
+   */
+  taskState: "blocked" | "ready" | "done" | null;
   /**
    * THE SENTENCE A RULE OF THE GRAPH WROTE AGAINST THIS NODE, when its red came
    * from one that names other nodes — today the aim rule (`off-target`), which
@@ -154,17 +169,14 @@ function brokenOf(refusal: RefusedFile): BrokenFile {
 }
 
 /**
- * The closure mark, asked only of the one type it means anything for.
- *
- * The type is compared by name rather than routed through a table, because
- * there is exactly one criterion type in the canon and a table of one row would
- * be a second place to keep that fact.
+ * The closure mark, asked only of the types it means anything for — the
+ * criterion and the task, which is what `CLOSURE_KINDS` is a table of.
  */
 function closureFor(
   node: SpecNode,
   context: ColorContext,
 ): "open" | "closed" | null {
-  return node.type === "AcceptanceCriterion" ? closureOf(node, context) : null;
+  return closureKindOf(node.type) === null ? null : closureOf(node, context);
 }
 
 /** The aim rule's sentence, and only when that rule is what made the node red. */
@@ -180,12 +192,12 @@ function problemFor(
   return breach === null ? null : offTargetSentence(node.id, breach);
 }
 
-/** The standing left-open word, asked of the same one type. */
+/** The standing left-open word, asked of the same two types. */
 function leftOpenFor(
   node: SpecNode,
   context: ColorContext,
 ): { by: string; at: string; rationale: string } | null {
-  if (node.type !== "AcceptanceCriterion") {
+  if (closureKindOf(node.type) === null) {
     return null;
   }
   const verdict = closureVerdictOf(node, context);
@@ -194,11 +206,38 @@ function leftOpenFor(
     : null;
 }
 
+/**
+ * ONE REFERRER'S LINE ABOUT AN ID NO FILE NAMES — the sentence `shall check`
+ * files under that referrer, said once here so the Task Board can say the same
+ * words. It is per referrer and not per id: the subject of the sentence is the
+ * file that still points at the hole, which is the file somebody opens.
+ */
+export function missingSentence(
+  id: string,
+  referrer: MissingNode["referencedBy"][number],
+): string {
+  return `${referrer.fromId} has a ${referrer.type} relation to ${id}, and no file names ${id}. The relation is kept as written, so writing or restoring ${id} attaches it again.`;
+}
+
 export function reviewGraph(
   graph: SpecGraph,
   ledgers: Ledgers,
 ): GraphReview {
   const context = colorContextOf(graph, ledgers);
+  // The colour of any node, computed once per id — the chain above a task is
+  // walked per task and the same requirement sits above many of them.
+  const settled = new Map<string, "red" | "yellow" | "green" | null>();
+  const colorAt: ColorAt = (id) => {
+    const held = settled.get(id);
+    if (held !== undefined) {
+      return held;
+    }
+    const node = context.nodes.get(id);
+    const answer =
+      node === undefined ? null : colorOf(livingSubject(node), context)?.color ?? null;
+    settled.set(id, answer);
+    return answer;
+  };
   const statuses: ReviewStatus[] = [];
   const missing: MissingNode[] = [];
   const broken: BrokenFile[] = [];
@@ -224,7 +263,7 @@ export function reviewGraph(
       approval:
         approval === undefined ? null : { by: approval.by, at: approval.at },
       rejection:
-        rejection === undefined || rejection.evidence !== undefined
+        rejection === undefined || rejection.leftOpen !== undefined
           ? null
           : {
               by: rejection.by,
@@ -233,6 +272,9 @@ export function reviewGraph(
             },
       closure: closureFor(node, context),
       leftOpen: leftOpenFor(node, context),
+      taskState: isClosableTask(node.type)
+        ? taskStateOf(node, context, colorAt)
+        : null,
       problem: problemFor(node, verdict.reason, context),
     });
   }

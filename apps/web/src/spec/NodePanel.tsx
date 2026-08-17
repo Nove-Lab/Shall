@@ -12,6 +12,7 @@ import {
   BAND_ORDER,
   anchorPhrase,
   bandOf,
+  closureKindOf,
   columnsInOrder,
   nextIdSuggestion,
   sectionGuideFor,
@@ -53,7 +54,13 @@ import {
   type ReviewStatus,
   type StatusReason,
 } from "./review";
-import { ClosureMark, LineDiff, Referrers, StatusDot } from "./review-parts";
+import {
+  ClosureMark,
+  LineDiff,
+  Referrers,
+  StatusDot,
+  TaskStateMark,
+} from "./review-parts";
 import { formatStamp } from "./spec-node";
 import { lineDiff, wholeFile, type DiffRow } from "./view/diff";
 
@@ -612,6 +619,20 @@ export function NodePanel({
    * once here rather than spelled twice in the render — only one of the two
    * positions can be reached at a time, so it is never mounted twice.
    */
+  /**
+   * THE DOOR THAT ASKS FOR CHANGES, and it lives on the footer row beside Edit.
+   *
+   * IT IS THE SAME ACT AS EDITING, POINTED AT SOMEBODY ELSE. A person reading a
+   * node either fixes it themselves — Edit — or writes down what is wrong and
+   * hands it back, which is what this does: the rejection ledger's record is a
+   * work order the agent reads next. Two ways to change the same node belong on
+   * the same row; the verdict box above stays about the verdict.
+   *
+   * "REQUEST CHANGES" AND NOT "REJECT", for the same reason. What the button
+   * does to the ledger is a rejection and the sentences everywhere else still
+   * say so; what a person is DOING is asking for a different version, and the
+   * button is named for the act rather than for the record it leaves.
+   */
   const rejectDoor =
     canReject && node !== null ? (
       <RejectionPopover
@@ -620,12 +641,8 @@ export function NodePanel({
         target={{ id: node.id, name: node.name }}
         verb="Reject"
         trigger={
-          <Button
-            type="button"
-            variant="outline"
-            className="justify-self-start"
-          >
-            Reject…
+          <Button type="button" variant="outline" className="ml-auto">
+            Request changes…
           </Button>
         }
         onConfirm={onReject}
@@ -636,14 +653,21 @@ export function NodePanel({
    * HOW MUCH CLAIMS THIS CRITERION, COUNTED OFF THE RELATIONS POINTING AT IT.
    *
    * `referrers` is already the edges INTO this node, and a claimant is exactly
-   * one of those whose type is `CLAIMS` — so the count is read off the graph the
+   * one of those whose type the closure table names — so the count is read off
+   * the graph the
    * panel was handed rather than asked for as a second number that could
    * disagree with the board. EVERY CLAIMANT COUNTS, WHATEVER COLOUR IT WEARS:
    * closing accepts the whole list, so a list of one yellow piece of evidence is
    * still a list something can be closed over, and counting only the green ones
    * would leave the switch dark over a criterion the daemon would happily close.
    */
-  const claimants = referrers.filter((edge) => edge.type === "CLAIMS").length;
+  // WHICH RELATION CLAIMS THIS NODE IS THE CANON'S ANSWER: `CLAIMS` into a
+  // criterion, `ADDRESSES` into a task, and nothing into anything else.
+  const closureKind = closureKindOf(node?.type ?? "");
+  const claimants =
+    closureKind === null
+      ? 0
+      : referrers.filter((edge) => edge.type === closureKind.claim).length;
   const awaiting = unapprovedClaimants.length;
 
   /**
@@ -657,16 +681,51 @@ export function NodePanel({
    * agreed to the words of cannot be signed off as met — so the surface shuts
    * the door and says which of the two it is.
    */
+  /**
+   * THE NOUNS EACH SUBJECT'S CAPTION IS SAID IN. A criterion is closed on
+   * evidence claiming it and a task on work addressing it, so the sentence is
+   * one sentence with two vocabularies rather than two sentences.
+   */
+  const CLOSURE_WORDS: Record<
+    "criterion" | "task",
+    { none: string; unread: string; one: string; many: (count: number) => string }
+  > = {
+    criterion: {
+      none: "No evidence claims this criterion yet — nothing to close over.",
+      unread:
+        "Approve this criterion first — until its words are agreed there is nothing for the evidence to be met against.",
+      one: "One piece of evidence claims this criterion.",
+      many: (count) => `${String(count)} pieces of evidence claim this criterion.`,
+    },
+    task: {
+      none: "No work log addresses this task yet — nothing to close over.",
+      unread:
+        "Approve this task first — until what it asks for is agreed there is nothing for the work to be done against.",
+      one: "One work log addresses this task.",
+      many: (count) => `${String(count)} work logs address this task.`,
+    },
+  };
+  const words = CLOSURE_WORDS[closureKind?.kind ?? "criterion"];
+  /**
+   * WHETHER THE SUBJECT'S OWN WORDS ARE SETTLED — the other half of the gate,
+   * and the half that was missing. "Met" is a statement about words somebody
+   * agreed to, so an unapproved or edited subject has nothing for its claimants
+   * to be measured against; the daemon refuses the same door in the same order,
+   * and this is that refusal said before it is reached.
+   */
+  const subjectUnread = status !== null && status.color !== "green";
   const closureCaption =
     claimants === 0
-      ? "No evidence claims this criterion yet — nothing to close over."
+      ? words.none
       : status?.reason === "rejected"
         ? "Its wording is rejected — closure waits until the words stand."
-        : awaiting > 0
-          ? `${unapprovedClaimants.join(", ")} ${awaiting === 1 ? "is" : "are"} awaiting approval — the switch opens once every claim is approved.`
-          : claimants === 1
-            ? "One piece of evidence claims this criterion."
-            : `${String(claimants)} pieces of evidence claim this criterion.`;
+        : subjectUnread
+          ? words.unread
+          : awaiting > 0
+            ? `${unapprovedClaimants.join(", ")} ${awaiting === 1 ? "is" : "are"} awaiting approval — the switch opens once every claim is approved.`
+            : claimants === 1
+              ? words.one
+              : words.many(claimants);
 
   /**
    * WHETHER THIS NODE HAS A COMPARISON TO SHOW, WHICH IS ALSO WHETHER ONE IS
@@ -1151,23 +1210,16 @@ export function NodePanel({
                 refused. */}
             {status === null ? null : (
               <div className="grid gap-2">
-                {status.color === "green" ? (
-                  <>
-                    <div className="flex items-center gap-1.5">
-                      <StatusDot color="green" />
-                      <span className="text-muted-foreground text-sm">
-                        {status.approval === null
-                          ? "Approved"
-                          : `Approved by ${status.approval.by} · ${formatStamp(status.approval.at)}`}
-                      </span>
-                    </div>
-                    {/* AN APPROVED NODE STILL HAS ONE DOOR, and it is here
-                        rather than in a box: green is not a thing to deal with,
-                        so it keeps its one muted line and the door sits under
-                        it at the same weight it has beside Approve. */}
-                    {rejectDoor}
-                  </>
-                ) : statusText === null ? null : (
+                {/* GREEN SAYS NOTHING HERE ANY MORE, and that is the point of
+                    the arrangement rather than an omission. An approved node is
+                    the state everything else is trying to reach: it is not a
+                    thing to deal with, so it gets no box, no dot and no line
+                    above the specification — who approved it and when is a FACT
+                    ABOUT THE NODE and now sits with the other facts, in the
+                    `Approved` field beside `Updated` at the foot of the pane.
+                    The one door it still has is on the footer row beside Edit,
+                    where asking for changes sits next to making them. */}
+                {status.color === "green" ? null : statusText === null ? null : (
                   <div className="grid gap-2 rounded-md border p-3">
                     <div className="flex items-center gap-1.5">
                       <StatusDot color={status.color} />
@@ -1237,27 +1289,22 @@ export function NodePanel({
                         )}
                       </div>
                     ) : null}
-                    {/* THE TWO ANSWERS SIDE BY SIDE, and the second one is why
-                        this is a row and not a button. Agreeing and refusing
-                        are the same size of decision on the same text, so they
-                        sit at the same place with the same weight — the refusal
-                        outlined, because it is the one that asks for a sentence
-                        before it can be sent. */}
+                    {/* THE ONE ANSWER THIS BOX CARRIES IS AGREEMENT. Refusing
+                        is the other half of the same decision, and it is on the
+                        footer row beside Edit — the two ways of changing a node
+                        a person has read: do it yourself, or write down what is
+                        wrong and hand it back. */}
                     {node.deletionProposed === undefined &&
-                    (APPROVABLE.has(status.reason) || rejectDoor !== null) ? (
+                    APPROVABLE.has(status.reason) ? (
                       <div className="grid gap-2">
-                        <div className="flex items-center gap-2">
-                          {APPROVABLE.has(status.reason) ? (
-                            <Button
-                              type="button"
-                              disabled={reviewBusy}
-                              onClick={() => void approve()}
-                            >
-                              {reviewBusy ? "Approving…" : "Approve"}
-                            </Button>
-                          ) : null}
-                          {rejectDoor}
-                        </div>
+                        <Button
+                          type="button"
+                          className="justify-self-start"
+                          disabled={reviewBusy}
+                          onClick={() => void approve()}
+                        >
+                          {reviewBusy ? "Approving…" : "Approve"}
+                        </Button>
                         {reviewError ? (
                           <p className="text-destructive text-sm">
                             {reviewError}
@@ -1324,7 +1371,7 @@ export function NodePanel({
                         reviewBusy ||
                         claimants === 0 ||
                         awaiting > 0 ||
-                        status.reason === "rejected"
+                        subjectUnread
                       }
                       onCheckedChange={(next: boolean) => {
                         if (next) {
@@ -1396,7 +1443,12 @@ export function NodePanel({
             <Field label="ID">
               <div className="flex items-center gap-1.5">
                 <span className="font-mono text-xs break-all">{node.id}</span>
-                {status === null || status.closure === null ? null : (
+                {/* ONE MARK, AND THE TYPE DECIDES WHICH — the canvas card's own
+                    rule: a task's word already says whether it is closed and
+                    says what that means for the work. */}
+                {status?.taskState != null ? (
+                  <TaskStateMark state={status.taskState} />
+                ) : status === null || status.closure === null ? null : (
                   <ClosureMark state={status.closure} />
                 )}
               </div>
@@ -1459,6 +1511,28 @@ export function NodePanel({
             <Field label="Updated">
               <span className="text-sm">{formatStamp(node.updatedAt)}</span>
             </Field>
+            {/* WHO SIGNED THIS OFF, AND WHEN — a fact about the node, filed
+                with the other facts rather than announced above the
+                specification.
+
+                IT IS READ OUT OF THE LEDGER AND NEVER OFF THE FILE, which is
+                the whole arrangement: a node file carries no claim about its own
+                approval. The instant leads and the name follows it in brackets,
+                because the question a reader has here is "how current is this
+                agreement" and the person is the follow-up.
+
+                IT IS SHOWN ONLY WHILE THE APPROVAL STANDS. A node somebody
+                edited after it was approved is yellow, and its ledger record is
+                history the verdict box above already tells the story of — a
+                field reading "Approved …" over a changed node would be the
+                panel contradicting its own colour. */}
+            {status?.color === "green" && status.approval !== null ? (
+              <Field label="Approved">
+                <span className="text-sm">
+                  {`${formatStamp(status.approval.at)} (${status.approval.by})`}
+                </span>
+              </Field>
+            ) : null}
           </div>
         ) : (
           <div className="grid gap-4">
@@ -1476,7 +1550,9 @@ export function NodePanel({
                     <span className="font-mono text-xs break-all">
                       {node.id}
                     </span>
-                    {status === null || status.closure === null ? null : (
+                    {status?.taskState != null ? (
+                      <TaskStateMark state={status.taskState} />
+                    ) : status === null || status.closure === null ? null : (
                       <ClosureMark state={status.closure} />
                     )}
                   </div>
@@ -1653,9 +1729,22 @@ export function NodePanel({
             ) : null}
 
             {mode === "edit" && node ? (
-              <Field label="Updated">
-                <span className="text-sm">{formatStamp(node.updatedAt)}</span>
-              </Field>
+              <>
+                <Field label="Updated">
+                  <span className="text-sm">{formatStamp(node.updatedAt)}</span>
+                </Field>
+                {/* The same pair the reading pane files at its foot, so the two
+                    modes say the same things about the node in the same place.
+                    Saving will move the bytes and lapse the approval; the field
+                    is the state as it stands, and it disappears with it. */}
+                {status?.color === "green" && status.approval !== null ? (
+                  <Field label="Approved">
+                    <span className="text-sm">
+                      {`${formatStamp(status.approval.at)} (${status.approval.by})`}
+                    </span>
+                  </Field>
+                ) : null}
+              </>
             ) : null}
           </div>
         )}
@@ -1667,10 +1756,18 @@ export function NodePanel({
 
       <div className="flex shrink-0 items-center gap-2 border-t p-3">
         {mode === "view" ? (
-          <Button type="button" onClick={onEdit}>
-            <Pencil />
-            Edit
-          </Button>
+          <>
+            <Button type="button" onClick={onEdit}>
+              <Pencil />
+              Edit
+            </Button>
+            {/* THE OTHER WAY TO CHANGE THIS NODE, pushed to the right of the
+                row: `ml-auto` on the trigger, so the two doors sit at the two
+                ends of the bar rather than shoulder to shoulder — making the
+                change yourself and asking somebody else for it are different
+                enough to be told apart at a glance. */}
+            {rejectDoor}
+          </>
         ) : mode === "create" ? (
           <>
             <Button
