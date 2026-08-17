@@ -1,17 +1,18 @@
 import {
   closureKindOf,
+  compare,
   type NodeTypeName,
   type SpecNode,
 } from "../graph/index.js";
 import { closureOf } from "./closure.js";
-import { colorOf, livingSubject, type ColorContext } from "./color.js";
+import type { ColorContext } from "./color.js";
 
 /**
  * WHETHER AN IMPLEMENTATION TASK CAN BE PICKED UP — blocked, ready, or done.
  *
  * THREE WORDS, MUTUALLY EXCLUSIVE, AND EVERY TASK HAS EXACTLY ONE. `done` is
- * the closure axis: a person said the work that addressed this task satisfies
- * it. `ready` is everything the board's Implement column asks for — nothing
+ * the closure axis: a person said the verification reports claiming this task
+ * satisfy it. `ready` is everything the board's Implement column asks for — nothing
  * above it is unread or refused, and everything it waits on is finished.
  * `blocked` is the rest, which is not a defect and not a warning: it is simply
  * a task whose turn has not come.
@@ -37,6 +38,9 @@ export type ColorAt = (id: string) => "red" | "yellow" | "green" | null;
 
 /** The one relation a task waits on — canon #15, written in the task's own file. */
 const DEPENDS_ON = "DEPENDS_ON";
+
+/** The relation that puts work under a task — canon #23, the log's own line. */
+const ADDRESSES = "ADDRESSES";
 
 /**
  * HOW THE CHAIN ABOVE A TASK IS WALKED — one row per type, and every hop is a
@@ -94,11 +98,6 @@ const UPWARD: Partial<
   AcceptanceCriterion: [{ dir: "in", edge: "HAS_CRITERION" }],
   Constraint: [],
 };
-
-/** Byte order, like everywhere else in core — never the machine's locale. */
-function compare(a: string, b: string): number {
-  return a === b ? 0 : a < b ? -1 : 1;
-}
 
 /**
  * Whether a person has said this task is done — the closure axis, asked of the
@@ -217,15 +216,6 @@ export function taskStateOf(
     : "blocked";
 }
 
-/** Whether the board should offer this task — `ready` and nothing else. */
-export function isStartable(
-  task: SpecNode,
-  context: ColorContext,
-  colorAt: ColorAt,
-): boolean {
-  return taskStateOf(task, context, colorAt) === "ready";
-}
-
 /**
  * How deep in the prerequisite graph this task sits: 0 with nothing before it,
  * otherwise one more than the deepest thing it waits on.
@@ -278,4 +268,57 @@ export function depthOf(taskId: string, context: ColorContext): number {
 /** Whether this type is a task at all — the one lookup the board and review share. */
 export function isClosableTask(type: string): boolean {
   return closureKindOf(type)?.kind === "task";
+}
+
+/**
+ * THE BLOCKED TASK THIS WORK LOG ADDRESSES, or null — the one red that reads
+ * other nodes' judgements.
+ *
+ * WORK IS LOGGED ONLY UNDER A TASK WHOSE TURN HAS COME. `blocked` is the
+ * board's own word — unfinished, and either its chain is unread or something
+ * it waits on is open — and a work log registered against such a task is not
+ * early news but a rule broken: the board exists so that work starts where
+ * the plan says it may, and a log under a blocked task is work the plan
+ * cannot yet account for.
+ *
+ * IT CANNOT BE A CLAUSE OF `colorOf`, and that is why it lives here: the base
+ * chain answers one node from its own file and the books, and this question
+ * reads the ADDRESSED task's state, which reads the colours of the chain
+ * above that task. `reviewGraph` asks it after the base chain, only of a node
+ * the chain left unred — so every deeper red keeps its own sentence, and every
+ * surface that reads statuses sees this one. Nothing else asks a WorkLog's
+ * colour directly, which is the fact that keeps the two-step honest.
+ *
+ * The first blocked task in edge order is named; fixing it surfaces the next.
+ * A dangling ADDRESSES is not asked about — the missing rule owns the hole.
+ */
+export function prematureAddressOf(
+  workLog: SpecNode,
+  context: ColorContext,
+  colorAt: ColorAt,
+): string | null {
+  if (workLog.type !== "WorkLog") {
+    return null;
+  }
+  for (const edge of context.outgoing.get(workLog.id) ?? []) {
+    if (edge.type !== ADDRESSES) {
+      continue;
+    }
+    const task = context.nodes.get(edge.toId);
+    if (task === undefined || !isClosableTask(task.type)) {
+      continue;
+    }
+    if (taskStateOf(task, context, colorAt) === "blocked") {
+      return task.id;
+    }
+  }
+  return null;
+}
+
+/**
+ * The breach as one sentence — the rule and both ids, with no instruction
+ * tail, so the doors and the board can each add their own.
+ */
+export function prematureSentence(workLogId: string, taskId: string): string {
+  return `${workLogId} addresses ${taskId}, and ${taskId} is blocked — work is logged only under a task whose turn has come: its chain read and agreed, and everything it waits on finished.`;
 }

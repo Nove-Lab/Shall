@@ -53,7 +53,8 @@ describe("ANCHOR_RULES", () => {
     // the code reads would agree with any table at all. The three are where a
     // specification begins — a word, a thing, a goal — and the journal is where
     // the execution record begins; everything else in the record is held by
-    // the work log that submitted or recorded it.
+    // the work log that logged or recorded it, or — evidence and reports — by
+    // its own claim.
     assert.deepEqual(
       ANCHOR_RULES.filter((rule) => isRootless(rule.type)).map(
         (rule) => rule.type,
@@ -101,13 +102,17 @@ describe("anchorPhrase", () => {
     );
   });
 
-  test("joins both directions when a type is held either way, as Evidence is", () => {
+  test("joins both directions when a type is held either way, as a WorkLog is", () => {
     // The row the doc comment promised would still read as one sentence: a
-    // work log reaching in, or the evidence's own claim reaching out.
+    // journal reaching in, or the log's own addressing reaching out.
     assert.equal(
-      anchorPhrase("Evidence"),
-      "a SUBMITS relation into it or a CLAIMS relation out of it",
+      anchorPhrase("WorkLog"),
+      "a LOGS relation into it or an ADDRESSES relation out of it",
     );
+  });
+
+  test("holds an Evidence by its claim alone — the submitter says who brought it, not what it is about", () => {
+    assert.equal(anchorPhrase("Evidence"), "a CLAIMS relation out of it");
   });
 
   test("has nothing to say about a type that anchors nothing", () => {
@@ -140,7 +145,7 @@ describe("orphanStem", () => {
     assert.equal(stem.endsWith("and none stands"), true);
     assert.equal(
       stem,
-      "EV-0001 is a Evidence with no live anchor — it is held to the graph by a SUBMITS relation into it or a CLAIMS relation out of it, and none stands",
+      "EV-0001 is a Evidence with no live anchor — it is held to the graph by a CLAIMS relation out of it, and none stands",
     );
   });
 });

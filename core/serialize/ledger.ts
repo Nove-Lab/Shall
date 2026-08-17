@@ -1,5 +1,5 @@
+import { compare } from "../graph/index.js";
 import {
-  compare,
   lowerFirst,
   readLedgerRoot,
   type LedgerGrammar,

@@ -45,10 +45,9 @@ import type { BorderSide, CardBox, Point } from "./edge-geometry";
  * and long relations would have nowhere to run — while 2 leaves the lane open
  * with a pixel to spare and still keeps the stroke off the border it passes.
  *
- * One constant, one home: tests read `CARD_CLEARANCE` rather than restating 2,
- * so correcting it is a one-line diff.
+ * One constant, one home, so correcting it is a one-line diff.
  */
-export const CARD_CLEARANCE = 2;
+const CARD_CLEARANCE = 2;
 
 /**
  * The corner radius, and it is the library's own default rather than a taste of
@@ -652,8 +651,8 @@ export function stepPath(waypoints: readonly Point[]): {
  * every relation's name has room, which makes this the rule and not a check.
  * Two copies of 7 and 8 would part company on the first edit.
  */
-export const LABEL_CHARACTER_WIDTH = 7;
-export const LABEL_PADDING = 8;
+const LABEL_CHARACTER_WIDTH = 7;
+const LABEL_PADDING = 8;
 
 /** How much horizontal run this text needs. */
 export function labelRoom(text: string): number {

@@ -1,5 +1,5 @@
 import type { api } from "@/api";
-import type { SpecEdge } from "./spec-node";
+import type { SpecEdge, SpecNode } from "./spec-node";
 import type { Closure, Signal } from "./view/furniture";
 
 /**
@@ -60,7 +60,7 @@ export type BundleMember = SpecApprovalBundle["members"][number];
 /** A claimant, which is a member with the work log that submitted it. */
 export type EvidenceMember = AcClosureBundle["evidence"][number];
 /** The other kind of claimant: a work log, with the commits it produced. */
-export type WorkLogMember = TaskClosureBundle["workLogs"][number];
+export type ReportMember = TaskClosureBundle["reports"][number];
 /**
  * THE OTHER SURFACE COMPUTED ON READ — what the specification needs fixed, and
  * what is ready to be worked on. Derived from the procedure like everything
@@ -208,6 +208,43 @@ export function statusesById(
   return byId;
 }
 
+/** The nodes keyed by id — the lookup both detail pages build before rendering rows. */
+export function nodesById(
+  nodes: readonly SpecNode[],
+): ReadonlyMap<string, SpecNode> {
+  const byId = new Map<string, SpecNode>();
+  for (const node of nodes) {
+    byId.set(node.id, node);
+  }
+  return byId;
+}
+
+/**
+ * WHETHER A PERSON CAN PASS JUDGEMENT ON THIS STATUS AT ALL — yellow or green,
+ * which is to say a node whose file reads and whose place in the graph stands.
+ * Red has no door: a broken file, an orphan and a standing rejection are not
+ * judgements waiting to be made. One spelling, because the panel's two buttons,
+ * the canvas menu and the queue's rows all gate on it and used to spell it
+ * severally.
+ */
+export function judgeable(status: Pick<ReviewStatus, "color">): boolean {
+  return status.color === "yellow" || status.color === "green";
+}
+
+/**
+ * WHETHER THE APPROVE BUTTON HAS ANY BUSINESS SHOWING for this member: yellow —
+ * the one colour approving resolves — and no deletion proposal standing over
+ * it, which has its own two buttons. The batch door and the per-row button both
+ * read this one spelling, so [Approve all] can never send an id the row itself
+ * would not offer.
+ */
+export function approvable(member: {
+  readonly color: Signal;
+  readonly deletionProposed: boolean;
+}): boolean {
+  return member.color === "yellow" && !member.deletionProposed;
+}
+
 /**
  * THE RELATIONS THAT POINT AT A NODE — what a deletion leaves drawn to nothing.
  *
@@ -222,12 +259,6 @@ export function referrersOf(
 }
 
 /**
- * WHAT DELETING A NODE DOES, IN THE ORDER IT MATTERS: what goes, what is left
- * pointing at nothing, and that neither comes back. Both dialogs that can delete
- * a node say it in these words, because there is one answer and it does not
- * depend on which door the person came through.
- */
-/**
  * THE FIRST LINE OF A RATIONALE, for the places it is QUOTED rather than shown —
  * the caption under a verdict for a rejection that no longer stands, and the
  * closure card's history rows. A caption that grew to twelve lines would bury
@@ -240,6 +271,12 @@ export function firstLine(text: string): string {
   return text.split("\n", 1)[0] ?? text;
 }
 
+/**
+ * WHAT DELETING A NODE DOES, IN THE ORDER IT MATTERS: what goes, what is left
+ * pointing at nothing, and that neither comes back. Both dialogs that can delete
+ * a node say it in these words, because there is one answer and it does not
+ * depend on which door the person came through.
+ */
 export function deletionSentence(id: string): string {
   return `${id} leaves the graph, and the relations that start at it go with it. Relations that point at it stay behind, drawn to a node that is no longer there. This cannot be undone.`;
 }

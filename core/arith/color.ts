@@ -1,5 +1,6 @@
 import {
   anchorsFor,
+  compare,
   isColored,
   type AnchorEdge,
   type SpecEdge,
@@ -21,10 +22,11 @@ import type { SpecGraph } from "../store/file-store.js";
  * somebody wrote down, yellow for a change nobody has read, green for a node a
  * person approved and nothing has touched since.
  *
- * SIX PREDICATES AND ONE ORDER. Each question below is asked on its own and
+ * SEVEN PREDICATES AND ONE ORDER. Each question below is asked on its own and
  * answers about one fact — is the file there, does it parse, does anything hold
- * it, has a person refused it at these bytes, has a person approved it, does
- * that approval still fit the bytes. `colorOf` is the ORDER those questions are
+ * it, does its aim land where the grammar says it may, has a person refused it
+ * at these bytes, has a person approved it, does that approval still fit the
+ * bytes. `colorOf` is the ORDER those questions are
  * asked in and it holds no judgement of its own: every rule about what is wrong
  * lives in a predicate, so a rule can be read, tested and changed in one place,
  * and the composition stays a list of ifs a person can check against the spec.
@@ -275,6 +277,11 @@ export type ColorVerdict =
         | "malformed"
         | "orphan"
         | "off-target"
+        // THE ONE REASON `colorOf` NEVER ANSWERS. Work logged under a task
+        // whose turn has not come reads the ADDRESSED task's state — other
+        // nodes' judgements — which the base chain cannot; `reviewGraph` asks
+        // it, after the chain, via `prematureAddressOf` in task-state.ts.
+        | "premature"
         | "rejected";
     }
   | { readonly color: "yellow"; readonly reason: "unapproved" | "changed" }
@@ -305,7 +312,7 @@ export function isMissing(
  * allow between these two types — was already asked by the loader, which put its
  * sentences in `problems` and left the file out of the graph. There is nothing
  * for this predicate to look up; it reads the answer the loader already wrote.
- * The parameter stays so that all six predicates are one shape and the chain
+ * The parameter stays so that all seven predicates are one shape and the chain
  * can call them without remembering which is which.
  */
 export function hasSchemaViolation(
@@ -373,17 +380,30 @@ const ADDRESSES = "ADDRESSES";
 const CLAIMS = "CLAIMS";
 
 /**
- * One breach of the aim rule, named at both ends: the work log, the evidence it
- * submitted, the tasks the log addresses, what those tasks target, and what the
- * evidence claims. Enough for a sentence a person can act on from either node.
+ * One breach of the aim rule, named at both ends and tagged by which claimant
+ * broke it. The evidence arm carries the whole chain — the work log, the tasks
+ * it addresses, what those tasks target, and what the evidence claims. The
+ * report arm is one hop shorter: a verification report claims a TASK, so the
+ * allowed set is the addressed tasks themselves — and `workLogId` is null only
+ * for the one breach that needs no submitter, a report claiming more than one
+ * task. Enough for a sentence a person can act on from either node.
  */
-export interface OffTarget {
-  readonly workLogId: string;
-  readonly evidenceId: string;
-  readonly tasks: readonly string[];
-  readonly targets: readonly string[];
-  readonly claims: readonly string[];
-}
+export type OffTarget =
+  | {
+      readonly claimant: "evidence";
+      readonly workLogId: string;
+      readonly evidenceId: string;
+      readonly tasks: readonly string[];
+      readonly targets: readonly string[];
+      readonly claims: readonly string[];
+    }
+  | {
+      readonly claimant: "report";
+      readonly workLogId: string | null;
+      readonly reportId: string;
+      readonly addresses: readonly string[];
+      readonly claims: readonly string[];
+    };
 
 /** The ids at the far end of this node's outgoing edges of one type, as written. */
 function writtenTargetsOf(
@@ -397,11 +417,7 @@ function writtenTargetsOf(
       ids.push(edge.toId);
     }
   }
-  return ids.sort(compareIds);
-}
-
-function compareIds(a: string, b: string): number {
-  return a === b ? 0 : a < b ? -1 : 1;
+  return ids.sort(compare);
 }
 
 /**
@@ -422,10 +438,22 @@ function aimOf(
       targets.add(target);
     }
   }
-  return { tasks, targets: [...targets].sort(compareIds) };
+  return { tasks, targets: [...targets].sort(compare) };
 }
 
-/** Whether one piece of evidence's claims all fall inside an aim. */
+/**
+ * Whether one piece of evidence's claims all fall inside an aim.
+ *
+ * AN EMPTY AIM IS AN EMPTY ALLOWANCE, NOT AN EXEMPTION. A log that addresses
+ * no task is fine on its own — foundation work exists — but its tasks target
+ * nothing, so there is nothing its evidence may claim, and any claim under it
+ * is a breach. It used to be an exemption ("under no aim, never red"), and the
+ * gap showed on a screen: evidence under an aimless log could claim any
+ * criterion in the project. The one asymmetry is deliberate: under an empty
+ * aim, evidence that claims NOTHING raises no breach here — the missing claim
+ * is the anchor rule's sentence (a claimless evidence is an orphan), and the
+ * log itself has done nothing wrong.
+ */
 function breachOf(
   workLogId: string,
   evidenceId: string,
@@ -434,30 +462,76 @@ function breachOf(
 ): OffTarget | null {
   const claims = writtenTargetsOf(evidenceId, CLAIMS, context);
   const inside =
-    claims.length > 0 && claims.every((claim) => aim.targets.includes(claim));
+    aim.tasks.length === 0
+      ? claims.length === 0
+      : claims.length > 0 &&
+        claims.every((claim) => aim.targets.includes(claim));
   return inside
     ? null
-    : { workLogId, evidenceId, tasks: aim.tasks, targets: aim.targets, claims };
+    : {
+        claimant: "evidence",
+        workLogId,
+        evidenceId,
+        tasks: aim.tasks,
+        targets: aim.targets,
+        claims,
+      };
 }
 
 /**
- * THE AIM RULE: a work log that addresses a task submits evidence only for the
- * criteria that task targets.
+ * Whether one verification report's claim falls inside its work log's
+ * addressing — the report's own half of the aim rule, one hop shorter than the
+ * evidence's: a report claims a TASK, so the allowed set is the tasks the
+ * submitting log addresses, as written.
+ *
+ * EXACTLY ONE CLAIM IS THE CARDINALITY AND IT IS CHECKED ELSEWHERE TOO: a
+ * report claiming several tasks is a breach whoever submitted it (the arm in
+ * `offTargetOf` below), and a report claiming nothing is the anchor rule's
+ * orphan, not this rule's business — the same asymmetry the evidence keeps.
+ */
+function reportBreachOf(
+  workLogId: string,
+  reportId: string,
+  context: ColorContext,
+): OffTarget | null {
+  const claims = writtenTargetsOf(reportId, CLAIMS, context);
+  if (claims.length === 0) {
+    return null;
+  }
+  const addresses = writtenTargetsOf(workLogId, ADDRESSES, context);
+  const inside =
+    claims.length === 1 &&
+    claims.every((claim) => addresses.includes(claim));
+  return inside
+    ? null
+    : { claimant: "report", workLogId, reportId, addresses, claims };
+}
+
+/**
+ * THE AIM RULE, OVER BOTH CLAIMANTS: a work log that addresses a task submits
+ * evidence only for the criteria that task targets, and submits verification
+ * reports only for the addressed tasks themselves — exactly one task per
+ * report, because a report that verified two things verified neither whole.
  *
  * It is the one rule of the canon that reads three files at once — the log's
- * `ADDRESSES`, the task's `TARGETS`, the evidence's `CLAIMS` — and it is a
+ * `ADDRESSES`, the task's `TARGETS`, the claimant's `CLAIMS` — and it is a
  * rule of GRAMMAR and not of judgement: it decides red, before anybody is
  * asked to approve anything, the way an orphan does. Work done under a task
- * that produces evidence for some other criterion, or evidence for nothing at
- * all, is work the plan cannot account for, and the person who would otherwise
- * be asked to approve it should be shown the seam instead.
+ * that produces evidence for some other criterion, or a report for some other
+ * task, is work the plan cannot account for, and the person who would
+ * otherwise be asked to approve it should be shown the seam instead.
  *
  * BOTH ENDS GO RED, because either file may be the one to fix — the log's
- * `ADDRESSES` line, the task's `TARGETS` line or the evidence's `CLAIMS` line —
+ * `ADDRESSES` line, the task's `TARGETS` line or the claimant's `CLAIMS` line —
  * and a person standing on either node should read the same sentence. A work
- * log that addresses no task is under no aim and is never red for this; an
- * evidence submitted by no such log is not either. Where several breaches
- * exist the first in id order is named; fixing it surfaces the next.
+ * log that addresses no task is under an EMPTY aim, not outside the rule: the
+ * log itself is fine, and the moment its evidence or its report claims
+ * anything both go red, because a claim is accounted for by the task the work
+ * was done under and this work is under none. Only a claimant submitted by NO
+ * log is outside the membership half — nothing ties it to a plan for this rule
+ * to read — though a report claiming several tasks is a breach with or without
+ * a submitter. Where several breaches exist the first in id order is named;
+ * fixing it surfaces the next.
  *
  * Read off written edges, dangling ones included: a claim at a criterion no
  * file names is still a claim outside the aim, and a task's target that is
@@ -474,32 +548,49 @@ export function offTargetOf(
   }
   if (node.type === "WorkLog") {
     const aim = aimOf(node.id, context);
-    if (aim.tasks.length === 0) {
-      return null;
-    }
-    for (const evidenceId of writtenTargetsOf(node.id, SUBMITS, context)) {
-      const evidence = context.nodes.get(evidenceId);
-      if (evidence === undefined || evidence.type !== "Evidence") {
+    for (const submittedId of writtenTargetsOf(node.id, SUBMITS, context)) {
+      const submitted = context.nodes.get(submittedId);
+      if (submitted === undefined) {
         continue;
       }
-      const breach = breachOf(node.id, evidenceId, aim, context);
+      const breach =
+        submitted.type === "Evidence"
+          ? breachOf(node.id, submittedId, aim, context)
+          : submitted.type === "VerificationReport"
+            ? reportBreachOf(node.id, submittedId, context)
+            : null;
       if (breach !== null) {
         return breach;
       }
     }
     return null;
   }
-  if (node.type === "Evidence") {
+  if (node.type === "Evidence" || node.type === "VerificationReport") {
+    // A REPORT CLAIMING SEVERAL TASKS IS A BREACH WHOEVER SUBMITTED IT — the
+    // cardinality is the rule's own clause, not the submitter's, so it is
+    // asked before the submitters are, and an unsubmitted report cannot carry
+    // two claims either.
+    if (node.type === "VerificationReport") {
+      const claims = writtenTargetsOf(node.id, CLAIMS, context);
+      if (claims.length > 1) {
+        return {
+          claimant: "report",
+          workLogId: null,
+          reportId: node.id,
+          addresses: [],
+          claims,
+        };
+      }
+    }
     const submitters = edgesOf(context.incoming, node.id)
       .filter((edge) => edge.type === SUBMITS && context.living.has(edge.fromId))
       .map((edge) => edge.fromId)
-      .sort(compareIds);
+      .sort(compare);
     for (const workLogId of submitters) {
-      const aim = aimOf(workLogId, context);
-      if (aim.tasks.length === 0) {
-        continue;
-      }
-      const breach = breachOf(workLogId, node.id, aim, context);
+      const breach =
+        node.type === "Evidence"
+          ? breachOf(workLogId, node.id, aimOf(workLogId, context), context)
+          : reportBreachOf(workLogId, node.id, context);
       if (breach !== null) {
         return breach;
       }
@@ -534,13 +625,72 @@ function listOf(ids: readonly string[]): string {
  * that a person can act on it wherever they meet it.
  */
 export function offTargetSentence(subjectId: string, breach: OffTarget): string {
+  if (breach.claimant === "report") {
+    return reportSentence(subjectId, breach);
+  }
   const tasks = breach.tasks.join(", ");
   const rule =
     "a work log's evidence claims only the criteria its task targets.";
+  // The empty aim gets its own two sentences: "addresses , which targets no
+  // criterion" is not a thing a person can read, and the fix is different —
+  // draw the ADDRESSES line the work was done under, or withdraw the claim.
+  if (breach.tasks.length === 0) {
+    // "No task the graph holds" and not "no task": a log whose only ADDRESSES
+    // lines reach missing or refused ids is in this arm too, and telling its
+    // reader a line they can see does not exist would be a sentence the file
+    // itself contradicts.
+    const aimless =
+      "a work log's evidence claims only the criteria its task targets, and this log addresses no task the graph holds.";
+    if (subjectId === breach.workLogId) {
+      return `${breach.workLogId} addresses no task the graph holds, but submits ${breach.evidenceId}, which claims ${listOf(breach.claims)} — ${aimless}`;
+    }
+    return `${breach.evidenceId} claims ${listOf(breach.claims)}, but the work log that submitted it, ${breach.workLogId}, addresses no task the graph holds — ${aimless}`;
+  }
   if (subjectId === breach.workLogId) {
     return `${breach.workLogId} addresses ${tasks}, which targets ${listOf(breach.targets)}, but submits ${breach.evidenceId}, which claims ${listOf(breach.claims)} — ${rule}`;
   }
   return `${breach.evidenceId} claims ${listOf(breach.claims)}, but the work log that submitted it, ${breach.workLogId}, addresses ${tasks}, which targets ${listOf(breach.targets)} — ${rule}`;
+}
+
+/** "IT-0001" / "IT-0001 and IT-0002" / "no task" — the report's own list words. */
+function taskListOf(ids: readonly string[]): string {
+  if (ids.length === 0) {
+    return "no task";
+  }
+  if (ids.length === 1) {
+    return ids[0] ?? "";
+  }
+  return `${ids.slice(0, -1).join(", ")} and ${ids[ids.length - 1] ?? ""}`;
+}
+
+/**
+ * The report's breach as one sentence, from either end — the same shape the
+ * evidence's sentences keep, one hop shorter.
+ */
+function reportSentence(
+  subjectId: string,
+  breach: Extract<OffTarget, { claimant: "report" }>,
+): string {
+  const rule = "a verification report claims exactly one task its work log addresses.";
+  // More than one claim breaks the rule whoever submitted the report, so the
+  // sentence needs no work log — and for the one with no submitter there is
+  // none to name.
+  if (breach.claims.length > 1) {
+    return subjectId === breach.workLogId
+      ? `${breach.workLogId} submits ${breach.reportId}, which claims ${taskListOf(breach.claims)} — ${rule}`
+      : `${breach.reportId} claims ${taskListOf(breach.claims)} — ${rule}`;
+  }
+  if (breach.addresses.length === 0) {
+    const aimless = `${rule.slice(0, -1)}, and this log addresses no task at all.`;
+    if (subjectId === breach.workLogId) {
+      return `${breach.workLogId} addresses no task, but submits ${breach.reportId}, which claims ${taskListOf(breach.claims)} — ${aimless}`;
+    }
+    return `${breach.reportId} claims ${taskListOf(breach.claims)}, but the work log that submitted it, ${breach.workLogId ?? "nothing"}, addresses no task — ${aimless}`;
+  }
+  if (subjectId === breach.workLogId) {
+    return `${breach.workLogId} addresses ${taskListOf(breach.addresses)}, but submits ${breach.reportId}, which claims ${taskListOf(breach.claims)} — ${rule}`;
+  }
+  return `${breach.reportId} claims ${taskListOf(breach.claims)}, but the work log that submitted it, ${breach.workLogId ?? "nothing"}, addresses ${taskListOf(breach.addresses)} — ${rule}`;
 }
 
 /* ------------------------------------------------------------------ *
@@ -573,7 +723,7 @@ export function isRejected(
     return false;
   }
   // A record carrying a claimant map is a subject LEFT OPEN — a judgement about
-  // the list of evidence claiming a criterion, or of work addressing a task,
+  // the list of evidence claiming a criterion, or of reports claiming a task,
   // and not about the subject's own words — so it colours nothing here;
   // `closure.ts` reads those.
   if (record.leftOpen !== undefined) {

@@ -79,6 +79,7 @@ const NODES: readonly (readonly [string, string])[] = [
   ["ImplementationTask", "IT-0001"],
   ["Journal", "J-0001"],
   ["WorkLog", "WL-0001"],
+  ["VerificationReport", "VR-0001"],
 ];
 
 const EDGES: readonly (readonly [string, string, string])[] = [
@@ -93,6 +94,8 @@ const EDGES: readonly (readonly [string, string, string])[] = [
   ["TARGETS", "IT-0001", "AC-0001"],
   ["LOGS", "J-0001", "WL-0001"],
   ["ADDRESSES", "WL-0001", "IT-0001"],
+  ["SUBMITS", "WL-0001", "VR-0001"],
+  ["CLAIMS", "VR-0001", "IT-0001"],
 ];
 
 const EVERY_ID = NODES.map(([, id]) => id);
@@ -106,7 +109,14 @@ async function greenProject(): Promise<RegistryProject> {
   for (const [type, fromId, toId] of EDGES) {
     await edge(project, type, fromId, toId);
   }
-  await approveSpecNodes({ projectId: project.id, ids: [...EVERY_ID] });
+  // The chain first, the log second: until the chain is green the task is
+  // blocked, and a log under a blocked task is red (`premature`) — the door
+  // refuses it in the same batch as the chain it waits on.
+  await approveSpecNodes({
+    projectId: project.id,
+    ids: EVERY_ID.filter((id) => id !== "WL-0001"),
+  });
+  await approveSpecNodes({ projectId: project.id, ids: ["WL-0001"] });
   return project;
 }
 
@@ -202,13 +212,30 @@ describe("the Implement half", () => {
     await node(project, "WorkLog", "WL-0002");
     await edge(project, "LOGS", "J-0001", "WL-0002");
     await edge(project, "ADDRESSES", "WL-0002", "IT-0002");
+    await node(project, "VerificationReport", "VR-0002");
+    await edge(project, "SUBMITS", "WL-0002", "VR-0002");
+    await edge(project, "CLAIMS", "VR-0002", "IT-0002");
     // Wiring the new task moved the module's own file (ALLOCATES is written
     // there) and the task's (DEPENDS_ON is written in its own), so everything
     // is read again — the board is about what is settled, not about what was.
+    // The logs go in their own second wave: until the chain is green again
+    // their tasks are blocked, and a log under a blocked task is red.
     await approveSpecNodes({
       projectId: project.id,
-      ids: [...EVERY_ID, "IT-0002", "WL-0002"],
+      ids: [
+        ...EVERY_ID.filter((id) => id !== "WL-0001"),
+        "IT-0002",
+        "VR-0002",
+      ],
     });
+    await approveSpecNodes({
+      projectId: project.id,
+      ids: ["WL-0002"],
+    });
+    // WL-0001 is left alone on purpose: adding the dependency put IT-0001
+    // behind IT-0002, so the work already logged under it is `premature` red —
+    // the demo's own situation — and it comes back green by itself the moment
+    // the prerequisite closes, because its approval never lapsed.
 
     // IT-0001 waits on IT-0002, so only the second is on the board.
     assert.deepEqual(
@@ -265,10 +292,14 @@ describe("the Fix Spec half", () => {
     await rejectSpecNode({ projectId: project.id, id: "AC-0001", rationale });
 
     const board = await taskBoard(project.id);
+    // The refusal CASCADES, and the board says so: with AC-0001 refused the
+    // chain over IT-0001 is no longer green, the task is blocked, and the work
+    // logged under it is early — a rule row beside the orphan, oldest first.
     assert.deepEqual(
       board.fixSpec.map((row) => [row.id, row.reason]),
       [
         ["AC-0001", "rejected"],
+        ["WL-0001", "premature"],
         ["R-0002", "orphan"],
       ],
     );
@@ -279,7 +310,7 @@ describe("the Fix Spec half", () => {
     assert.equal(refusal.kind, "rejected");
     // The orphan reads as `shall check` reads it.
     assert.equal(
-      board.fixSpec[1]?.detail,
+      board.fixSpec[2]?.detail,
       "R-0002 is a Requirement with no live anchor — it is held to the graph by a REQUIRES relation into it, and none stands. Draw the relation, or remove the node.",
     );
   });

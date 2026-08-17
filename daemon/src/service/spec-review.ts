@@ -1,26 +1,22 @@
 import os from "node:os";
 import path from "node:path";
 import {
+  colorContextOf,
   contentHashOf,
   reviewGraph,
+  writtenEdgesOf,
+  type ColorContext,
   type GraphReview,
   type Ledgers,
+  type ReviewStatus,
 } from "@shall/core/arith";
-import {
-  anchorPhrase,
-  bandFolderOf,
-  type SpecNode,
-  orphanStem,
-} from "@shall/core/graph";
+import { orphanStem, type SpecNode } from "@shall/core/graph";
 import {
   approvalPayload,
   blocksOf,
   emitNodeFile,
   parseNodeFile,
-  type AcceptanceLedger,
-  type ApprovalLedger,
   type ApprovalRecord,
-  type RejectionLedger,
 } from "@shall/core/serialize";
 import {
   clearDeletionProposal,
@@ -33,8 +29,8 @@ import {
   revertNodeFile,
   type SpecGraph,
 } from "@shall/core/store";
-import { conflict, invalid, missing } from "./errors.js";
-import { projectSpecFor, served } from "./spec-graph.js";
+import { Refusal, conflict, invalid, missing } from "./errors.js";
+import { fileOf, ledgersOf, projectSpecFor, served } from "./spec-graph.js";
 import {
   commitPaths,
   fileAt,
@@ -61,8 +57,9 @@ import { readSpecNodeFile } from "../host/project-files.js";
  * history the version, restore and commit doors reach into.
  *
  * GREEN HAS ONE MANUFACTURER, AND SO DO RED-BY-REJECTION AND CLOSED. The
- * approve door below and the queue's four doors in `spec-queue.ts`
- * (`approveNodes`, `reject`, `withdrawRejection`, `acceptClosure`) are the only
+ * approve door below and the queue's five doors in `spec-queue.ts`
+ * (`approveNodes`, `reject`, `withdrawRejection`, `acceptClosure`, `leaveOpen`
+ * — the last one writes the rejection ledger's left-open record) are the only
  * places a ledger record is ever written, and every one of them is reached from
  * the web UI alone. A node file says nothing about its own judgement — that
  * claim moved out of the frontmatter so that the spec folder is pure authorship
@@ -82,15 +79,6 @@ import { readSpecNodeFile } from "../host/project-files.js";
 /** Repo-root-relative, `/`-separated — the one spelling git-cli accepts. */
 function toPosix(relative: string): string {
   return relative.split(path.sep).join("/");
-}
-
-/** The three books' records and the daemon's hash, as the colour chain takes them. */
-export function ledgersOf(records: {
-  approvals: ApprovalLedger;
-  rejections: RejectionLedger;
-  acceptances: AcceptanceLedger;
-}): Ledgers {
-  return { ...records, hash: payloadHash };
 }
 
 /** Where a project's three books sit — `projectSpecFor`'s answer, narrowed. */
@@ -177,6 +165,40 @@ export async function requireLedgers(
   });
 }
 
+/** Everything a judgement door needs of the project, read once at the top of a call. */
+export interface Loaded {
+  readonly spec: Awaited<ReturnType<typeof projectSpecFor>>;
+  readonly graph: SpecGraph;
+  readonly ledgers: Ledgers;
+  readonly context: ColorContext;
+  readonly statuses: ReadonlyMap<string, ReviewStatus>;
+}
+
+/**
+ * The project, its three books and its graph, in the order the refusals belong
+ * in: an id nobody can resolve, then a book nobody can read, then the folder.
+ *
+ * ONE LOAD PER CALL AND ONE INDEX OVER IT. The colour context and the statuses
+ * are both built here because every door below asks both — what colour is this
+ * node, and which edges does its own file draw — and two loads would be two
+ * moments a save could land between. The context is handed into `reviewGraph`
+ * so the index really is built once, which is the sentence above kept honest.
+ */
+export async function loaded(
+  projectId: string,
+  casualty: "approve" | "reject" | "accept",
+): Promise<Loaded> {
+  const spec = await projectSpecFor(projectId);
+  const ledgers = await requireLedgers(spec, casualty);
+  const graph = await loadGraph(spec.specDir);
+  const context = colorContextOf(graph, ledgers);
+  const statuses = new Map<string, ReviewStatus>();
+  for (const status of reviewGraph(graph, ledgers, context).statuses) {
+    statuses.set(status.id, status);
+  }
+  return { spec, graph, ledgers, context, statuses };
+}
+
 /**
  * Whoever pressed the button. The daemon is a single person's local process,
  * so the OS user is the honest name for them; a container without a passwd
@@ -196,11 +218,6 @@ export function userName(): string {
 
 async function gitPresent(cwd: string): Promise<boolean> {
   return (await runGit(cwd, ["--version"])).kind !== "absent";
-}
-
-/** The node's file, relative to the spec folder — the spelling every sentence uses. */
-export function fileOf(node: Pick<SpecNode, "type" | "id">): string {
-  return `${bandFolderOf(node.type) ?? "?"}/${node.type}/${node.id}.md`;
 }
 
 /**
@@ -366,67 +383,104 @@ export function rejectedSentence(id: string): string {
 }
 
 /**
+ * Why this one id cannot be approved, or null — asked by BOTH approve doors,
+ * the single one below and the queue's [Approve all], so that a person pressing
+ * [Approve] on a row and [Approve all] on the bundle above it can never be told
+ * two different things about the same node. It used to be two copies of the
+ * same five gates in two files, holding that promise by hand.
+ *
+ * The refusals run in the order a person can act on: the file's own state, the
+ * node's existence, the standing deletion proposal, the anchor, the aim rule,
+ * and last the standing rejection — because "fix the file" comes before "decide
+ * the proposal", both come before "nothing reaches it yet", and all of them
+ * come before "somebody has already refused this".
+ */
+export function blockerFor(
+  project: Loaded,
+  id: string,
+): { kind: Refusal["kind"]; message: string } | null {
+  const { graph, context, statuses } = project;
+  const refused = graph.refused.find((entry) => entry.id === id);
+  if (refused !== undefined) {
+    return {
+      kind: "conflict",
+      message: `${refused.file} is in a state Shall cannot read — ${refused.problems[0] ?? ""} Nothing was approved, so that edit is still there to fix.`,
+    };
+  }
+  const node = context.nodes.get(id);
+  if (node === undefined) {
+    return { kind: "missing", message: `Unknown node: ${id}` };
+  }
+  if (node.deletionProposed !== undefined) {
+    return {
+      kind: "conflict",
+      message: `${id} carries a deletion an agent proposed, so approving it would record a node that is asking to be removed — approve the deletion or reject it first.`,
+    };
+  }
+  const status = statuses.get(id);
+  if (status !== undefined && status.reason === "orphan") {
+    return {
+      kind: "invalid",
+      message: `${orphanStem(id, node.type)} — so there is nothing yet to approve.`,
+    };
+  }
+  if (status !== undefined && status.reason === "off-target") {
+    // The aim rule is grammar, and it names the seam itself; a person cannot
+    // approve over it any more than over a missing anchor.
+    return {
+      kind: "invalid",
+      message: `${status.problem ?? `${id} is outside its task's aim`} Fix that first — there is nothing yet to approve.`,
+    };
+  }
+  if (status !== undefined && status.reason === "premature") {
+    // Work under a task whose turn has not come — the same family of red: a
+    // rule of the graph, named before any book is opened.
+    return {
+      kind: "invalid",
+      message: `${status.problem ?? `${id} addresses a blocked task`} Fix that first — there is nothing yet to approve.`,
+    };
+  }
+  if (status !== undefined && status.reason === "rejected") {
+    return { kind: "invalid", message: rejectedSentence(id) };
+  }
+  return null;
+}
+
+/**
  * A person turns a node green — the one manufacturer, and it writes one line
  * in the ledger and not a byte of the node's file.
  *
- * The refusals run in the order a person can act on: the project, the ledgers,
- * the file's own state, the node's existence, the standing deletion proposal,
- * the anchor, and last the standing rejection — because "fix the file" comes
- * before "decide the proposal", both come before "nothing reaches it yet", and
- * all of them come before "somebody has already refused this". The execution
- * band is approved like any other: a record is read by a person too.
+ * The gates are `blockerFor`'s, in its order, behind the project and ledger
+ * refusals `loaded` makes first. The execution band is approved like any
+ * other: a record is read by a person too.
  *
- * WHAT IS HASHED IS THE NODE AS LOADED, through the same function the colour
- * chain uses, so the record written here is the record `isHashMatched` will
- * find fitting a moment later — same payload, same edges, same hash.
+ * WHAT IS HASHED IS THE NODE AS LOADED, through the same two functions the
+ * colour chain uses — `writtenEdgesOf` for the edges, `contentHashOf` over
+ * them — so the record written here is the record `isHashMatched` will find
+ * fitting a moment later: same payload, same edges, same hash.
  */
 export async function approveSpecNode(input: {
   projectId: string;
   id: string;
 }): Promise<ApprovalRecord> {
-  const { specDir, ledgerFile, ...rest } = await projectSpecFor(input.projectId);
-  const ledgers = await requireLedgers({ ledgerFile, ...rest }, "approve");
-  const graph = await loadGraph(specDir);
-
-  const refused = graph.refused.find((entry) => entry.id === input.id);
-  if (refused !== undefined) {
-    throw conflict(
-      `${refused.file} is in a state Shall cannot read — ${refused.problems[0] ?? ""} Nothing was approved, so that edit is still there to fix.`,
-    );
+  const project = await loaded(input.projectId, "approve");
+  const blocker = blockerFor(project, input.id);
+  if (blocker !== null) {
+    throw new Refusal(blocker.kind, blocker.message);
   }
-  const node = graph.nodes.find((entry) => entry.id === input.id);
+  // A node `blockerFor` passed is a node it found; this narrows for the
+  // compiler and is never taken.
+  const node = project.context.nodes.get(input.id);
   if (node === undefined) {
     throw missing(`Unknown node: ${input.id}`);
   }
-  if (node.deletionProposed !== undefined) {
-    throw conflict(
-      `${input.id} carries a deletion an agent proposed, so approving it would record a node that is asking to be removed — approve the deletion or reject it first.`,
-    );
-  }
-  const review = reviewGraph(graph, ledgers);
-  const status = review.statuses.find((entry) => entry.id === input.id);
-  if (status !== undefined && status.reason === "orphan") {
-    throw invalid(
-      `${orphanStem(input.id, node.type)} — so there is nothing yet to approve.`,
-    );
-  }
-  if (status !== undefined && status.reason === "off-target") {
-    // The aim rule is grammar, and it names the seam itself; a person cannot
-    // approve over it any more than over a missing anchor.
-    throw invalid(
-      `${status.problem ?? `${input.id} is outside its task's aim`} Fix that first — there is nothing yet to approve.`,
-    );
-  }
-  if (status !== undefined && status.reason === "rejected") {
-    throw invalid(rejectedSentence(input.id));
-  }
-
-  const edges = graph.edges
-    .filter((edge) => edge.fromId === node.id)
-    .map((edge) => ({ type: edge.type, toId: edge.toId }));
   return served(
-    recordApproval(ledgerFile, input.id, {
-      approvedHash: contentHashOf(node, edges, payloadHash),
+    recordApproval(project.spec.ledgerFile, input.id, {
+      approvedHash: contentHashOf(
+        node,
+        writtenEdgesOf(node, project.context),
+        project.ledgers.hash,
+      ),
       by: userName(),
       at: new Date().toISOString(),
     }),

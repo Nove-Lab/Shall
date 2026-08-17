@@ -32,7 +32,9 @@ import { useProject } from "@/project-context";
 import { RejectionPopover } from "@/spec/RejectionPopover";
 import { ClosureMark, StatusDot } from "@/spec/review-parts";
 import {
+  approvable,
   firstLine,
+  nodesById,
   type AcClosureBundle,
   type TaskClosureBundle,
   type BundleMember,
@@ -43,8 +45,9 @@ import {
 } from "@/spec/review";
 import { formatStamp, type SpecNode } from "@/spec/spec-node";
 import { ChevronDown, ChevronRight } from "lucide-react";
+import { BOX, CAPTION, controlBase } from "../parts";
 import { MemberRow, rootLabel } from "./MemberRow";
-import { KIND_LABEL } from "./ReviewQueue";
+import { KIND_LABEL } from "./rows";
 
 /**
  * ONE BUNDLE, AS THE CARD SOMEBODY DECIDES IT ON.
@@ -81,16 +84,6 @@ interface Verdict {
   error: string | null;
 }
 
-/** The muted caption every section on the card is headed with. */
-const CAPTION = "text-muted-foreground text-xs";
-/** The row recipe, shared by the read-only boxes that are not `MemberRow`. */
-const BOX = "grid gap-2 rounded-md border p-3";
-
-/** Whether a bundle's [Approve all] can send this member. */
-function approvable(member: BundleMember): boolean {
-  return member.color === "yellow" && !member.deletionProposed;
-}
-
 export function ReviewBundlePage() {
   const params = useParams();
   const project = useProject();
@@ -101,7 +94,7 @@ export function ReviewBundlePage() {
    * The links encode, the router decodes, and this is the id the daemon sent.
    */
   const bundleId = params.bundleId ?? "";
-  const base = `/p/${encodeURIComponent(project.id)}/control`;
+  const base = controlBase(project.id);
   const queuePath = `${base}/review-queue`;
   const backPath = `${queuePath}/${encodeURIComponent(bundleId)}`;
 
@@ -119,20 +112,35 @@ export function ReviewBundlePage() {
    * decision and carries no bodies, and `spec.nodes` is where the document a
    * person is being asked to read actually lives.
    */
-  const load = useCallback(async () => {
+  const fetchCard = useCallback(async () => {
     const [queue, nextNodes] = await Promise.all([
       api.spec.reviewQueue.query({ projectId: project.id }),
       api.spec.nodes.query({ projectId: project.id }),
     ]);
-    setBundles(queue.bundles);
-    setNodes(nextNodes);
+    return { bundles: queue.bundles, nodes: nextNodes };
   }, [project.id]);
+
+  /** A write's own refetch — the component is still on the card it wrote from. */
+  const load = useCallback(async () => {
+    const next = await fetchCard();
+    setBundles(next.bundles);
+    setNodes(next.nodes);
+  }, [fetchCard]);
 
   useEffect(() => {
     let live = true;
     setLoading(true);
     setError(null);
-    load()
+    // The SUCCESS path is under the latch with the failure path: this route
+    // keeps its component across a project switch, and a slow answer for the
+    // project somebody left must not be drawn as this one's.
+    fetchCard()
+      .then((next) => {
+        if (live) {
+          setBundles(next.bundles);
+          setNodes(next.nodes);
+        }
+      })
       .catch((loadError: unknown) => {
         if (live) {
           setError(
@@ -150,7 +158,7 @@ export function ReviewBundlePage() {
     return () => {
       live = false;
     };
-  }, [load]);
+  }, [fetchCard]);
 
   /**
    * A DIFFERENT CARD IS A DIFFERENT REFUSAL. This route keeps its component
@@ -165,13 +173,7 @@ export function ReviewBundlePage() {
   }, [bundleId]);
 
   const bundle = bundles.find((entry) => entry.id === bundleId) ?? null;
-  const nodeById = useMemo(() => {
-    const byId = new Map<string, SpecNode>();
-    for (const node of nodes) {
-      byId.set(node.id, node);
-    }
-    return byId;
-  }, [nodes]);
+  const nodeById = useMemo(() => nodesById(nodes), [nodes]);
 
   /* ---------------------------------------------------------------- *
    * The writes
@@ -505,7 +507,7 @@ function PrimaryAction({
 
   if (bundle.kind === "ac-closure" || bundle.kind === "task-closure") {
     // THE TWO SUBJECTS SHARE THE PAIR OF DOORS. What is closed differs — a
-    // criterion on its evidence, a task on the work that addressed it — and
+    // criterion on its evidence, a task on the reports that claim it — and
     // both are one id and one word, so the buttons are the same buttons.
     const subject =
       bundle.kind === "ac-closure"
@@ -974,9 +976,10 @@ function ClosureCard({
  * closed — and those marks are context and never buttons: closing a criterion
  * is its own card in this queue.
  *
- * THE COMMITS ARE THE THREAD BACK TO GIT, one hop shorter than the evidence
- * card's: there the log is what SUBMITTED the claimant, here the log IS the
- * claimant, so its commits sit on its own row.
+ * THE THREAD BACK TO THE WORK IS THE EVIDENCE CARD'S OWN: each report row says
+ * which log submitted it and that log's commits, because the claimant here is
+ * the verification report and the log is its provenance — exactly the
+ * arrangement the criterion's card keeps.
  */
 function TaskClosureCard({
   bundle,
@@ -1003,9 +1006,9 @@ function TaskClosureCard({
       />
 
       <p className={CAPTION}>
-        Everything addressing this task — closing accepts the whole list
+        Every report claiming this task — closing accepts the whole list
       </p>
-      {bundle.workLogs.map((member) => (
+      {bundle.reports.map((member) => (
         <MemberRow
           key={member.id}
           member={member}
@@ -1013,15 +1016,9 @@ function TaskClosureCard({
           verb="Reject"
           canApprove={false}
           canReject={false}
-          showLabel="Show the work"
-          hideLabel="Hide the work"
-          caption={
-            member.commits.length === 0 ? null : (
-              <p className={CAPTION}>
-                {`commits ${member.commits.join(", ")}`}
-              </p>
-            )
-          }
+          showLabel="Show the report"
+          hideLabel="Hide the report"
+          caption={<SubmittedBy member={member} />}
           {...wiring}
         />
       ))}
@@ -1049,12 +1046,12 @@ function TaskClosureCard({
             render={<Button type="button" variant="ghost" size="sm" />}
           >
             {historyOpen ? <ChevronDown /> : <ChevronRight />}
-            {`History (latest hearing per work log) (${String(bundle.history.length)})`}
+            {`History (latest hearing per report) (${String(bundle.history.length)})`}
           </CollapsibleTrigger>
           <CollapsibleContent className="grid gap-1 pt-2">
             {bundle.history.map((entry) => (
-              <p key={`${entry.workLogId}:${entry.at}`} className={CAPTION}>
-                <span className="font-mono">{entry.workLogId}</span>
+              <p key={`${entry.reportId}:${entry.at}`} className={CAPTION}>
+                <span className="font-mono">{entry.reportId}</span>
                 {` · ${entry.by} · ${formatStamp(entry.at)} · ${firstLine(entry.rationale)}`}
               </p>
             ))}

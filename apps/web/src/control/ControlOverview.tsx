@@ -19,15 +19,10 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/EmptyState";
 import { PANELS, type PanelMeta } from "./panels";
-import {
-  BOARD_KIND_LABEL,
-  boardRows,
-  rowSummary,
-  rowTitle,
-} from "./task-board/rows";
-import { KIND_LABEL, bundleSummary } from "./review-queue/ReviewQueue";
+import { controlBase } from "./parts";
+import { BOARD_KIND_LABEL, boardRows, rowSummary, rowTitle } from "./task-board/rows";
+import { KIND_LABEL, bundleSummary } from "./review-queue/rows";
 import { useProject } from "@/project-context";
-import type { ReviewBundle, TaskBoard } from "@/spec/review";
 
 /**
  * How many rows the overview card shows before it says "and N more". A card is
@@ -36,111 +31,79 @@ import type { ReviewBundle, TaskBoard } from "@/spec/review";
  */
 const GLANCE = 3;
 
-/**
- * THE REVIEW QUEUE'S CARD IS LIVE; the other three are still their placeholder
- * sentence. It reads the same `spec.reviewQueue` the panel reads — computed on
- * every ask, stored nowhere — so the overview cannot say "nothing is waiting"
- * while the panel behind it holds bundles. Loading, a refusal and an empty
- * queue each have their own honest shape: a skeleton, the daemon's sentence,
- * the panel's own empty line.
- */
-function ReviewQueueGlance({ panel }: { panel: PanelMeta }) {
-  const project = useProject();
-  const base = `/p/${encodeURIComponent(project.id)}/control`;
-  const [bundles, setBundles] = useState<ReviewBundle[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let live = true;
-    setBundles(null);
-    setError(null);
-    api.spec.reviewQueue
-      .query({ projectId: project.id })
-      .then((queue) => {
-        if (live) setBundles(queue.bundles);
-      })
-      .catch((loadError: unknown) => {
-        if (live) {
-          setError(
-            loadError instanceof Error
-              ? loadError.message
-              : "Could not read the review queue",
-          );
-        }
-      });
-    return () => {
-      live = false;
-    };
-  }, [project.id]);
-
-  if (error !== null) {
-    return <p className="text-destructive text-sm">{error}</p>;
-  }
-  if (bundles === null) {
-    return (
-      <div className="grid gap-2">
-        <Skeleton className="h-4 w-3/4" />
-        <Skeleton className="h-4 w-1/2" />
-      </div>
-    );
-  }
-  if (bundles.length === 0) {
-    return <EmptyState message={panel.empty} />;
-  }
-  const rest = bundles.length - GLANCE;
-  return (
-    <ul className="grid gap-2">
-      {bundles.slice(0, GLANCE).map((bundle) => (
-        <li key={bundle.id} className="flex min-w-0 items-center gap-2">
-          <Badge variant="secondary">{KIND_LABEL[bundle.kind]}</Badge>
-          {/* EVERY ROW IS ITS OWN DOOR. A glance that could only be entered
-              through "View all" made a person land on the list they had just
-              read and find the row again; the title here goes where the title
-              in the panel goes. It is why the card is no longer one big link —
-              a link inside a link is not a thing a browser can honour. */}
-          <Link
-            to={`${base}/review-queue/${encodeURIComponent(bundle.id)}`}
-            className="text-primary truncate text-sm underline-offset-4 hover:underline"
-          >
-            {bundle.title}
-          </Link>
-          <span className="text-muted-foreground shrink-0 text-xs">
-            {bundleSummary(bundle)}
-          </span>
-        </li>
-      ))}
-      {rest > 0 ? (
-        <li className="text-muted-foreground text-xs">
-          {`and ${String(rest)} more`}
-        </li>
-      ) : null}
-    </ul>
-  );
+/** One row of a glance, whatever list it came from — a badge, a door, a note. */
+interface GlanceRow {
+  key: string;
+  label: string;
+  title: string;
+  summary: string;
+  href: string;
 }
 
 /**
- * THE BOARD AT A GLANCE — the same three rows the queue's card shows, over the
- * other list, and each of them its own door.
- *
- * IT IS THE SAME FETCH THE PANEL MAKES and not a cheaper summary procedure: the
- * board is computed on read either way, and a second endpoint counting the same
- * rows would be a second place for them to disagree.
+ * THE TWO LIVE CARDS ARE ONE COMPONENT OVER TWO QUESTIONS; the other panels are
+ * still their placeholder sentence. Each question here IS THE SAME FETCH ITS
+ * PANEL MAKES and not a cheaper summary procedure: both lists are computed on
+ * read either way, and a second endpoint counting the same rows would be a
+ * second place for them to disagree. What differs between the two — the query,
+ * the row's words, the row's door — is this table; the loading, error, empty
+ * and "and N more" ladders are the component, written once.
  */
-function TaskBoardGlance({ panel }: { panel: PanelMeta }) {
+const GLANCE_ROWS: Record<
+  "review-queue" | "task-board",
+  {
+    failed: string;
+    rows: (projectId: string, base: string) => Promise<GlanceRow[]>;
+  }
+> = {
+  "review-queue": {
+    failed: "Could not read the review queue",
+    rows: async (projectId, base) => {
+      const queue = await api.spec.reviewQueue.query({ projectId });
+      return queue.bundles.map((bundle) => ({
+        key: bundle.id,
+        label: KIND_LABEL[bundle.kind],
+        title: bundle.title,
+        summary: bundleSummary(bundle),
+        href: `${base}/review-queue/${encodeURIComponent(bundle.id)}`,
+      }));
+    },
+  },
+  "task-board": {
+    failed: "Could not read the task board",
+    rows: async (projectId, base) => {
+      const board = await api.spec.taskBoard.query({ projectId });
+      return boardRows(board).map((row) => ({
+        key: row.item.key,
+        label: BOARD_KIND_LABEL[row.kind],
+        title: rowTitle(row),
+        summary: rowSummary(row),
+        href: `${base}/task-board/${encodeURIComponent(row.item.key)}`,
+      }));
+    },
+  },
+};
+
+function PanelGlance({
+  panel,
+  source,
+}: {
+  panel: PanelMeta;
+  source: keyof typeof GLANCE_ROWS;
+}) {
   const project = useProject();
-  const base = `/p/${encodeURIComponent(project.id)}/control`;
-  const [board, setBoard] = useState<TaskBoard | null>(null);
+  const [rows, setRows] = useState<GlanceRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let live = true;
-    setBoard(null);
+    setRows(null);
     setError(null);
-    api.spec.taskBoard
-      .query({ projectId: project.id })
+    GLANCE_ROWS[source]
+      .rows(project.id, controlBase(project.id))
       .then((next) => {
         if (live) {
-          setBoard(next);
+          setRows(next);
         }
       })
       .catch((loadError: unknown) => {
@@ -148,19 +111,19 @@ function TaskBoardGlance({ panel }: { panel: PanelMeta }) {
           setError(
             loadError instanceof Error
               ? loadError.message
-              : "Could not read the task board",
+              : GLANCE_ROWS[source].failed,
           );
         }
       });
     return () => {
       live = false;
     };
-  }, [project.id]);
+  }, [project.id, source]);
 
   if (error !== null) {
     return <p className="text-destructive text-sm">{error}</p>;
   }
-  if (board === null) {
+  if (rows === null) {
     return (
       <div className="grid gap-2">
         <Skeleton className="h-4 w-3/4" />
@@ -168,7 +131,6 @@ function TaskBoardGlance({ panel }: { panel: PanelMeta }) {
       </div>
     );
   }
-  const rows = boardRows(board);
   if (rows.length === 0) {
     return <EmptyState message={panel.empty} />;
   }
@@ -176,16 +138,21 @@ function TaskBoardGlance({ panel }: { panel: PanelMeta }) {
   return (
     <ul className="grid gap-2">
       {rows.slice(0, GLANCE).map((row) => (
-        <li key={row.item.key} className="flex min-w-0 items-center gap-2">
-          <Badge variant="secondary">{BOARD_KIND_LABEL[row.kind]}</Badge>
+        <li key={row.key} className="flex min-w-0 items-center gap-2">
+          <Badge variant="secondary">{row.label}</Badge>
+          {/* EVERY ROW IS ITS OWN DOOR. A glance that could only be entered
+              through "View all" made a person land on the list they had just
+              read and find the row again; the title here goes where the title
+              in the panel goes. It is why the card is no longer one big link —
+              a link inside a link is not a thing a browser can honour. */}
           <Link
-            to={`${base}/task-board/${encodeURIComponent(row.item.key)}`}
+            to={row.href}
             className="text-primary truncate text-sm underline-offset-4 hover:underline"
           >
-            {rowTitle(row)}
+            {row.title}
           </Link>
-          <span className="text-muted-foreground shrink-0 truncate text-xs">
-            {rowSummary(row)}
+          <span className="text-muted-foreground shrink-0 text-xs">
+            {row.summary}
           </span>
         </li>
       ))}
@@ -200,7 +167,7 @@ function TaskBoardGlance({ panel }: { panel: PanelMeta }) {
 
 export function ControlOverview() {
   const project = useProject();
-  const base = `/p/${encodeURIComponent(project.id)}/control`;
+  const base = controlBase(project.id);
 
   return (
     <>
@@ -246,10 +213,8 @@ export function ControlOverview() {
               </CardTitle>
             </CardHeader>
             <CardContent className="flex-1">
-              {panel.id === "review-queue" ? (
-                <ReviewQueueGlance panel={panel} />
-              ) : panel.id === "task-board" ? (
-                <TaskBoardGlance panel={panel} />
+              {panel.id === "review-queue" || panel.id === "task-board" ? (
+                <PanelGlance panel={panel} source={panel.id} />
               ) : (
                 <EmptyState message={panel.empty} />
               )}

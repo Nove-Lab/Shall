@@ -154,7 +154,7 @@ function seatsOf(bundle: ReviewBundle): BundleMember[] {
     case "ac-closure":
       return [bundle.ac, ...bundle.evidence];
     case "task-closure":
-      return [bundle.task, ...bundle.workLogs];
+      return [bundle.task, ...bundle.reports];
     default:
       return bundle.members;
   }
@@ -555,16 +555,19 @@ describe("the work report", () => {
     // ESCALATES points OUT of the record at something the report is about. The
     // counts are over the members and the unchanged together, in canon order.
     const finding = node("Finding", "F-0001");
-    const evidence = node("Evidence", "EV-0001");
-    const nodes = [...SPINE, journal, workLog, finding, evidence];
+    // A second finding, already read, is the green member here: an evidence or
+    // a report would each need the whole claim-and-aim chain this test is not
+    // about — both are anchored by their claim now.
+    const noted = node("Finding", "F-0002");
+    const nodes = [...SPINE, journal, workLog, finding, noted];
     const edges = [
       ...SPINE_EDGES,
       edge("J-0001", "LOGS", "WL-0001"),
       edge("WL-0001", "RECORDS", "F-0001"),
-      edge("WL-0001", "SUBMITS", "EV-0001"),
+      edge("WL-0001", "RECORDS", "F-0002"),
       edge("F-0001", "ESCALATES", "R-0001"),
     ];
-    const queue = queueOf(nodes, edges, { green: [...SPINE, evidence] });
+    const queue = queueOf(nodes, edges, { green: [...SPINE, noted] });
     assert.deepEqual(bundleIds(queue), ["report:J-0001"]);
     const bundle = queue.bundles[0];
     assert.ok(bundle !== undefined && bundle.kind === "work-report");
@@ -575,20 +578,51 @@ describe("the work report", () => {
     ]);
     assert.deepEqual(bundle.unchanged, [
       {
-        id: "EV-0001",
-        type: "Evidence",
-        shortName: "EV-0001",
-        name: "Evidence EV-0001",
+        id: "F-0002",
+        type: "Finding",
+        shortName: "F-0002",
+        name: "Finding F-0002",
       },
     ]);
     assert.deepEqual(bundle.counts, [
       { type: "Journal", count: 1 },
       { type: "WorkLog", count: 1 },
-      { type: "Evidence", count: 1 },
-      { type: "Finding", count: 1 },
+      { type: "Finding", count: 2 },
     ]);
     assert.equal(bundle.title, "J-0001 Journal J-0001");
     assert.equal(bundle.rootId, "J-0001");
+  });
+
+  test("a premature log rides along in the report, red, beside the rows it submitted", () => {
+    // The log jumped its turn — the task it addresses is blocked while the
+    // chain is unread — so it is red; but its evidence is still a row a person
+    // can judge, and a report that hid the author of its own rows would be a
+    // report with a hole in it. So `premature` rides along the way `rejected`
+    // does.
+    const criterion = node("AcceptanceCriterion", "AC-0001");
+    const task = node("ImplementationTask", "IT-0001");
+    const evidence = node("Evidence", "EV-0001");
+    const nodes = [...SPINE, criterion, task, journal, workLog, evidence];
+    const edges = [
+      ...SPINE_EDGES,
+      edge("R-0001", "HAS_CRITERION", "AC-0001"),
+      edge("IT-0001", "TARGETS", "AC-0001"),
+      edge("J-0001", "LOGS", "WL-0001"),
+      edge("WL-0001", "ADDRESSES", "IT-0001"),
+      edge("WL-0001", "SUBMITS", "EV-0001"),
+      edge("EV-0001", "CLAIMS", "AC-0001"),
+    ];
+    const queue = queueOf(nodes, edges);
+    const report = queue.bundles.find((held) => held.id === "report:J-0001");
+    assert.ok(report !== undefined && report.kind === "work-report");
+    assert.deepEqual(
+      report.members.map((member) => [member.id, member.color, member.reason]),
+      [
+        ["J-0001", "yellow", "unapproved"],
+        ["WL-0001", "red", "premature"],
+        ["EV-0001", "yellow", "unapproved"],
+      ],
+    );
   });
 
   test("a journal whose whole record is approved stands no bundle up", () => {
@@ -603,17 +637,23 @@ describe("the work report", () => {
 
 describe("AC closure", () => {
   const criterion = node("AcceptanceCriterion", "AC-0001");
+  const task = node("ImplementationTask", "IT-0001");
   const journal = node("Journal", "J-0001");
   const workLog = node("WorkLog", "WL-0001", { commits: ["a1b2c3", "d4e5f6"] });
   const first = node("Evidence", "EV-0001");
   const second = node("Evidence", "EV-0002");
   const third = node("Evidence", "EV-0003");
 
-  const NODES = [...SPINE, criterion, journal, workLog, first, second, third];
+  // THE AIM CHAIN IS PART OF THE FIXTURE: the log addresses a task that targets
+  // the criterion, so the submitted claims are inside the aim — a log under no
+  // task may submit nothing that claims.
+  const NODES = [...SPINE, criterion, task, journal, workLog, first, second, third];
   const EDGES = [
     ...SPINE_EDGES,
     edge("R-0001", "HAS_CRITERION", "AC-0001"),
+    edge("IT-0001", "TARGETS", "AC-0001"),
     edge("J-0001", "LOGS", "WL-0001"),
+    edge("WL-0001", "ADDRESSES", "IT-0001"),
     edge("WL-0001", "SUBMITS", "EV-0001"),
     edge("WL-0001", "SUBMITS", "EV-0002"),
     edge("WL-0001", "SUBMITS", "EV-0003"),
@@ -623,11 +663,11 @@ describe("AC closure", () => {
   ];
   /** Everything approved — the whole list read, so the criterion is asked about. */
   const SETTLED: Books = {
-    green: [...SPINE, criterion, journal, workLog, first, second, third],
+    green: [...SPINE, criterion, task, journal, workLog, first, second, third],
   };
   /** The same graph with EV-0002 unread and EV-0003 refused: not asked about. */
   const UNREAD: Books = {
-    green: [...SPINE, criterion, journal, workLog, first, third],
+    green: [...SPINE, criterion, task, journal, workLog, first, third],
     rejected: [third],
   };
   /** A criterion left open over a list, as the daemon writes it. */
@@ -698,13 +738,13 @@ describe("AC closure", () => {
     // closure question waits for the answer: there is nothing settled for the
     // evidence to be met against.
     const queue = queueOf(NODES, EDGES, {
-      green: [...SPINE, journal, workLog, first, second, third],
+      green: [...SPINE, task, journal, workLog, first, second, third],
     });
     assert.deepEqual(bundleIds(queue), ["spec:AC-0001"]);
     // Refused, it is the agent's turn and out of the queue altogether — nothing
     // yellow reaches the red criterion here.
     const refused = queueOf(NODES, EDGES, {
-      green: [...SPINE, journal, workLog, first, second, third],
+      green: [...SPINE, task, journal, workLog, first, second, third],
       rejected: [criterion],
     });
     assert.deepEqual(bundleIds(refused), []);
@@ -714,7 +754,7 @@ describe("AC closure", () => {
     const queue = queueOf(
       NODES.filter((held) => held.type !== "Evidence"),
       EDGES.filter((held) => held.type !== "SUBMITS" && held.type !== "CLAIMS"),
-      { green: [...SPINE, criterion, journal, workLog] },
+      { green: [...SPINE, criterion, task, journal, workLog] },
     );
     assert.equal(
       queue.bundles.some((held) => held.kind === "ac-closure"),
@@ -768,9 +808,14 @@ describe("task closure", () => {
   const second = node("ImplementationTask", "IT-0002");
   const criterion = node("AcceptanceCriterion", "AC-0001");
   const journal = node("Journal", "J-0001");
-  const first = node("WorkLog", "WL-0001", { commits: ["a1b2c3"] });
-  const later = node("WorkLog", "WL-0002", { commits: [] });
+  const log = node("WorkLog", "WL-0001", { commits: ["a1b2c3"] });
+  const otherLog = node("WorkLog", "WL-0002", { commits: [] });
+  const first = node("VerificationReport", "VR-0001");
+  const later = node("VerificationReport", "VR-0002");
 
+  // THE CLAIMANTS ARE VERIFICATION REPORTS: each is submitted by a log that
+  // addresses the task, and claims that one task — the aim rule's shape for
+  // reports, kept legal so what is under test is the closure and not the aim.
   const NODES = [
     ...SPINE,
     criterion,
@@ -778,6 +823,8 @@ describe("task closure", () => {
     task,
     second,
     journal,
+    log,
+    otherLog,
     first,
     later,
   ];
@@ -792,11 +839,15 @@ describe("task closure", () => {
     edge("J-0001", "LOGS", "WL-0002"),
     edge("WL-0001", "ADDRESSES", "IT-0001"),
     edge("WL-0002", "ADDRESSES", "IT-0001"),
+    edge("WL-0001", "SUBMITS", "VR-0001"),
+    edge("WL-0002", "SUBMITS", "VR-0002"),
+    edge("VR-0001", "CLAIMS", "IT-0001"),
+    edge("VR-0002", "CLAIMS", "IT-0001"),
   ];
   /** Everything read — so the task is asked about and nothing else is waiting. */
   const SETTLED: Books = { green: NODES };
 
-  test("stands up when work addresses the task, all of it approved, and nobody has spoken", () => {
+  test("stands up when reports claim the task, all of it approved, and nobody has spoken", () => {
     const queue = queueOf(NODES, EDGES, SETTLED);
     assert.deepEqual(bundleIds(queue), ["completion:IT-0001"]);
     const bundle = queue.bundles[0];
@@ -805,10 +856,13 @@ describe("task closure", () => {
     assert.equal(bundle.title, "IT-0001 ImplementationTask IT-0001");
     assert.equal(bundle.task.closure, "open");
     assert.deepEqual(
-      bundle.workLogs.map((held) => held.id),
-      ["WL-0001", "WL-0002"],
+      bundle.reports.map((held) => held.id),
+      ["VR-0001", "VR-0002"],
     );
-    assert.deepEqual(bundle.workLogs[0]?.commits, ["a1b2c3"]);
+    // The thread back to the work: who submitted the report, and its commits.
+    assert.deepEqual(bundle.reports[0]?.submittedBy, [
+      { workLogId: "WL-0001", commits: ["a1b2c3"] },
+    ]);
     // The criteria it aimed at travel as context, with their own marks.
     assert.deepEqual(bundle.targets, [
       { id: "AC-0001", name: "AcceptanceCriterion AC-0001", closure: "open" },
@@ -816,12 +870,12 @@ describe("task closure", () => {
     assert.deepEqual(bundle.history, []);
   });
 
-  test("waits while a work log is unread, and asks again once it is approved", () => {
+  test("waits while a report is unread, and asks again once it is approved", () => {
     const queue = queueOf(NODES, EDGES, {
-      green: NODES.filter((held) => held.id !== "WL-0002"),
+      green: NODES.filter((held) => held.id !== "VR-0002"),
     });
     assert.equal(bundleIds(queue).includes("completion:IT-0001"), false);
-    assert.deepEqual(memberIds(queue, "report:J-0001"), ["WL-0002"]);
+    assert.deepEqual(memberIds(queue, "report:J-0001"), ["VR-0002"]);
   });
 
   test("leaves the queue on either word, and comes back when the list moves", () => {
@@ -831,14 +885,14 @@ describe("task closure", () => {
     });
     assert.deepEqual(bundleIds(closed), []);
 
-    // A third log addresses the task: a different list, so the question is
+    // A third report claims the task: a different list, so the question is
     // asked again even though the record still names the first two.
-    const third = node("WorkLog", "WL-0003");
+    const third = node("VerificationReport", "VR-0003");
     const grown = [...NODES, third];
     const wired = [
       ...EDGES,
-      edge("J-0001", "LOGS", "WL-0003"),
-      edge("WL-0003", "ADDRESSES", "IT-0001"),
+      edge("WL-0001", "SUBMITS", "VR-0003"),
+      edge("VR-0003", "CLAIMS", "IT-0001"),
     ];
     const again = queueOf(grown, wired, {
       green: grown,
@@ -847,26 +901,22 @@ describe("task closure", () => {
     assert.deepEqual(bundleIds(again), ["completion:IT-0001"]);
   });
 
-  test("a work log addressing two tasks seats in both, and says so on each row", () => {
-    const wired = [...EDGES, edge("WL-0001", "ADDRESSES", "IT-0002")];
+  test("a report claiming two tasks is the aim rule's red, and neither task is asked", () => {
+    // The sharedWith mechanics a work log used to have are impossible here by
+    // cardinality: a verification report claims exactly one task, so a second
+    // CLAIMS line is a breach — not a second seat.
+    const wired = [...EDGES, edge("VR-0001", "CLAIMS", "IT-0002")];
     const queue = queueOf(NODES, wired, { green: NODES });
-    assert.deepEqual(bundleIds(queue), [
-      "completion:IT-0001",
-      "completion:IT-0002",
-    ]);
-    assert.deepEqual(
-      memberIn(queue, "completion:IT-0001", "WL-0001").sharedWith,
-      ["completion:IT-0002"],
-    );
-    assert.deepEqual(
-      memberIn(queue, "completion:IT-0002", "WL-0001").sharedWith,
-      ["completion:IT-0001"],
+    assert.equal(
+      queue.bundles.some((held) => held.kind === "task-closure"),
+      false,
     );
   });
 
-  test("a refused work log is a hearing on the task's card", () => {
-    // The log is red, so the task is not asked about at all — and once it is
-    // fixed and approved, the refusal that happened is on the card as history.
+  test("a refused report is a hearing on the task's card", () => {
+    // The report is red, so the task is not asked about at all — and once it
+    // is fixed and approved, the refusal that happened is on the card as
+    // history.
     const queue = queueOf(NODES, EDGES, {
       green: NODES,
       rejected: [later],
@@ -875,10 +925,10 @@ describe("task closure", () => {
 
     const fixed = { ...later, body: "The retry, now shown." };
     const healed = queueOf(
-      NODES.map((held) => (held.id === "WL-0002" ? fixed : held)),
+      NODES.map((held) => (held.id === "VR-0002" ? fixed : held)),
       EDGES,
       {
-        green: NODES.map((held) => (held.id === "WL-0002" ? fixed : held)),
+        green: NODES.map((held) => (held.id === "VR-0002" ? fixed : held)),
         rejected: [later],
       },
     );
@@ -887,8 +937,8 @@ describe("task closure", () => {
     );
     assert.ok(bundle !== undefined && bundle.kind === "task-closure");
     assert.deepEqual(
-      bundle.history.map((row) => row.workLogId),
-      ["WL-0002"],
+      bundle.history.map((row) => row.reportId),
+      ["VR-0002"],
     );
   });
 
@@ -925,7 +975,8 @@ describe("the order of the queue", () => {
       ...SPINE_EDGES,
       edge("R-0001", "HAS_CRITERION", "AC-0001"),
       edge("J-0001", "LOGS", "WL-0001"),
-      edge("WL-0001", "SUBMITS", "EV-0001"),
+      // Nothing submits the evidence: submitted, its claim would answer to the
+      // aim rule, and this test is about the order of kinds and not the aim.
       edge("EV-0001", "CLAIMS", "AC-0001"),
       edge("R-0001", "MENTIONS", "T-0001"),
     ];

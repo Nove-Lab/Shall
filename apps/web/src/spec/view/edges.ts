@@ -95,10 +95,19 @@ export function routedEdges<E extends Incidence>(
     }
 
     const ends = floatingEndpoints(source, target, geometry, view);
-    const box = boxes.find((card) => card.id === edge.fromId)?.box;
+    // The self-loop's box is the source card itself — built here, on the one
+    // branch that needs it, rather than found by an O(cards) scan per edge.
     const route =
-      edge.fromId === edge.toId && box !== undefined
-        ? selfLoopPath(box, ends.offset)
+      edge.fromId === edge.toId
+        ? selfLoopPath(
+            {
+              x: source.x,
+              y: source.y,
+              width: geometry.cardWidth,
+              height: geometry.cardHeight,
+            },
+            ends.offset,
+          )
         : routeAroundCards({
             start: { x: ends.sx, y: ends.sy },
             startSide: ends.sourceSide,

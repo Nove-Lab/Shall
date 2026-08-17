@@ -1,7 +1,6 @@
-import { reviewGraph } from "@shall/core/arith";
+import { missingSentence, reviewGraph, type Ledgers } from "@shall/core/arith";
 import type { SpecEdge, SpecNode } from "@shall/core/graph";
 import {
-  anchorPhrase,
   bandFolderOf,
   bandOf,
   isNodeType,
@@ -9,14 +8,17 @@ import {
   judgeNodeId,
   judgeText,
   NODE_TYPES,
+  orphanFixSentence,
   permittedEdgeTypes,
-  orphanStem,
 } from "@shall/core/graph";
 import {
   ACCEPTANCES_FILE,
   isCanonical,
   LEDGER_FILE,
   REJECTIONS_FILE,
+  type AcceptanceLedger,
+  type ApprovalLedger,
+  type RejectionLedger,
 } from "@shall/core/serialize";
 import type { FileProblem, SpecGraph } from "@shall/core/store";
 import {
@@ -459,6 +461,20 @@ export interface SpecCheck {
   notes: FileProblem[];
 }
 
+/** The node's file, relative to the spec folder — the spelling every sentence uses. */
+export function fileOf(node: { readonly type: string; readonly id: string }): string {
+  return `${bandFolderOf(node.type) ?? "?"}/${node.type}/${node.id}.md`;
+}
+
+/** The three books' records and the daemon's hash, as the colour chain takes them. */
+export function ledgersOf(records: {
+  approvals: ApprovalLedger;
+  rejections: RejectionLedger;
+  acceptances: AcceptanceLedger;
+}): Ledgers {
+  return { ...records, hash: payloadHash };
+}
+
 /**
  * The spec folder, checked from wherever a person happens to be standing.
  *
@@ -510,44 +526,49 @@ export async function checkSpec(startPath: string): Promise<SpecCheck> {
   // filed under its own file. The source of an edge is always a living node,
   // because a refused file contributes no edges.
   const typeById = new Map(graph.nodes.map((node) => [node.id, node.type]));
-  const fileFor = (id: string): string => {
-    const type = typeById.get(id) ?? "?";
-    return `${bandFolderOf(type) ?? "?"}/${type}/${id}.md`;
-  };
+  const fileFor = (id: string): string =>
+    fileOf({ type: typeById.get(id) ?? "?", id });
   // A book that would not read contributes NO records to the arithmetic, and
   // says so in the problem list below instead. It is the same bargain the
   // approvals have always made here: the check is a report and not a door, so
   // it goes on to count the graph rather than refusing the whole run — and the
   // row it prints is what tells the person why the colours below it are thin.
-  const review = reviewGraph(graph, {
-    approvals: ledger.records,
-    rejections: rejections.records,
-    acceptances: acceptances.records,
-    hash: payloadHash,
-  });
+  const review = reviewGraph(
+    graph,
+    ledgersOf({
+      approvals: ledger.records,
+      rejections: rejections.records,
+      acceptances: acceptances.records,
+    }),
+  );
   const gaps: FileProblem[] = [];
   for (const entry of review.missing) {
     for (const referrer of entry.referencedBy) {
       gaps.push({
         file: fileFor(referrer.fromId),
-        message: `${referrer.fromId} has a ${referrer.type} relation to ${entry.id}, and no file names ${entry.id}. The relation is kept as written, so writing or restoring ${entry.id} attaches it again.`,
+        // Core's own sentence — the same words the Task Board's row quotes.
+        message: missingSentence(entry.id, referrer),
       });
     }
   }
   for (const status of review.statuses) {
-    if (status.reason === "off-target" && status.problem !== null) {
-      // The aim rule: a seam between a work log, its task and its evidence,
-      // filed under the node the sentence is about — both ends carry one.
+    if (
+      (status.reason === "off-target" || status.reason === "premature") &&
+      status.problem !== null
+    ) {
+      // The aim rule and the blocked-address rule: seams that name other
+      // nodes, filed under the node each sentence is about — the aim rule's
+      // two ends carry one each.
       gaps.push({ file: fileFor(status.id), message: status.problem });
       continue;
     }
     if (status.reason !== "orphan") {
       continue;
     }
-    const type = typeById.get(status.id) ?? "?";
     gaps.push({
       file: fileFor(status.id),
-      message: `${orphanStem(status.id, type)}. Draw the relation, or remove the node.`,
+      // Core's own sentence — the check and the board say this one identically.
+      message: orphanFixSentence(status.id, typeById.get(status.id) ?? "?"),
     });
   }
   gaps.sort((a, b) => (a.file === b.file ? 0 : a.file < b.file ? -1 : 1));
@@ -563,9 +584,7 @@ export async function checkSpec(startPath: string): Promise<SpecCheck> {
       continue;
     }
     notes.push({
-      // The loader only serves canon types, so the band is always there; the
-      // fallback spelling keeps the compiler honest rather than a case alive.
-      file: `${bandFolderOf(node.type) ?? "?"}/${node.type}/${node.id}.md`,
+      file: fileOf(node),
       message: `${node.id}.md is valid but not canonical — a save from the UI will rewrite it and drop comments and ordering.`,
     });
   }

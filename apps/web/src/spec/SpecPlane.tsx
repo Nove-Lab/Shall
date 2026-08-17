@@ -65,6 +65,7 @@ import {
   taskStatesOf,
   deletionSentence,
   impactSentence,
+  judgeable,
   problemCount,
   referrersOf,
   signalsOf,
@@ -484,9 +485,7 @@ export function SpecPlane() {
   const menuStatus =
     menuNode === null ? null : (statusById.get(menuNode.id) ?? null);
   const menuRejected = menuStatus?.reason === "rejected";
-  const menuJudgeable =
-    menuStatus !== null &&
-    (menuStatus.color === "yellow" || menuStatus.color === "green");
+  const menuJudgeable = menuStatus !== null && judgeable(menuStatus);
   /** The node a right-click asked to reject, resolved against the board as it stands. */
   const rejectingNode =
     rejecting === null
@@ -510,14 +509,6 @@ export function SpecPlane() {
   );
 
   /**
-   * Open the create form, aimed at a column or at nothing.
-   *
-   * The counter only has to differ from the value the open form is holding, so
-   * it is derived from the previous state rather than kept in a ref: a create
-   * that follows a closed panel starts again at 1, and the panel it is arriving
-   * at was just refilled anyway.
-   */
-  /**
    * THE ONE WAY A NODE'S PANEL OPENS. A click on a card, the menu's Open, the
    * node a save just wrote and the node an edit was cancelled on are all the same
    * act, and a Review Queue that deep-links into this plane is the same act
@@ -527,6 +518,14 @@ export function SpecPlane() {
     setPanel({ mode: "view", id });
   }
 
+  /**
+   * Open the create form, aimed at a column or at nothing.
+   *
+   * The counter only has to differ from the value the open form is holding, so
+   * it is derived from the previous state rather than kept in a ref: a create
+   * that follows a closed panel starts again at 1, and the panel it is arriving
+   * at was just refilled anyway.
+   */
   function openCreate(presetType: string | null) {
     setPanel((current) => ({
       mode: "create",

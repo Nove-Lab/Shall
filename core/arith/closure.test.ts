@@ -138,14 +138,18 @@ const SPINE: SpecEdge[] = [
   edge("J-0001", "LOGS", "WL-0001"),
 ];
 
-/** The fixture with these claimants wired in: submitted by the log, claiming the AC. */
+/**
+ * The fixture with these claimants wired in, claiming the AC — and SUBMITTED BY
+ * NOBODY, deliberately: a submitted claim answers to the aim rule (it may claim
+ * only what its log's addressed tasks target), and this file is about closure,
+ * not aim. The claim alone anchors an Evidence.
+ */
 function world(...claimants: SpecNode[]): {
   graph: SpecGraph;
   edges: SpecEdge[];
 } {
   const edges = [...SPINE];
   for (const claimant of claimants) {
-    edges.push(edge("WL-0001", "SUBMITS", claimant.id));
     edges.push(edge(claimant.id, "CLAIMS", "AC-0001"));
   }
   return {

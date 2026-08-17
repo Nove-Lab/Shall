@@ -1,7 +1,13 @@
-import { closureKindOf, type SpecNode } from "../graph/index.js";
+import { closureKindOf, compare, type SpecNode } from "../graph/index.js";
 import type { RefusedFile, SpecGraph } from "../store/file-store.js";
-import { closureOf, closureVerdictOf } from "./closure.js";
-import { isClosableTask, taskStateOf, type ColorAt } from "./task-state.js";
+import { closureVerdictOf } from "./closure.js";
+import {
+  isClosableTask,
+  prematureAddressOf,
+  prematureSentence,
+  taskStateOf,
+  type ColorAt,
+} from "./task-state.js";
 import {
   type ColorContext,
   colorContextOf,
@@ -40,7 +46,8 @@ import {
 
 /**
  * One node that has a colour, the one word for why, what the two judgement
- * books say about it, and — for a criterion — whether it is met.
+ * books say about it, and — for a closure subject, the criterion or the task —
+ * whether it is met.
  */
 export interface ReviewStatus {
   id: string;
@@ -82,26 +89,29 @@ export interface ReviewStatus {
    */
   rejection: { by: string; at: string; rationale: string } | null;
   /**
-   * Whether an acceptance criterion is satisfied — and null for every other
-   * type, because no other type is a thing that can be met.
+   * Whether a closure subject is satisfied — a criterion met on its evidence, a
+   * task done on the reports claiming it — and null for every other type,
+   * because no other type is a thing that can be met. `CLOSURE_KINDS` in
+   * `core/graph` is the table of which two those are.
    *
-   * IT IS A SECOND AXIS AND NOT A FOURTH COLOUR. Green says a person agreed with
-   * what this criterion demands; closed says somebody showed that the demand is
-   * met, on evidence they named. A criterion can be green and open all release
-   * long, and that is not a defect in either answer.
+   * IT IS A SECOND AXIS AND NOT A FOURTH COLOUR. Green says a person agreed
+   * with what this subject demands; closed says somebody showed that the demand
+   * is met, on claimants they named. A subject can be green and open all
+   * release long, and that is not a defect in either answer.
    *
    * REQUIRED AND NULLABLE, NEVER OPTIONAL, for the reason written above — and
-   * here the null carries a fact of its own: this node is not a criterion, so
-   * the question does not apply.
+   * here the null carries a fact of its own: this node is not a closure
+   * subject, so the question does not apply.
    */
   closure: "open" | "closed" | null;
   /**
-   * The person's STANDING word that this criterion is not met by the evidence
-   * claiming it now, with the reason — the other exit from the review queue,
-   * beside closing. Null when nobody has said so about this list, when the
-   * word lapsed (the criterion or the list moved), or when the node is not a
-   * criterion at all. A closed criterion has null here too: the two books hold
-   * a criterion in one or the other.
+   * The person's STANDING word that this subject is not met by what claims it
+   * now — the evidence over a criterion, the work over a task — with the
+   * reason: the other exit from the review queue, beside closing. Null when
+   * nobody has said so about this list, when the word lapsed (the subject or
+   * the list moved), or when the node is no closure subject at all. A closed
+   * subject has null here too: the two books hold a subject in one or the
+   * other.
    *
    * REQUIRED AND NULLABLE, NEVER OPTIONAL, for the reason written above.
    */
@@ -121,9 +131,10 @@ export interface ReviewStatus {
   taskState: "blocked" | "ready" | "done" | null;
   /**
    * THE SENTENCE A RULE OF THE GRAPH WROTE AGAINST THIS NODE, when its red came
-   * from one that names other nodes — today the aim rule (`off-target`), which
-   * needs the log, the task, the criteria and the evidence spelled out to be
-   * acted on, and which the panel could not compose from the one node it holds.
+   * from one that names other nodes — the aim rule (`off-target`), which needs
+   * the log, the task and the claims spelled out to be acted on, and the
+   * blocked-address rule (`premature`), which names the task whose turn has
+   * not come. The panel could not compose either from the one node it holds.
    * Null for every other reason: an orphan's sentence is the anchor phrase the
    * panel already composes from the type, and the books' reasons carry their
    * own records above.
@@ -151,32 +162,9 @@ export interface GraphReview {
   broken: BrokenFile[];
 }
 
-/**
- * Byte order, not locale order — the same choice `core/store` makes, for the
- * same reason: ids and paths are ASCII, and a review that sorted by the daemon's
- * locale would put its own output at the mercy of an environment variable.
- */
-function compare(a: string, b: string): number {
-  if (a === b) {
-    return 0;
-  }
-  return a < b ? -1 : 1;
-}
-
 /** A refused file, said as the review says it — its own sentences, copied out. */
 function brokenOf(refusal: RefusedFile): BrokenFile {
   return { file: refusal.file, problems: [...refusal.problems] };
-}
-
-/**
- * The closure mark, asked only of the types it means anything for — the
- * criterion and the task, which is what `CLOSURE_KINDS` is a table of.
- */
-function closureFor(
-  node: SpecNode,
-  context: ColorContext,
-): "open" | "closed" | null {
-  return closureKindOf(node.type) === null ? null : closureOf(node, context);
 }
 
 /** The aim rule's sentence, and only when that rule is what made the node red. */
@@ -190,20 +178,6 @@ function problemFor(
   }
   const breach = offTargetOf(livingSubject(node), context);
   return breach === null ? null : offTargetSentence(node.id, breach);
-}
-
-/** The standing left-open word, asked of the same two types. */
-function leftOpenFor(
-  node: SpecNode,
-  context: ColorContext,
-): { by: string; at: string; rationale: string } | null {
-  if (closureKindOf(node.type) === null) {
-    return null;
-  }
-  const verdict = closureVerdictOf(node, context);
-  return verdict !== null && verdict.kind === "left-open"
-    ? { by: verdict.by, at: verdict.at, rationale: verdict.rationale }
-    : null;
 }
 
 /**
@@ -222,8 +196,12 @@ export function missingSentence(
 export function reviewGraph(
   graph: SpecGraph,
   ledgers: Ledgers,
+  // A caller that has already indexed the graph hands its context in; the
+  // default keeps every other caller whole. Before the parameter, the board,
+  // the bundles and the daemon's doors each built this index twice per read —
+  // once for themselves and once again in here.
+  context: ColorContext = colorContextOf(graph, ledgers),
 ): GraphReview {
-  const context = colorContextOf(graph, ledgers);
   // The colour of any node, computed once per id — the chain above a task is
   // walked per task and the same requirement sits above many of them.
   const settled = new Map<string, "red" | "yellow" | "green" | null>();
@@ -243,7 +221,25 @@ export function reviewGraph(
   const broken: BrokenFile[] = [];
 
   for (const node of graph.nodes) {
-    const verdict = colorOf(livingSubject(node), context);
+    let verdict = colorOf(livingSubject(node), context);
+    // THE EIGHTH QUESTION — work logged under a task whose turn has not come —
+    // is asked here and not inside `colorOf`, because it reads the addressed
+    // task's STATE, which reads other nodes' colours; the base chain answers
+    // one node from its own file and the books. Only a node the chain left
+    // unred is asked, so every deeper red keeps its own sentence.
+    const blockedTaskId =
+      verdict !== null && verdict.color !== "red"
+        ? prematureAddressOf(node, context, colorAt)
+        : null;
+    if (blockedTaskId !== null) {
+      verdict = { color: "red", reason: "premature" };
+    }
+    // The memo is seeded by the loop that just did the work: `colorAt` asked
+    // about a node this pass has already coloured would otherwise run the whole
+    // chain a second time, and every task's chain runs through nodes of this
+    // very list. (The chain above a task holds no work logs, so the eighth
+    // question can never be part of an answer it is itself waiting on.)
+    settled.set(node.id, verdict?.color ?? null);
     if (verdict === null) {
       // A type outside the canon, which the loader never serves as a node —
       // kept as the honest shape of `colorOf`'s answer rather than cast away.
@@ -256,6 +252,13 @@ export function reviewGraph(
     // a red row is as entitled to as a green one.
     const approval = ledgers.approvals.get(node.id);
     const rejection = ledgers.rejections.get(node.id);
+    // ONE CLOSURE VERDICT PER SUBJECT. `closure` and `leftOpen` are two
+    // readings of the same answer — the mark, and the standing word behind an
+    // open mark — so it is asked once here rather than once per field. A type
+    // that is no closure subject at all is not asked, and both fields say so
+    // with their own nulls.
+    const closable = closureKindOf(node.type) !== null;
+    const word = closable ? closureVerdictOf(node, context) : null;
     statuses.push({
       id: node.id,
       color: verdict.color,
@@ -270,12 +273,18 @@ export function reviewGraph(
               at: rejection.at,
               rationale: rejection.rationale,
             },
-      closure: closureFor(node, context),
-      leftOpen: leftOpenFor(node, context),
+      closure: closable ? (word?.kind === "closed" ? "closed" : "open") : null,
+      leftOpen:
+        word !== null && word.kind === "left-open"
+          ? { by: word.by, at: word.at, rationale: word.rationale }
+          : null,
       taskState: isClosableTask(node.type)
         ? taskStateOf(node, context, colorAt)
         : null,
-      problem: problemFor(node, verdict.reason, context),
+      problem:
+        blockedTaskId !== null
+          ? prematureSentence(node.id, blockedTaskId)
+          : problemFor(node, verdict.reason, context),
     });
   }
 

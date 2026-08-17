@@ -50,16 +50,15 @@ import {
   deletionSentence,
   firstLine,
   impactSentence,
+  judgeable,
   type ApprovedVersion,
   type ReviewStatus,
-  type StatusReason,
 } from "./review";
 import {
-  ClosureMark,
   LineDiff,
   Referrers,
+  SecondAxisMark,
   StatusDot,
-  TaskStateMark,
 } from "./review-parts";
 import { formatStamp } from "./spec-node";
 import { lineDiff, wholeFile, type DiffRow } from "./view/diff";
@@ -194,7 +193,17 @@ function statusCopy(
         title: "Outside its task's aim",
         body:
           status.problem ??
-          "This node sits on a seam between a work log, its task and its evidence — the evidence claims criteria the task does not target. Fix the ADDRESSES, TARGETS or CLAIMS line first.",
+          "This node sits on a seam between a work log, its task and its claims — the evidence or report claims what the task does not cover. Fix the ADDRESSES, TARGETS or CLAIMS line first.",
+      };
+    // WORK BEFORE ITS TURN. The daemon composed the sentence — it names the
+    // blocked task, which is more than this panel holds — so it is quoted
+    // whole, like the aim rule's.
+    case "premature":
+      return {
+        title: "Work before its turn",
+        body:
+          status.problem ??
+          "This work log addresses a task that is still blocked — its chain is unread, or something it waits on is open. Settle that first.",
       };
     case "missing":
     case "malformed":
@@ -204,14 +213,30 @@ function statusCopy(
 }
 
 /**
- * THE TWO STATES APPROVING RESOLVES. An orphan is the one colour an approval
- * cannot fix — the graph has to change first — so it gets the sentence and no
- * button, and the daemon refuses it at the door either way.
+ * THE NOUNS EACH SUBJECT'S CLOSURE CAPTION IS SAID IN. A criterion is closed on
+ * evidence claiming it and a task on reports claiming it, so the sentence is
+ * one sentence with two vocabularies rather than two sentences. Module scope,
+ * because the panel re-renders per keystroke and this table never moves.
  */
-const APPROVABLE: ReadonlySet<StatusReason> = new Set<StatusReason>([
-  "unapproved",
-  "changed",
-]);
+const CLOSURE_WORDS: Record<
+  "criterion" | "task",
+  { none: string; unread: string; one: string; many: (count: number) => string }
+> = {
+  criterion: {
+    none: "No evidence claims this criterion yet — nothing to close over.",
+    unread:
+      "Approve this criterion first — until its words are agreed there is nothing for the evidence to be met against.",
+    one: "One piece of evidence claims this criterion.",
+    many: (count) => `${String(count)} pieces of evidence claim this criterion.`,
+  },
+  task: {
+    none: "No verification report claims this task yet — nothing to close over.",
+    unread:
+      "Approve this task first — until what it asks for is agreed there is nothing for the work to be done against.",
+    one: "One verification report claims this task.",
+    many: (count) => `${String(count)} verification reports claim this task.`,
+  },
+};
 
 /** A row the panel shows but nothing in it can change. */
 function Field({ label, children }: { label: string; children: ReactNode }) {
@@ -482,7 +507,9 @@ export function NodePanel({
   const [versionBusy, setVersionBusy] = useState(false);
   const [versionError, setVersionError] = useState<string | null>(null);
 
-  const existingIds = nodes.map((existing) => existing.id);
+  // Memoised because the panel re-renders per keystroke, and this list only
+  // moves when the graph does.
+  const existingIds = useMemo(() => nodes.map((existing) => existing.id), [nodes]);
 
   // Only a different node or a different mode refills the form; a repeat create
   // request re-aims the one already open instead, in the effect below. A reload
@@ -586,7 +613,7 @@ export function NodePanel({
     status !== null &&
     status.reason !== "rejected" &&
     status.rejection !== null &&
-    (status.color === "yellow" || status.color === "green")
+    judgeable(status)
       ? status.rejection
       : null;
 
@@ -610,15 +637,8 @@ export function NodePanel({
     node !== null &&
     node.deletionProposed === undefined &&
     status !== null &&
-    (status.color === "yellow" || status.color === "green");
+    judgeable(status);
 
-  /**
-   * THE REJECT DOOR AS ONE ELEMENT, because it is drawn in one of two places and
-   * is the same door in both: beside Approve inside the status box on a yellow
-   * node, and under the approved line on a green one, which has no box. Built
-   * once here rather than spelled twice in the render — only one of the two
-   * positions can be reached at a time, so it is never mounted twice.
-   */
   /**
    * THE DOOR THAT ASKS FOR CHANGES, and it lives on the footer row beside Edit.
    *
@@ -657,9 +677,9 @@ export function NodePanel({
    * the graph the
    * panel was handed rather than asked for as a second number that could
    * disagree with the board. EVERY CLAIMANT COUNTS, WHATEVER COLOUR IT WEARS:
-   * closing accepts the whole list, so a list of one yellow piece of evidence is
-   * still a list something can be closed over, and counting only the green ones
-   * would leave the switch dark over a criterion the daemon would happily close.
+   * closing accepts the whole list, so the number is the size of the list and
+   * not of its green part — which claimants still WAIT on approval is the
+   * caption's next question, not this count's.
    */
   // WHICH RELATION CLAIMS THIS NODE IS THE CANON'S ANSWER: `CLAIMS` into a
   // criterion, `ADDRESSES` into a task, and nothing into anything else.
@@ -675,36 +695,11 @@ export function NodePanel({
    * reader looking at a control they cannot use wants the reason in the place
    * the number would have been rather than beside it.
    *
-   * THE TWO REFUSALS ARE THE DAEMON'S OWN AND ARE SAID BEFORE IT SAYS THEM. It
-   * refuses a close with nothing claiming the criterion, and it refuses one
-   * while the criterion's own wording stands rejected — a criterion nobody has
-   * agreed to the words of cannot be signed off as met — so the surface shuts
-   * the door and says which of the two it is.
+   * THE REFUSALS ARE THE DAEMON'S OWN AND ARE SAID BEFORE IT SAYS THEM. It
+   * refuses a close with nothing claiming the subject, one whose own wording
+   * stands rejected, one that is not yet green, and one with claimants nobody
+   * has approved — so the surface shuts the door and says which it is.
    */
-  /**
-   * THE NOUNS EACH SUBJECT'S CAPTION IS SAID IN. A criterion is closed on
-   * evidence claiming it and a task on work addressing it, so the sentence is
-   * one sentence with two vocabularies rather than two sentences.
-   */
-  const CLOSURE_WORDS: Record<
-    "criterion" | "task",
-    { none: string; unread: string; one: string; many: (count: number) => string }
-  > = {
-    criterion: {
-      none: "No evidence claims this criterion yet — nothing to close over.",
-      unread:
-        "Approve this criterion first — until its words are agreed there is nothing for the evidence to be met against.",
-      one: "One piece of evidence claims this criterion.",
-      many: (count) => `${String(count)} pieces of evidence claim this criterion.`,
-    },
-    task: {
-      none: "No work log addresses this task yet — nothing to close over.",
-      unread:
-        "Approve this task first — until what it asks for is agreed there is nothing for the work to be done against.",
-      one: "One work log addresses this task.",
-      many: (count) => `${String(count)} work logs address this task.`,
-    },
-  };
   const words = CLOSURE_WORDS[closureKind?.kind ?? "criterion"];
   /**
    * WHETHER THE SUBJECT'S OWN WORDS ARE SETTLED — the other half of the gate,
@@ -1294,8 +1289,12 @@ export function NodePanel({
                         footer row beside Edit — the two ways of changing a node
                         a person has read: do it yourself, or write down what is
                         wrong and hand it back. */}
+                    {/* YELLOW IS THE ONE COLOUR APPROVING RESOLVES — the same
+                        clause the queue's rows gate their button on. An orphan
+                        or a refused node gets the sentence and no button, and
+                        the daemon refuses either at the door anyway. */}
                     {node.deletionProposed === undefined &&
-                    APPROVABLE.has(status.reason) ? (
+                    status.color === "yellow" ? (
                       <div className="grid gap-2">
                         <Button
                           type="button"
@@ -1431,26 +1430,21 @@ export function NodePanel({
             <Field label="Type">
               <Badge variant="secondary">{node.type}</Badge>
             </Field>
-            {/* THE MARK BESIDE THE ID, WHICH IS A CRITERION'S SECOND ANSWER
-                and wears the traffic light's own two colours — `ClosureMark`
-                carries why. It is drawn in this row in BOTH modes and on the
-                card on the canvas, so the three places a criterion's id appears
-                give one answer; `status` is where that answer comes from, and a
-                node that is not a criterion has none. Here it also repeats what
-                the switch above already says, which is the point: this is the
-                row a person reads the id off, and the id and its state belong
+            {/* THE MARK BESIDE THE ID, WHICH IS THE SECOND AXIS'S ANSWER. It is
+                drawn in this row in BOTH modes and on the card on the canvas,
+                so the three places an id appears give one answer;
+                `SecondAxisMark` owns which mark a type wears, and `status` is
+                where the answer comes from. Here it also repeats what the
+                switch above already says, which is the point: this is the row a
+                person reads the id off, and the id and its state belong
                 together wherever they are drawn. */}
             <Field label="ID">
               <div className="flex items-center gap-1.5">
                 <span className="font-mono text-xs break-all">{node.id}</span>
-                {/* ONE MARK, AND THE TYPE DECIDES WHICH — the canvas card's own
-                    rule: a task's word already says whether it is closed and
-                    says what that means for the work. */}
-                {status?.taskState != null ? (
-                  <TaskStateMark state={status.taskState} />
-                ) : status === null || status.closure === null ? null : (
-                  <ClosureMark state={status.closure} />
-                )}
+                <SecondAxisMark
+                  closure={status?.closure ?? null}
+                  taskState={status?.taskState ?? null}
+                />
               </div>
             </Field>
             <Field label="Short name">
@@ -1550,11 +1544,10 @@ export function NodePanel({
                     <span className="font-mono text-xs break-all">
                       {node.id}
                     </span>
-                    {status?.taskState != null ? (
-                      <TaskStateMark state={status.taskState} />
-                    ) : status === null || status.closure === null ? null : (
-                      <ClosureMark state={status.closure} />
-                    )}
+                    <SecondAxisMark
+                      closure={status?.closure ?? null}
+                      taskState={status?.taskState ?? null}
+                    />
                   </div>
                 </Field>
               </>
