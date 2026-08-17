@@ -272,6 +272,16 @@ Opening or creating a project also writes two deny rules into the project's
 runs `git init` when the folder is in no repository, because git is the spec's
 only restoration material.
 
+It writes one more file, and this one is Shall's own: `.claude/rules/shall.md`,
+half a page an agent reads at the start of every session. What is on it is the
+handful of things the files cannot say about themselves — that writing a spec
+file is a proposal and not a decision, that a node is retired by proposing its
+deletion rather than by deleting it, that the ledgers are nobody's to open, and
+that a colour is asked for rather than worked out. It is generated output, kept
+current on every open the way the reference templates are, so a hand edit to it
+is lost; anything of your own belongs in another file beside it. There is one
+adapter today, which is why the page lands under `.claude`.
+
 ## The `shall` command
 
 Five subcommands go on top of `.shall/`, and between them they are what an
