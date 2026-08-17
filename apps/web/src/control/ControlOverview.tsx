@@ -147,11 +147,19 @@ function PanelGlance({
               a link inside a link is not a thing a browser can honour. */}
           <Link
             to={row.href}
-            className="text-primary truncate text-sm underline-offset-4 hover:underline"
+            className="text-primary min-w-0 flex-1 truncate text-sm underline-offset-4 hover:underline"
           >
             {row.title}
           </Link>
-          <span className="text-muted-foreground shrink-0 text-xs">
+          {/* THE SUMMARY YIELDS FIRST, AND NEITHER HALF LEAVES THE CARD. A
+              summary that could not shrink took the whole row and left the
+              title — the door — at zero width, which is how a Fix Spec row
+              lost its name here while the queue's short counts never showed
+              it; and whatever still did not fit ran under the card's edge,
+              cut flush at the border while the left kept its margin. So the
+              title takes the slack and the summary is capped at a share of
+              the row, and both end in an ellipsis inside the padding. */}
+          <span className="text-muted-foreground max-w-[45%] shrink-0 truncate text-xs">
             {row.summary}
           </span>
         </li>
@@ -221,7 +229,7 @@ export function ControlOverview() {
             </CardContent>
             <Link
               to={`${base}/${panel.id}`}
-              className="text-primary flex items-center gap-1 px-6 text-sm underline-offset-4 hover:underline"
+              className="text-primary flex items-center gap-1 px-(--card-spacing) text-sm underline-offset-4 hover:underline"
             >
               View all
               <ArrowRight className="size-4" />
