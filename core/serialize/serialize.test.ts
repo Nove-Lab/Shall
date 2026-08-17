@@ -1438,10 +1438,10 @@ edges:
 
 describe("emitTemplate", () => {
   test("the Requirement template, byte for byte", () => {
-    // The longest guide in the canon, and the one with hints on two of its
-    // sections — so this golden pins the header a reference copy carries and a
-    // scaffold does not, the two required keys, the hint column, the relation
-    // table's arrow alignment and the suggested headings all at once.
+    // Five sections, three of them hinted — so this golden pins the header a
+    // reference copy carries and a scaffold does not, the two required keys,
+    // the hint column, the relation table's arrow alignment and the suggested
+    // headings all at once.
     assert.equal(
       emitTemplate("Requirement"),
       `---
@@ -1457,7 +1457,7 @@ name:                  # required · one line
 # Everything below the closing fence is the specification: free markdown,
 # read back exactly as written. The headings that follow are a starting
 # shape, not a rule — keep them, reshape them or write your own.
-#   ## Statement
+#   ## Statement — one SHALL or MUST sentence, one behaviour
 #   ## Description
 #   ## Requirement Type — Functional · Non-Functional
 #   ## Priority — High · Medium · Low
@@ -1664,7 +1664,7 @@ name:                  # required · one line
 # read back exactly as written. The headings that follow are a starting
 # shape, not a rule — keep them, reshape them or write your own.
 #   ## Definition
-#   ## Aliases — comma-separated
+#   ## Aliases — comma-separated, and mark a deprecated spelling as such
 # Outgoing relations are written HERE and only here — never on the target.
 # From a Term the canon allows:
 #   DENOTES -> DomainEntity
@@ -1691,7 +1691,7 @@ name:                  # required · one line
   });
 
   test("every scaffold is its template with the header swapped and nothing else", () => {
-    // Said as a subtraction rather than as twenty-three more goldens. The two
+    // Said as a subtraction rather than as twenty-two more goldens. The two
     // files share their starting lines in the source, and those begin at
     // `short_name:` — so cut both files there, and below the cut the bytes must
     // be identical for every type, while above it the scaffold carries exactly

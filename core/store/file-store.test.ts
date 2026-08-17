@@ -608,9 +608,11 @@ describe("a node file has one place, and every other place is a sentence", () =>
     const graph = await loadGraph(specDir);
     assert.deepEqual(graph.nodes, []);
     assert.deepEqual(messages(graph.problems), [
+      "intent/notes is not one of the canon's node types — rename it to one of them, or move it out of the spec folder. The canon's types are Term, DomainEntity, Goal, Actor, UseCase, Scenario, SystemResponsibility, Requirement, AcceptanceCriterion, Constraint, ModuleDesign, Interface, DataSchema, ImplementationTask, Journal, WorkLog, Evidence, VerificationReport, Finding, Assumption, Question, Decision.",
       "intent/notes is not one of the canon's node types, so intent/notes/deep/R-0001.md is not read as a node. A node file lives at <band>/<Type>/<id>.md.",
     ]);
-    assert.equal(graph.problems[0]?.file, "intent/notes/deep/R-0001.md");
+    assert.equal(graph.problems[0]?.file, "intent/notes");
+    assert.equal(graph.problems[1]?.file, "intent/notes/deep/R-0001.md");
   });
 });
 
@@ -676,7 +678,7 @@ describe("the loader's cross-file judgements", () => {
     );
     assert.deepEqual(graph.edges, []);
     assert.deepEqual(messages(graph.problems), [
-      "HAS_CRITERION is not allowed from Requirement to Goal, so R-0001 cannot relate to G-0001 that way.",
+      "HAS_CRITERION is not allowed from Requirement to Goal, so R-0001 cannot relate to G-0001 that way. Nothing in the canon relates a Requirement to a Goal.",
     ]);
   });
 

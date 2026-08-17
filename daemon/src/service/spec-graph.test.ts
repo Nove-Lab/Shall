@@ -597,7 +597,7 @@ describe("the edge doors", () => {
     );
   });
 
-  test("say nothing further when neither direction allows anything", async () => {
+  test("say the pair itself is the problem when neither direction allows anything", async () => {
     const project = await newProject();
     await node(project, "Goal", "G-0001", GOAL_BODY);
     await node(project, "AcceptanceCriterion", "AC-0001", CRITERION_BODY);
@@ -609,7 +609,7 @@ describe("the edge doors", () => {
         toId: "AC-0001",
       }),
       "invalid",
-      "HAS_CRITERION is not allowed from Goal to AcceptanceCriterion.",
+      "HAS_CRITERION is not allowed from Goal to AcceptanceCriterion. Nothing in the canon relates a Goal to a AcceptanceCriterion.",
     );
   });
 
@@ -837,14 +837,12 @@ describe("the scaffold door", () => {
     assert.equal(scaffolded.id, "R-0008");
   });
 
-  test("refuses a type the canon does not have, and lists all twenty-three", async () => {
+  test("refuses a type the canon does not have, and lists all twenty-two", async () => {
     const project = await newProject();
     await says(
       scaffoldSpecNode({ path: project.path, type: "Widget" }),
       "invalid",
-      `Unknown node type: Widget. The canon's types are ${NODE_TYPES.map(
-        (entry) => entry.name,
-      ).join(", ")}.`,
+      "Unknown node type: Widget. The canon's types are Term, DomainEntity, Goal, Actor, UseCase, Scenario, SystemResponsibility, Requirement, AcceptanceCriterion, Constraint, ModuleDesign, Interface, DataSchema, ImplementationTask, Journal, WorkLog, Evidence, VerificationReport, Finding, Assumption, Question, Decision.",
     );
   });
 

@@ -185,7 +185,7 @@ async function init(url: string): Promise<void> {
  * `shall add-spec-node --type <Type>` — a starting file for one new node,
  * written at the node's own path with the next free id as its name.
  *
- * ONE COMMAND FOR ALL TWENTY-THREE TYPES: the type is an argument and never a
+ * ONE COMMAND FOR ALL TWENTY-TWO TYPES: the type is an argument and never a
  * subcommand, so the canon can grow without this file learning a new word. The
  * daemon resolves the spelling case-insensitively and refuses an unknown one
  * with the full list, which is this command's `--help` for types.

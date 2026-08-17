@@ -165,6 +165,11 @@ function presetProps(panel: PanelState): { presetType?: string } {
  * way" is the whole answer and a clause about a direction that has none too is
  * noise — which is also the case whenever the two nodes share a type, since
  * there the reverse IS this direction.
+ *
+ * IT KEEPS ITS OWN WORDS RATHER THAN CORE'S `grammarHint`, which says the same
+ * two facts to a file. The screen can do what a file cannot: name the two nodes
+ * the person is looking at and offer the gesture that fixes it. Change one and
+ * read the other.
  */
 function refusalSentence(connect: Connect): string {
   const none = `The canon has no relation from ${connect.from.type} to ${connect.to.type}.`;

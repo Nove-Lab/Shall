@@ -80,6 +80,19 @@ export function isNodeType(value: string): value is NodeTypeName {
   return NODE_TYPES.some((entry) => entry.name === value);
 }
 
+/**
+ * The roster as one sentence, for the refusals that have to teach it. Whoever
+ * reads them is holding a file path or a typed command and cannot see a
+ * dropdown, so the sentence is the dropdown.
+ *
+ * It hands the join back to its callers, where `grammarHint` keeps it: this is
+ * a whole sentence and lands in two shapes — mid-message after a full stop, and
+ * as the tail of a refusal — while a hint is a fragment that only ever trails.
+ */
+export function canonTypesSentence(): string {
+  return `The canon's types are ${NODE_TYPES.map((entry) => entry.name).join(", ")}.`;
+}
+
 /** Null for a type outside the canon, which is how a caller's string is checked. */
 export function nodeTypeEntry(type: string): NodeTypeEntry | null {
   return NODE_TYPES.find((entry) => entry.name === type) ?? null;
@@ -105,7 +118,7 @@ export function typesInBand(band: Band): readonly NodeTypeEntry[] {
 
 /**
  * The band as a FOLDER NAME — the level between `spec/` and the type folder,
- * so two hundred nodes fan out over four drawers instead of twenty-three.
+ * so two hundred nodes fan out over four drawers instead of twenty-two.
  *
  * Lowercase on purpose: the type folder beside it is canon-spelled and
  * CamelCase, and the two reading differently is what keeps a path legible —

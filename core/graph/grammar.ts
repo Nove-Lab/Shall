@@ -157,6 +157,39 @@ export function permittedEdgeTypes(fromType: string, toType: string): string[] {
   );
 }
 
+/**
+ * What the canon allows between these two node types, said in the order a
+ * reader can use it: this direction first, because that is the relation they
+ * just wrote and the set they can pick from without moving anything.
+ *
+ * The reverse clause is only worth adding when the relation could actually be
+ * turned around. Between two nodes of one type the reverse is the same
+ * direction, so naming it sends the reader off to redraw the arrow and meet the
+ * identical refusal.
+ *
+ * When the canon relates the two types no way at all, the last clause says so
+ * outright. It used to say nothing, and nothing left the reader believing they
+ * had merely reached for the wrong edge name between a pair that was fine.
+ *
+ * EVERY ANSWER OPENS WITH A SPACE, and there is always an answer — a caller
+ * appends this straight after the full stop of its own sentence, so the join
+ * belongs here and not in each of them.
+ */
+export function grammarHint(fromType: string, toType: string): string {
+  const forward = permittedEdgeTypes(fromType, toType);
+  const hint =
+    forward.length > 0 ? ` This direction allows: ${forward.join(", ")}.` : "";
+
+  const reverse =
+    fromType === toType ? [] : permittedEdgeTypes(toType, fromType);
+  if (reverse.length > 0) {
+    return `${hint} The reverse direction allows: ${reverse.join(", ")}.`;
+  }
+  return hint === ""
+    ? ` Nothing in the canon relates a ${fromType} to a ${toType}.`
+    : hint;
+}
+
 /** Whether the canon allows this exact (from, to, type) row. */
 export function isPermittedTriple(
   fromType: string,
