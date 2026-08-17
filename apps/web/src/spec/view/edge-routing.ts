@@ -636,3 +636,73 @@ export function stepPath(waypoints: readonly Point[]): {
 
   return { d, label: labelSlot(waypoints) };
 }
+
+/**
+ * HOW WIDE A RELATION'S NAME IS, AND WHETHER THE ROUTE HAS ROOM FOR IT.
+ *
+ * The decision has to be made before the text has a box to measure, so this is
+ * an ESTIMATE: the label is drawn at `var(--text-xs)` — 12px — in the app's
+ * sans face, where the canon's upper-case relation names run about 7px a
+ * character, and the library's own `EdgeText` pads its background by 4px each
+ * side. Measured against the drawn box: HAS_CRITERION is 13 characters, this
+ * answers 99, the browser drew 98.
+ *
+ * IT LIVES HERE AND NOT BESIDE THE COMPONENT THAT ASKS IT, because a second
+ * caller derives GEOMETRY from it: the metamodel spaces its columns so that
+ * every relation's name has room, which makes this the rule and not a check.
+ * Two copies of 7 and 8 would part company on the first edit.
+ */
+export const LABEL_CHARACTER_WIDTH = 7;
+export const LABEL_PADDING = 8;
+
+/** How much horizontal run this text needs. */
+export function labelRoom(text: string): number {
+  return text.length * LABEL_CHARACTER_WIDTH + LABEL_PADDING;
+}
+
+/** Whether the route's longest horizontal run can hold this name. */
+export function labelFits(slot: LabelSlot, text: string): boolean {
+  return slot.room >= labelRoom(text);
+}
+
+/**
+ * A RELATION FROM A THING TO ITSELF, DRAWN AS AN ARCH OVER IT.
+ *
+ * The floating endpoints degenerate for a self-relation — both crossings are
+ * the same point on the same border — so there is nothing for `routeAroundCards`
+ * to route, and this hand-built path is the answer instead: out of the left
+ * border, up over the card, across it, and back into the right border. The last
+ * segment travels leftwards, so the arrowhead points INTO the card the way
+ * every other relation's does.
+ *
+ * THE STEP-OUT IS THE ROUTER'S OWN and not a number of this function's:
+ * `floatingEndpoints` already answers how far a path clears a border before it
+ * may turn, and the caller hands that over, so an arch keeps the same clearance
+ * as the routes beside it.
+ *
+ * `detoured` AND `fallback` ARE BOTH FALSE, and honestly so: nothing moved this
+ * path around an obstacle, and it is not a route the router gave up on — a
+ * `fallback` would be stippled by `FloatingEdgePath` and read as a defect.
+ *
+ * The long run is the top of the arch, `width + 2 * offset` across, which is
+ * where `labelSlot` puts the relation's name — over the card rather than beside
+ * it, which is the only clear space a self-relation has.
+ */
+export function selfLoopPath(card: CardBox, offset: number): RoutedPath {
+  const middle = card.y + card.height / 2;
+  const left = card.x - offset;
+  const right = card.x + card.width + offset;
+  const top = card.y - offset;
+  return {
+    waypoints: [
+      { x: card.x, y: middle },
+      { x: left, y: middle },
+      { x: left, y: top },
+      { x: right, y: top },
+      { x: right, y: middle },
+      { x: card.x + card.width, y: middle },
+    ],
+    detoured: false,
+    fallback: false,
+  };
+}

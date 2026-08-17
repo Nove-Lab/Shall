@@ -94,8 +94,19 @@ function status(
   closure: ReviewStatus["closure"] = null,
   leftOpen: ReviewStatus["leftOpen"] = null,
   problem: ReviewStatus["problem"] = null,
+  taskState: ReviewStatus["taskState"] = null,
 ): ReviewStatus {
-  return { id, color, reason, approval, rejection, closure, leftOpen, problem };
+  return {
+    id,
+    color,
+    reason,
+    approval,
+    rejection,
+    closure,
+    leftOpen,
+    taskState,
+    problem,
+  };
 }
 
 /** The `{by, at}` a status carries for a record the approve door returned. */

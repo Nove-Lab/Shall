@@ -1,4 +1,4 @@
-import type { SpecEdge } from "./model";
+import type { Incidence } from "./edges";
 
 /**
  * THE ONE-HOP NEIGHBOURHOOD OF A SELECTED NODE: what stays lit, and what recedes.
@@ -94,7 +94,7 @@ export const NOTHING_SELECTED: Highlight = {
  * against, nor any need of one.
  */
 export function highlightFor(
-  edges: readonly SpecEdge[],
+  edges: readonly Incidence[],
   selected: string | null,
 ): Highlight {
   if (selected === null) return NOTHING_SELECTED;

@@ -1,6 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import type { Closure } from "./review";
+import type { Closure, TaskState } from "./review";
 import type { DiffKind, DiffRow } from "./view/diff";
 import type { Signal } from "./view/furniture";
 
@@ -56,36 +56,50 @@ export function StatusDot({ color }: { color: Signal }) {
 }
 
 /**
- * WHETHER A CRITERION IS MET — THE SECOND AXIS, AND IT IS A SECOND TRAFFIC LIGHT.
+ * THE TWO SECOND-AXIS MARKS SHARE ONE VOCABULARY, and it is two words wide:
+ * NOT YET, and DONE.
  *
- * Registration is the square: somebody read this criterion and agreed that it
- * says the right thing. Satisfaction is this badge: somebody signed off that the
- * demand is met by everything now claiming it. A criterion can be green and open
- * for a whole release and neither answer is wrong — the two axes are asked of
- * different things — but OPEN IS THE STATE THE PROJECT IS TRYING TO LEAVE, and a
- * muted outline said that at the weight of a footnote. So it wears red until it
- * is closed, and green when it is, IN THE SAME TWO PALETTE VALUES THE SQUARE
- * USES: two lights on one board that disagreed about what red means would be
- * two vocabularies. That is why this map sits beside `SIGNAL_CLASS` and why
- * these two are the only places on the surface a colour is named.
+ * A criterion is open or closed; a task is blocked, ready or done. Five words,
+ * but only two STATES a person scans for — the thing has been shown to be met,
+ * or it has not — so there are two paints and not five, and both marks use
+ * them. Before this they disagreed: an open criterion wore red while a blocked
+ * task wore grey, which said that a criterion nobody has closed yet is a defect
+ * and a task nobody can start yet is merely news. Neither is a defect. Red is
+ * the traffic light's word for "this is wrong", and it is now only ever that.
  *
- * `Record<Closure, string>` for the reason the signal map gives: a third state
- * is a compile error here rather than a badge in no class at all.
+ * DONE IS THE FILLED EMERALD, the same one `SIGNAL_CLASS.green` uses, because
+ * arriving is the thing the whole board is trying to do and it should read as
+ * arrival wherever it happens. NOT YET IS THE DESIGN SYSTEM'S OWN QUIET BADGE —
+ * `variant="secondary"`, no colour of ours at all — so an unfinished thing
+ * announces itself by its WORD rather than by a hue, and a screen full of
+ * unfinished things is not a screen full of alarm.
+ *
+ * `border-transparent` on the filled one because the base badge carries a
+ * border, and a border in the default colour around a filled badge reads as an
+ * outline the palette did not ask for.
+ */
+const MET_CLASS = "bg-emerald-500 text-white border-transparent";
+
+/**
+ * The paint each closure word takes. `Record<Closure, …>` for the reason
+ * `SIGNAL_CLASS` is one: a third word is a compile error here.
  */
 export const CLOSURE_CLASS: Record<Closure, string> = {
-  open: "bg-red-500 text-white",
-  closed: "bg-emerald-500 text-white",
+  open: "",
+  closed: MET_CLASS,
+};
+
+/** Which badge variant each word wears — quiet until the thing is met. */
+const CLOSURE_VARIANT: Record<Closure, "secondary" | "default"> = {
+  open: "secondary",
+  closed: "default",
 };
 
 /**
  * THE WORD IS THE ANNOUNCEMENT AND THERE IS NO SECOND ONE. The badge says
  * "Open" or "Closed" in text a reader lands on directly, so nothing here is
- * hidden behind an sr-only span the way the old tick needed — the shape WAS the
+ * hidden behind an sr-only span the way a tick would need — the shape WAS the
  * statement then, and the statement is now the label.
- *
- * `border-transparent` because the base badge carries a border and the fill is
- * what this variant is: a border in the default colour around a red badge reads
- * as an outline the palette did not ask for.
  *
  * `className` IS FOR THE ONE CALLER WITH A HEIGHT BUDGET. The canvas card is
  * 44px with a 16px `text-xs` row in it and the badge's own `h-5` is 20px, so the
@@ -101,8 +115,64 @@ export function ClosureMark({
   className?: string;
 }) {
   return (
-    <Badge className={cn(CLOSURE_CLASS[state], "border-transparent", className)}>
+    <Badge
+      variant={CLOSURE_VARIANT[state]}
+      className={cn(CLOSURE_CLASS[state], className)}
+    >
       {state === "closed" ? "Closed" : "Open"}
+    </Badge>
+  );
+}
+
+/**
+ * WHETHER A TASK CAN BE PICKED UP — the same two paints, read the same way.
+ *
+ * BLOCKED AND READY ARE THE SAME QUIET BADGE and the WORD is what separates
+ * them: both are states of unfinished work and neither is a defect; what
+ * differs is whether this is somebody's turn. Colouring "ready" would put a
+ * third light on a board that already has one, and a person scanning for red
+ * would find work that is merely available.
+ */
+export const TASK_STATE_CLASS: Record<TaskState, string> = {
+  blocked: "",
+  ready: "",
+  done: MET_CLASS,
+};
+
+const TASK_STATE_VARIANT: Record<TaskState, "secondary" | "default"> = {
+  blocked: "secondary",
+  ready: "secondary",
+  done: "default",
+};
+
+/** The word each state announces itself with. */
+const TASK_STATE_LABEL: Record<TaskState, string> = {
+  blocked: "Blocked",
+  ready: "Ready",
+  done: "Done",
+};
+
+/**
+ * THE BADGE BESIDE A TASK'S ID, drawn for reading only — no hover, no click,
+ * no tooltip. It answers a question a person asks of the board with their eyes:
+ * is this mine to start.
+ *
+ * `className` IS FOR THE ONE CALLER WITH A HEIGHT BUDGET — the canvas card,
+ * exactly as `ClosureMark` above documents.
+ */
+export function TaskStateMark({
+  state,
+  className,
+}: {
+  state: TaskState;
+  className?: string;
+}) {
+  return (
+    <Badge
+      variant={TASK_STATE_VARIANT[state]}
+      className={cn(TASK_STATE_CLASS[state], className)}
+    >
+      {TASK_STATE_LABEL[state]}
     </Badge>
   );
 }

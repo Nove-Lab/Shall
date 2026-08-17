@@ -1,4 +1,8 @@
-import type { SpecNode } from "../graph/index.js";
+import {
+  closureKindOf,
+  type ClosureKind,
+  type SpecNode,
+} from "../graph/index.js";
 import type { AcceptanceRecord, RejectionRecord } from "../serialize/index.js";
 import {
   colorOf,
@@ -9,8 +13,14 @@ import {
 } from "./color.js";
 
 /**
- * Whether an acceptance criterion is SATISFIED — closed on the evidence that
- * claims it — or still open, and whether anybody has yet said which.
+ * Whether a thing a person can CLOSE is closed — a criterion satisfied by the
+ * evidence claiming it, a task done by the work addressing it — or still open,
+ * and whether anybody has yet said which.
+ *
+ * TWO SUBJECTS, ONE ARITHMETIC. `core/graph/closure-kinds.ts` says which types
+ * are closed and by which relation; everything below reads that table off the
+ * subject in hand, so the criterion and the task are not two code paths that
+ * could drift but one that is asked a different question about its list.
  *
  * COLOUR AND CLOSURE ARE TWO AXES AND NEITHER IMPLIES THE OTHER. A colour says
  * whether a person has READ this node and agreed that it says the right thing;
@@ -41,14 +51,26 @@ import {
  *     would say which files were looked at; the map says which VERSIONS.
  *
  * COLOUR IS NOT A CLAUSE OF STANDING, BUT IT IS THE GATE ON ASKING. Every
- * living node whose file draws a `CLAIMS` line at the criterion is on the list,
+ * living node whose file draws the claiming line at the subject is on the list,
  * approved or not, and a record stands or lapses on the list alone — an agent's
  * new claim reopens a closed criterion the moment it is written. But nobody is
- * ASKED to close or leave open until every claimant is green: a claim nobody
- * has read is not yet a claim a person can judge the criterion on, so the
- * criterion simply stays open, off the queue, and the toggle stays off, until
- * the last claimant is approved. `closureAsks` and `unapprovedClaimantsOf`
- * below are that gate.
+ * ASKED to close or leave open until BOTH sides are green:
+ *
+ *  · EVERY CLAIMANT, because a claim nobody has read is not yet a claim a
+ *    person can judge the subject on; and
+ *  · THE SUBJECT ITSELF, because "met" is a statement about words somebody has
+ *    agreed to. A task whose scope nobody has read yet cannot be called done —
+ *    done against WHAT? — and a criterion whose demand is still being edited
+ *    cannot be shown to be satisfied. Closing over an unapproved subject
+ *    produced exactly the state that made this clause necessary: a yellow node
+ *    wearing a green Done.
+ *
+ * Until then the subject simply stays open, off the queue, and the toggle stays
+ * off. `closureAsks`, `unapprovedClaimantsOf` and the colour of the subject
+ * below are that gate. NOTHING ABOUT STANDING CHANGES: a record made while
+ * everything was green keeps standing, and editing the subject moves its hash
+ * and reopens it, so the state this gate forbids cannot be reached the long way
+ * round either.
  *
  * ONE BOOK OR THE OTHER, NEVER BOTH. The doors that write these records remove
  * the criterion from the other ledger in the same act, so a standing acceptance
@@ -61,26 +83,46 @@ import {
  * answer.
  */
 
-/** The one relation an evidence node claims a criterion by — canon edge #24. */
-const CLAIMS = "CLAIMS";
+/**
+ * WHICH CLOSURE THE NODE AT THIS ID IS THE SUBJECT OF, or null when nothing
+ * living is there or the type has no closure at all.
+ *
+ * The relation that makes the list is read here rather than named as a constant,
+ * because there are two of them now — `CLAIMS` into a criterion, `ADDRESSES`
+ * into a task — and `core/graph/closure-kinds.ts` is where that pairing lives.
+ */
+function kindAt(id: string, context: ColorContext): ClosureKind | null {
+  const node = context.nodes.get(id);
+  return node === undefined ? null : closureKindOf(node.type);
+}
 
 /**
- * Every living node whose own file draws a `CLAIMS` line at this criterion, in
- * id order.
+ * Every living node whose own file draws the claiming line at this subject, in
+ * id order — the Evidence that CLAIMS a criterion, the WorkLog that ADDRESSES
+ * a task.
  *
- * READ OFF THE INCOMING EDGES, because since edge #24 was turned around the
- * claim is the evidence's line and never the criterion's: a claimant announces
- * itself, and the criterion's file does not move when one turns up. The far end
- * has to be living for the same reason an anchor's does — a line from a file
- * that would not parse is a line nobody can read.
+ * READ OFF THE INCOMING EDGES, because both claims are the CLAIMANT's line and
+ * never the subject's: canon #24 and #23 were turned around so that a claimant
+ * announces itself and the subject's file does not move when one turns up. The
+ * far end has to be living for the same reason an anchor's does — a line from a
+ * file that would not parse is a line nobody can read.
+ *
+ * NOTHING FILTERS THE CLAIMANT'S TYPE, and that is not an omission: the loader
+ * refuses a file whose relation the canon does not allow, so only an Evidence
+ * can draw `CLAIMS` and only a WorkLog `ADDRESSES`. A filter here would be a
+ * second copy of the grammar.
  */
 export function claimantsOf(
-  acId: string,
+  subjectId: string,
   context: ColorContext,
 ): SpecNode[] {
+  const kind = kindAt(subjectId, context);
+  if (kind === null) {
+    return [];
+  }
   const claimants: SpecNode[] = [];
-  for (const edge of context.incoming.get(acId) ?? []) {
-    if (edge.type !== CLAIMS || !context.living.has(edge.fromId)) {
+  for (const edge of context.incoming.get(subjectId) ?? []) {
+    if (edge.type !== kind.claim || !context.living.has(edge.fromId)) {
       continue;
     }
     const node = context.nodes.get(edge.fromId);
@@ -106,11 +148,11 @@ function hashNow(node: SpecNode, context: ColorContext): string {
  * writes into a record, and the map a standing record has to equal.
  */
 export function claimantHashesOf(
-  acId: string,
+  subjectId: string,
   context: ColorContext,
 ): ReadonlyMap<string, string> {
   const hashes = new Map<string, string>();
-  for (const claimant of claimantsOf(acId, context)) {
+  for (const claimant of claimantsOf(subjectId, context)) {
     hashes.set(claimant.id, hashNow(claimant, context));
   }
   return hashes;
@@ -145,36 +187,44 @@ function sameList(
  */
 export function isAcceptanceStanding(
   record: AcceptanceRecord,
-  ac: SpecNode,
+  subject: SpecNode,
   context: ColorContext,
 ): boolean {
+  // THREE CLAUSES, AND THE FIRST IS THE KIND. A record says which thing it
+  // closed; a task's record filed under a criterion's id closes nothing, so a
+  // hand-edit that moves a record cannot close the wrong thing by matching a
+  // hash it was never taken over.
   return (
-    record.acHash === hashNow(ac, context) &&
-    sameList(record.evidence, claimantHashesOf(ac.id, context))
+    record.kind === closureKindOf(subject.type)?.kind &&
+    record.subjectHash === hashNow(subject, context) &&
+    sameList(record.claimants, claimantHashesOf(subject.id, context))
   );
 }
 
 /**
- * Whether a record in the rejection ledger is a criterion LEFT OPEN — one that
- * carries an evidence map — and still describes the criterion and the list.
+ * Whether a record in the rejection ledger is a subject LEFT OPEN — one that
+ * carries a claimant map — and still describes that subject and that list.
  * A rejection record without a map is the refusal of the node's own content,
  * which is the colour chain's business and not this module's; it answers
- * false here whatever its hash.
+ * false here whatever its hash. The kind is a clause here for the reason it is
+ * one above.
  */
 export function isLeftOpenStanding(
   record: RejectionRecord,
-  ac: SpecNode,
+  subject: SpecNode,
   context: ColorContext,
 ): boolean {
+  const leftOpen = record.leftOpen;
   return (
-    record.evidence !== undefined &&
-    record.rejectedHash === hashNow(ac, context) &&
-    sameList(record.evidence, claimantHashesOf(ac.id, context))
+    leftOpen !== undefined &&
+    leftOpen.kind === closureKindOf(subject.type)?.kind &&
+    record.rejectedHash === hashNow(subject, context) &&
+    sameList(leftOpen.claimants, claimantHashesOf(subject.id, context))
   );
 }
 
 /**
- * The person's standing word on a criterion's list, if there is one.
+ * The person's standing word on a subject's list, if there is one.
  *
  * `closed` when the acceptance stands, `left-open` when the left-open record
  * stands, `null` when neither does — no record, a lapsed one, or a list nobody
@@ -191,17 +241,17 @@ export type ClosureVerdict =
     };
 
 export function closureVerdictOf(
-  ac: SpecNode,
+  subject: SpecNode,
   context: ColorContext,
 ): ClosureVerdict | null {
-  const accepted = context.ledgers.acceptances.get(ac.id);
-  const refused = context.ledgers.rejections.get(ac.id);
+  const accepted = context.ledgers.acceptances.get(subject.id);
+  const refused = context.ledgers.rejections.get(subject.id);
   const closed =
-    accepted !== undefined && isAcceptanceStanding(accepted, ac, context)
+    accepted !== undefined && isAcceptanceStanding(accepted, subject, context)
       ? { kind: "closed" as const, by: accepted.by, at: accepted.at }
       : null;
   const leftOpen =
-    refused !== undefined && isLeftOpenStanding(refused, ac, context)
+    refused !== undefined && isLeftOpenStanding(refused, subject, context)
       ? {
           kind: "left-open" as const,
           by: refused.by,
@@ -216,21 +266,22 @@ export function closureVerdictOf(
 }
 
 /**
- * The criterion's mark: closed when an acceptance stands for it, open
- * otherwise.
+ * The subject's mark: closed when an acceptance stands for it, open otherwise —
+ * a criterion met on its evidence, a task done on the work that addressed it.
  *
  * OPEN IS THE ANSWER FOR EVERYTHING ELSE — no record at all, a lapsed one, a
- * criterion left open with a reason, a criterion nobody has looked at. There is
- * no third word on the mark, because there is no third state of the world:
- * either this criterion is met on the evidence attached to it, or it is not.
- * Whether somebody has SAID it is not is `closureVerdictOf`'s answer, and the
- * queue's question.
+ * subject left open with a reason, a subject nobody has looked at. There is no
+ * third word on the mark, because there is no third state of the world: either
+ * the thing is shown to be met, or it is not. Whether somebody has SAID it is
+ * not is `closureVerdictOf`'s answer, and the queue's question.
  */
 export function closureOf(
-  ac: SpecNode,
+  subject: SpecNode,
   context: ColorContext,
 ): "open" | "closed" {
-  return closureVerdictOf(ac, context)?.kind === "closed" ? "closed" : "open";
+  return closureVerdictOf(subject, context)?.kind === "closed"
+    ? "closed"
+    : "open";
 }
 
 /**
@@ -238,26 +289,47 @@ export function closureOf(
  * Empty is what lets a criterion be asked about, closed or left open.
  */
 export function unapprovedClaimantsOf(
-  acId: string,
+  subjectId: string,
   context: ColorContext,
 ): SpecNode[] {
-  return claimantsOf(acId, context).filter(
+  return claimantsOf(subjectId, context).filter(
     (claimant) => colorOf(livingSubject(claimant), context)?.color !== "green",
   );
 }
 
 /**
- * Whether the queue still has to ask a person about this criterion: something
- * claims it, every claimant is approved, and nobody has said "closed" or "left
- * open" about THIS list — the exit from the queue being exactly one of those
- * two words. A criterion with an unapproved claimant is not asked: it is open,
- * and it waits, and the approval of that claimant is what brings it here.
+ * Whether the subject's own words are settled — green, which is to say a person
+ * read them and nothing has moved since.
+ *
+ * IT IS THE COLOUR CHAIN'S ANSWER AND NOT A SECOND OPINION. `colorOf` decides
+ * what green means; this only asks. Every door and every queue that offers to
+ * close something asks it, so "you cannot call a node done before it is agreed"
+ * has one home.
  */
-export function closureAsks(ac: SpecNode, context: ColorContext): boolean {
-  const claimants = claimantsOf(ac.id, context);
+export function isSubjectAgreed(
+  subject: SpecNode,
+  context: ColorContext,
+): boolean {
+  return colorOf(livingSubject(subject), context)?.color === "green";
+}
+
+/**
+ * Whether the queue still has to ask a person about this subject: the subject
+ * itself is agreed, something claims it, every claimant is approved, and nobody
+ * has said "closed" or "left open" about THIS list — the exit from the queue
+ * being exactly one of those two words.
+ *
+ * A SUBJECT THAT IS NOT GREEN IS NOT ASKED ABOUT AT ALL, whichever reason it
+ * wears: unapproved, edited since, refused, unanchored. It is open, and it
+ * waits, and approving it is what brings it here — the same shape of gate the
+ * claimants have, pointed at the other side of the question.
+ */
+export function closureAsks(subject: SpecNode, context: ColorContext): boolean {
+  const claimants = claimantsOf(subject.id, context);
   return (
+    isSubjectAgreed(subject, context) &&
     claimants.length > 0 &&
-    unapprovedClaimantsOf(ac.id, context).length === 0 &&
-    closureVerdictOf(ac, context) === null
+    unapprovedClaimantsOf(subject.id, context).length === 0 &&
+    closureVerdictOf(subject, context) === null
   );
 }

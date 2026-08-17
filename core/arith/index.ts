@@ -47,16 +47,31 @@ export {
   closureVerdictOf,
   isAcceptanceStanding,
   isLeftOpenStanding,
+  isSubjectAgreed,
   unapprovedClaimantsOf,
   type ClosureVerdict,
 } from "./closure.js";
-export { reviewGraph } from "./review.js";
+export { missingSentence, reviewGraph } from "./review.js";
 export type {
   BrokenFile,
   GraphReview,
   MissingNode,
   ReviewStatus,
 } from "./review.js";
+export { taskBoardOf } from "./board.js";
+export type { FixSpecItem, ImplementItem, Ref, TaskBoard } from "./board.js";
+export {
+  chainGreen,
+  depthOf,
+  isClosableTask,
+  isCompleted,
+  isStartable,
+  prerequisitesMet,
+  prerequisitesOf,
+  taskStateOf,
+  upwardChainOf,
+} from "./task-state.js";
+export type { ColorAt } from "./task-state.js";
 export { reviewBundles, scanRankOf } from "./bundles.js";
 export type {
   AcClosureBundle,
@@ -67,7 +82,9 @@ export type {
   ReviewQueue,
   ScanRank,
   SpecApprovalBundle,
+  TaskClosureBundle,
   TypeCount,
   UnchangedNode,
+  WorkLogMember,
   WorkReportBundle,
 } from "./bundles.js";

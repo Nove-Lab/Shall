@@ -10,6 +10,7 @@ import {
   anchorPhrase,
   bandFolderOf,
   type SpecNode,
+  orphanStem,
 } from "@shall/core/graph";
 import {
   approvalPayload,
@@ -101,7 +102,7 @@ export interface LedgerPaths {
 
 /** What a casualty says after the book's own problem sentence. */
 const CASUALTY: Record<
-  "approve" | "review" | "reject" | "withdraw" | "accept",
+  "approve" | "review" | "reject" | "withdraw" | "accept" | "board",
   string
 > = {
   approve:
@@ -114,6 +115,8 @@ const CASUALTY: Record<
     "Nothing was withdrawn, because writing into a ledger nobody can read would bury what it holds; restore it from git or move it aside, and withdraw again.",
   accept:
     "Nothing was accepted, because writing into a ledger nobody can read would bury what it holds; restore it from git or move it aside, and accept again.",
+  board:
+    "Nothing on the board can be trusted until it reads — what needs fixing, what is finished and what is ready to work on are all counted out of the ledgers; the ledger is Shall's own file, so restore it from git or move it aside.",
 };
 
 /** The first book that would not read, said as a refusal — or nothing at all. */
@@ -404,7 +407,7 @@ export async function approveSpecNode(input: {
   const status = review.statuses.find((entry) => entry.id === input.id);
   if (status !== undefined && status.reason === "orphan") {
     throw invalid(
-      `${input.id} is a ${node.type} with no live anchor — it is held to the graph by ${anchorPhrase(node.type) ?? "nothing the canon names"}, and none stands — so there is nothing yet to approve.`,
+      `${orphanStem(input.id, node.type)} — so there is nothing yet to approve.`,
     );
   }
   if (status !== undefined && status.reason === "off-target") {

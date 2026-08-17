@@ -46,6 +46,7 @@ export const KIND_LABEL: Record<BundleKind, string> = {
   "spec-approval": "Spec approval",
   "work-report": "Work report",
   "ac-closure": "AC closure",
+  "task-closure": "Task closure",
 };
 
 /** "1 node", "3 nodes" — the plural said once rather than at each call. */
@@ -88,6 +89,10 @@ export function bundleSummary(bundle: ReviewBundle): string {
             .join(", ");
     case "ac-closure":
       return `evidence ${String(bundle.evidence.length)}`;
+    // A TASK IS COUNTED IN WORK LOGS, for the reason a criterion is counted in
+    // evidence: closing accepts the whole list, so the list is the number.
+    case "task-closure":
+      return `work logs ${String(bundle.workLogs.length)}`;
   }
 }
 

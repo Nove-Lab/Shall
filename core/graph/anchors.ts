@@ -197,3 +197,24 @@ export function anchorPhrase(type: string): string | null {
   }
   return anyOf(clauses);
 }
+
+/**
+ * THE ONE CLAUSE FOUR REFUSALS AND A BOARD SHARE — "R-0001 is a Requirement
+ * with no live anchor — it is held to the graph by a REQUIRES relation into it,
+ * and none stands".
+ *
+ * IT STOPS BEFORE THE FULL STOP ON PURPOSE. What follows differs by who is
+ * speaking — `shall check` says how to fix it, the approve door says there is
+ * nothing yet to approve, the reject door says a rejection is a judgement on a
+ * node the graph holds — and each of those tails is that caller's own sentence.
+ * What must not differ is the diagnosis, so the diagnosis is written once here
+ * and every caller quotes it rather than composing its own from `anchorPhrase`.
+ *
+ * IT TAKES AN ID AND A TYPE RATHER THAN A NODE, because two of its callers hold
+ * neither: `checkSpec` walks a review's statuses and reads the type off an
+ * index, and a missing node has no `SpecNode` at all.
+ */
+export function orphanStem(id: string, type: string): string {
+  const phrase = anchorPhrase(type) ?? "nothing the canon names";
+  return `${id} is a ${type} with no live anchor — it is held to the graph by ${phrase}, and none stands`;
+}

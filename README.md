@@ -107,12 +107,16 @@ rejection removes its line. Approvals and rejections never erase each other; a
 standing rejection outranks an approval. A colour is then arithmetic over the
 spec and the ledgers: what the file says now against what the books remember,
 so a node file carries no claim about its own approval and green has exactly
-one manufacturer. An acceptance criterion carries a second badge beside its id,
-independent of its colour: a red **Open** or a green **Closed** — whether a
-person has closed it over the evidence claiming it. The node panel has the
-toggle: on once at least one piece of evidence claims the criterion and every
-claim is approved, it closes the criterion over everything that claims it now;
-off asks for a reason and leaves it open (see the Review Queue below). The daemon never commits on its
+one manufacturer. Two types carry a second badge beside their id, independent of their colour.
+An acceptance criterion wears a red **Open** or a green **Closed** — whether a
+person has closed it over the evidence claiming it — and an implementation task
+wears **Blocked**, **Ready** or **Done**: whether the chain above it is read and
+everything it waits on is finished, which is exactly the Task Board's Implement
+column, or whether a person has called the work done. The node panel has the
+toggle for both: on once at least one claimant is attached and every one of them
+is approved, it closes the subject over everything claiming it now — evidence
+for a criterion, work logs for a task; off asks for a reason and leaves it open
+(see the Review Queue below). The daemon never commits on its
 own — a **Commit spec** button appears when the project is a git repository and
 the spec folder or a ledger has uncommitted changes, and makes one commit
 scoped to `.shall/spec` and `.shall/ledger`. A file deleted by hand shows up
@@ -130,6 +134,13 @@ what that task targets. Break it and both the work log and the evidence are red
 — an error to fix, before anybody is asked to approve — with one sentence
 naming the log, the task, the criteria and the evidence, under either node.
 
+A **?** button beside the view tabs opens the canon itself: every node type the
+canon has, laid out in its four bands, and every relation it allows between
+them, drawn in the same cards and lines as the board it explains. Click a type
+and it lights what it touches. It is read-only, remembers nothing, and is
+generated from `EDGE_GRAMMAR` and the type roster rather than transcribed — so
+a relation added or turned around appears there with nobody editing the picture.
+
 A work log names the commits its work produced in its own frontmatter — a
 `commits:` list of shas, in the order they were made — the sha and nothing
 else, because the message and the author are git's to answer for. The panel
@@ -143,7 +154,7 @@ did not need a file of its own.
 The Control plane's Review Queue shows what is waiting on a person, cut into
 bundles. Nothing about a bundle is stored: every load recomputes them from the
 graph and the three ledgers, so a save, a hand edit or a `git checkout` moves
-the queue with nobody told. Three kinds:
+the queue with nobody told. Four kinds:
 
 - **Spec approval** — a subgraph of yellow nodes in the Intent and Plan layers,
   rooted at the topmost yellow node the scan meets (Goal → Actor → UseCase →
@@ -157,6 +168,12 @@ the queue with nobody told. Three kinds:
   evidence and reports, `RECORDS` findings, plus the assumptions and questions
   a work log raised), with the journal's text in front and **Accept report**
   approving every yellow node under it in one write.
+- **Task closure** — an implementation task that work addresses, every log of
+  it approved, about whose current list nobody has said a word. The card shows
+  the task, the work logs addressing it with their commits, and — as context,
+  never as buttons — the criteria the task targets with their own marks. The two
+  words are the criterion's two words, written under the task's id with
+  `taskHash` and a `workLogs` map.
 - **AC closure** — a criterion that something claims, every claim of it
   approved, about whose current list of evidence nobody has said a word (while
   a claim is still unapproved the criterion is simply open, and waits). Two
@@ -173,7 +190,7 @@ the queue with nobody told. Three kinds:
   see it, and a left-open criterion stays whatever colour its own books make it.
 
 A spec-approval or work-report card has **Approve** and **Reject…** on every
-node; an AC-closure card lists the evidence and has **Close** and **Leave
+node; a closure card lists what claims the subject and has **Close** and **Leave
 open…**. Every row has **Open in Spec plane** (a question's says **Answer**),
 and every card has one bundle-wide button. Approving or rejecting recomputes the queue at once: a
 bundle whose members are all green is gone, and yellow that is left regroups
@@ -181,6 +198,26 @@ into new bundles. A rejected node stays listed, red with its rationale, while a
 yellow root still reaches it; a rejection on its own leaves the queue — that is
 the agent's turn — and the row you just wrote keeps an **Undo** until you leave
 the page.
+
+## Task board
+
+The Control plane's Task Board is the other surface computed on read: what the
+specification needs fixed, and what is ready to be worked on. Nothing about it
+is stored, and nothing that fails a condition is listed with a reason — it is
+absent, and it turns up of its own accord once the thing above it is settled.
+
+- **Fix Spec** — every red node, in the order somebody would take them: a
+  person's rejection first, with the rationale WHOLE (it is a work order, so it
+  is never summarised), then the seams the grammar found — an orphan, a work
+  log whose evidence claims a criterion its task does not target — then the ids
+  nothing answers to, then the files that would not read at all.
+- **Implement** — every implementation task that is not finished, whose
+  prerequisites are all closed, and whose whole chain upwards is green: the
+  task, its module, its responsibility and the goal above it, together with the
+  requirements, criteria and constraints hanging off that chain. The gate is
+  local — a yellow node in an unrelated part of the graph hides nothing here —
+  and each row names the module it belongs to, the requirement it serves, the
+  criteria it targets and any work already logged against it.
 
 Settings edits real files: the daemon port lives in `~/.shall/config.json` and
 the display name in `<project>/.shall/project.json`. Everything else on that
@@ -199,6 +236,7 @@ registry config, so `npx shadcn add <component>` works from `apps/web`.
   ledger/approvals.yaml        the approvals: node id → {approvedHash, by, at}
   ledger/rejections.yaml       the rejections: node id → {rejectedHash, by, at, rationale}
   ledger/acceptances.yaml      the closures: criterion id → {acHash, evidence: {id → hash}, by, at}
+                               and task id → {taskHash, workLogs: {id → hash}, by, at}
 ```
 
 `.shall/spec` and `.shall/ledger` both belong in the repository, and that is

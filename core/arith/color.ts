@@ -572,10 +572,11 @@ export function isRejected(
   if (node === null || record === undefined) {
     return false;
   }
-  // A record carrying an evidence map is a criterion LEFT OPEN — a judgement
-  // about the list of evidence claiming it and not about the criterion's own
-  // words — so it colours nothing here; `closure.ts` reads those.
-  if (record.evidence !== undefined) {
+  // A record carrying a claimant map is a subject LEFT OPEN — a judgement about
+  // the list of evidence claiming a criterion, or of work addressing a task,
+  // and not about the subject's own words — so it colours nothing here;
+  // `closure.ts` reads those.
+  if (record.leftOpen !== undefined) {
     return false;
   }
   return (

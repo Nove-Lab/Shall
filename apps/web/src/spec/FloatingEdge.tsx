@@ -6,7 +6,13 @@ import {
   type EdgeProps,
 } from "@xyflow/react";
 import { RECEDED } from "./canvas-nodes";
-import { stepPath, type LabelSlot, type RoutedPath } from "./view/edge-routing";
+import type { Highlight } from "./view/highlight";
+import { Z, cardNodeId } from "./view/furniture";
+import {
+  labelFits,
+  stepPath,
+  type RoutedPath,
+} from "./view/edge-routing";
 
 /**
  * One relation, drawn between two points this program chose rather than between
@@ -148,44 +154,20 @@ export const ARROW_LIT = {
 } as const;
 
 /**
- * WHETHER THE RELATION'S NAME FITS WHERE THE ROUTE CAN PUT IT.
- *
- * `LabelSlot` is the middle of the longest horizontal run and the room that run
- * has; this is the other half of the comparison, and it is an ESTIMATE because
- * the decision has to be made before the text has a box to measure. The label is
- * drawn at `var(--text-xs)` — 12px — in the app's sans face, where the canon's
- * upper-case relation names run about 7px a character, and the library's own
- * `EdgeText` pads its background by 4px each side. Measured against the drawn
- * box: HAS_CRITERION is 13 characters, this answers 99, the browser drew 98.
- *
- * AN EDGE WITH NO ROOM GETS NO LABEL AT ALL, which is a deliberate loss. Two
- * cards in adjacent columns are 16px apart in the grid and 40px in the graph,
- * and nothing true can be written in that space: the old label covered its own
- * line, its arrowhead and both of its neighbours' faces to print four legible
- * characters of a name. The line and the arrow are the half of the statement
- * only the canvas can make; the type is a right-click away, where the delete
- * item already names it in full.
+ * WHETHER A RELATION'S NAME FITS IS `view/edge-routing.ts`'S RULE, and it is
+ * imported rather than restated: the metamodel canvas SPACES ITS COLUMNS by the
+ * same arithmetic, so the estimate is a law about this surface and not a check
+ * this component happens to make. `labelFits` carries the measurement and the
+ * reason an edge with no room gets no label at all.
  *
  * EXCEPT WHERE THE RELATION TOUCHES THE SELECTION, WHICH IS THE USER'S OWN
- * EXCEPTION AND IS ASKED FOR IN THOSE WORDS. Clicking a card is asking what it
- * touches, and "it touches that one somehow" is not the answer — the answer is
- * the relation's name, and the handful of relations that reach one card are the
- * one moment on this board when there are few enough names to draw them all
- * whatever the room. So `labelFits` is not consulted for an incident relation:
- * see `FloatingEdgePath` below, where the two are `||`-ed.
- *
- * TWO THINGS MAKE THAT TOLERABLE AND NEITHER IS OPTIONAL. The name has no plate
- * under it, so an overrun covers the ink it crosses and not the picture; and the
- * lit relation is lifted above the cards, so the name is not printed underneath
- * one. Take either away and the exception writes an unreadable name over a
- * readable card.
+ * EXCEPTION. Clicking a card is asking what it touches, and "it touches that one
+ * somehow" is not the answer — so `labelFits` is not consulted for an incident
+ * relation; see `FloatingEdgePath` below, where the two are `||`-ed. Two things
+ * make that tolerable and neither is optional: the name has no plate under it,
+ * so an overrun covers the ink it crosses and not the picture, and the lit
+ * relation is lifted above the cards, so the name is not printed underneath one.
  */
-const LABEL_CHARACTER_WIDTH = 7;
-const LABEL_PADDING = 8;
-
-function labelFits(slot: LabelSlot, text: string): boolean {
-  return slot.room >= text.length * LABEL_CHARACTER_WIDTH + LABEL_PADDING;
-}
 
 /**
  * THE TWO DASHES ON THIS CANVAS, WRITTEN TOGETHER BECAUSE THEY MUST NOT BE
@@ -323,3 +305,56 @@ export function FloatingEdgePath({
  * inside the canvas component would rebuild them on every render.
  */
 export const EDGE_TYPES = { floating: FloatingEdgePath };
+
+/**
+ * ONE ROUTED RELATION AS THE LIBRARY WANTS IT, painted for this selection.
+ *
+ * THE THREE LOAD-BEARING CHOICES LIVE HERE AND NOWHERE ELSE, which is why both
+ * canvases build their edges through this rather than each spelling them out:
+ *
+ *   · THE ARROWHEAD OBJECT. React Flow builds a marker's `<defs>` from the edge
+ *     object's own `markerEnd` before any edge component runs, so a lit line
+ *     whose marker was still `ARROW_END` would arrive at its target in the
+ *     resting grey.
+ *   · THE Z. The library reads it off the object and writes it onto the `<svg>`
+ *     wrapper around the whole edge, so a component cannot change it — and the
+ *     lift is what makes the label exception worth anything: an incident
+ *     relation writes its name even where the route has no room, and at the
+ *     resting z that name would be printed UNDER a card.
+ *   · `incident` AND `dimmed` ARE COMPLEMENTS, computed together here so they
+ *     cannot drift into a state where a receded relation is also lit.
+ *
+ * The dash goes on `style` because a `stroke-dasharray` has to land on the
+ * `<path>`; `FloatingEdgePath` spreads it first so that `UNROUTED_DASH` — a
+ * defect in the DRAWING — can outrank a statement about the graph.
+ */
+export function floatingEdgeOf(
+  edge: { id: string; fromId: string; toId: string },
+  name: string,
+  route: RoutedPath,
+  dashed: boolean,
+  highlight: Highlight,
+): FloatingEdge {
+  const incident = highlight.edges.has(edge.id);
+  return {
+    id: edge.id,
+    // The two cards as the CANVAS keys them: React Flow resolves these against
+    // its node lookup to find the handles an edge hangs off, and a relation
+    // whose ends it cannot find is not drawn at all.
+    source: cardNodeId(edge.fromId),
+    target: cardNodeId(edge.toId),
+    type: "floating",
+    data: {
+      route,
+      edgeType: name,
+      incident,
+      dimmed: highlight.selected !== null && !incident,
+    },
+    markerEnd: incident ? ARROW_LIT : ARROW_END,
+    zIndex: incident ? Z.litEdge : Z.edge,
+    // Spread rather than passed: `exactOptionalPropertyTypes` will not give
+    // `undefined` to an optional `style`, and "no style" and "an empty style"
+    // are different asks.
+    ...(dashed ? { style: { strokeDasharray: DOMAIN_DASH } } : {}),
+  };
+}

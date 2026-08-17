@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import {
   NODE_TYPES,
+  closureKindOf,
   formatEdgeId,
   type SpecEdge,
   type SpecNode,
@@ -101,16 +102,20 @@ function reject(
 }
 
 function accept(
-  ac: SpecNode,
-  evidence: readonly SpecNode[],
+  subject: SpecNode,
+  claimants: readonly SpecNode[],
   edges: readonly SpecEdge[],
+  // The kind is read off the subject, as the daemon's door reads it: a record
+  // filed for a task must SAY task, or it stands for nothing.
+  kind = closureKindOf(subject.type)?.kind ?? "criterion",
 ): [string, AcceptanceRecord] {
   return [
-    ac.id,
+    subject.id,
     {
-      acHash: hashOf(ac, edges),
-      evidence: new Map(
-        evidence.map((held) => [held.id, hashOf(held, edges)] as const),
+      kind,
+      subjectHash: hashOf(subject, edges),
+      claimants: new Map(
+        claimants.map((held) => [held.id, hashOf(held, edges)] as const),
       ),
       ...ACCEPTOR,
     },
@@ -145,9 +150,14 @@ function queueOf(
 
 /** Every row of a bundle, whichever kind it is. */
 function seatsOf(bundle: ReviewBundle): BundleMember[] {
-  return bundle.kind === "ac-closure"
-    ? [bundle.ac, ...bundle.evidence]
-    : bundle.members;
+  switch (bundle.kind) {
+    case "ac-closure":
+      return [bundle.ac, ...bundle.evidence];
+    case "task-closure":
+      return [bundle.task, ...bundle.workLogs];
+    default:
+      return bundle.members;
+  }
 }
 
 function bundleIds(queue: ReviewQueue): string[] {
@@ -622,17 +632,21 @@ describe("AC closure", () => {
   };
   /** A criterion left open over a list, as the daemon writes it. */
   function leftOpen(
-    ac: SpecNode,
-    evidence: readonly SpecNode[],
+    subject: SpecNode,
+    claimants: readonly SpecNode[],
     edges: readonly SpecEdge[],
+    kind: "criterion" | "task" = "criterion",
   ): [string, RejectionRecord] {
     return [
-      ac.id,
+      subject.id,
       {
-        rejectedHash: hashOf(ac, edges),
-        evidence: new Map(
-          evidence.map((held) => [held.id, hashOf(held, edges)] as const),
-        ),
+        rejectedHash: hashOf(subject, edges),
+        leftOpen: {
+          kind,
+          claimants: new Map(
+            claimants.map((held) => [held.id, hashOf(held, edges)] as const),
+          ),
+        },
         ...REFUSAL,
       },
     ];
@@ -678,17 +692,17 @@ describe("AC closure", () => {
     assert.equal(status?.closure, "open");
   });
 
-  test("asks about a yellow criterion too — but not one whose own wording is refused", () => {
-    // The criterion is yellow here: it is in a spec bundle AND, because
-    // approved evidence claims it and nobody has spoken, in a closure bundle too.
+  test("waits while the criterion's own words are unread or refused", () => {
+    // A YELLOW CRITERION IS A SPEC QUESTION AND NOT YET A CLOSURE ONE. It is in
+    // the approval bundle — that is the question being asked about it — and the
+    // closure question waits for the answer: there is nothing settled for the
+    // evidence to be met against.
     const queue = queueOf(NODES, EDGES, {
       green: [...SPINE, journal, workLog, first, second, third],
     });
-    assert.deepEqual(bundleIds(queue), ["closure:AC-0001", "spec:AC-0001"]);
-    // Refuse the criterion's wording, and the closure question waits: words a
-    // person said are wrong are not words anything can be met against. Nothing
-    // yellow reaches the red criterion here, so it is the agent's turn and out
-    // of the queue altogether.
+    assert.deepEqual(bundleIds(queue), ["spec:AC-0001"]);
+    // Refused, it is the agent's turn and out of the queue altogether — nothing
+    // yellow reaches the red criterion here.
     const refused = queueOf(NODES, EDGES, {
       green: [...SPINE, journal, workLog, first, second, third],
       rejected: [criterion],
@@ -745,6 +759,157 @@ describe("AC closure", () => {
     );
     assert.equal(status?.color, "green");
     assert.equal(status?.leftOpen?.rationale, REFUSAL.rationale);
+  });
+});
+
+describe("task closure", () => {
+  const module = node("ModuleDesign", "MD-0001");
+  const task = node("ImplementationTask", "IT-0001");
+  const second = node("ImplementationTask", "IT-0002");
+  const criterion = node("AcceptanceCriterion", "AC-0001");
+  const journal = node("Journal", "J-0001");
+  const first = node("WorkLog", "WL-0001", { commits: ["a1b2c3"] });
+  const later = node("WorkLog", "WL-0002", { commits: [] });
+
+  const NODES = [
+    ...SPINE,
+    criterion,
+    module,
+    task,
+    second,
+    journal,
+    first,
+    later,
+  ];
+  const EDGES = [
+    ...SPINE_EDGES,
+    edge("R-0001", "HAS_CRITERION", "AC-0001"),
+    edge("SR-0001", "IS_REALIZED_BY", "MD-0001"),
+    edge("MD-0001", "ALLOCATES", "IT-0001"),
+    edge("MD-0001", "ALLOCATES", "IT-0002"),
+    edge("IT-0001", "TARGETS", "AC-0001"),
+    edge("J-0001", "LOGS", "WL-0001"),
+    edge("J-0001", "LOGS", "WL-0002"),
+    edge("WL-0001", "ADDRESSES", "IT-0001"),
+    edge("WL-0002", "ADDRESSES", "IT-0001"),
+  ];
+  /** Everything read — so the task is asked about and nothing else is waiting. */
+  const SETTLED: Books = { green: NODES };
+
+  test("stands up when work addresses the task, all of it approved, and nobody has spoken", () => {
+    const queue = queueOf(NODES, EDGES, SETTLED);
+    assert.deepEqual(bundleIds(queue), ["completion:IT-0001"]);
+    const bundle = queue.bundles[0];
+    assert.ok(bundle !== undefined && bundle.kind === "task-closure");
+    assert.equal(bundle.taskId, "IT-0001");
+    assert.equal(bundle.title, "IT-0001 ImplementationTask IT-0001");
+    assert.equal(bundle.task.closure, "open");
+    assert.deepEqual(
+      bundle.workLogs.map((held) => held.id),
+      ["WL-0001", "WL-0002"],
+    );
+    assert.deepEqual(bundle.workLogs[0]?.commits, ["a1b2c3"]);
+    // The criteria it aimed at travel as context, with their own marks.
+    assert.deepEqual(bundle.targets, [
+      { id: "AC-0001", name: "AcceptanceCriterion AC-0001", closure: "open" },
+    ]);
+    assert.deepEqual(bundle.history, []);
+  });
+
+  test("waits while a work log is unread, and asks again once it is approved", () => {
+    const queue = queueOf(NODES, EDGES, {
+      green: NODES.filter((held) => held.id !== "WL-0002"),
+    });
+    assert.equal(bundleIds(queue).includes("completion:IT-0001"), false);
+    assert.deepEqual(memberIds(queue, "report:J-0001"), ["WL-0002"]);
+  });
+
+  test("leaves the queue on either word, and comes back when the list moves", () => {
+    const closed = queueOf(NODES, EDGES, {
+      ...SETTLED,
+      accepted: [[task, [first, later]]],
+    });
+    assert.deepEqual(bundleIds(closed), []);
+
+    // A third log addresses the task: a different list, so the question is
+    // asked again even though the record still names the first two.
+    const third = node("WorkLog", "WL-0003");
+    const grown = [...NODES, third];
+    const wired = [
+      ...EDGES,
+      edge("J-0001", "LOGS", "WL-0003"),
+      edge("WL-0003", "ADDRESSES", "IT-0001"),
+    ];
+    const again = queueOf(grown, wired, {
+      green: grown,
+      accepted: [[task, [first, later]]],
+    });
+    assert.deepEqual(bundleIds(again), ["completion:IT-0001"]);
+  });
+
+  test("a work log addressing two tasks seats in both, and says so on each row", () => {
+    const wired = [...EDGES, edge("WL-0001", "ADDRESSES", "IT-0002")];
+    const queue = queueOf(NODES, wired, { green: NODES });
+    assert.deepEqual(bundleIds(queue), [
+      "completion:IT-0001",
+      "completion:IT-0002",
+    ]);
+    assert.deepEqual(
+      memberIn(queue, "completion:IT-0001", "WL-0001").sharedWith,
+      ["completion:IT-0002"],
+    );
+    assert.deepEqual(
+      memberIn(queue, "completion:IT-0002", "WL-0001").sharedWith,
+      ["completion:IT-0001"],
+    );
+  });
+
+  test("a refused work log is a hearing on the task's card", () => {
+    // The log is red, so the task is not asked about at all — and once it is
+    // fixed and approved, the refusal that happened is on the card as history.
+    const queue = queueOf(NODES, EDGES, {
+      green: NODES,
+      rejected: [later],
+    });
+    assert.equal(bundleIds(queue).includes("completion:IT-0001"), false);
+
+    const fixed = { ...later, body: "The retry, now shown." };
+    const healed = queueOf(
+      NODES.map((held) => (held.id === "WL-0002" ? fixed : held)),
+      EDGES,
+      {
+        green: NODES.map((held) => (held.id === "WL-0002" ? fixed : held)),
+        rejected: [later],
+      },
+    );
+    const bundle = healed.bundles.find(
+      (held) => held.id === "completion:IT-0001",
+    );
+    assert.ok(bundle !== undefined && bundle.kind === "task-closure");
+    assert.deepEqual(
+      bundle.history.map((row) => row.workLogId),
+      ["WL-0002"],
+    );
+  });
+
+  test("waits while the task's own words are unread — the very state that made this rule", () => {
+    // Reported from a screen: a green, closed task was edited, so it went
+    // yellow, the queue offered BOTH the approval and the closure, closing
+    // worked, and the board showed a yellow task wearing a green Done. The
+    // closure question now waits for the approval.
+    const queue = queueOf(NODES, EDGES, {
+      green: NODES.filter((held) => held.id !== "IT-0001"),
+    });
+    assert.deepEqual(bundleIds(queue), ["spec:IT-0001"]);
+    assert.equal(bundleIds(queue).includes("completion:IT-0001"), false);
+  });
+
+  test("is not asked while the task's own wording is refused", () => {
+    const queue = queueOf(NODES, EDGES, {
+      green: NODES.filter((held) => held.id !== "IT-0001"),
+      rejected: [task],
+    });
+    assert.equal(bundleIds(queue).includes("completion:IT-0001"), false);
   });
 });
 
