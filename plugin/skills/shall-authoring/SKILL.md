@@ -1,6 +1,7 @@
 ---
 name: shall-authoring
 description: Write, revise, relate or retire a Shall spec node — use whenever you add or edit anything under `.shall/spec`, draw a relation between two nodes, propose a deletion, or fix what `shall check` reported. Carries the anchoring rule, the propose-and-review loop, and the `shall` CLI contract.
+allowed-tools: Bash(shall:*)
 ---
 
 # Authoring a Shall spec node

@@ -1,6 +1,7 @@
 ---
 name: shall-specify
 description: Carries the Shall /specify elicitation process — the staged, phase-gated interview that fills a project's intent and domain planes with goals, actors, use cases, scenarios, terms, responsibilities, requirements, constraints and acceptance criteria, one approved phase at a time. Loaded by the /shall:specify command.
+allowed-tools: Bash(shall:*)
 user-invocable: false
 ---
 
