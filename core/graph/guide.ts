@@ -15,10 +15,16 @@ import type { NodeTypeName } from "./canon.js";
  *
  * WHERE IT COMES FROM. These are the attribute labels of the previous system's
  * roster, in its authoring order — the fourteen Domain/Intent/Plan types ported
- * verbatim, the nine Execution/satellite types from the spec-node design
- * document §3.15–3.23. The hints carry what that roster knew beyond the label:
+ * verbatim, the eight Execution/satellite types from the spec-node design
+ * document §3.15–3.23 — nine sections there, one of them Commit's, which left
+ * with the type. The hints carry what that roster knew beyond the label:
  * a vocabulary a `choice` slot offered, a comma-separated convention. They are
  * suggestions in a comment now, which is all a guide owes anyone.
+ *
+ * A few hints carry no roster memory at all — they are the authoring
+ * conventions the /specify elicitation names, and they are seated here so that
+ * an agent meets them in the file it is starting rather than in a skill
+ * document it may never open.
  */
 
 /** One suggested section: its heading, and the hint the old roster carried for it. */
@@ -31,7 +37,7 @@ export interface SectionGuide {
 const section = (label: string, hint?: string): SectionGuide =>
   hint === undefined ? { label } : { label, hint };
 
-/** The comma-separated authoring convention a few list-like sections suggest. */
+/** The comma-separated authoring convention Key Attributes still suggests. */
 const COMMA_SEPARATED = "comma-separated";
 
 /**
@@ -44,7 +50,16 @@ const COMMA_SEPARATED = "comma-separated";
  * runtime one.
  */
 const GUIDE: Readonly<Record<NodeTypeName, readonly SectionGuide[]>> = {
-  Term: [section("Definition"), section("Aliases", COMMA_SEPARATED)],
+  // Aliases spells its convention out instead of sharing COMMA_SEPARATED:
+  // a term is the one place a dead spelling is worth writing down, and whoever
+  // reads the term has to be told which of its names nobody should use.
+  Term: [
+    section("Definition"),
+    section(
+      "Aliases",
+      "comma-separated, and mark a deprecated spelling as such",
+    ),
+  ],
   DomainEntity: [
     section("Description"),
     section("Key Attributes", COMMA_SEPARATED),
@@ -52,7 +67,7 @@ const GUIDE: Readonly<Record<NodeTypeName, readonly SectionGuide[]>> = {
   Goal: [
     section("Statement"),
     section("Description"),
-    section("Success Measure"),
+    section("Success Measure", "how achievement would be gauged, in words"),
   ],
   Actor: [
     section("Description"),
@@ -66,7 +81,7 @@ const GUIDE: Readonly<Record<NodeTypeName, readonly SectionGuide[]>> = {
   Scenario: [
     section("Scenario Type", "Main · Alternative · Exception"),
     section("Preconditions"),
-    section("Steps"),
+    section("Steps", "ordered, each one an action and its result"),
     section("Postconditions"),
   ],
   SystemResponsibility: [
@@ -75,17 +90,17 @@ const GUIDE: Readonly<Record<NodeTypeName, readonly SectionGuide[]>> = {
     section("Responsibility Type", "Core · Supplementary"),
   ],
   Requirement: [
-    section("Statement"),
+    section("Statement", "one SHALL or MUST sentence, one behaviour"),
     section("Description"),
     section("Requirement Type", "Functional · Non-Functional"),
     section("Priority", "High · Medium · Low"),
     section("Rationale"),
   ],
   AcceptanceCriterion: [
-    section("Statement"),
+    section("Statement", "an observable outcome, judgeable rather than a test case"),
     section("Description"),
-    section("Evaluation Process"),
-    section("Benchmark"),
+    section("Evaluation Process", "what to check, and how"),
+    section("Benchmark", "metric and target, technology-agnostic"),
   ],
   Constraint: [
     section("Statement"),
@@ -168,7 +183,7 @@ const GUIDE: Readonly<Record<NodeTypeName, readonly SectionGuide[]>> = {
 
 /**
  * The sections this type's template suggests, in authoring order — or `null`
- * when the name is not one of the canon's 23, which is how a caller's string is
+ * when the name is not one of the canon's 22, which is how a caller's string is
  * checked.
  */
 export function sectionGuideFor(

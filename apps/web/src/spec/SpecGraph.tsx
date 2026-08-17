@@ -165,8 +165,8 @@ function scrollerOf(board: HTMLElement | null): HTMLElement | null {
  * How far out and how far in the GRAPH view may be zoomed, carried over from the
  * board this ports from rather than re-chosen.
  *
- * The floor is for orientation and not for reading: 23 columns at a 188px pitch
- * are 4 324px across, which no window frames at a legible scale, so zooming out
+ * The floor is for orientation and not for reading: 22 columns at a 188px pitch
+ * are 4 136px across, which no window frames at a legible scale, so zooming out
  * is how you find the far side of the board and zooming back in is how you read
  * it. The ceiling is a little over `READABLE_ZOOM` because the card is drawn to
  * be read at 1 and there is nothing above it to reveal.

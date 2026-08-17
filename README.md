@@ -274,7 +274,7 @@ git is the spec's only restoration material.
 
 Three `shall` subcommands go on top of this: `shall init` to write that folder
 into the current directory, `shall check` to read the spec back and print what
-is wrong with it (one file and one sentence per line — problems that keep a
+is wrong with it (one file and one line each — problems that keep a
 file out of the graph, a ledger of the three that will not read, gaps where the graph does
 not hold together, and notes about non-canonical files; problems and gaps exit
 1), and

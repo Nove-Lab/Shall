@@ -15,6 +15,7 @@ export {
   bandFolderOf,
   bandOf,
   bandOfFolder,
+  canonTypesSentence,
   columnsInOrder,
   isNodeType,
   layerOf,
@@ -51,6 +52,7 @@ export {
 export {
   EDGE_GRAMMAR,
   EDGE_TYPE_NAMES,
+  grammarHint,
   isPermittedTriple,
   permittedEdgeTypes,
 } from "./grammar.js";

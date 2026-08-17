@@ -3,13 +3,14 @@ import type { SpecEdge, SpecNode } from "@shall/core/graph";
 import {
   bandFolderOf,
   bandOf,
+  canonTypesSentence,
+  grammarHint,
   isNodeType,
   isPermittedTriple,
   judgeNodeId,
   judgeText,
   NODE_TYPES,
   orphanFixSentence,
-  permittedEdgeTypes,
 } from "@shall/core/graph";
 import {
   ACCEPTANCES_FILE,
@@ -291,31 +292,6 @@ export async function listSpecEdges(projectId: string): Promise<SpecEdge[]> {
 }
 
 /**
- * What the canon allows between these two node types, said in the order a
- * person can use it: this direction first, because that is the arrow they just
- * drew and the set they can pick from without moving anything.
- *
- * The reverse clause is only worth adding when the arrow could actually be
- * turned around. Between two nodes of one type the reverse is the same
- * direction, so naming it sends the person off to redraw the arrow and meet the
- * identical refusal.
- */
-function grammarHint(fromType: string, toType: string): string {
-  const forward = permittedEdgeTypes(fromType, toType);
-  const hint =
-    forward.length > 0 ? ` This direction allows: ${forward.join(", ")}.` : "";
-
-  if (fromType === toType) {
-    return hint;
-  }
-
-  const reverse = permittedEdgeTypes(toType, fromType);
-  return reverse.length > 0
-    ? `${hint} The reverse direction allows: ${reverse.join(", ")}.`
-    : hint;
-}
-
-/**
  * A relation the canon does not have is not a relation, so the grammar is
  * enforced here and not left to whatever the screen offered — the screen is a
  * convenience, this is the rule.
@@ -328,10 +304,11 @@ function grammarHint(fromType: string, toType: string): string {
  *
  * THE GRAMMAR IS THIS DOOR'S AND ONLY THIS DOOR'S. The store writes the line
  * into the source node's file and judges what one file can say about itself;
- * the two node types are a fact about two files, and the hint above is the half
- * a person actually needs. The loader judges the triple again over every file no
- * door of ours wrote, and refuses that file — which is the backstop, not a
- * second voice, because nobody is standing at it waiting to be told.
+ * the two node types are a fact about two files, and the hint appended below is
+ * the half a person actually needs. The loader judges the triple again over
+ * every file no door of ours wrote and refuses that file — the backstop, which
+ * carries the same hint, because the agent who wrote that file by hand is read
+ * to by `shall check` and by nothing else.
  */
 export async function createSpecEdge(input: {
   projectId: string;
@@ -411,8 +388,8 @@ export interface ScaffoldedSpec {
  *
  * THE TYPE IS RESOLVED CASE-INSENSITIVELY, because the command is typed by
  * hand and `--type requirement` means the one thing it can mean. The refusal
- * for a miss lists all twenty-three spellings: the caller cannot see a
- * dropdown, so the sentence is the dropdown.
+ * for a miss names every spelling the canon has, in the one sentence core keeps
+ * for that job.
  *
  * The id, the band folder and the file's contents are the store's and the
  * template's; this door only says which project and which type.
@@ -426,11 +403,7 @@ export async function scaffoldSpecNode(input: {
     (entry) => entry.name.toLowerCase() === asked.toLowerCase(),
   )?.name;
   if (type === undefined) {
-    throw invalid(
-      `Unknown node type: ${asked}. The canon's types are ${NODE_TYPES.map(
-        (entry) => entry.name,
-      ).join(", ")}.`,
-    );
+    throw invalid(`Unknown node type: ${asked}. ${canonTypesSentence()}`);
   }
 
   const root = await findProjectRootAbove(input.path);

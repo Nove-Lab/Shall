@@ -5,8 +5,10 @@ import {
   BAND_FOLDERS,
   bandFolderOf,
   bandOfFolder,
+  canonTypesSentence,
   compare,
   formatEdgeId,
+  grammarHint,
   isNodeType,
   isPermittedTriple,
   judgeBody,
@@ -315,6 +317,17 @@ async function collectBand(
         }
         continue;
       }
+      // THE ROSTER IS SAID TO THE FOLDER AND THE FILES ARE NAMED SEPARATELY.
+      // A folder in a band was meant to be a type, so the fix is one rename and
+      // the vocabulary is what the rename needs — but hanging it off the walk
+      // below would repeat three hundred characters once per file inside, and a
+      // folder of fifty notes would bury its own diagnosis. A path has no
+      // dropdown, and the check's output is where an agent writing files by
+      // hand learns the canon, so it is spelled out exactly once.
+      problems.push({
+        file: relative,
+        message: `${relative} is not one of the canon's node types — rename it to one of them, or move it out of the spec folder. ${canonTypesSentence()}`,
+      });
       await collectStrays(
         specDir,
         relative,
@@ -373,6 +386,8 @@ async function collectNodes(
  * the file and a file nested three folders down is exactly the one nobody would
  * otherwise find. `reason` is the clause about the folder at the top of the
  * walk — what it is not — so every file inside answers with the same one fact.
+ * What that folder should have been instead is said once, by the caller, to the
+ * folder: it is one fix, and a roster repeated per file is not a diagnosis.
  */
 async function collectStrays(
   specDir: string,
@@ -647,8 +662,11 @@ export async function loadGraph(specDir: string): Promise<SpecGraph> {
         continue;
       }
       if (!isPermittedTriple(reading.candidate.type, toType, edge.type)) {
+        // Named wrong or drawn from the wrong end are the two ways to get here,
+        // and the file being read has no dropdown to have prevented either —
+        // the check's output is where an agent learns what may relate to what.
         reading.problems.push(
-          `${edge.type} is not allowed from ${reading.candidate.type} to ${toType}, so ${edge.fromId} cannot relate to ${edge.toId} that way.`,
+          `${edge.type} is not allowed from ${reading.candidate.type} to ${toType}, so ${edge.fromId} cannot relate to ${edge.toId} that way.${grammarHint(reading.candidate.type, toType)}`,
         );
       }
     }
@@ -768,7 +786,7 @@ async function writeNodeFile(
   const target = path.join(directory, fileName);
   try {
     // On demand, because git does not carry an empty folder: pre-creating every
-    // band and type would put twenty-seven folders in a person's working tree
+    // band and type would put twenty-six folders in a person's working tree
     // that no commit could keep.
     await mkdir(directory, { recursive: true });
     await writeBytes(target, text);
@@ -1222,11 +1240,11 @@ export async function deleteNodeFile(
  * One relation, written into the file it leaves.
  *
  * WHETHER THE CANON ALLOWS THE TRIPLE IS NOT ASKED HERE. That judgement needs
- * both node types and, to be any use, the list of relations that would have
- * worked instead — which is the daemon's door, where the person and their two
- * boxes are. This module's fences are the ones it can see from one file and the
- * paths around it, and the loader judges the grammar again over every file no
- * door of ours wrote.
+ * both node types, which this door cannot see from one file and the paths
+ * around it. It is made twice elsewhere and with the same hint each time: at
+ * the daemon's door, for the person holding two boxes and a line, and in the
+ * loader below, for the file somebody wrote by hand — which is read to by
+ * `shall check` and by nothing else.
  */
 export async function addEdge(
   specDir: string,
