@@ -265,17 +265,18 @@ export async function ensureProjectSpec(projectPath: string): Promise<void> {
 }
 
 /**
- * `shall.db` is named here and nowhere else in the daemon any more. The
- * database is gone, but a folder initialized by an older Shall still holds one,
- * and an ignore rule is the one place where deleting the line would do harm:
- * the file would appear in `git status` for everybody who has one. It is left
- * alone and left ignored.
+ * ONE RULE, AND IT IS THE STORE'S OWN. Every write lands as
+ * `<name>.<pid>.<random>.tmp` and is renamed onto its target, and a crash
+ * between the two must not leave a stray a person is asked to commit.
  *
- * `*.tmp` is the store's own: every write lands as `<name>.<pid>.tmp` and is
- * renamed onto its target, and a crash between the two must not leave something
- * a person is asked to commit.
+ * `shall.db`, `shall.db-wal` and `shall.db-shm` stood above it until the last
+ * folder holding one was cleared. The database went when the spec became
+ * files; the three lines outlived it only so a leftover would not surface in
+ * somebody's `git status`, and they were the last mention of sqlite the daemon
+ * made. A folder that still has one is not a case an ignore rule has to
+ * answer — the file is dead weight, and deleting it is the answer.
  */
-const GITIGNORE = "shall.db\nshall.db-wal\nshall.db-shm\n*.tmp\n";
+const GITIGNORE = "*.tmp\n";
 
 export async function writeProjectFiles(
   projectPath: string,
