@@ -25,10 +25,10 @@ import { bandOf, type NodeTypeName } from "./canon.js";
  * `Journal` is the fourth: it is where the execution record starts, and
  * nothing in the canon points at a journal. The rest of the execution band is
  * anchored like everything else — a work log by the journal that logs it or
- * the task it addresses, the reports and findings by the work log that
- * submitted or recorded them, and evidence by that work log or by the
- * criterion its own claim reaches — because a record nothing reaches is as
- * much a card left lying on the canvas as a requirement nothing requires.
+ * the task it addresses, a finding by the work log that recorded it, and
+ * evidence and a verification report by their own claim alone — because a
+ * record nothing reaches is as much a card left lying on the canvas as a
+ * requirement nothing requires.
  *
  * Nothing here reads a file, a database or a clock, so it is as safe in a
  * browser bundle as the rest of `core/graph`.
@@ -41,8 +41,8 @@ import { bandOf, type NodeTypeName } from "./canon.js";
  * question it answers rather than by anything that points at it — and, since
  * the aim, the addressing and the claim became the lower node's own lines, an
  * `ImplementationTask` held by the criterion it targets, a `WorkLog` held by
- * the task it addresses and an `Evidence` held by the criterion it claims to
- * satisfy.
+ * the task it addresses, an `Evidence` held by the criterion it claims to
+ * satisfy and a `VerificationReport` by the task it claims to verify.
  */
 export type AnchorDirection = "in" | "out";
 
@@ -88,14 +88,19 @@ export const ANCHOR_RULES: readonly AnchorRule[] = [
   { type: "DataSchema",           anchors: [{ direction: "in", edgeType: "CARRIES" }] },
   { type: "ImplementationTask",   anchors: [{ direction: "in", edgeType: "ALLOCATES" }, { direction: "out", edgeType: "TARGETS" }] },
 
-  // Execution. The journal is the root of the record; everything below it is
-  // held by the work log that submitted or recorded it, a work log by the
-  // journal that logs it or by the task its own ADDRESSES line reaches, and
-  // evidence also by the criterion its own CLAIMS line reaches — either will do.
+  // Execution. The journal is the root of the record; a finding is held by the
+  // work log that recorded it, and a work log by the journal that logs it or
+  // by the task its own ADDRESSES line reaches — either of those will do.
+  // EVIDENCE AND A VERIFICATION REPORT ARE HELD BY THEIR CLAIM ALONE: evidence
+  // is shown AGAINST a criterion and a report verifies A task, so the `CLAIMS`
+  // line is not one way to anchor either but the thing that makes each what it
+  // is. The SUBMITS line says who brought them, never what they are about, and
+  // holding a claimless one to the graph by its submitter is exactly how an
+  // evidence got approved while claiming nothing.
   { type: "Journal",              anchors: [] },
   { type: "WorkLog",              anchors: [{ direction: "in", edgeType: "LOGS" }, { direction: "out", edgeType: "ADDRESSES" }] },
-  { type: "Evidence",             anchors: [{ direction: "in", edgeType: "SUBMITS" }, { direction: "out", edgeType: "CLAIMS" }] },
-  { type: "VerificationReport",   anchors: [{ direction: "in", edgeType: "SUBMITS" }] },
+  { type: "Evidence",             anchors: [{ direction: "out", edgeType: "CLAIMS" }] },
+  { type: "VerificationReport",   anchors: [{ direction: "out", edgeType: "CLAIMS" }] },
   { type: "Finding",              anchors: [{ direction: "in", edgeType: "RECORDS" }] },
 
   // Satellites. Two hang off the chalk node that raised them; the third is the
@@ -107,9 +112,18 @@ export const ANCHOR_RULES: readonly AnchorRule[] = [
   { type: "Decision",             anchors: [{ direction: "out", edgeType: "RESOLVES" }, { direction: "out", edgeType: "AFFECTS" }] },
 ];
 
+/**
+ * The table indexed once, because the questions below are asked per node and
+ * per edge of every subgraph walk — a linear scan of the rules on each ask was
+ * the hottest needless work in the queue's cutting.
+ */
+const RULE_OF: ReadonlyMap<string, AnchorRule> = new Map(
+  ANCHOR_RULES.map((rule) => [rule.type, rule]),
+);
+
 /** Empty for a rootless type and for a type outside the canon alike. */
 export function anchorsFor(type: string): readonly AnchorEdge[] {
-  return ANCHOR_RULES.find((rule) => rule.type === type)?.anchors ?? [];
+  return RULE_OF.get(type)?.anchors ?? [];
 }
 
 /**
@@ -122,7 +136,7 @@ export function anchorsFor(type: string): readonly AnchorEdge[] {
  * failed.
  */
 export function isRootless(type: string): boolean {
-  const rule = ANCHOR_RULES.find((entry) => entry.type === type);
+  const rule = RULE_OF.get(type);
   return rule !== undefined && rule.anchors.length === 0;
 }
 
@@ -217,4 +231,14 @@ export function anchorPhrase(type: string): string | null {
 export function orphanStem(id: string, type: string): string {
   const phrase = anchorPhrase(type) ?? "nothing the canon names";
   return `${id} is a ${type} with no live anchor — it is held to the graph by ${phrase}, and none stands`;
+}
+
+/**
+ * THE STEM WITH THE CHECK'S OWN TAIL — the whole sentence `shall check` files
+ * against an orphan, and the Task Board's Fix Spec row quotes rather than
+ * recomposes. Two speakers say this one identically, so it has one home; the
+ * approve and reject doors keep tails of their own and quote only the stem.
+ */
+export function orphanFixSentence(id: string, type: string): string {
+  return `${orphanStem(id, type)}. Draw the relation, or remove the node.`;
 }

@@ -4,11 +4,12 @@ import type { NodeTypeName } from "./canon.js";
  * The two things a person CLOSES, and the relation that claims each of them.
  *
  * CLOSURE IS A SECOND AXIS AND IT NOW HAS TWO SUBJECTS. A criterion is met when
- * evidence shows it is; a task is done when the work that addressed it says so.
- * Both judgements are the same act — a person reads a LIST of lower nodes and
- * says "yes, on these" or "not yet, and here is why" — so both are read out of
- * the same two ledgers by the same arithmetic, and this table is the only place
- * that says which relation makes the list.
+ * evidence shows it is; a task is done when a verification report shows it is —
+ * the work logs that addressed it are how it was worked on, not what proves it
+ * finished. Both judgements are the same act — a person reads a LIST of lower
+ * nodes and says "yes, on these" or "not yet, and here is why" — so both are
+ * read out of the same two ledgers by the same arithmetic, and this table is
+ * the only place that says which relation makes the list.
  *
  * IT LIVES IN `core/graph` AND NOT IN `core/arith`, beside `ANCHOR_RULES`, and
  * for the same reason that table does: "an Evidence claims a criterion by its
@@ -17,9 +18,11 @@ import type { NodeTypeName } from "./canon.js";
  * browser that only wants to know whether a type has a closure at all — the
  * Spec plane's panel does — can ask without pulling the ledgers' parser in.
  *
- * THE CLAIM RUNS FROM THE CLAIMANT, both times. Canon #24 and #23 were both
- * turned around for that: the lower node names what it claims in its own file,
- * so a new claim never touches the subject's file and never moves its approval.
+ * THE CLAIM RUNS FROM THE CLAIMANT, both times — the lower node names what it
+ * claims in its own file, so a new claim never touches the subject's file and
+ * never moves its approval. Both rows are the CLAIMS edge on purpose: closing
+ * is judged over claims, and ADDRESSES stays what it always was — which task
+ * this work was done under — without being a closure list too.
  */
 
 /** Which of the two things is being closed. */
@@ -41,12 +44,12 @@ export const CLOSURE_KINDS: readonly ClosureKind[] = [
     claim: "CLAIMS",
     claimantType: "Evidence",
   },
-  // #23 WorkLog —ADDRESSES→ ImplementationTask
+  // #24— VerificationReport —CLAIMS→ ImplementationTask
   {
     kind: "task",
     subjectType: "ImplementationTask",
-    claim: "ADDRESSES",
-    claimantType: "WorkLog",
+    claim: "CLAIMS",
+    claimantType: "VerificationReport",
   },
 ];
 

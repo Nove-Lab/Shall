@@ -67,9 +67,11 @@ export const METAMODEL = {
   /**
    * Where each band's first column starts, so that cross-band relations have a
    * horizontal leg long enough to write their names on. Searched against the
-   * real router rather than chosen by eye.
+   * real router rather than chosen by eye — Execution moved 120 → 116 when
+   * #24— (VerificationReport CLAIMS ImplementationTask) joined the grammar and
+   * its label missed the old channel by a third of a pixel.
    */
-  shift: { Domain: 0, Intent: 120, Plan: 104, Execution: 120 } as Record<
+  shift: { Domain: 0, Intent: 120, Plan: 104, Execution: 116 } as Record<
     Band,
     number
   >,

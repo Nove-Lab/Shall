@@ -1,5 +1,11 @@
-import { judgeNodeId } from "../graph/index.js";
-import { describeValue, isMap, readYaml, type YamlError } from "./yaml.js";
+import { judgeNodeId, type ClosureSubject } from "../graph/index.js";
+import {
+  describeValue,
+  isMap,
+  mapKeysAt,
+  readYaml,
+  type YamlError,
+} from "./yaml.js";
 
 /**
  * The grammar all three of Shall's ledgers share — `approvals.yaml`,
@@ -76,17 +82,86 @@ export interface LedgerRootReading {
 }
 
 /**
- * Byte order, not locale order — the same choice `core/store` makes, for the
- * same reason: ids are ASCII, and a ledger sorted by the daemon's locale would
- * put its own bytes at the mercy of an environment variable. Sorted, so the
- * same records are always the same file and two people's approvals of two
- * different nodes merge without a conflict.
+ * WHAT EACH CLOSURE KIND'S CLAIMANT LIST IS CALLED — the disk key and the three
+ * nouns a refusal drops into a sentence.
+ *
+ * TWO BOOKS WRITE THESE LISTS — an acceptance closes a subject over one, a
+ * left-open record holds one — and the names are deliberately THE SAME NAMES
+ * in both: one list of claimants, one vocabulary, whichever book is holding
+ * the verdict. This table is that fact; before it, each book carried its own
+ * copy and a comment swearing they matched.
  */
-export function compare(a: string, b: string): number {
-  if (a === b) {
-    return 0;
+export interface ClaimantWords {
+  /** The disk key the map is written under: `evidence`, `reports`. */
+  readonly key: string;
+  /** One row of it, for the names-no-id refusal: `an evidence entry`. */
+  readonly entry: string;
+  /** The rows severally, for the twin-key refusal: `each piece of evidence`. */
+  readonly each: string;
+  /** A row's value, for the bad-hash refusal: `An evidence hash`. */
+  readonly hash: string;
+}
+
+export const CLAIMANT_WORDS: Readonly<Record<ClosureSubject, ClaimantWords>> = {
+  criterion: {
+    key: "evidence",
+    entry: "an evidence entry",
+    each: "each piece of evidence",
+    hash: "An evidence hash",
+  },
+  task: {
+    key: "reports",
+    entry: "a report entry",
+    each: "each report",
+    hash: "A report hash",
+  },
+};
+
+/**
+ * THE NESTED MAP DEFENDED THE WAY THE ROOT IS. `toJS()` collapses a key written
+ * once bare and once quoted into one property, at any depth, so the claimant
+ * map is asked about the document's own keys through `mapKeysAt` — over the
+ * very bytes the root reader settled, so both questions are about one source.
+ * Two spellings of one claimant id would be two hashes for one node, and the
+ * last one written would silently win.
+ *
+ * The ids are then judged as node ids, because that is what they are — the ids
+ * first and the values after, which is the order the root reader keeps and the
+ * order a person can act on: an entry that names no node is a worse thing to be
+ * told second. The first problem is the whole answer, or null when the list
+ * reads; the hashes beside the ids stay the caller's to judge, with the rest of
+ * its record.
+ *
+ * `closing` is the clause that ends the twin-key refusal — "an acceptance names
+ * one hash for each piece of evidence", "a criterion left open names one hash
+ * for each piece of evidence" — because that is the one clause the two books
+ * say differently about the same defence.
+ */
+export function judgeClaimantList(
+  source: string,
+  id: string,
+  grammar: LedgerGrammar,
+  words: ClaimantWords,
+  closing: string,
+  claimantIds: Iterable<string>,
+): string | null {
+  const seen = new Set<string>();
+  for (const key of mapKeysAt(source, [id, words.key]) ?? []) {
+    if (key !== "" && seen.has(key)) {
+      return `${key} is written twice under ${id} in the ${grammar.noun}, once bare and once quoted — YAML reads two keys and Shall one id, and ${closing}.`;
+    }
+    seen.add(key);
   }
-  return a < b ? -1 : 1;
+  for (const claimantId of claimantIds) {
+    if (claimantId === "") {
+      return `Under ${id}, ${words.entry} names no node id.`;
+    }
+    const judged = judgeNodeId(claimantId);
+    if (judged !== null) {
+      return `Under ${id}, ${JSON.stringify(claimantId)} is not a node id. ${judged}`;
+    }
+  }
+  return null;
 }
 
 /** "An approver is required." → "an approver is required." — for after "Under X,". */

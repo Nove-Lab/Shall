@@ -18,7 +18,7 @@ export interface EdgeTriple {
 }
 
 /**
- * Every triple the canon allows: 62 rows over 31 numbered edge types.
+ * Every triple the canon allows: 63 rows over 31 numbered edge types.
  *
  * v5 numbered 33; #19 PRODUCED and #20 CITES went with the Commit type, whose
  * one job — naming the commits a piece of work produced — is now a `commits:`
@@ -29,7 +29,7 @@ export interface EdgeTriple {
  * The triple is the key, never the bare name. v5 numbers `DEPENDS_ON` twice —
  * #9 Requirement→Requirement and #15 ImplementationTask→ImplementationTask — so
  * the 31 edge types live under 30 distinct names, and anything that indexes this
- * table by name alone silently drops one of the two. HAS_CRITERION, SUBMITS and
+ * table by name alone silently drops one of the two. HAS_CRITERION, SUBMITS, CLAIMS and
  * the fan-out families (ASSUMES, RAISES, AFFECTS, ESCALATES, MENTIONS) repeat
  * their names too, but those are one edge type with several endpoints;
  * `DEPENDS_ON` is the one place where the same name means two different edges.
@@ -76,6 +76,10 @@ export const EDGE_GRAMMAR: readonly EdgeTriple[] = [
   // #24 runs FROM the evidence: a claim is the evidence's own line, so writing
   // one never touches the criterion's file or moves its approval.
   { fromType: "Evidence",             toType: "AcceptanceCriterion",  edgeType: "CLAIMS" },                 // #24
+  // #24— a verification report claims the ONE task it verifies, from its own
+  // file, for the reason #24 runs from the evidence — and it is what a task's
+  // closure is judged over, as #24 is a criterion's.
+  { fromType: "VerificationReport",   toType: "ImplementationTask",   edgeType: "CLAIMS" },                 // #24—
 
   // §3-5 Satellites. ASSUMES and RAISES attach to the five chalk nodes of §0.5
   // and to nothing else, so the five sources are written out rather than implied.

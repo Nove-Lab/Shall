@@ -5,6 +5,7 @@ import {
   BAND_FOLDERS,
   bandFolderOf,
   bandOfFolder,
+  compare,
   formatEdgeId,
   isNodeType,
   isPermittedTriple,
@@ -99,18 +100,6 @@ export { isStoreRefusal, StoreRefusal } from "./refusal.js";
 export type { RefusalKind } from "./refusal.js";
 
 const MARKDOWN_SUFFIX = ".md";
-
-/**
- * Byte order, not locale order. `localeCompare` would put a folder's reading at
- * the mercy of an environment variable, and ids are ASCII by the id door, so
- * UTF-16 order, byte order and the order a person expects are one order.
- */
-function compare(a: string, b: string): number {
-  if (a === b) {
-    return 0;
-  }
-  return a < b ? -1 : 1;
-}
 
 /** Two names read as English; more than two are a list. */
 function namesPhrase(names: readonly string[]): string {

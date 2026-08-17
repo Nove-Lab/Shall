@@ -4,7 +4,7 @@ import type { Incidence } from "../view/edges";
 /**
  * EVERY RELATION THE CANON ALLOWS, ONE PER PAIR OF TYPES.
  *
- * THE PAIR IS THE UNIT AND NOT THE NAME. `EDGE_GRAMMAR` has 62 rows over 31
+ * THE PAIR IS THE UNIT AND NOT THE NAME. `EDGE_GRAMMAR` has 63 rows over 31
  * numbered edge types, and two of its pairs carry two names each —
  * `ModuleDesign → Interface` is EXPOSES and CONSUMES, `Requirement →
  * Requirement` is DEPENDS_ON and CONFLICTS_WITH. Drawn per row those two would
@@ -18,12 +18,8 @@ import type { Incidence } from "../view/edges";
  * What the popup owns is where each type SITS, which is `layout.ts`.
  */
 
-/** One drawn relation: the pair, and every name the canon allows across it. */
+/** One drawn relation: the pair, and what the line writes — the names in canon order, joined. */
 export type MetaRelation = Incidence & {
-  readonly fromType: string;
-  readonly toType: string;
-  readonly edgeTypes: readonly string[];
-  /** What the line writes: the names in canon order, joined. */
   readonly label: string;
 };
 
@@ -55,15 +51,11 @@ export function metamodelRelations(): MetaRelation[] {
       continue;
     }
     seen.add(id);
-    const edgeTypes = permittedEdgeTypes(row.fromType, row.toType);
     relations.push({
       id,
       fromId: row.fromType,
       toId: row.toType,
-      fromType: row.fromType,
-      toType: row.toType,
-      edgeTypes,
-      label: edgeTypes.join(", "),
+      label: permittedEdgeTypes(row.fromType, row.toType).join(", "),
     });
   }
   return relations;

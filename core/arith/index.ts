@@ -65,7 +65,6 @@ export {
   depthOf,
   isClosableTask,
   isCompleted,
-  isStartable,
   prerequisitesMet,
   prerequisitesOf,
   taskStateOf,
@@ -85,6 +84,5 @@ export type {
   TaskClosureBundle,
   TypeCount,
   UnchangedNode,
-  WorkLogMember,
   WorkReportBundle,
 } from "./bundles.js";

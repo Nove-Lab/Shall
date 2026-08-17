@@ -87,8 +87,8 @@ from the context menu on the line.
 Every card carries a traffic light, computed on read — the execution band
 too, because a record is written by an agent and read by a person like any
 other node: red is an error to fix (a file that will not read, a node no live anchor
-holds, an id that is referenced but gone, a work log or evidence outside its
-task's aim) or a rejection that still stands,
+holds, an id that is referenced but gone, a claim outside its work log's
+aim, or work logged under a task that is still blocked) or a rejection that still stands,
 yellow is a judgement still owed (no approval yet, or changed since it was
 approved), green is both settled. The
 node panel is where a judgement happens — a full read for a new node, a line
@@ -115,7 +115,7 @@ everything it waits on is finished, which is exactly the Task Board's Implement
 column, or whether a person has called the work done. The node panel has the
 toggle for both: on once at least one claimant is attached and every one of them
 is approved, it closes the subject over everything claiming it now — evidence
-for a criterion, work logs for a task; off asks for a reason and leaves it open
+for a criterion, verification reports for a task; off asks for a reason and leaves it open
 (see the Review Queue below). The daemon never commits on its
 own — a **Commit spec** button appears when the project is a git repository and
 the spec folder or a ledger has uncommitted changes, and makes one commit
@@ -126,13 +126,24 @@ green.
 
 The lower node names what it aims at in its own file: a task targets the
 criterion it means to close (`TARGETS`), a work log names the task it addresses
-(`ADDRESSES`), an evidence claims the criterion it satisfies (`CLAIMS`) — so
+(`ADDRESSES`), an evidence claims the criterion it satisfies and a verification
+report claims the one task it verifies (`CLAIMS`) — so
 planning, starting work or making a claim never touches the criterion's or the
-task's file, and never moves their approval. One rule of grammar ties the three
-together: a work log that addresses a task may submit only evidence that claims
-what that task targets. Break it and both the work log and the evidence are red
+task's file, and never moves their approval. The claim is also what holds an
+evidence to the graph at all: an evidence that claims nothing is an orphan,
+red, whoever submitted it. One rule of grammar then ties the three files
+together: a work log's evidence may claim only what the tasks that log
+addresses target, and its verification report exactly one of the addressed
+tasks themselves — a log under no task targets nothing, so any claim under it
+breaks the rule too. Break it and both the work log and the claimant are red
 — an error to fix, before anybody is asked to approve — with one sentence
-naming the log, the task, the criteria and the evidence, under either node.
+naming the log, the task and the claims, under either node.
+
+One more rule reads across the axes: **work is logged only under a task whose
+turn has come**. A work log addressing a *blocked* task — its chain unread, or
+something it waits on still open — is red (`premature`), and turns yellow again
+by itself the moment the task becomes ready. Approve the chain first, then the
+record.
 
 A **?** button beside the view tabs opens the canon itself: every node type the
 canon has, laid out in its four bands, and every relation it allows between
@@ -168,12 +179,13 @@ the queue with nobody told. Four kinds:
   evidence and reports, `RECORDS` findings, plus the assumptions and questions
   a work log raised), with the journal's text in front and **Accept report**
   approving every yellow node under it in one write.
-- **Task closure** — an implementation task that work addresses, every log of
-  it approved, about whose current list nobody has said a word. The card shows
-  the task, the work logs addressing it with their commits, and — as context,
-  never as buttons — the criteria the task targets with their own marks. The two
-  words are the criterion's two words, written under the task's id with
-  `taskHash` and a `workLogs` map.
+- **Task closure** — an implementation task that verification reports claim,
+  every one of them approved, about whose current list nobody has said a word.
+  The card shows the task, the reports claiming it (each with the work log that
+  submitted it and its commits), and — as context, never as buttons — the
+  criteria the task targets with their own marks. The two words are the
+  criterion's two words, written under the task's id with `taskHash` and a
+  `reports` map.
 - **AC closure** — a criterion that something claims, every claim of it
   approved, about whose current list of evidence nobody has said a word (while
   a claim is still unapproved the criterion is simply open, and waits). Two
@@ -236,7 +248,7 @@ registry config, so `npx shadcn add <component>` works from `apps/web`.
   ledger/approvals.yaml        the approvals: node id → {approvedHash, by, at}
   ledger/rejections.yaml       the rejections: node id → {rejectedHash, by, at, rationale}
   ledger/acceptances.yaml      the closures: criterion id → {acHash, evidence: {id → hash}, by, at}
-                               and task id → {taskHash, workLogs: {id → hash}, by, at}
+                               and task id → {taskHash, reports: {id → hash}, by, at}
 ```
 
 `.shall/spec` and `.shall/ledger` both belong in the repository, and that is

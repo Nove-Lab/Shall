@@ -1,6 +1,7 @@
 import {
   anchorsFor,
   closureKindOf,
+  compare,
   layerOf,
   type Band,
   type ClosureSubject,
@@ -34,13 +35,16 @@ import { reviewGraph, type ReviewStatus } from "./review.js";
  * rearrange itself with nobody told about it, and why a `git checkout` of a
  * branch is a different queue and not a stale one.
  *
- * THREE KINDS, BECAUSE THERE ARE THREE THINGS A PERSON DOES.
+ * FOUR KINDS, BECAUSE THERE ARE FOUR THINGS A PERSON DOES.
  *  - *Spec approval* — a piece of the specification changed; read it and agree
  *    or say what is wrong.
  *  - *Work report* — an agent finished something and wrote it down; read the
  *    journal, the logs, the evidence and the findings as one report.
- *  - *AC closure* — a criterion is green and open and something now claims to
- *    satisfy it; decide whether it does.
+ *  - *AC closure* — a criterion is green and open and approved evidence now
+ *    claims to satisfy it; decide whether it does.
+ *  - *Task closure* — the same question over the other closure subject: a task
+ *    is green and open and approved verification reports claim it; decide
+ *    whether the work they report satisfies it.
  *
  * WORK REPORT IS CUT FIRST, and the order is load-bearing rather than
  * cosmetic. The execution record has a natural container — a Journal, with its
@@ -76,9 +80,13 @@ import { reviewGraph, type ReviewStatus } from "./review.js";
  * never stands a bundle up by itself, and a node whose only trouble is a
  * standing rejection leaves the queue entirely. It still RIDES ALONG as a
  * member when some yellow root reaches it, red and with its rationale on the
- * row, because a person judging the piece around it has to see it is there. Red
- * for a broken or unanchored file is not in the queue at all: that is a fix in
- * an editor, and `shall check` is where it is said.
+ * row, because a person judging the piece around it has to see it is there. A
+ * `premature` log rides along for the same reason: its evidence and reports
+ * are still rows a person can approve, and hiding the red log that submitted
+ * them would show a report with its author cut out. Red for a broken or
+ * unanchored file is not in the queue at all: that is a fix in an editor, and
+ * `shall check` is where it is said — and the aim rule's red is its claimant's
+ * own red too, so nothing there goes unseen.
  *
  * DOMAIN NODES STAND ALONE. `Term` and `DomainEntity` are the global sink —
  * everything MENTIONS them and they contain nothing — so a walk never descends
@@ -199,23 +207,16 @@ export interface AcClosureBundle {
 }
 
 /**
- * A work log that addressed the task, with the commits it produced — the same
- * thread back to git the evidence rows carry, one hop shorter because the log
- * is the claimant here rather than what submitted one.
- */
-export interface WorkLogMember extends BundleMember {
-  commits: string[];
-}
-
-/**
- * A TASK WAITING TO BE CALLED DONE, on the work that addressed it.
+ * A TASK WAITING TO BE CALLED DONE, on the verification reports that claim it.
  *
  * IT IS THE CRITERION'S BUNDLE WITH THE OTHER SUBJECT IN IT: the same question
- * — is this list enough — asked about work instead of about evidence, so the
- * shape is the same shape and only the nouns move. What it adds is `targets`:
- * the criteria this task aimed to close, with their own marks, because "is the
- * task done" is a question a person answers partly by looking at whether what
- * it was for has closed.
+ * — is this list enough — asked about reports instead of about evidence, so
+ * the shape is the same shape and only the nouns move. What it adds is
+ * `targets`: the criteria this task aimed to close, with their own marks,
+ * because "is the task done" is a question a person answers partly by looking
+ * at whether what it was for has closed. Each report row carries `submittedBy`
+ * the way an evidence row does — the same thread back to the work and its
+ * commits.
  */
 export interface TaskClosureBundle {
   kind: "task-closure";
@@ -224,12 +225,12 @@ export interface TaskClosureBundle {
   title: string;
   since: number;
   task: BundleMember;
-  /** Every living work log addressing the task, id order. */
-  workLogs: WorkLogMember[];
+  /** Every living verification report claiming the task, id order. */
+  reports: EvidenceMember[];
   /** Context only: the living criteria the task TARGETS, and where each stands. */
   targets: { id: string; name: string; closure: "open" | "closed" | null }[];
-  /** The latest hearing per work log, oldest first — the criterion bundle's rule. */
-  history: { workLogId: string; by: string; at: string; rationale: string }[];
+  /** The latest hearing per report, oldest first — the criterion bundle's rule. */
+  history: { reportId: string; by: string; at: string; rationale: string }[];
 }
 
 export type ReviewBundle =
@@ -342,13 +343,6 @@ const NOWHERE: ScanPlace = {
   satellite: true,
   home: null,
 };
-
-function compare(a: string, b: string): number {
-  if (a === b) {
-    return 0;
-  }
-  return a < b ? -1 : 1;
-}
 
 /**
  * What a satellite hangs off — READ OFF THE ANCHOR TABLE and not off a second
@@ -480,13 +474,17 @@ function sideFor(scan: Scan, id: string): Side {
 }
 
 /**
- * On a bundle's list: a node somebody still has to look at, or a node somebody
- * has already handed back.
+ * On a bundle's list: a node somebody still has to look at, a node somebody
+ * has already handed back, or work that jumped its turn — the two reds a
+ * reviewer must SEE beside the piece they are judging.
  */
 function isMember(scan: Scan, id: string): boolean {
   const held = scan.status.get(id);
   return (
-    held !== undefined && (held.color === "yellow" || held.reason === "rejected")
+    held !== undefined &&
+    (held.color === "yellow" ||
+      held.reason === "rejected" ||
+      held.reason === "premature")
   );
 }
 
@@ -874,15 +872,15 @@ function targetsOf(
 }
 
 /**
- * A SUBJECT IS ASKED ABOUT WHEN SOMETHING CLAIMS IT, EVERY CLAIMANT IS
- * APPROVED, AND NOBODY HAS SAID A WORD ABOUT THIS LIST — `closureAsks` is the
- * whole condition, and it is the same condition for both subjects. A claim
- * nobody has read yet is not a claim a person can judge on, so a criterion with
- * a yellow piece of evidence, or a task with an unread work log, is open and
- * off the queue until that claimant is approved (which is what brings it here);
- * the list itself is still everything attached, so the closing that follows is
- * over all of it. The two exits are the two words, and either one takes the
- * subject out of the queue until the subject or the list changes.
+ * A SUBJECT IS ASKED ABOUT WHEN ITS OWN WORDS ARE AGREED, SOMETHING CLAIMS IT,
+ * EVERY CLAIMANT IS APPROVED, AND NOBODY HAS SAID A WORD ABOUT THIS LIST —
+ * `closureAsks` is the whole condition, and it is the same condition for both
+ * subjects. A claim nobody has read yet is not a claim a person can judge on,
+ * so a criterion with a yellow piece of evidence, or a task with an unread work
+ * log, is open and off the queue until that claimant is approved (which is what
+ * brings it here); the list itself is still everything attached, so the closing
+ * that follows is over all of it. The two exits are the two words, and either
+ * one takes the subject out of the queue until the subject or the list changes.
  *
  * ONE BUILDER, TWO ARMS. Everything above the return — the guard, the rows, the
  * hearing, `since` — is one path; only the last statement names the fields for
@@ -893,13 +891,12 @@ function closureBundleFor(
   subject: SpecNode,
 ): AcClosureBundle | TaskClosureBundle | null {
   const kind = closureKindOf(subject.type);
-  const held = scan.status.get(subject.id);
   // WHERE THE TWO AXES TOUCH IS INSIDE `closureAsks` AND NOT HERE. A subject
   // whose own words are not agreed — unapproved, edited since, refused — is not
   // asked whether it is met: there is nothing settled to be met AGAINST. This
   // used to be a rejected-only guard at this line, and the gap it left showed
   // up on a screen as a yellow task wearing a green Done.
-  if (kind === null || held === undefined || !closureAsks(subject, scan.context)) {
+  if (kind === null || !closureAsks(subject, scan.context)) {
     return null;
   }
   const claimants = claimantsOf(subject.id, scan.context);
@@ -928,13 +925,13 @@ function closureBundleFor(
       title,
       since,
       task: seat,
-      workLogs: rows.map((row) => ({
+      reports: rows.map((row) => ({
         ...row,
-        commits: [...(scan.context.nodes.get(row.id)?.commits ?? [])],
+        submittedBy: submittersOf(scan, row.id),
       })),
       targets: targetsOf(scan, subject.id),
-      history: hearings.map(({ id: workLogId, ...rest }) => ({
-        workLogId,
+      history: hearings.map(({ id: reportId, ...rest }) => ({
+        reportId,
         ...rest,
       })),
     };
@@ -967,7 +964,7 @@ function seatsOf(bundle: ReviewBundle): BundleMember[] {
     case "ac-closure":
       return [bundle.ac, ...bundle.evidence];
     case "task-closure":
-      return [bundle.task, ...bundle.workLogs];
+      return [bundle.task, ...bundle.reports];
     default:
       return bundle.members;
   }
@@ -993,7 +990,7 @@ export function reviewBundles(
   ledgers: Ledgers,
 ): ReviewQueue {
   const context = colorContextOf(graph, ledgers);
-  const review = reviewGraph(graph, ledgers);
+  const review = reviewGraph(graph, ledgers, context);
   const status = new Map<string, ReviewStatus>();
   for (const held of review.statuses) {
     status.set(held.id, held);
@@ -1003,7 +1000,10 @@ export function reviewBundles(
   const nodes = [...context.nodes.values()].sort((a, b) =>
     compare(a.id, b.id),
   );
-  const inScanOrder = [...nodes].sort((a, b) => byScan(scan)(a.id, b.id));
+  // The comparator factory is called once, not once per comparison — its other
+  // two callers already do this, and a sort allocates O(n log n) comparisons.
+  const inOrder = byScan(scan);
+  const inScanOrder = [...nodes].sort((a, b) => inOrder(a.id, b.id));
 
   const bundles: ReviewBundle[] = [];
   const covered = new Set<string>();
@@ -1085,7 +1085,7 @@ export function reviewBundles(
 
   // 3. Closure, on its own axis: a subject here is out of the approval queue,
   //    and what is waiting is the question of whether it is met — a criterion on
-  //    its evidence, a task on the work that addressed it. Nothing is marked
+  //    its evidence, a task on the reports that claim it. Nothing is marked
   //    covered: closure is not approval.
   for (const node of nodes) {
     if (closureKindOf(node.type) === null) {

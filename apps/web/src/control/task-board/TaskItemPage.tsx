@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router";
 import { api } from "@/api";
 import { Badge } from "@/components/ui/badge";
@@ -17,8 +17,9 @@ import { EmptyState } from "@/components/EmptyState";
 import { cn } from "@/lib/utils";
 import { useProject } from "@/project-context";
 import { ClosureMark, StatusDot, TaskStateMark } from "@/spec/review-parts";
-import type { FixSpecItem, ImplementItem, Ref } from "@/spec/review";
+import { nodesById, type FixSpecItem, type ImplementItem, type Ref } from "@/spec/review";
 import { formatStamp, type SpecNode } from "@/spec/spec-node";
+import { BOX, CAPTION, controlBase, specLink } from "../parts";
 import { BOARD_KIND_LABEL, boardRows, rowTitle, type BoardRow } from "./rows";
 
 /**
@@ -37,16 +38,11 @@ import { BOARD_KIND_LABEL, boardRows, rowTitle, type BoardRow } from "./rows";
  * whole, with its line breaks, above everything else the row knows.
  */
 
-/** The muted caption every section is headed with — the queue card's own. */
-const CAPTION = "text-muted-foreground text-xs";
-/** The row recipe the rest of this surface is built from. */
-const BOX = "grid gap-2 rounded-md border p-3";
-
 export function TaskItemPage() {
   const params = useParams();
   const project = useProject();
   const itemKey = params.itemId ?? "";
-  const base = `/p/${encodeURIComponent(project.id)}/control`;
+  const base = controlBase(project.id);
   const boardPath = `${base}/task-board`;
   const backPath = `${boardPath}/${encodeURIComponent(itemKey)}`;
 
@@ -54,42 +50,39 @@ export function TaskItemPage() {
   const [nodes, setNodes] = useState<SpecNode[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    // The board and the bodies together: the board ships no prose — a card
-    // reads `spec.nodes` beside it, exactly as the queue's does.
-    const [board, nextNodes] = await Promise.all([
-      api.spec.taskBoard.query({ projectId: project.id }),
-      api.spec.nodes.query({ projectId: project.id }),
-    ]);
-    setRows(boardRows(board));
-    setNodes(nextNodes);
-  }, [project.id]);
-
   useEffect(() => {
     let live = true;
     setRows(null);
     setError(null);
-    load().catch((loadError: unknown) => {
-      if (live) {
-        setError(
-          loadError instanceof Error
-            ? loadError.message
-            : "Could not read the task board",
-        );
-      }
-    });
+    // The board and the bodies together: the board ships no prose — a card
+    // reads `spec.nodes` beside it, exactly as the queue's does. The SUCCESS
+    // path sits under the latch with the failure path, so a slow answer for a
+    // project somebody left is never drawn as this one's.
+    Promise.all([
+      api.spec.taskBoard.query({ projectId: project.id }),
+      api.spec.nodes.query({ projectId: project.id }),
+    ])
+      .then(([board, nextNodes]) => {
+        if (live) {
+          setRows(boardRows(board));
+          setNodes(nextNodes);
+        }
+      })
+      .catch((loadError: unknown) => {
+        if (live) {
+          setError(
+            loadError instanceof Error
+              ? loadError.message
+              : "Could not read the task board",
+          );
+        }
+      });
     return () => {
       live = false;
     };
-  }, [load]);
+  }, [project.id]);
 
-  const nodeById = useMemo(() => {
-    const byId = new Map<string, SpecNode>();
-    for (const node of nodes) {
-      byId.set(node.id, node);
-    }
-    return byId;
-  }, [nodes]);
+  const nodeById = useMemo(() => nodesById(nodes), [nodes]);
 
   const row = rows?.find((held) => held.item.key === itemKey) ?? null;
   const title = row === null ? itemKey : rowTitle(row);
@@ -167,15 +160,6 @@ export function TaskItemPage() {
         />
       )}
     </>
-  );
-}
-
-/** Where a link into the Spec plane goes, and how it gets back here. */
-function specLink(projectId: string, id: string, backPath: string): string {
-  return (
-    `/p/${encodeURIComponent(projectId)}/spec` +
-    `?node=${encodeURIComponent(id)}` +
-    `&back=${encodeURIComponent(backPath)}`
   );
 }
 
@@ -353,7 +337,7 @@ function ImplementDetail({
           <p className={CAPTION}>What this task aims to close</p>
           <p className="text-sm">
             Nothing — this is foundation work, and it is finished when somebody
-            says the work addressing it is enough.
+            says the reports claiming it show enough.
           </p>
         </div>
       ) : (

@@ -27,9 +27,16 @@ import {
 import { cn } from "@/lib/utils";
 import { RejectionPopover } from "@/spec/RejectionPopover";
 import { ClosureMark, LineDiff, StatusDot } from "@/spec/review-parts";
-import { firstLine, type ApprovedVersion, type BundleMember } from "@/spec/review";
+import {
+  approvable,
+  firstLine,
+  judgeable,
+  type ApprovedVersion,
+  type BundleMember,
+} from "@/spec/review";
 import { formatStamp, type SpecNode } from "@/spec/spec-node";
 import { lineDiff, wholeFile, type DiffRow } from "@/spec/view/diff";
+import { controlBase, specLink } from "../parts";
 
 /**
  * ONE NODE INSIDE A BUNDLE, AND THE SAME ROW FOR ALL THREE KINDS.
@@ -130,12 +137,10 @@ export function MemberRow({
   const [versionBusy, setVersionBusy] = useState(false);
   const [versionError, setVersionError] = useState<string | null>(null);
 
-  const base = `/p/${encodeURIComponent(projectId)}/control`;
+  const base = controlBase(projectId);
   const rejected = member.reason === "rejected";
-  const judgeable = member.color === "yellow" || member.color === "green";
-  const showApprove =
-    canApprove && member.color === "yellow" && !member.deletionProposed;
-  const showReject = canReject && judgeable && !member.deletionProposed;
+  const showApprove = canApprove && approvable(member);
+  const showReject = canReject && judgeable(member) && !member.deletionProposed;
 
   /**
    * WHICH VERSION OF THIS FILE THE COMPARISON IS OF, and it is two stamps for
@@ -268,11 +273,7 @@ export function MemberRow({
    * because a question with no answer in it is routed here to be answered and
    * landing in the reading pane would make that one more click on every row.
    */
-  const specLink =
-    `/p/${encodeURIComponent(projectId)}/spec` +
-    `?node=${encodeURIComponent(member.id)}` +
-    (answer ? "&mode=edit" : "") +
-    `&back=${encodeURIComponent(backPath)}`;
+  const planeLink = specLink(projectId, member.id, backPath, { edit: answer });
   const openLabel = answer ? "Answer" : "Open in Spec plane";
 
   return (
@@ -396,7 +397,7 @@ export function MemberRow({
                 </Button>
               ) : null}
               <Link
-                to={specLink}
+                to={planeLink}
                 className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
               >
                 {openLabel}
@@ -444,7 +445,7 @@ export function MemberRow({
           file is. Nothing else — approving from a menu is a verdict made
           without the diff open. */}
       <ContextMenuContent>
-        <ContextMenuItem onClick={() => void navigate(specLink)}>
+        <ContextMenuItem onClick={() => void navigate(planeLink)}>
           <Eye />
           {openLabel}
         </ContextMenuItem>

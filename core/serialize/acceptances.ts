@@ -1,12 +1,13 @@
-import { judgeNodeId, type ClosureSubject } from "../graph/index.js";
+import { compare, type ClosureSubject } from "../graph/index.js";
 import {
-  compare,
+  CLAIMANT_WORDS,
+  judgeClaimantList,
   lowerFirst,
   readLedgerRoot,
   type LedgerGrammar,
 } from "./ledger-common.js";
 import { emitScalar } from "./scalar.js";
-import { isMap, judgeIdentity, mapKeysAt } from "./yaml.js";
+import { isMap, judgeIdentity } from "./yaml.js";
 
 /**
  * The acceptance ledger — `.shall/ledger/acceptances.yaml` — as bytes, and
@@ -48,7 +49,7 @@ export const ACCEPTANCES_FILE = "ledger/acceptances.yaml";
  * ONE SHAPE WITH A TAG, AND TWO SPELLINGS ON DISK. In memory a record is the
  * subject's hash and the map of what closed it, whatever the subject was; on
  * disk the two keys are named for what they hold — `acHash`/`evidence` for a
- * criterion, `taskHash`/`workLogs` for a task — because a person reading the
+ * criterion, `taskHash`/`reports` for a task — because a person reading the
  * file should see which of the two they are looking at without decoding an id
  * prefix. `KEYS` below is the only place those four names live, and a record
  * carrying both pairs is refused rather than guessed at.
@@ -84,15 +85,15 @@ export interface AcceptanceLedgerReading {
 }
 
 /**
- * The two key names each kind of record is written under, and the ONLY place
- * either pair is spelled. The order the emitter writes them in is the order
- * they are read here: the subject's hash, its list, `by`, `at`.
+ * The subject-hash key each kind of record is written under — this book's own
+ * half of the pair. The claimant map's key and nouns are `CLAIMANT_WORDS` in
+ * `ledger-common.ts`, shared with the rejection ledger, which writes the same
+ * list under the same name. The order the emitter writes a record in is the
+ * order it is read here: the subject's hash, its list, `by`, `at`.
  */
-const KEYS: Readonly<
-  Record<ClosureSubject, { readonly subject: string; readonly claimants: string }>
-> = {
-  criterion: { subject: "acHash", claimants: "evidence" },
-  task: { subject: "taskHash", claimants: "workLogs" },
+const SUBJECT_KEY: Readonly<Record<ClosureSubject, string>> = {
+  criterion: "acHash",
+  task: "taskHash",
 };
 
 /** How many keys a record has, whichever kind it is. */
@@ -103,26 +104,7 @@ const RECORD_KEY_COUNT = 4;
  * the nested map is part of the shape rather than a second rule about it.
  */
 const RECORD_SHAPE =
-  "Every record in the acceptance ledger is a map of exactly by, at and one closed thing — acHash with an evidence map for a criterion, or taskHash with a workLogs map for a task — the map holding at least one entry, and never both";
-
-/** What each kind's claimants are called in a sentence a person reads. */
-const NESTED: Readonly<
-  Record<
-    ClosureSubject,
-    { readonly entry: string; readonly each: string; readonly hash: string }
-  >
-> = {
-  criterion: {
-    entry: "an evidence entry",
-    each: "each piece of evidence",
-    hash: "An evidence hash",
-  },
-  task: {
-    entry: "a work log entry",
-    each: "each work log",
-    hash: "A work log hash",
-  },
-};
+  "Every record in the acceptance ledger is a map of exactly by, at and one closed thing — acHash with an evidence map for a criterion, or taskHash with a reports map for a task — the map holding at least one entry, and never both";
 
 /** The three words the shared root reader makes this book's sentences out of. */
 const GRAMMAR: LedgerGrammar = {
@@ -154,10 +136,9 @@ export function emitAcceptanceLedger(records: AcceptanceLedger): string {
     if (record === undefined) {
       continue;
     }
-    const keys = KEYS[record.kind];
     lines.push(`${emitScalar(id)}:`);
-    lines.push(`  ${keys.subject}: ${emitScalar(record.subjectHash)}`);
-    lines.push(`  ${keys.claimants}:`);
+    lines.push(`  ${SUBJECT_KEY[record.kind]}: ${emitScalar(record.subjectHash)}`);
+    lines.push(`  ${CLAIMANT_WORDS[record.kind].key}:`);
     for (const claimantId of [...record.claimants.keys()].sort(compare)) {
       const hash = record.claimants.get(claimantId);
       if (hash === undefined) {
@@ -203,18 +184,17 @@ function readRecordShape(value: unknown): {
   if (!isMap(value) || Object.keys(value).length !== RECORD_KEY_COUNT) {
     return null;
   }
-  const kinds = (Object.keys(KEYS) as ClosureSubject[]).filter(
-    (kind) => value[KEYS[kind].subject] !== undefined,
+  const kinds = (Object.keys(SUBJECT_KEY) as ClosureSubject[]).filter(
+    (kind) => value[SUBJECT_KEY[kind]] !== undefined,
   );
   const [kind] = kinds;
   if (kind === undefined || kinds.length !== 1) {
     return null;
   }
-  const keys = KEYS[kind];
-  const subjectHash = value[keys.subject];
+  const subjectHash = value[SUBJECT_KEY[kind]];
   const by = value["by"];
   const at = value["at"];
-  const claimants = value[keys.claimants];
+  const claimants = value[CLAIMANT_WORDS[kind].key];
   if (
     typeof subjectHash !== "string" ||
     typeof by !== "string" ||
@@ -240,15 +220,11 @@ function readRecordShape(value: unknown): {
 /**
  * The bytes of a ledger, read.
  *
- * THE NESTED MAP IS DEFENDED THE WAY THE ROOT IS. `toJS()` collapses a key
- * written once bare and once quoted into one property, at any depth, so the
- * evidence map is asked about the document's own keys through `mapKeysAt` —
- * over the very bytes the root reader settled, so both questions are about one
- * source. Two spellings of one evidence id would be two hashes for one node,
- * and the last one written would silently win.
- *
- * The evidence ids are judged as node ids, because that is what they are, and
- * the hashes as identities beside them.
+ * The claimant map's own defence — the twin-key check over the settled bytes,
+ * the ids judged as node ids — is `judgeClaimantList` in `ledger-common.ts`,
+ * shared word for word with the rejection ledger's left-open records. The
+ * hashes beside the ids are judged here as identities, with the rest of the
+ * record.
  */
 export function parseAcceptanceLedger(text: string): AcceptanceLedgerReading {
   const root = readLedgerRoot(text, GRAMMAR);
@@ -262,32 +238,17 @@ export function parseAcceptanceLedger(text: string): AcceptanceLedgerReading {
     if (held === null) {
       return refused(`${RECORD_SHAPE} — the record under ${id} is not.`);
     }
-    const words = NESTED[held.kind];
-    const listKey = KEYS[held.kind].claimants;
-
-    const seen = new Set<string>();
-    for (const key of mapKeysAt(root.source, [id, listKey]) ?? []) {
-      if (key !== "" && seen.has(key)) {
-        return refused(
-          `${key} is written twice under ${id} in the acceptance ledger, once bare and once quoted — YAML reads two keys and Shall one id, and an acceptance names one hash for ${words.each}.`,
-        );
-      }
-      seen.add(key);
-    }
-
-    // The ids first and the values after, which is the order the root reader
-    // keeps and the order a person can act on: an entry that names no node is a
-    // worse thing to be told second.
-    for (const claimantId of held.claimants.keys()) {
-      if (claimantId === "") {
-        return refused(`Under ${id}, ${words.entry} names no node id.`);
-      }
-      const judged = judgeNodeId(claimantId);
-      if (judged !== null) {
-        return refused(
-          `Under ${id}, ${JSON.stringify(claimantId)} is not a node id. ${judged}`,
-        );
-      }
+    const words = CLAIMANT_WORDS[held.kind];
+    const listProblem = judgeClaimantList(
+      root.source,
+      id,
+      GRAMMAR,
+      words,
+      `an acceptance names one hash for ${words.each}`,
+      held.claimants.keys(),
+    );
+    if (listProblem !== null) {
+      return refused(listProblem);
     }
 
     const subjectHash = judgeIdentity("An accepted hash", held.subjectHash);

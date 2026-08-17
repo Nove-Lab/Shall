@@ -30,7 +30,7 @@ import { reviewGraph, type GraphReview, type ReviewStatus } from "./review.js";
  * every record a black box; with `sha256:<payload>` a fixture can say what a
  * record is taken over — a body, a relation, a deletion proposal, the node's own
  * address — and be wrong out loud when the payload changes shape. What is under
- * test is the ORDER the six questions are asked in and the arithmetic of two
+ * test is the ORDER the seven questions are asked in and the arithmetic of two
  * files, never the cryptography, which core does not do at all.
  */
 
@@ -672,6 +672,12 @@ describe("the execution band", () => {
 describe("the aim rule", () => {
   // A criterion, a task that targets it, a work log that addresses the task,
   // and the evidence the log submits — the four files the rule reads.
+  // The whole intent chain, Goal down — so every node above the task is
+  // anchored and the chain can actually be green when it is read.
+  const goal = node("Goal", "G-0001");
+  const actor = node("Actor", "A-0001");
+  const useCase = node("UseCase", "UC-0001");
+  const scenario = node("Scenario", "SC-0001");
   const criterion = node("AcceptanceCriterion", "AC-0001");
   const other = node("AcceptanceCriterion", "AC-0002");
   const requirement = node("Requirement", "R-0001");
@@ -681,6 +687,10 @@ describe("the aim rule", () => {
   const log = node("WorkLog", "WL-0001");
   const evidence = node("Evidence", "EV-0001");
   const SPINE = [
+    edge("G-0001", "PURSUED_BY", "A-0001"),
+    edge("A-0001", "PERFORMS", "UC-0001"),
+    edge("UC-0001", "DETAILS", "SC-0001"),
+    edge("SC-0001", "DERIVES_RESPONSIBILITY", "SR-0001"),
     edge("SR-0001", "REQUIRES", "R-0001"),
     edge("R-0001", "HAS_CRITERION", "AC-0001"),
     edge("R-0001", "HAS_CRITERION", "AC-0002"),
@@ -690,6 +700,10 @@ describe("the aim rule", () => {
     edge("WL-0001", "SUBMITS", "EV-0001"),
   ];
   const NODES = [
+    goal,
+    actor,
+    useCase,
+    scenario,
     responsibility,
     requirement,
     criterion,
@@ -699,10 +713,27 @@ describe("the aim rule", () => {
     log,
     evidence,
   ];
+  /**
+   * The chain above the task, read — so IT-0001 is `ready`, and the
+   * blocked-address rule (a different red, tested in its own describe) never
+   * fires on the log while the aim is what is under test.
+   */
+  const CHAIN_READ = ledgerOf(
+    approve(goal, SPINE),
+    approve(actor, SPINE),
+    approve(useCase, SPINE),
+    approve(scenario, SPINE),
+    approve(responsibility, SPINE),
+    approve(requirement, SPINE),
+    approve(criterion, SPINE),
+    approve(other, SPINE),
+    approve(task, SPINE),
+  );
+
   function reviewWith(...claims: SpecEdge[]): GraphReview {
     return reviewGraph(
       graphOf({ nodes: NODES, edges: [...SPINE, ...claims] }),
-      unapproved,
+      CHAIN_READ,
     );
   }
 
@@ -741,17 +772,21 @@ describe("the aim rule", () => {
       ),
     );
     // The criteria and the task themselves are not touched by it.
-    assert.equal(statusOf(review, "AC-0002")?.color, "yellow");
-    assert.equal(statusOf(review, "IT-0001")?.color, "yellow");
+    assert.equal(statusOf(review, "AC-0002")?.color, "green");
+    assert.equal(statusOf(review, "IT-0001")?.color, "green");
   });
 
-  test("evidence that claims nothing at all is outside the aim too", () => {
+  test("evidence that claims nothing is red at both ends — the log for the aim, the evidence for its anchor", () => {
     const review = reviewWith();
     assert.equal(statusOf(review, "WL-0001")?.reason, "off-target");
     assert.equal(
-      statusOf(review, "EV-0001")?.problem,
-      "EV-0001 claims no criterion, but the work log that submitted it, WL-0001, addresses IT-0001, which targets AC-0001 — a work log's evidence claims only the criteria its task targets.",
+      statusOf(review, "WL-0001")?.problem,
+      "WL-0001 addresses IT-0001, which targets AC-0001, but submits EV-0001, which claims no criterion — a work log's evidence claims only the criteria its task targets.",
     );
+    // The evidence's own diagnosis is the anchor rule's: a claimless evidence
+    // is an orphan — the claim is what makes it evidence at all — and the
+    // orphan sentence is the one that says what to draw.
+    assert.equal(statusOf(review, "EV-0001")?.reason, "orphan");
   });
 
   test("a claim partly outside the aim is outside it — every claim has to be a target", () => {
@@ -763,7 +798,10 @@ describe("the aim rule", () => {
     assert.ok(statusOf(review, "EV-0001")?.problem?.includes("claims AC-0001 and AC-0002"));
   });
 
-  test("a work log under no task is under no aim, and its evidence may claim anything", () => {
+  test("a work log under no task has an empty aim — a claim under it is a breach at both ends", () => {
+    // IT USED TO BE AN EXEMPTION ("under no aim, never red"), and the gap
+    // showed on a screen: evidence under an aimless log could claim any
+    // criterion in the project. An empty aim is an empty allowance.
     const review = reviewGraph(
       graphOf({
         nodes: NODES,
@@ -772,10 +810,68 @@ describe("the aim rule", () => {
           edge("EV-0001", "CLAIMS", "AC-0002"),
         ],
       }),
-      unapproved,
+      CHAIN_READ,
+    );
+    assert.equal(statusOf(review, "WL-0001")?.reason, "off-target");
+    assert.equal(
+      statusOf(review, "WL-0001")?.problem,
+      "WL-0001 addresses no task the graph holds, but submits EV-0001, which claims AC-0002 — a work log's evidence claims only the criteria its task targets, and this log addresses no task the graph holds.",
+    );
+    assert.equal(
+      statusOf(review, "EV-0001")?.problem,
+      "EV-0001 claims AC-0002, but the work log that submitted it, WL-0001, addresses no task the graph holds — a work log's evidence claims only the criteria its task targets, and this log addresses no task the graph holds.",
+    );
+  });
+
+  test("a work log whose only ADDRESSES line reaches a task no file names is in the empty-aim arm, said truthfully", () => {
+    // The colour is the same as addressing nothing — an unverifiable task
+    // justifies no claim — but the sentence must not deny the line the file
+    // visibly writes, so it says "no task the graph holds". The hole itself is
+    // the missing rule's row, filed under this same log.
+    const review = reviewGraph(
+      graphOf({
+        nodes: NODES,
+        edges: [
+          ...SPINE.filter((line) => line.type !== "ADDRESSES"),
+          edge("WL-0001", "ADDRESSES", "IT-9999"),
+          edge("EV-0001", "CLAIMS", "AC-0002"),
+        ],
+      }),
+      CHAIN_READ,
+    );
+    assert.equal(statusOf(review, "WL-0001")?.reason, "off-target");
+    assert.ok(
+      statusOf(review, "WL-0001")?.problem?.startsWith(
+        "WL-0001 addresses no task the graph holds,",
+      ),
+    );
+    // Claimless under the same dead address: the log is clean — the hole is
+    // the missing rule's sentence, and the claim that is not there is the
+    // evidence's own orphanhood.
+    const clean = reviewGraph(
+      graphOf({
+        nodes: NODES,
+        edges: [
+          ...SPINE.filter((line) => line.type !== "ADDRESSES"),
+          edge("WL-0001", "ADDRESSES", "IT-9999"),
+        ],
+      }),
+      CHAIN_READ,
+    );
+    assert.equal(statusOf(clean, "WL-0001")?.reason, "unapproved");
+    assert.equal(statusOf(clean, "EV-0001")?.reason, "orphan");
+  });
+
+  test("a work log under no task whose evidence claims nothing is clean — the missing claim is the evidence's own orphanhood", () => {
+    const review = reviewGraph(
+      graphOf({
+        nodes: NODES,
+        edges: SPINE.filter((line) => line.type !== "ADDRESSES"),
+      }),
+      CHAIN_READ,
     );
     assert.equal(statusOf(review, "WL-0001")?.reason, "unapproved");
-    assert.equal(statusOf(review, "EV-0001")?.reason, "unapproved");
+    assert.equal(statusOf(review, "EV-0001")?.reason, "orphan");
   });
 
   test("a rule of grammar comes before the books: an approved breach is still red", () => {
@@ -790,10 +886,319 @@ describe("the aim rule", () => {
     assert.deepEqual(statusOf(review, "WL-0001")?.approval, APPROVER);
   });
 
-  test("a claim at a criterion no file names is a claim outside the aim, said as such", () => {
+  test("a claim at a criterion no file names anchors nothing, and is still the log's breach", () => {
     const review = reviewWith(edge("EV-0001", "CLAIMS", "AC-9999"));
-    assert.equal(statusOf(review, "EV-0001")?.reason, "off-target");
-    assert.ok(statusOf(review, "EV-0001")?.problem?.includes("claims AC-9999"));
+    // A dangling claim is no live anchor, so the evidence is an orphan — and
+    // the missing rule files its own sentence under the id the claim names.
+    assert.equal(statusOf(review, "EV-0001")?.reason, "orphan");
+    assert.equal(statusOf(review, "WL-0001")?.reason, "off-target");
+    assert.ok(statusOf(review, "WL-0001")?.problem?.includes("claims AC-9999"));
+  });
+});
+
+describe("the aim rule for verification reports", () => {
+  // The report's own half of the rule: exactly one claim, and that one among
+  // the tasks the submitting log addresses. The chain is read so that the log
+  // is never `premature` here — what is under test is the claim.
+  const goal = node("Goal", "G-0001");
+  const actor = node("Actor", "A-0001");
+  const useCase = node("UseCase", "UC-0001");
+  const scenario = node("Scenario", "SC-0001");
+  const responsibility = node("SystemResponsibility", "SR-0001");
+  const requirement = node("Requirement", "R-0001");
+  const criterion = node("AcceptanceCriterion", "AC-0001");
+  const other = node("AcceptanceCriterion", "AC-0002");
+  const task = node("ImplementationTask", "IT-0001");
+  const second = node("ImplementationTask", "IT-0002");
+  const journal = node("Journal", "J-0001");
+  const log = node("WorkLog", "WL-0001");
+  const report = node("VerificationReport", "VR-0001");
+  const SPINE = [
+    edge("G-0001", "PURSUED_BY", "A-0001"),
+    edge("A-0001", "PERFORMS", "UC-0001"),
+    edge("UC-0001", "DETAILS", "SC-0001"),
+    edge("SC-0001", "DERIVES_RESPONSIBILITY", "SR-0001"),
+    edge("SR-0001", "REQUIRES", "R-0001"),
+    edge("R-0001", "HAS_CRITERION", "AC-0001"),
+    edge("R-0001", "HAS_CRITERION", "AC-0002"),
+    edge("IT-0001", "TARGETS", "AC-0001"),
+    edge("IT-0002", "TARGETS", "AC-0002"),
+    edge("J-0001", "LOGS", "WL-0001"),
+    edge("WL-0001", "ADDRESSES", "IT-0001"),
+    edge("WL-0001", "SUBMITS", "VR-0001"),
+  ];
+  const NODES = [
+    goal,
+    actor,
+    useCase,
+    scenario,
+    responsibility,
+    requirement,
+    criterion,
+    other,
+    task,
+    second,
+    journal,
+    log,
+    report,
+  ];
+  const CHAIN_READ = ledgerOf(
+    approve(goal, SPINE),
+    approve(actor, SPINE),
+    approve(useCase, SPINE),
+    approve(scenario, SPINE),
+    approve(responsibility, SPINE),
+    approve(requirement, SPINE),
+    approve(criterion, SPINE),
+    approve(other, SPINE),
+    approve(task, SPINE),
+    approve(second, SPINE),
+  );
+  const RULE =
+    "a verification report claims exactly one task its work log addresses.";
+
+  function reviewWith(edits: {
+    drop?: (line: SpecEdge) => boolean;
+    add?: SpecEdge[];
+  }): GraphReview {
+    const edges = [
+      ...SPINE.filter((line) => !(edits.drop?.(line) ?? false)),
+      ...(edits.add ?? []),
+    ];
+    return reviewGraph(graphOf({ nodes: NODES, edges }), CHAIN_READ);
+  }
+
+  test("one claim at the addressed task is inside the rule, and nothing is red", () => {
+    const review = reviewWith({ add: [edge("VR-0001", "CLAIMS", "IT-0001")] });
+    assert.equal(statusOf(review, "VR-0001")?.reason, "unapproved");
+    assert.equal(statusOf(review, "WL-0001")?.reason, "unapproved");
+  });
+
+  test("a claim at a task the log does not address turns both ends red, said from each", () => {
+    const review = reviewWith({ add: [edge("VR-0001", "CLAIMS", "IT-0002")] });
+    assert.equal(
+      statusOf(review, "WL-0001")?.problem,
+      `WL-0001 addresses IT-0001, but submits VR-0001, which claims IT-0002 — ${RULE}`,
+    );
+    assert.equal(
+      statusOf(review, "VR-0001")?.problem,
+      `VR-0001 claims IT-0002, but the work log that submitted it, WL-0001, addresses IT-0001 — ${RULE}`,
+    );
+  });
+
+  test("two claims are a breach with a submitter — and without one", () => {
+    const review = reviewWith({
+      add: [
+        edge("VR-0001", "CLAIMS", "IT-0001"),
+        edge("VR-0001", "CLAIMS", "IT-0002"),
+      ],
+    });
+    assert.equal(
+      statusOf(review, "VR-0001")?.problem,
+      `VR-0001 claims IT-0001 and IT-0002 — ${RULE}`,
+    );
+    assert.equal(
+      statusOf(review, "WL-0001")?.problem,
+      `WL-0001 submits VR-0001, which claims IT-0001 and IT-0002 — ${RULE}`,
+    );
+
+    // Submitted by nobody, the cardinality still holds — it is the report's
+    // own clause, not the submitter's — and there is no log to red.
+    const free = reviewWith({
+      drop: (line) => line.type === "SUBMITS",
+      add: [
+        edge("VR-0001", "CLAIMS", "IT-0001"),
+        edge("VR-0001", "CLAIMS", "IT-0002"),
+      ],
+    });
+    assert.equal(
+      statusOf(free, "VR-0001")?.problem,
+      `VR-0001 claims IT-0001 and IT-0002 — ${RULE}`,
+    );
+    assert.equal(statusOf(free, "WL-0001")?.reason, "unapproved");
+  });
+
+  test("a log that addresses no task has none to verify — any claim under it is a breach", () => {
+    const aimless = `${RULE.slice(0, -1)}, and this log addresses no task at all.`;
+    const review = reviewWith({
+      drop: (line) => line.type === "ADDRESSES",
+      add: [edge("VR-0001", "CLAIMS", "IT-0001")],
+    });
+    assert.equal(
+      statusOf(review, "WL-0001")?.problem,
+      `WL-0001 addresses no task, but submits VR-0001, which claims IT-0001 — ${aimless}`,
+    );
+    assert.equal(
+      statusOf(review, "VR-0001")?.problem,
+      `VR-0001 claims IT-0001, but the work log that submitted it, WL-0001, addresses no task — ${aimless}`,
+    );
+  });
+
+  test("a claimless report is an orphan, and a dangling claim anchors nothing and is still the log's breach", () => {
+    const claimless = reviewWith({});
+    assert.equal(statusOf(claimless, "VR-0001")?.reason, "orphan");
+    assert.equal(statusOf(claimless, "WL-0001")?.reason, "unapproved");
+
+    const dangling = reviewWith({ add: [edge("VR-0001", "CLAIMS", "IT-9999")] });
+    assert.equal(statusOf(dangling, "VR-0001")?.reason, "orphan");
+    assert.equal(statusOf(dangling, "WL-0001")?.reason, "off-target");
+    assert.ok(statusOf(dangling, "WL-0001")?.problem?.includes("claims IT-9999"));
+  });
+});
+
+describe("the blocked-address rule", () => {
+  // The same spine the aim rule uses, plus a second task that waits on the
+  // first — the two ways a task is blocked: an unread chain, and an open
+  // prerequisite.
+  const goal = node("Goal", "G-0001");
+  const actor = node("Actor", "A-0001");
+  const useCase = node("UseCase", "UC-0001");
+  const scenario = node("Scenario", "SC-0001");
+  const criterion = node("AcceptanceCriterion", "AC-0001");
+  const requirement = node("Requirement", "R-0001");
+  const responsibility = node("SystemResponsibility", "SR-0001");
+  const task = node("ImplementationTask", "IT-0001");
+  const waiting = node("ImplementationTask", "IT-0002");
+  const journal = node("Journal", "J-0001");
+  const log = node("WorkLog", "WL-0001");
+  const SPINE = [
+    edge("G-0001", "PURSUED_BY", "A-0001"),
+    edge("A-0001", "PERFORMS", "UC-0001"),
+    edge("UC-0001", "DETAILS", "SC-0001"),
+    edge("SC-0001", "DERIVES_RESPONSIBILITY", "SR-0001"),
+    edge("SR-0001", "REQUIRES", "R-0001"),
+    edge("R-0001", "HAS_CRITERION", "AC-0001"),
+    edge("IT-0001", "TARGETS", "AC-0001"),
+    edge("IT-0002", "TARGETS", "AC-0001"),
+    edge("IT-0002", "DEPENDS_ON", "IT-0001"),
+    edge("J-0001", "LOGS", "WL-0001"),
+  ];
+  const NODES = [
+    goal,
+    actor,
+    useCase,
+    scenario,
+    responsibility,
+    requirement,
+    criterion,
+    task,
+    waiting,
+    journal,
+    log,
+  ];
+  const CHAIN_READ = ledgerOf(
+    approve(goal, SPINE),
+    approve(actor, SPINE),
+    approve(useCase, SPINE),
+    approve(scenario, SPINE),
+    approve(responsibility, SPINE),
+    approve(requirement, SPINE),
+    approve(criterion, SPINE),
+    approve(task, SPINE),
+    approve(waiting, SPINE),
+  );
+
+  function reviewWith(ledgers: Ledgers, ...extra: SpecEdge[]): GraphReview {
+    return reviewGraph(
+      graphOf({ nodes: NODES, edges: [...SPINE, ...extra] }),
+      ledgers,
+    );
+  }
+
+  test("work logged under a task whose chain is unread is red, with the sentence naming the task", () => {
+    const review = reviewWith(unapproved, edge("WL-0001", "ADDRESSES", "IT-0001"));
+    assert.equal(statusOf(review, "WL-0001")?.reason, "premature");
+    assert.equal(
+      statusOf(review, "WL-0001")?.problem,
+      "WL-0001 addresses IT-0001, and IT-0001 is blocked — work is logged only under a task whose turn has come: its chain read and agreed, and everything it waits on finished.",
+    );
+    // The task itself is untouched by it: blocked is its state, not a defect.
+    assert.equal(statusOf(review, "IT-0001")?.color, "yellow");
+  });
+
+  test("the same log under the same task, chain read, is ordinary yellow — the red clears itself", () => {
+    const review = reviewWith(CHAIN_READ, edge("WL-0001", "ADDRESSES", "IT-0001"));
+    assert.deepEqual(
+      statusOf(review, "WL-0001"),
+      status("WL-0001", "yellow", "unapproved"),
+    );
+  });
+
+  test("an open prerequisite blocks the task, so work under it is red even with the whole chain read", () => {
+    const review = reviewWith(CHAIN_READ, edge("WL-0001", "ADDRESSES", "IT-0002"));
+    assert.equal(statusOf(review, "WL-0001")?.reason, "premature");
+    assert.ok(statusOf(review, "WL-0001")?.problem?.includes("IT-0002 is blocked"));
+  });
+
+  test("a rule of the graph comes before the books here too: an approved log under a blocked task is red", () => {
+    const edges = [...SPINE, edge("WL-0001", "ADDRESSES", "IT-0002")];
+    const review = reviewGraph(
+      graphOf({ nodes: NODES, edges }),
+      ledgerOf(
+        approve(goal, SPINE),
+        approve(actor, SPINE),
+        approve(useCase, SPINE),
+        approve(scenario, SPINE),
+        approve(responsibility, SPINE),
+        approve(requirement, SPINE),
+        approve(criterion, SPINE),
+        approve(task, SPINE),
+        approve(waiting, SPINE),
+        approve(log, edges),
+      ),
+    );
+    assert.equal(statusOf(review, "WL-0001")?.reason, "premature");
+    assert.deepEqual(statusOf(review, "WL-0001")?.approval, APPROVER);
+  });
+
+  test("a deeper red keeps its own sentence — an aim breach is told about the aim, not the timing", () => {
+    const evidence = node("Evidence", "EV-0001");
+    const review = reviewGraph(
+      graphOf({
+        nodes: [...NODES, evidence],
+        edges: [
+          ...SPINE,
+          edge("WL-0001", "ADDRESSES", "IT-0001"),
+          edge("WL-0001", "SUBMITS", "EV-0001"),
+          edge("EV-0001", "CLAIMS", "AC-9999"),
+        ],
+      }),
+      unapproved,
+    );
+    assert.equal(statusOf(review, "WL-0001")?.reason, "off-target");
+  });
+
+  test("a dangling ADDRESSES is not asked about — the missing rule owns the hole", () => {
+    const review = reviewWith(unapproved, edge("WL-0001", "ADDRESSES", "IT-9999"));
+    assert.equal(statusOf(review, "WL-0001")?.reason, "unapproved");
+    assert.deepEqual(
+      review.missing.map((hole) => hole.id),
+      ["IT-9999"],
+    );
+  });
+});
+
+describe("evidence stands on its claim", () => {
+  // Rule 1's motivating regression, pinned: an APPROVED evidence that claims
+  // nothing is still red — the approval is carried as history, never as a
+  // colour over an unanchored node.
+  const journal = node("Journal", "J-0001");
+  const log = node("WorkLog", "WL-0001");
+  const evidence = node("Evidence", "EV-0001");
+  const NODES = [journal, log, evidence];
+  const EDGES = [
+    edge("J-0001", "LOGS", "WL-0001"),
+    edge("WL-0001", "SUBMITS", "EV-0001"),
+  ];
+
+  test("an approved evidence that claims nothing is an orphan, approval and all", () => {
+    const review = reviewGraph(
+      graphOf({ nodes: NODES, edges: EDGES }),
+      ledgerOf(approve(journal, EDGES), approve(log, EDGES), approve(evidence, EDGES)),
+    );
+    assert.equal(statusOf(review, "EV-0001")?.reason, "orphan");
+    assert.equal(statusOf(review, "EV-0001")?.color, "red");
+    assert.deepEqual(statusOf(review, "EV-0001")?.approval, APPROVER);
   });
 });
 

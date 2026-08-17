@@ -214,17 +214,17 @@ export const appRouter = t.router({
     // thing said three ways. `reviewQueue` computes the bundles on every ask
     // and stores nothing. `reject` and `withdrawRejection` are the second book
     // — a person says in writing what is wrong, and takes it back.
-    // `acceptClosure` and `leaveOpen` are the third — a criterion closed over
-    // everything that claims it, or left open with a reason; each removes the
-    // other book's word in the same act.
+    // `acceptClosure` and `leaveOpen` are the third — a subject (criterion or
+    // task) closed over everything that claims it, or left open with a
+    // reason; each removes the other book's word in the same act.
     // `approveNodes` is [Approve all]: one bundle, one turn, all or nothing.
     // Every one of them is the person's, never an agent's, for the reason
     // above.
     //
-    // `ids` and `evidence` are arrays of strings and the schema asks nothing
-    // more of them than that, which is the same bargain every field here
-    // makes: whether an id is blank, unknown or the wrong type of node is the
-    // service's sentence, written for a person to read.
+    // `ids` is an array of strings and the schema asks nothing more of it
+    // than that, which is the same bargain every field here makes: whether an
+    // id is blank, unknown or the wrong type of node is the service's
+    // sentence, written for a person to read.
     review: procedure
       .input(z.object({ projectId: z.string().min(1) }))
       .query(({ input }) => reviewSpec(input.projectId)),

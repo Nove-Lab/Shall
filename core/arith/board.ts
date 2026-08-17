@@ -1,22 +1,12 @@
-import { orphanStem, type SpecNode } from "../graph/index.js";
+import { compare, orphanFixSentence, type SpecNode } from "../graph/index.js";
 import type { RefusedFile, SpecGraph } from "../store/file-store.js";
 import {
   colorContextOf,
-  colorOf,
-  livingSubject,
   type ColorContext,
   type Ledgers,
 } from "./color.js";
-import { closureOf } from "./closure.js";
 import { missingSentence, reviewGraph, type ReviewStatus } from "./review.js";
-import {
-  depthOf,
-  isClosableTask,
-  isCompleted,
-  prerequisitesOf,
-  taskStateOf,
-  type ColorAt,
-} from "./task-state.js";
+import { depthOf } from "./task-state.js";
 
 /**
  * THE BOARD: what the specification needs fixed, and what is ready to be worked
@@ -75,7 +65,13 @@ export interface FixSpecItem {
   name: string | null;
   /** Whose turn it is: a person refused this, or a rule of the graph did. */
   kind: "rejected" | "grammar";
-  reason: "missing" | "malformed" | "orphan" | "off-target" | "rejected";
+  reason:
+    | "missing"
+    | "malformed"
+    | "orphan"
+    | "off-target"
+    | "premature"
+    | "rejected";
   /** The rationale VERBATIM, or the rule's own sentence. Never summarised. */
   detail: string;
   file: string | null;
@@ -112,30 +108,31 @@ export interface TaskBoard {
   implement: ImplementItem[];
 }
 
-/** Byte order, never the machine's locale — the choice the rest of core makes. */
-function compare(a: string, b: string): number {
-  return a === b ? 0 : a < b ? -1 : 1;
-}
-
 /**
  * Where a reason sorts. A person's refusal first, because it is an instruction
  * somebody wrote for whoever is reading this; then the seams the grammar found,
  * then the holes, then the files that would not read at all.
+ *
+ * IT IS THE COLOUR CHAIN'S PRIORITY READ BACKWARDS, deliberately: the chain
+ * answers missing → malformed → orphan → off-target → rejected because that is
+ * the order a single node's defects mask each other in, and this board sorts a
+ * LIST for a person whose first job is the instructions people wrote. Both
+ * orders are right for their own audience. `orphan` and `off-target` share a
+ * rank on purpose — between them it is the tiebreak below (`at`, then
+ * `updatedAt`, then id) that decides, oldest first.
  */
 const RANK: Readonly<Record<FixSpecItem["reason"], number>> = {
   rejected: 0,
   orphan: 1,
   "off-target": 1,
+  premature: 1,
   missing: 2,
   malformed: 3,
 };
 
-/** The reference a row makes to a node, or null when nothing living is there. */
-function refOf(id: string, context: ColorContext): Ref | null {
-  const node = context.nodes.get(id);
-  return node === null || node === undefined
-    ? null
-    : { id: node.id, shortName: node.shortName, name: node.name };
+/** The reference a row makes to a node it already holds. */
+function refOf(node: SpecNode): Ref {
+  return { id: node.id, shortName: node.shortName, name: node.name };
 }
 
 /** The nodes one relation reaches from this one, living only, in id order. */
@@ -195,8 +192,8 @@ function fixOf(
       ...common,
       kind: "grammar",
       reason: "orphan",
-      // The check's own words, so the CLI and the board agree.
-      detail: `${orphanStem(node.id, node.type)}. Draw the relation, or remove the node.`,
+      // The check's own sentence, quoted from its one home in `core/graph`.
+      detail: orphanFixSentence(node.id, node.type),
       by: null,
       at: null,
     };
@@ -211,6 +208,16 @@ function fixOf(
       at: null,
     };
   }
+  if (status.reason === "premature" && status.problem !== null) {
+    return {
+      ...common,
+      kind: "grammar",
+      reason: "premature",
+      detail: status.problem,
+      by: null,
+      at: null,
+    };
+  }
   return null;
 }
 
@@ -218,31 +225,18 @@ function fixOf(
  * The board, whole.
  *
  * THE REVIEW IS RUN ONCE AND EVERYTHING READS IT. Colours, rejections, closure
- * marks and the aim rule's sentence all come out of that one pass, and the
- * task's own word is computed against the colours it produced — so the badge on
- * the Spec plane and the Implement column here cannot disagree.
+ * marks, the aim rule's sentence AND the task's own word all come out of that
+ * one pass — the Implement list below is the review's `taskState === "ready"`
+ * read back rather than recomputed, so the badge on the Spec plane and the
+ * Implement column here cannot disagree: they are one field.
  */
 export function taskBoardOf(graph: SpecGraph, ledgers: Ledgers): TaskBoard {
   const context = colorContextOf(graph, ledgers);
-  const review = reviewGraph(graph, ledgers);
+  const review = reviewGraph(graph, ledgers, context);
   const status = new Map<string, ReviewStatus>();
   for (const held of review.statuses) {
     status.set(held.id, held);
   }
-  const settled = new Map<string, "red" | "yellow" | "green" | null>();
-  const colorAt: ColorAt = (id) => {
-    const held = settled.get(id);
-    if (held !== undefined) {
-      return held;
-    }
-    const node = context.nodes.get(id);
-    const answer =
-      node === undefined
-        ? null
-        : status.get(id)?.color ?? colorOf(livingSubject(node), context)?.color ?? null;
-    settled.set(id, answer);
-    return answer;
-  };
 
   const fixSpec: FixSpecItem[] = [];
   for (const held of review.statuses) {
@@ -318,24 +312,23 @@ export function taskBoardOf(graph: SpecGraph, ledgers: Ledgers): TaskBoard {
   );
 
   const implement: ImplementItem[] = [];
-  for (const node of context.nodes.values()) {
-    if (!isClosableTask(node.type)) {
+  for (const held of review.statuses) {
+    // THE GATE IS THE REVIEW'S OWN WORD. `task-state.ts` decided it once, per
+    // task, inside the pass above; a second computation here is exactly the
+    // drift the shared module exists to prevent.
+    if (held.taskState !== "ready") {
       continue;
     }
-    if (taskStateOf(node, context, colorAt) !== "ready") {
+    const node = context.nodes.get(held.id);
+    if (node === undefined) {
       continue;
     }
-    const modules = reach(node.id, "ALLOCATES", "in", context)
-      .map((module) => refOf(module.id, context))
-      .filter((ref): ref is Ref => ref !== null);
+    const modules = reach(node.id, "ALLOCATES", "in", context).map(refOf);
     const targeted = reach(node.id, "TARGETS", "out", context);
     const carriers = new Map<string, Ref>();
     for (const criterion of targeted) {
       for (const carrier of reach(criterion.id, "HAS_CRITERION", "in", context)) {
-        const ref = refOf(carrier.id, context);
-        if (ref !== null) {
-          carriers.set(ref.id, ref);
-        }
+        carriers.set(carrier.id, refOf(carrier));
       }
     }
     implement.push({
@@ -349,7 +342,9 @@ export function taskBoardOf(graph: SpecGraph, ledgers: Ledgers): TaskBoard {
       targets: targeted.map((criterion) => ({
         id: criterion.id,
         name: criterion.name,
-        closure: status.get(criterion.id)?.closure ?? closureOf(criterion, context),
+        // Null when the far end is no criterion — the same answer the queue's
+        // task card gives for this field, so one wire word for one fact.
+        closure: status.get(criterion.id)?.closure ?? null,
       })),
       addressedBy: reach(node.id, "ADDRESSES", "in", context).map((log) => ({
         id: log.id,
@@ -366,5 +361,3 @@ export function taskBoardOf(graph: SpecGraph, ledgers: Ledgers): TaskBoard {
 
   return { fixSpec, implement };
 }
-
-export { isCompleted, prerequisitesOf, depthOf };

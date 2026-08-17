@@ -1,6 +1,6 @@
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import { cn } from "@/lib/utils";
-import { ClosureMark, StatusDot, TaskStateMark } from "./review-parts";
+import { SecondAxisMark, StatusDot } from "./review-parts";
 import type {
   BandNodeData,
   CardNodeData,
@@ -312,26 +312,22 @@ export function SpecNodeCard({ data }: NodeProps<CardNode>) {
         {data.signal === null ? null : <StatusDot color={data.signal} />}
         <span className="truncate font-mono text-xs">{data.node.id}</span>
         {/* THE SECOND AXIS, AND IT SITS AFTER THE ID RATHER THAN BEFORE IT. The
-            square on the left is the verdict every card can carry; this mark is
-            a criterion's alone, so putting it in the square's place would make
-            two different questions share one position on the board. It IS a
-            colour — red until the criterion closes, green after — in the square's
-            own two palette values; `ClosureMark` carries why.
+            square on the left is the verdict every card can carry; this mark
+            belongs to the closure subjects alone, so putting it in the square's
+            place would make two different questions share one position on the
+            board. Which mark a type wears is `SecondAxisMark`'s one rule, said
+            there for the panel's ID field too.
 
             THE CARD IS THE ONE PLACE THE BADGE IS SHRUNK, and `h-4 px-1.5` is
             the whole of it: the badge stands `h-5` by default, the row it is in
             is a 16px `text-xs` line inside a 44px card the layout declared, and
             a badge at its own height would push every card on the board taller.
             Both are stock utilities — no new style, only a smaller one. */}
-        {/* ONE MARK PER CARD AND THE TYPE DECIDES WHICH. A criterion wears
-            open/closed; a task wears blocked/ready/done, which already says
-            whether it is closed and says what that means for work. Drawing
-            both on a task would be two answers to one question in one row. */}
-        {data.taskState !== null ? (
-          <TaskStateMark state={data.taskState} className="h-4 px-1.5" />
-        ) : data.closure === null ? null : (
-          <ClosureMark state={data.closure} className="h-4 px-1.5" />
-        )}
+        <SecondAxisMark
+          closure={data.closure}
+          taskState={data.taskState}
+          className="h-4 px-1.5"
+        />
       </div>
       {/* THE SHORT NAME IS THE CARD'S OWN INK AT 70% AND NOT `--muted-foreground`.
           The id above it is the readability this canvas is calibrated to, and

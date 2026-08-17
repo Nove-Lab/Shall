@@ -28,6 +28,7 @@ export {
   anchorsFor,
   isColored,
   isRootless,
+  orphanFixSentence,
   orphanStem,
 } from "./anchors.js";
 export type { AnchorDirection, AnchorEdge, AnchorRule } from "./anchors.js";
@@ -37,6 +38,7 @@ export {
   closureKindOf,
 } from "./closure-kinds.js";
 export type { ClosureKind, ClosureSubject } from "./closure-kinds.js";
+export { compare } from "./order.js";
 export { sectionGuideFor } from "./guide.js";
 export type { SectionGuide } from "./guide.js";
 export {

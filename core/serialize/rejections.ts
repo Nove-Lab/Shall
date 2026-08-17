@@ -1,16 +1,13 @@
+import { compare, judgeBody, type ClosureSubject } from "../graph/index.js";
 import {
-  judgeBody,
-  judgeNodeId,
-  type ClosureSubject,
-} from "../graph/index.js";
-import {
-  compare,
+  CLAIMANT_WORDS,
+  judgeClaimantList,
   lowerFirst,
   readLedgerRoot,
   type LedgerGrammar,
 } from "./ledger-common.js";
 import { emitScalar } from "./scalar.js";
-import { isMap, judgeIdentity, mapKeysAt } from "./yaml.js";
+import { isMap, judgeIdentity } from "./yaml.js";
 
 /**
  * The rejection ledger — `.shall/ledger/rejections.yaml` — as bytes, and bytes
@@ -44,15 +41,15 @@ import { isMap, judgeIdentity, mapKeysAt } from "./yaml.js";
  * is `ledger-common.ts`, shared with the other two books.
  *
  * TWO KINDS OF "NO" LIVE IN THIS BOOK, told apart by one key. A record without
- * `evidence` is the refusal of a NODE — its content, at that hash — and it is
- * what turns the node red. A record WITH `evidence` is a criterion LEFT OPEN:
- * somebody looked at every piece of evidence claiming an AcceptanceCriterion,
- * decided the criterion is not met by them, and said why. That is a judgement
- * about the list and not about the criterion's wording, so it colours nothing;
- * it names the criterion's hash and every claimant's hash so that a changed
- * criterion or a changed list asks the question again, exactly as an
+ * a claimant map is the refusal of a NODE — its content, at that hash — and it
+ * is what turns the node red. A record WITH one (`evidence:` for a criterion,
+ * `reports:` for a task) is a subject LEFT OPEN: somebody looked at every
+ * claimant, decided the subject is not met by them, and said why. That is a
+ * judgement about the list and not about the subject's wording, so it colours
+ * nothing; it names the subject's hash and every claimant's hash so that a
+ * changed subject or a changed list asks the question again, exactly as an
  * acceptance does. The two are the same shape plus one map, and they share the
- * key so that a criterion is EITHER closed (acceptances) OR left open (here)
+ * key so that a subject is EITHER closed (acceptances) OR left open (here)
  * and never both — the doors that write them remove the other book's record.
  */
 
@@ -81,7 +78,7 @@ export interface RejectionRecord {
    * rejection of a node's own words.
    *
    * ON DISK IT IS ONE MAP UNDER ONE NAME — `evidence:` for a criterion,
-   * `workLogs:` for a task, the same two names the acceptance ledger uses for
+   * `reports:` for a task, the same two names the acceptance ledger uses for
    * the same two lists — and a record carrying both is refused. The tag is read
    * back off whichever name is there.
    */
@@ -109,34 +106,9 @@ export interface RejectionLedgerReading {
 /** The record's keys, in the order the emitter writes them. */
 const RECORD_KEYS = ["rejectedHash", "by", "at", "rationale"] as const;
 
-/**
- * What each kind's list is called on disk, and in a sentence a person reads.
- * The two key names are the acceptance ledger's own, on purpose: one list of
- * claimants, one name for it, whichever book is holding the verdict.
- */
-const LISTS: Readonly<
-  Record<
-    ClosureSubject,
-    { readonly key: string; readonly entry: string; readonly each: string; readonly hash: string }
-  >
-> = {
-  criterion: {
-    key: "evidence",
-    entry: "an evidence entry",
-    each: "each piece of evidence",
-    hash: "An evidence hash",
-  },
-  task: {
-    key: "workLogs",
-    entry: "a work log entry",
-    each: "each work log",
-    hash: "A work log hash",
-  },
-};
-
 /** Refused wholesale rather than per-key: it is one rule about one shape. */
 const RECORD_SHAPE =
-  "Every record in the rejection ledger is a map of rejectedHash, by, at and rationale, each of them text — with one map of what was left open over it, evidence for a criterion or workLogs for a task, holding at least one entry and never both";
+  "Every record in the rejection ledger is a map of rejectedHash, by, at and rationale, each of them text — with one map of what was left open over it, evidence for a criterion or reports for a task, holding at least one entry and never both";
 
 /** The three words the shared root reader makes this book's sentences out of. */
 const GRAMMAR: LedgerGrammar = {
@@ -171,10 +143,9 @@ export function emitRejectionLedger(records: RejectionLedger): string {
     if (record.leftOpen !== undefined) {
       // The map goes right after the hash it was judged beside, as it does in
       // the acceptance ledger, so the two books read alike. An empty map is
-      // written as a bare `evidence:`/`workLogs:` and refused on the way back —
+      // written as a bare `evidence:`/`reports:` and refused on the way back —
       // see the acceptance ledger for why the emitter does not paper over it.
-      const list = LISTS[record.leftOpen.kind];
-      lines.push(`  ${list.key}:`);
+      lines.push(`  ${CLAIMANT_WORDS[record.leftOpen.kind].key}:`);
       for (const claimantId of [...record.leftOpen.claimants.keys()].sort(
         compare,
       )) {
@@ -198,7 +169,7 @@ function refused(problem: string): RejectionLedgerReading {
 
 /**
  * The record's shape, or null: the four text keys, and either no list at all or
- * exactly one of `evidence`/`workLogs`, a map of text to text with something in
+ * exactly one of `evidence`/`reports`, a map of text to text with something in
  * it. Written out rather than reached for from `readStringMap`, because that
  * helper asks for a tuple of strings and the fifth key here is a map.
  *
@@ -220,8 +191,8 @@ function readRecordShape(value: unknown): {
     return null;
   }
   const keys = Object.keys(value);
-  const kinds = (Object.keys(LISTS) as ClosureSubject[]).filter((kind) =>
-    keys.includes(LISTS[kind].key),
+  const kinds = (Object.keys(CLAIMANT_WORDS) as ClosureSubject[]).filter(
+    (kind) => keys.includes(CLAIMANT_WORDS[kind].key),
   );
   if (kinds.length > 1) {
     return null;
@@ -245,7 +216,7 @@ function readRecordShape(value: unknown): {
   if (kind === undefined) {
     return { rejectedHash, by, at, rationale, leftOpen: null };
   }
-  const claimants = value[LISTS[kind].key];
+  const claimants = value[CLAIMANT_WORDS[kind].key];
   if (!isMap(claimants)) {
     return null;
   }
@@ -294,30 +265,20 @@ export function parseRejectionLedger(text: string): RejectionLedgerReading {
       return refused(`${RECORD_SHAPE} — the record under ${id} is not.`);
     }
 
-    // The nested map is defended the way the root is — see the acceptance
-    // ledger, whose defence this is word for word.
-    const list = held.leftOpen === null ? null : LISTS[held.leftOpen.kind];
-    if (held.leftOpen !== null && list !== null) {
-      const subject = held.leftOpen.kind === "task" ? "task" : "criterion";
-      const seen = new Set<string>();
-      for (const key of mapKeysAt(root.source, [id, list.key]) ?? []) {
-        if (key !== "" && seen.has(key)) {
-          return refused(
-            `${key} is written twice under ${id} in the rejection ledger, once bare and once quoted — YAML reads two keys and Shall one id, and a ${subject} left open names one hash for ${list.each}.`,
-          );
-        }
-        seen.add(key);
-      }
-      for (const claimantId of held.leftOpen.claimants.keys()) {
-        if (claimantId === "") {
-          return refused(`Under ${id}, ${list.entry} names no node id.`);
-        }
-        const judged = judgeNodeId(claimantId);
-        if (judged !== null) {
-          return refused(
-            `Under ${id}, ${JSON.stringify(claimantId)} is not a node id. ${judged}`,
-          );
-        }
+    // The claimant map's defence is `judgeClaimantList` in `ledger-common.ts`,
+    // shared word for word with the acceptance ledger.
+    if (held.leftOpen !== null) {
+      const words = CLAIMANT_WORDS[held.leftOpen.kind];
+      const listProblem = judgeClaimantList(
+        root.source,
+        id,
+        GRAMMAR,
+        words,
+        `a ${held.leftOpen.kind} left open names one hash for ${words.each}`,
+        held.leftOpen.claimants.keys(),
+      );
+      if (listProblem !== null) {
+        return refused(listProblem);
       }
     }
 
@@ -336,10 +297,13 @@ export function parseRejectionLedger(text: string): RejectionLedgerReading {
       ...rationaleProblems,
     ];
     let leftOpen: RejectionRecord["leftOpen"];
-    if (held.leftOpen !== null && list !== null) {
+    if (held.leftOpen !== null) {
       const claimants = new Map<string, string>();
       for (const [claimantId, hash] of held.leftOpen.claimants) {
-        const judgedHash = judgeIdentity(list.hash, hash);
+        const judgedHash = judgeIdentity(
+          CLAIMANT_WORDS[held.leftOpen.kind].hash,
+          hash,
+        );
         problems.push(...judgedHash.problems);
         claimants.set(claimantId, judgedHash.value);
       }

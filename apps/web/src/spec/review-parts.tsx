@@ -21,9 +21,9 @@ import type { Signal } from "./view/furniture";
  */
 
 /**
- * THE VERDICT'S PAINT. WITH `CLOSURE_CLASS` BELOW IT, THE TWO PLACES A COLOUR IS
- * NAMED — and there are two rather than one because a criterion's second axis is
- * now painted too, in these same values.
+ * THE VERDICT'S PAINT. WITH THE `MARK` TABLE BELOW IT, THE TWO PLACES A COLOUR
+ * IS NAMED — and there are two rather than one because the second axis is
+ * painted too, in these same values.
  *
  * THEY ARE TAILWIND PALETTE VALUES AND NOT THEME TOKENS, which is a departure
  * from the rest of this app and is the same one the card's placeholder square
@@ -81,19 +81,48 @@ export function StatusDot({ color }: { color: Signal }) {
 const MET_CLASS = "bg-emerald-500 text-white border-transparent";
 
 /**
- * The paint each closure word takes. `Record<Closure, …>` for the reason
- * `SIGNAL_CLASS` is one: a third word is a compile error here.
+ * THE FIVE WORDS AND THEIR TWO PAINTS, ONE TABLE. The two unions are disjoint,
+ * so one `Record` over both keeps the exhaustiveness a `Record` is for — a new
+ * word on either axis is a compile error here — while making the sameness
+ * visible: `closed` and `done` are one row said twice, and the three unfinished
+ * words are the design system's own quiet badge with nothing of ours on it.
+ *
+ * BLOCKED AND READY ARE DELIBERATELY IDENTICAL PAINT: both are states of
+ * unfinished work and neither is a defect; what differs is whether this is
+ * somebody's turn, and the WORD says that. Colouring "ready" would put a third
+ * light on a board that already has one.
  */
-export const CLOSURE_CLASS: Record<Closure, string> = {
-  open: "",
-  closed: MET_CLASS,
+const MARK: Record<
+  Closure | TaskState,
+  {
+    readonly variant: "secondary" | "default";
+    readonly className: string;
+    readonly label: string;
+  }
+> = {
+  open: { variant: "secondary", className: "", label: "Open" },
+  closed: { variant: "default", className: MET_CLASS, label: "Closed" },
+  blocked: { variant: "secondary", className: "", label: "Blocked" },
+  ready: { variant: "secondary", className: "", label: "Ready" },
+  done: { variant: "default", className: MET_CLASS, label: "Done" },
 };
 
-/** Which badge variant each word wears — quiet until the thing is met. */
-const CLOSURE_VARIANT: Record<Closure, "secondary" | "default"> = {
-  open: "secondary",
-  closed: "default",
-};
+function Mark({
+  state,
+  className,
+}: {
+  state: Closure | TaskState;
+  // `| undefined` because the two named marks forward their own optional prop
+  // here under `exactOptionalPropertyTypes`.
+  className?: string | undefined;
+}) {
+  const mark = MARK[state];
+  return (
+    <Badge variant={mark.variant} className={cn(mark.className, className)}>
+      {mark.label}
+    </Badge>
+  );
+}
 
 /**
  * THE WORD IS THE ANNOUNCEMENT AND THERE IS NO SECOND ONE. The badge says
@@ -112,45 +141,10 @@ export function ClosureMark({
   className,
 }: {
   state: Closure;
-  className?: string;
+  className?: string | undefined;
 }) {
-  return (
-    <Badge
-      variant={CLOSURE_VARIANT[state]}
-      className={cn(CLOSURE_CLASS[state], className)}
-    >
-      {state === "closed" ? "Closed" : "Open"}
-    </Badge>
-  );
+  return <Mark state={state} className={className} />;
 }
-
-/**
- * WHETHER A TASK CAN BE PICKED UP — the same two paints, read the same way.
- *
- * BLOCKED AND READY ARE THE SAME QUIET BADGE and the WORD is what separates
- * them: both are states of unfinished work and neither is a defect; what
- * differs is whether this is somebody's turn. Colouring "ready" would put a
- * third light on a board that already has one, and a person scanning for red
- * would find work that is merely available.
- */
-export const TASK_STATE_CLASS: Record<TaskState, string> = {
-  blocked: "",
-  ready: "",
-  done: MET_CLASS,
-};
-
-const TASK_STATE_VARIANT: Record<TaskState, "secondary" | "default"> = {
-  blocked: "secondary",
-  ready: "secondary",
-  done: "default",
-};
-
-/** The word each state announces itself with. */
-const TASK_STATE_LABEL: Record<TaskState, string> = {
-  blocked: "Blocked",
-  ready: "Ready",
-  done: "Done",
-};
 
 /**
  * THE BADGE BESIDE A TASK'S ID, drawn for reading only — no hover, no click,
@@ -165,16 +159,35 @@ export function TaskStateMark({
   className,
 }: {
   state: TaskState;
-  className?: string;
+  className?: string | undefined;
 }) {
-  return (
-    <Badge
-      variant={TASK_STATE_VARIANT[state]}
-      className={cn(TASK_STATE_CLASS[state], className)}
-    >
-      {TASK_STATE_LABEL[state]}
-    </Badge>
-  );
+  return <Mark state={state} className={className} />;
+}
+
+/**
+ * ONE MARK PER SECOND AXIS, AND THE TYPE DECIDES WHICH — the precedence said
+ * once for the three places a node's id wears it (the canvas card, and the
+ * panel's ID field in both modes). A task's word wins because it already says
+ * whether the task is closed and what that means for work; a criterion wears
+ * its closure mark; everything else wears nothing. Drawing both on a task
+ * would be two answers to one question in one row.
+ */
+export function SecondAxisMark({
+  closure,
+  taskState,
+  className,
+}: {
+  closure: Closure | null;
+  taskState: TaskState | null;
+  className?: string | undefined;
+}) {
+  if (taskState !== null) {
+    return <TaskStateMark state={taskState} className={className} />;
+  }
+  if (closure !== null) {
+    return <ClosureMark state={closure} className={className} />;
+  }
+  return null;
 }
 
 /**

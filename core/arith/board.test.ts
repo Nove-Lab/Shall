@@ -185,6 +185,8 @@ const assumption = node("Assumption", "AS-0001");
 const term = node("Term", "T-0001");
 const journal = node("Journal", "J-0001");
 const workLog = node("WorkLog", "WL-0001");
+/** The task's claimant since #24— : a report, submitted by the log, claiming one task. */
+const report = node("VerificationReport", "VR-0001");
 
 const SPINE_NODES = [
   parentGoal,
@@ -371,13 +373,15 @@ describe("whether a task can be picked up", () => {
   });
 
   test("is blocked while a prerequisite is unfinished, and ready once it closes", () => {
-    const nodes = [...SPINE_NODES, other, journal, workLog];
+    const nodes = [...SPINE_NODES, other, journal, workLog, report];
     const edges = [
       ...SPINE,
       edge("MD-0001", "ALLOCATES", "IT-0002"),
       edge("IT-0001", "DEPENDS_ON", "IT-0002"),
       edge("J-0001", "LOGS", "WL-0001"),
       edge("WL-0001", "ADDRESSES", "IT-0002"),
+      edge("WL-0001", "SUBMITS", "VR-0001"),
+      edge("VR-0001", "CLAIMS", "IT-0002"),
     ];
     const green = settled(nodes, edges);
     const waiting = colorContextOf(graphOf(nodes, edges), green);
@@ -388,7 +392,7 @@ describe("whether a task can be picked up", () => {
 
     const closed = booksOf({
       approvals: nodes.map((held) => approve(held, edges)),
-      acceptances: [accept(other, [workLog], edges)],
+      acceptances: [accept(other, [report], edges)],
     });
     const context = colorContextOf(graphOf(nodes, edges), closed);
     assert.equal(isCompleted(other, context), true);
@@ -410,16 +414,18 @@ describe("whether a task can be picked up", () => {
     );
   });
 
-  test("is done once a person closes it on the work that addressed it", () => {
-    const nodes = [...SPINE_NODES, journal, workLog];
+  test("is done once a person closes it on the report that verified it", () => {
+    const nodes = [...SPINE_NODES, journal, workLog, report];
     const edges = [
       ...SPINE,
       edge("J-0001", "LOGS", "WL-0001"),
       edge("WL-0001", "ADDRESSES", "IT-0001"),
+      edge("WL-0001", "SUBMITS", "VR-0001"),
+      edge("VR-0001", "CLAIMS", "IT-0001"),
     ];
     const ledgers = booksOf({
       approvals: nodes.map((held) => approve(held, edges)),
-      acceptances: [accept(task, [workLog], edges)],
+      acceptances: [accept(task, [report], edges)],
     });
     const context = colorContextOf(graphOf(nodes, edges), ledgers);
     assert.equal(
@@ -429,11 +435,13 @@ describe("whether a task can be picked up", () => {
   });
 
   test("comes back to ready when the closing is withdrawn as a leaving-open", () => {
-    const nodes = [...SPINE_NODES, journal, workLog];
+    const nodes = [...SPINE_NODES, journal, workLog, report];
     const edges = [
       ...SPINE,
       edge("J-0001", "LOGS", "WL-0001"),
       edge("WL-0001", "ADDRESSES", "IT-0001"),
+      edge("WL-0001", "SUBMITS", "VR-0001"),
+      edge("VR-0001", "CLAIMS", "IT-0001"),
     ];
     const ledgers = booksOf({
       approvals: nodes.map((held) => approve(held, edges)),
@@ -771,11 +779,13 @@ describe("the board and the queue", () => {
     // The two surfaces answer two questions: the queue asks whether the work
     // shown is enough, the board says the task is not closed yet. Until a
     // person says one of the two words, both are true.
-    const nodes = [...SPINE_NODES, journal, workLog];
+    const nodes = [...SPINE_NODES, journal, workLog, report];
     const edges = [
       ...SPINE,
       edge("J-0001", "LOGS", "WL-0001"),
       edge("WL-0001", "ADDRESSES", "IT-0001"),
+      edge("WL-0001", "SUBMITS", "VR-0001"),
+      edge("VR-0001", "CLAIMS", "IT-0001"),
     ];
     const ledgers = settled(nodes, edges);
     const graph = graphOf(nodes, edges);

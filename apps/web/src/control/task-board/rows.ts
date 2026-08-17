@@ -1,5 +1,6 @@
 import type { FixSpecItem, ImplementItem, TaskBoard } from "@/spec/review";
 import { firstLine } from "@/spec/review";
+import { countWord } from "../parts";
 
 /**
  * THE BOARD AS ONE LIST, because the page that shows it is one table.
@@ -32,11 +33,6 @@ export function boardRows(board: TaskBoard): BoardRow[] {
   ];
 }
 
-/** The row's name in a URL — core's, so a link and a lookup cannot disagree. */
-export function rowKey(row: BoardRow): string {
-  return row.item.key;
-}
-
 /** What the row is about: an id where there is one, a path where there is not. */
 export function rowTitle(row: BoardRow): string {
   return row.kind === "implement"
@@ -44,11 +40,6 @@ export function rowTitle(row: BoardRow): string {
     : row.item.id === null
       ? (row.item.file ?? "a file that would not read")
       : `${row.item.id}${row.item.name === null ? "" : ` ${row.item.name}`}`;
-}
-
-/** "1 criterion", "2 criteria" — the plural said once rather than at each call. */
-function countWord(count: number, one: string, many: string): string {
-  return `${String(count)} ${count === 1 ? one : many}`;
 }
 
 /**

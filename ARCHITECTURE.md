@@ -33,9 +33,9 @@ daemon 하나가 돌고, 사람은 localhost 웹 화면에서 스펙을 보고 �
   없다. 판정은 파일 밖, 데몬만 쓰는 장부 세 권에 산다 — `.shall/ledger/approvals.yaml`
   (nodeId → `{approvedHash, by, at}`), `rejections.yaml`(nodeId → `{rejectedHash, by,
   at, rationale}` — 무언가를 "열어 둔" 기록은 같은 키 아래 맵을 하나 더 실어 노드
-  반려와 구분한다: AC면 `evidence: {id → hash}`, task면 `workLogs: {id → hash}`),
+  반려와 구분한다: AC면 `evidence: {id → hash}`, task면 `reports: {id → hash}`),
   `acceptances.yaml`(acId → `{acHash, evidence: {id → hash}, by, at}` 또는 taskId →
-  `{taskHash, workLogs: {id → hash}, by, at}`) — 각각 노드당 최신 레코드 하나. 승인과
+  `{taskHash, reports: {id → hash}, by, at}`) — 각각 노드당 최신 레코드 하나. 승인과
   반려는 서로를 지우지 않지만, 닫힘의 두 말(closed / left open)은 주체마다 한 권에만
   산다 — 닫으면 rejections에서 지우고, 열어 두면 acceptances에서 지운다. 옛 `approval:` 블록이 파일에
   남아 있으면 낯선 키처럼 이름으로 거부된다.
@@ -175,17 +175,32 @@ WorkLog에 한해 `commits`, 그리고 기계 블록 하나(`deletionProposed`)�
   ImplementationTask의 `TARGETS`(닫으려는 AcceptanceCriterion), WorkLog의
   `ADDRESSES`(다루는 과제), Evidence의 `CLAIMS`(만족시킨다는 기준) — 그래서 IT는
   ALLOCATES하는 모듈에 또는 자기 TARGETS 대상에, WorkLog는 LOGS하는 Journal에 또는
-  자기 ADDRESSES 대상에, Evidence는 SUBMITS하는 WorkLog에 또는 자기 CLAIMS 대상에
-  붙든다(#22·#23·#24는 2026-08-16에 방향을 뒤집었다: 겨냥하는 쪽이 겨냥 대상을
+  자기 ADDRESSES 대상에 붙들고, **Evidence와 VerificationReport는 자기 CLAIMS
+  대상에만** 붙든다 — claim이 곧 그것을 그것이게 하는 것이라, claim 없는 둘은
+  SUBMITS가 있어도 고아(red)다(SUBMITS는 누가 가져왔는지를 말할 뿐이다;
+  2026-08-17에 좁힘 — claim 없는 Evidence가 승인되는 구멍이 화면에 나타났다)(#22·#23·#24는 2026-08-16에 방향을 뒤집었다: 겨냥하는 쪽이 겨냥 대상을
   말하므로, 과제를 세우거나 작업을 시작하거나 주장을 적어도 기준·과제 파일은 한
   바이트도 움직이지 않는다). 문법 테이블과 교차검증된다
-- **겨냥 규칙(aim rule)** — 과제를 ADDRESSES하는 WorkLog가 SUBMITS하는 Evidence는
-  그 과제가 TARGETS하는 기준만 CLAIMS해야 한다(claim이 없어도, 다른 기준을 claim해도
-  위반). 파일 셋을 한꺼번에 읽는 유일한 문법이고, 판정이 아니라 **문법**이라 색 사슬의
-  red(`off-target`)로 답한다 — 사람의 승인 이전에 지켜야 하는 것. 위반은 WorkLog와
-  Evidence **양쪽**을 red로 만들고 관련 id를 전부 이름한 문장 하나를 단다(고칠 줄이
-  세 파일 중 어디에 있어도 같은 문장을 읽도록). 과제를 ADDRESSES하지 않는 WorkLog는
-  이 규칙 밖이다
+- **겨냥 규칙(aim rule)** — WorkLog가 SUBMITS하는 Evidence는 그 WorkLog가
+  ADDRESSES하는 과제가 TARGETS하는 기준만 CLAIMS할 수 있고, SUBMITS하는
+  **VerificationReport는 그 ADDRESSES 대상 과제들 중 정확히 하나만** CLAIMS할 수
+  있다(둘 이상 claim하면 제출자가 없어도 위반). 파일 셋을 한꺼번에 읽는 유일한
+  문법이고, 판정이 아니라 **문법**이라 색 사슬의 red(`off-target`)로 답한다 — 사람의
+  승인 이전에 지켜야 하는 것. 위반은 WorkLog와 claimant **양쪽**을 red로 만들고 관련
+  id를 전부 이름한 문장 하나를 단다(고칠 줄이 세 파일 중 어디에 있어도 같은 문장을
+  읽도록). **과제를 ADDRESSES하지 않는 WorkLog는 빈 허용 집합 밑에 있다**: 로그
+  자체는 무죄지만, 그 밑의 Evidence·VR가 무언가를 claim하는 순간 양쪽이 red다
+  (예외였다가 2026-08-17에 닫힘 — aim 없는 로그의 evidence가 아무 기준이나 claim할
+  수 있었다). 아무 WorkLog도 SUBMITS하지 않는 claimant만 소속 절 밖이다
+- **차단-작업 규칙(blocked-address rule)** — WorkLog가 ADDRESSES하는 과제가
+  **blocked**(사슬 미독 ∨ 선행 미완)면 그 로그는 red(`premature`)다: 일은 차례가 온
+  과제 밑에서만 기록된다(demo1의 WL-0002 → blocked IT-0002 재현에서 나옴,
+  2026-08-17). 과제가 ready/done이 되는 순간 스스로 풀린다. 다른 노드들의 판정
+  (과제의 상태)을 읽는 유일한 red라 `colorOf`의 여덟 번째 질문이 되지 못하고,
+  `reviewGraph`가 기본 사슬이 red를 내지 않은 노드에만 얹는다(술어는
+  `task-state.ts`의 `prematureAddressOf`). 문·보드·check가 모두 statuses를 읽으므로
+  전부 같은 답을 본다. 승인 순서에 함의가 있다: 사슬을 먼저 승인하고, 로그는 그
+  과제의 차례가 온 다음에(두 물결)
 - 판정 규칙 — id 형태, 두 이름, 본문의 문자·크기. 순수 함수 하나로 모아 두어
   파일 로더와 daemon의 door가 **같은 것**을 부른다. 문장도 발견 순서도 하나뿐이다
 - 섹션 가이드 — 타입마다 템플릿이 제안하는 `## <라벨>` 시작 형태. 데이터일 뿐,
@@ -247,7 +262,9 @@ core에서 파일시스템을 만지는 유일한 모듈이고, 노드가 어느
   green. spec에 없는 id의 레코드는 무시된다 — 삭제된 노드의 이력이고, 복원되면
   내용이 맞는 한 그대로다
 - **닫힘의 주체는 둘이다**(`core/graph/closure-kinds.ts`) — AC는 그것을 CLAIMS하는
-  Evidence로, ImplementationTask는 그것을 ADDRESSES하는 WorkLog로 닫힌다. 어떤 타입이
+  Evidence로, ImplementationTask는 그것을 CLAIMS하는 VerificationReport로 닫힌다
+  (2026-08-17에 WorkLog·ADDRESSES에서 옮김: ADDRESSES는 "어느 과제 밑의 작업인가"라는
+  사실로 남고, 닫힘은 검증 보고서가 말한다). 어떤 타입이
   어떤 관계로 닫히는지는 `ANCHOR_RULES`와 같은 성격의 canon 사실이라 core/graph의 표
   한 곳에 있고, 산술은 주체에서 그 표를 읽는다 — 두 주체가 두 코드 경로가 아니라
   목록만 다른 하나다. 레코드는 자기가 무엇을 닫았는지(kind)를 함께 들고, 종류가
@@ -270,12 +287,14 @@ core에서 파일시스템을 만지는 유일한 모듈이고, 노드가 어느
   — 는 부모를 가리키므로 뒤집어)로 닿는 서브그래프의 yellow∪반려를 멤버로, green을
   '무수정 확인' 목록으로 담는다. 뿌리 선택만 covered를 보고 도달은 안 본다 — 두
   뿌리가 닿는 노드는 두 번들에 다 실리고 `sharedWith`로 서로를 가리킨다. Term·DE는
-  마지막에 각자 단일 번들. 마지막으로 AC closure: 증거가 하나라도 CLAIMS하고 **그
-  증거가 전부 green**인데 지금 목록에 대해 closed도 left open도 말해진 적 없는 AC(문구가
-  반려 중인 AC는 제외; 미승인 증거가 하나라도 있으면 그냥 open, 큐 밖).
-  정렬은 AC closure → Spec approval → Work report, 그 안에서 멤버
-  mtime 최솟값이 오래된 것 먼저. 뿌리는 yellow만이다 — 반려된 노드는 yellow 뿌리가
-  닿을 때 멤버로 남고, 홀로 남으면 큐를 떠난다(에이전트 차례)
+  마지막에 각자 단일 번들. 마지막으로 두 closure: 주체가 green이고
+  claimant(AC면 CLAIMS하는 증거, task면 CLAIMS하는 VerificationReport)가 하나 이상
+  **전부 green**인데 지금 목록에 대해 closed도 left open도 말해진 적 없는 주체(문구가
+  반려 중이거나 non-green이면 제외; 미승인 claimant가 하나라도 있으면 그냥 open, 큐 밖).
+  정렬은 AC closure → Task closure → Spec approval → Work report, 그 안에서 멤버
+  mtime 최솟값이 오래된 것 먼저. 뿌리는 yellow만이다 — 반려된 노드와 `premature`
+  로그는 yellow 뿌리가 닿을 때 red 멤버로 남고(판정하는 사람이 봐야 하므로), 홀로
+  남으면 큐를 떠난다(에이전트 차례)
 - reviewGraph — 상태 목록(각 상태에 approval·rejection 레코드, AC의 closure와 left-open
   기록, 겨냥 규칙이 쓴 문장 `problem`을 실어),
   답하는 파일이 없는 id와 그것을 이름하는 참조들, 읽히지 않는 파일들을 한 번에
@@ -342,7 +361,7 @@ core에서 파일시스템을 만지는 유일한 모듈이고, 노드가 어느
   제조 경로다 — 각각 장부에 레코드를 쓰고 노드 파일은 건드리지 않는다.
   `approveNodes`는 전부-아니면-무다: 가드를 전부 지난 뒤 한 번 쓰고, 하나라도 막히면
   막힌 것을 전부 나열하며 아무것도 안 쓴다. `acceptClosure`는 id 하나를 받아 **지금 그
-  주체를 claim하는 것 전부**로 닫고(AC면 CLAIMS하는 증거, task면 ADDRESSES하는 작업
+  주체를 claim하는 것 전부**로 닫고(AC면 CLAIMS하는 증거, task면 CLAIMS하는 보고서
   기록), `leaveOpen`은 같은 목록에 사유를 붙여 열어 둔다; `taskBoard`는 아무것도 쓰지
   않는 읽기 하나다 — 보드의 모든 열이 장부에서 세어지므로 장부가 안 읽히면 통째로
   거부한다;
@@ -386,7 +405,7 @@ localhost 브라우저 화면. 사람의 관찰·편집 표면.
   전면에 판정 재료(뿌리의 diff/전문, Journal 본문, AC 본문)·멤버 목록(노드마다
   diff/전문, [Approve]·[Reject…]·[Open in Spec Plane])·접힌 무수정 확인 목록·번들 버튼
   하나 또는 둘([Approve all]/[Accept report]/[Close]+[Leave open…]). 번들은 네 종류다 —
-  AC closure · Task closure(그 task를 ADDRESSES하는 WorkLog 목록, 겨냥한 AC들의 마크를
+  AC closure · Task closure(그 task를 CLAIMS하는 VerificationReport 목록, 겨냥한 AC들의 마크를
   문맥으로) · Spec approval · Work report. 반려는 인라인
   팝오버 — 대상 id·이름, 필수 rationale, 확정/취소 — 이고 카드의 행 우클릭과 스펙
   플레인 카드 우클릭 어디서든 같은 팝오버다. 판정 직후 카드는 큐를 다시 계산하고,
@@ -445,13 +464,14 @@ MCP 서버 · webhook 수신 · 외부 cron · 추론 클라이언트와 그 게
   장부의 모든 레코드가 yellow로 돌아간다
 - **장부 세 권** — `.shall/ledger/approvals.yaml`(nodeId → `{approvedHash, by, at}`),
   `rejections.yaml`(nodeId → `{rejectedHash, by, at, rationale}`, 열어 둔 기록이면
-  `evidence:` 또는 `workLogs:` 맵 하나를 더), `acceptances.yaml`(acId → `{acHash,
-  evidence: {evId → hash}, by, at}` 또는 taskId → `{taskHash, workLogs: {wlId → hash},
+  `evidence:` 또는 `reports:` 맵 하나를 더), `acceptances.yaml`(acId → `{acHash,
+  evidence: {evId → hash}, by, at}` 또는 taskId → `{taskHash, reports: {vrId → hash},
   by, at}`), id 바이트 순, 파일 형식과 같은 스칼라 규칙과 yaml 계약. 뒤의 두 권은
   2026-08-16의 리뷰 큐 라운드에 얼었고, task 쪽 두 키는 2026-08-17에 나란히 얼었다 —
   criterion 레코드의 바이트는 그대로다
 - **엣지 #22·#23·#24의 방향** — `ImplementationTask —TARGETS→ AcceptanceCriterion`,
-  `WorkLog —ADDRESSES→ ImplementationTask`, `Evidence —CLAIMS→ AcceptanceCriterion`
+  `WorkLog —ADDRESSES→ ImplementationTask`, `Evidence —CLAIMS→ AcceptanceCriterion`,
+  `VerificationReport —CLAIMS→ ImplementationTask`
   (2026-08-16에 옛 `IS_PLANNED_BY`·`IS_ADDRESSED_BY`·`IS_CLAIMED_BY`를 뒤집었다). 문법의
   다른 행은 얼지 않았지만, 이 세 행은 아래층 파일의 바이트에 남으므로 여기 적는다
 - **경로가 정체성** — `.shall/spec/<band>/<Type>/<id>.md`. 밴드 폴더 넷, 폴더가
