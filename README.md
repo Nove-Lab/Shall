@@ -243,7 +243,7 @@ registry config, so `npx shadcn add <component>` works from `apps/web`.
 ```
 <project>/.shall/
   project.json                 id, display name, schema version
-  .gitignore                   the shall.db files and *.tmp — Shall's own leavings
+  .gitignore                   *.tmp — the only leaving Shall can make
   spec/<band>/<Type>/<id>.md   the graph: one file per node
   ledger/approvals.yaml        the approvals: node id → {approvedHash, by, at}
   ledger/rejections.yaml       the rejections: node id → {rejectedHash, by, at, rationale}
@@ -258,9 +258,10 @@ code, git holds their history and their merges, and a fresh clone can be read
 it in the UI. Each ledger appears with its first record; a project that has
 judged nothing has none. A ledger that will not read is a refusal, not a
 screenful of yellow: the review says which book and why.
-The `.gitignore` Shall writes covers only its own leavings — a `shall.db` left
-behind by a version from before the spec moved into files, and the `*.tmp` a
-write leaves if it dies between writing and renaming. The 22 reference
+The `.gitignore` Shall writes covers one thing: the `*.tmp` a write leaves if
+it dies between writing and renaming. It also ignored a `shall.db` for as long
+as any folder still held one from before the spec moved into files; those files
+are gone and the lines went with them. The 22 reference
 templates are not in the project any more: they are the machine's, regenerated
 under `~/.shall/templates/`, and a set an older Shall committed into a project
 is removed on the next open.
