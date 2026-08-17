@@ -17,6 +17,7 @@ import {
   writeProjectFiles,
   writeSharedTemplates,
 } from "../host/project-files.js";
+import { writeAgentRules } from "../host/agent-rules.js";
 import { writeAgentDenyRules } from "../host/agent-settings.js";
 import { initRepository, repositoryRoot } from "../host/git-cli.js";
 import { readGitBranch } from "../host/git.js";
@@ -46,8 +47,11 @@ export async function createProject(
   if ((await repositoryRoot(absolutePath)) === null) {
     await initRepository(absolutePath);
   }
-  // The same convenience an open runs — see openProject for why it is quiet.
-  await writeAgentDenyRules(absolutePath);
+  // The same conveniences an open runs — see openProject for why they are quiet.
+  await Promise.all([
+    writeAgentDenyRules(absolutePath),
+    writeAgentRules(absolutePath),
+  ]);
   const project = toRegistryProject(absolutePath, metadata);
   await upsertRegistryProject(project);
   return project;
@@ -86,16 +90,18 @@ export async function openProject(
   }
 
   // A project arrives here from a git clone as often as from this machine's own
-  // `create`. Four tidyings are cheap and quiet when there is nothing to do:
+  // `create`. Five tidyings are cheap and quiet when there is nothing to do:
   // the spec folder is made if it is not there, the machine's reference
   // templates under `~/.shall/templates` are brought current, a template set
   // an older Shall committed into this project is removed — templates live
   // with Shall now, and a stale copy in the repository would teach an agent a
-  // format the daemon no longer writes — and the agent settings gain the two
-  // deny rules that keep Shall's own home out of an agent's reading and the
-  // ledgers out of its pen.
+  // format the daemon no longer writes — the agent settings gain the two deny
+  // rules that keep Shall's own home out of an agent's reading and the ledgers
+  // out of its pen, and the page under `.claude/rules` is brought current the
+  // way the templates are: half a page saying what this project is and which
+  // doors are not an agent's.
   //
-  // NONE IS A CONDITION OF OPENING. All four are conveniences — so a folder
+  // NONE IS A CONDITION OF OPENING. All five are conveniences — so a folder
   // Shall may read but not write into (a read-only mount, a checkout owned by
   // somebody else) opens and serves its graph rather than failing the click
   // with an errno. Reading a project should never require the right to write
@@ -105,6 +111,7 @@ export async function openProject(
     writeSharedTemplates().catch(() => undefined),
     removeProjectTemplates(absolutePath).catch(() => undefined),
     writeAgentDenyRules(absolutePath),
+    writeAgentRules(absolutePath),
   ]);
 
   const project = toRegistryProject(absolutePath, metadata);
