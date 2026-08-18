@@ -29,6 +29,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/EmptyState";
 import { cn } from "@/lib/utils";
 import { useProject } from "@/project-context";
+import { useRevision } from "@/live";
 import { RejectionPopover } from "@/spec/RejectionPopover";
 import { ClosureMark, StatusDot } from "@/spec/review-parts";
 import {
@@ -159,6 +160,33 @@ export function ReviewBundlePage() {
       live = false;
     };
   }, [fetchCard]);
+
+  /**
+   * A CHANGE ON DISK RE-READS WHAT IS ALREADY HERE, AND CLEARS NOTHING. The
+   * effect above owns the skeleton and the refusal because it owns the mount;
+   * this one owns neither, so an agent's write does not blink the card back to
+   * skeletons on its way to being right. A failure here keeps what is on screen
+   * and says nothing: the next change asks again. The bundle vanishing under
+   * this is the ordinary successful outcome, said where it already was.
+   */
+  const revision = useRevision();
+  useEffect(() => {
+    if (revision === 0) {
+      return;
+    }
+    let live = true;
+    fetchCard()
+      .then((next) => {
+        if (live) {
+          setBundles(next.bundles);
+          setNodes(next.nodes);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [revision, fetchCard]);
 
   /**
    * A DIFFERENT CARD IS A DIFFERENT REFUSAL. This route keeps its component
