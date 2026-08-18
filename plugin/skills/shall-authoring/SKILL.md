@@ -134,6 +134,10 @@ nodes: split it and relate the halves. A file longer than a screen is overloaded
 and will be reviewed badly: a person approves what they can hold in their head
 at once.
 
+Say each thing once, in the node whose thing it is. Where a neighbour already
+carries a fact, draw the relation and let it stand: a node that reads well only
+because it repeats its neighbours is approved once and wrong ever after.
+
 ## 7. Don't reopen what is closed
 
 A criterion a person has closed is closed over the exact list of evidence that

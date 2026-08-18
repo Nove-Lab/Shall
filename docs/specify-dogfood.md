@@ -62,6 +62,11 @@ the agent cannot open:
 - **demo3, a link shortener** — a compressed run to loop-ready, then a revision
   request, to watch entry dispatch pick the right phase and scope the work to
   the subtree it touches.
+- **An interruption**, in whichever of the two is convenient: close the session
+  part-way through a phase, before its cards are approved, and open a new one on
+  the same folder. The dispatch should see the yellow nodes, say which phase they
+  belong to, and ask whether to finish it — not read a layer off the request and
+  start writing beside what is already there.
 
 The measurement to record for each phase: **how many approval cards actually
 arrive.** The skills say "one or more" and predict one per top-level thing

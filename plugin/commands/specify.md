@@ -55,11 +55,18 @@ and follow them the same way:
 
 Read the status you got in step 0.
 
+**Yellow in the intent or domain band → unapproved work, and it comes first.**
+A new session cannot tell a phase still waiting on a person from one nobody
+finished, and does not need to: either way nobody has agreed to those nodes, and
+the ids and their types name the phase they belong to. Ask with AskUserQuestion
+— carry that phase to its approval `(Recommended)`, or leave it standing and
+enter where this request lands — then follow the answer to a phase.
+
 **No nodes in the intent band → new mode.** The specification does not exist
 yet. Enter at phase 1 and run the phases in order.
 
-**Anything in the intent band → revision mode.** Work out the highest layer the
-request touches, and enter there:
+**Nothing yellow, and nodes already there → revision mode.** Work out the
+highest layer the request touches, and enter there:
 
 | The request is about | Enter at |
 |---|---|
