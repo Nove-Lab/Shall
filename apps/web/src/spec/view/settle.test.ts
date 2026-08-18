@@ -175,17 +175,18 @@ test("the same board settles the same way twice", () => {
 test("the answer is a fixed point, and settling it again moves nothing", () => {
   // THE SWEEPS STOP WHEN NOTHING MOVED, so this is that stopping rule asserted
   // from outside the module: hand the answer back as the stack and the whole
-  // step — sweeps, solve, rounding and all — reproduces it. The second run is
-  // not the first one repeated, either, because every card's HOME is now where
-  // the answer left it rather than where the stack did; a card the rounding had
-  // parked half a row from the row it wanted is exactly what this would drag
-  // off its row.
+  // step — sweeps, solve, rounding and all — reproduces it. Home does not move
+  // between the two runs, because it is read off the board's height and the
+  // column's own, and the fullest column is pinned so the board's first row is
+  // where it was. What is really being asked is whether a card the rounding
+  // parked half a row from the row it wanted gets dragged off it on a second
+  // look.
   const once = settleColumns(CROWDED, CROWDED_EDGES, PITCH);
   const twice = settleColumns(restack(once, CROWDED), CROWDED_EDGES, PITCH);
   assert.deepStrictEqual(twice, once);
 });
 
-test("a column with no relation at all comes back exactly stacked", () => {
+test("a column with no relation at all comes back centred", () => {
   const pulled = stack("a", 3);
   const fullest = stack("b", 4);
   const untouched = stack("c", 2);
@@ -194,11 +195,14 @@ test("a column with no relation at all comes back exactly stacked", () => {
     [{ fromId: "a0", toId: "b3" }],
     PITCH,
   );
-  assert.deepStrictEqual(ysOf(settled, untouched), [46, 108]);
-  // `a` was equally free and did move, so `c` staying put is the anchoring term
-  // doing its work rather than the whole board being frozen. It moved by one
-  // row and not by three: `a0`'s block wants row 3 to be level with `b3`, and
-  // the column's one row of slack under a four-row board is all it may take.
+  // Two cards on a four-row board, with nothing acting on them but `HOME`:
+  // one row of slack above and one below, so they take the row that is left.
+  assert.deepStrictEqual(ysOf(settled, untouched), [108, 170]);
+  // `a` was equally free and answered to something else, so `c` sitting in the
+  // middle is the anchoring term doing its work rather than the whole board
+  // being frozen. `a` moved to where its relation wanted it: `a0`'s block wants
+  // row 3, to be level with `b3`, and the column's one row of slack under a
+  // four-row board is all it may take.
   assert.deepStrictEqual(ysOf(settled, pulled), [108, 170, 232]);
 });
 
@@ -306,23 +310,26 @@ test("three columns, worked out by hand", () => {
   // nothing to change and stops the loop.
   assert.deepStrictEqual(ysOf(settled, b), [46, 108, 170, 232]);
 
-  // COLUMN a. Row 0 is pulled to `b2` at 170: weight 1.01, target
-  // (170 + 0.46)/1.01 = 168.77…, which at row 0 is also its z. Row 1 has no
-  // relation, so its target is its home, 108, and in z that is 108 − 62 = 46.
-  // That is a violation — z may not decrease — so the two rows pool into one
-  // block at (170.46 + 0.46)/1.02 = 167.56…. In rows that is (167.56… − 46)/62
-  // = 1.96, which rounds to 2 and is inside the two rows of slack a two-row
-  // column has under a four-row board: `a0` lands on 46 + 2*62 = 170, level
-  // with the card it is related to, and `a1` follows it a pitch below.
+  // A TWO-ROW COLUMN ON A FOUR-ROW BOARD IS HOME AT ROWS 1 AND 2 — one row of
+  // slack above it and one below, so the middle is 108 and 170.
+  //
+  // COLUMN a. Row 0 is pulled to `b2` at 170: weight 1 + 0.3, target
+  // (170 + 0.3*108)/1.3 = 155.69…, which at row 0 is also its z. Row 1 has no
+  // relation, so its target is its own home, 170, and in z that is 170 − 62 =
+  // 108. That is a violation — z may not decrease — so the two rows pool into
+  // one block at (202.4 + 51)/1.6 = 146.75. In rows that is (146.75 − 46)/62 =
+  // 1.63, which rounds to 2 and is inside the two rows of slack a two-row
+  // column has here: `a0` lands on 46 + 2*62 = 170, level with the card it is
+  // related to, and `a1` follows it a pitch below.
   assert.deepStrictEqual(ysOf(settled, a), [170, 232]);
 
   // COLUMN c, the same two ingredients the other way up. Row 0 has no relation
-  // and wants its home, z = 46, which is row 0 of the lattice and no move at
-  // all. Row 1 is pulled to `b3` at 232: target (232 + 1.08)/1.01 = 230.77…,
-  // which in z is 168.77… — no violation, so nothing pools — and 1.98 rows,
+  // and wants its home, 108, whose z is also 108 — one row down, which is the
+  // middle. Row 1 is pulled to `b3` at 232: target (232 + 0.3*170)/1.3 =
+  // 217.69…, in z 155.69… — no violation, so nothing pools — and 1.77 rows,
   // rounding to 2. Row 1 is therefore written at 46 + (2 + 1)*62 = 232, the
   // board's last row and the tightest the slack allows.
-  assert.deepStrictEqual(ysOf(settled, c), [46, 232]);
+  assert.deepStrictEqual(ysOf(settled, c), [108, 232]);
 });
 
 test("an empty board settles to an empty map", () => {
