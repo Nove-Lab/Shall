@@ -1,3 +1,4 @@
+import type { Incidence } from "./edges";
 import {
   BAND_ORDER,
   SATELLITE_BAND,
@@ -10,15 +11,20 @@ import {
   type NodeTypeEntry,
   type SpecNode,
 } from "./model";
+import { settleColumns } from "./settle";
 
 /**
- * Both Spec-plane layouts, as pure functions of `(band, type ordinal, id)`.
+ * Both Spec-plane layouts, as pure functions of the graph: `(band, type
+ * ordinal, id)` in the grid, and those plus the relations in the graph view.
  *
  * POSITIONS ARE NEVER STORED AND CARDS ARE NEVER DRAGGABLE. A moved card would
  * show a position the graph does not hold, so there is nowhere to keep one. What
  * that buys is a picture you can reason about and test: the same graph is the
- * same picture, every time. No heuristic to tune, no seed, no layout cache to
- * invalidate, and nothing computed here that could be persisted by accident.
+ * same picture, every time. No heuristic to tune and no seed: the settle step
+ * the graph view ends in is solved and not a pass of nudges, and the one thing
+ * it reads that the stack did not is the graph's own relations. No layout cache
+ * to invalidate, and nothing computed here that could be persisted by
+ * accident.
  *
  * THE CANVAS IS NOT AN INPUT TO EITHER LAYOUT, in either axis. It used to be, in
  * one: the grid divided the canvas HEIGHT between its four bands so that an empty
@@ -32,7 +38,10 @@ import {
  * POSITIONS ARE STILL NOT STABLE UNDER INSERTION, and that is the intended
  * behaviour rather than a side effect: a sixth Requirement shifts every Intent
  * column to its right by one pitch, and a fourth card in any column pushes the
- * bands below it down by one row pitch.
+ * bands below it down by one row pitch. A NEW RELATION MOVES THE GRAPH VIEW
+ * TOO, and further than a new node does: one line is one more term in an
+ * objective taken over the whole board, so drawing it can slide cards in
+ * columns that neither of its two ends is in.
  *
  * THERE IS NO CANVAS *WIDTH* EITHER. The board's width is set by its content alone: the
  * widest band's columns at a fixed card width. Nothing here reads how wide the
@@ -41,8 +50,20 @@ import {
  * zero nodes, which is accepted: no legible card width fits the Intent band's
  * eleven columns into a small viewport.
  *
- * THERE IS NO RANK SOLVER for the graph view, and there is not meant to be one.
- * One type is one column, id-ascending inside it.
+ * THERE IS A SETTLE STEP IN THE GRAPH VIEW, AND WHAT IT IS FOR IS THE DISTANCE
+ * BETWEEN THE TWO ENDS OF A RELATION. A column is ordered by its own ids and
+ * knows nothing about the relations, so the two ends of one land wherever two
+ * unrelated orderings put them. Each column is therefore stacked exactly as it
+ * always was and then slid along itself, BY WHOLE ROWS, toward the cards it is
+ * related to: block coordinate descent, each column solved exactly by isotonic
+ * regression against the others where they stand and rounded back onto the row
+ * lattice the stack laid down, swept until no card changes row. Deterministic,
+ * no seed. `view/settle.ts` writes the objective, measures what the step is
+ * worth and says why the lattice is not the step's to give away; this file only
+ * hands it the stack.
+ *
+ * WHAT THE SETTLE STEP MAY NOT LOSE IS AS LOAD-BEARING AS WHAT IT DOES, and it
+ * is listed once, in that module's header, rather than copied to here.
  *
  * This module says where things go. Something else does the drawing.
  */
@@ -602,8 +623,24 @@ export function gridLayout(nodes: readonly SpecNode[]): Layout {
  * hang `topPadding` below them, which is the clearance `openingViewport` anchors
  * against. The two views' paddings were one shared number and are now one each,
  * so the grid's zero cannot travel.
+ *
+ * IT STACKS AND THEN SETTLES, AND THE STACK IS STILL THE WHOLE OF THE ORDERING.
+ * The loop below fills every column top-down at the row pitch exactly as it did
+ * before, and `settleColumns` then answers where each card ends up once its
+ * relations are allowed to pull on it — the module header says what that step
+ * may and may not move. Only a card's y comes back changed: which column it is
+ * in, where that column sits and which card is above which are the stack's
+ * answers and are not the settle step's to revisit.
+ *
+ * THE RELATIONS ARRIVE AS THEIR TWO ENDS AND NOTHING ELSE — `Incidence` less
+ * the id nothing here reads, which is the narrowest type a `SpecEdge[]`
+ * satisfies structurally, and the move `view/edges.ts` makes for its own
+ * reason.
  */
-export function graphLayout(nodes: readonly SpecNode[]): Layout {
+export function graphLayout(
+  nodes: readonly SpecNode[],
+  edges: readonly Pick<Incidence, "fromId" | "toId">[],
+): Layout {
   const {
     cardWidth,
     cardHeight,
@@ -613,8 +650,10 @@ export function graphLayout(nodes: readonly SpecNode[]): Layout {
     bandPadding,
     topPadding,
   } = GEOMETRY.graph;
+  const rowPitch = cardHeight + rowGap;
   const placements: Placement[] = [];
   const columns: ColumnHeader[] = [];
+  const stacks: Placement[][] = [];
 
   let widest = 0;
   let tallest = 0;
@@ -635,17 +674,26 @@ export function graphLayout(nodes: readonly SpecNode[]): Layout {
       width: cardWidth,
     });
 
-    for (const [row, node] of ofType.entries()) {
-      placements.push({
-        id: node.id,
-        type: entry.name,
-        band,
-        x,
-        y: topPadding + headerHeight + row * (cardHeight + rowGap),
-      });
-    }
+    const stacked: Placement[] = ofType.map((node, row) => ({
+      id: node.id,
+      type: entry.name,
+      band,
+      x,
+      y: topPadding + headerHeight + row * rowPitch,
+    }));
+    placements.push(...stacked);
+    stacks.push(stacked);
+
     widest = Math.max(widest, x + cardWidth);
     tallest = Math.max(tallest, ofType.length);
+  }
+
+  // A `Placement` IS A STACKED CARD, so a column goes over as the array it
+  // already is. Every id handed in comes back with a y — see `settleColumns` —
+  // so the fallback decides nothing and is there to keep the read total.
+  const settled = settleColumns(stacks, edges, rowPitch);
+  for (const card of placements) {
+    card.y = settled.get(card.id) ?? card.y;
   }
 
   return {
@@ -655,8 +703,11 @@ export function graphLayout(nodes: readonly SpecNode[]): Layout {
     bands: [],
     lanes: [],
     width: widest + columnGap,
-    height:
-      topPadding + headerHeight + tallest * (cardHeight + rowGap) + bandPadding,
+    // `height` IS THE STACK'S OWN ARITHMETIC AND NOT A MEASUREMENT OF THE
+    // ANSWER, and the box constraint is what keeps that true: no card settles
+    // above the first row or below the fullest column's last, so the extent the
+    // stack occupied is the extent the settled board occupies.
+    height: topPadding + headerHeight + tallest * rowPitch + bandPadding,
   };
 }
 

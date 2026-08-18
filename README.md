@@ -79,10 +79,11 @@ the rest of the graph keeps serving, and the sentence against it is what a
 check reports.
 
 Nothing stores a node's position, so the canvas lays cards out from the graph
-alone — by band and type — and they cannot be dragged. The grid and graph tabs
-are two layouts of the same nodes. A relation is drawn by dragging from one
-card to another and picking a type the canon allows between them, and removed
-from the context menu on the line.
+alone — by band and type, and in the graph tab a card then slides down its own
+column toward the cards it is related to — and they cannot be dragged. The grid
+and graph tabs are two layouts of the same nodes. A relation is drawn by
+dragging from one card to another and picking a type the canon allows between
+them, and removed from the context menu on the line.
 
 Every card carries a traffic light, computed on read — the execution band
 too, because a record is written by an agent and read by a person like any

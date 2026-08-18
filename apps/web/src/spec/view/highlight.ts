@@ -85,7 +85,9 @@ export const NOTHING_SELECTED: Highlight = {
  * TWO RELATIONS BETWEEN THE SAME PAIR COUNT ONCE AS A NEIGHBOUR AND TWICE AS A
  * RELATION, which is not an inconsistency: a node is adjacent or it is not,
  * however many ways the graph says so, and each of those relations is a separate
- * line on the canvas that has to be lit separately.
+ * line on the canvas that has to be lit separately. `view/settle.ts` reads
+ * adjacency off the relations the same way and for this reason, and says what
+ * counting the pair twice would do to a board.
  *
  * A SELECTED ID WITH NO NODE BEHIND IT lights nothing and dims everything, which
  * is the honest answer to "highlight the neighbourhood of a node that is not
