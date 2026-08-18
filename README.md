@@ -73,8 +73,15 @@ and `git diff` says only what changed. It also drops any comments and custom
 ordering a hand-edited frontmatter was carrying; the body is kept as written.
 
 The daemon re-reads the folder on every query, so a file you edit by hand or
-pull in from a branch shows up on the next refresh with nothing to restart. A
-file it cannot read costs only itself: that node and its relations drop out,
+pull in from a branch shows up with nothing to restart — and it watches the
+folder too, so it shows up without being asked. A page left open sees an agent's
+writes as they land: the queue rearranges, a colour moves, a badge counts one
+more. Nothing is announced, because the alternative is a banner interrupting a
+person to tell them the truth they were already reading. The one thing that does
+speak up is a node changed underneath somebody who is editing it, where saving
+would write over that change.
+
+A file it cannot read costs only itself: that node and its relations drop out,
 the rest of the graph keeps serving, and the sentence against it is what a
 check reports.
 

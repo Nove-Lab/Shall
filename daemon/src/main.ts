@@ -11,6 +11,7 @@ import {
   removeDaemonState,
   writeDaemonState,
 } from "./host/shall-home.js";
+import { closeAllFeeds } from "./service/spec-events.js";
 
 process.title = "shall";
 
@@ -102,8 +103,16 @@ async function shutdown(): Promise<void> {
   }
   shuttingDown = true;
   await removeDaemonState(process.pid);
+  // THE FEEDS GO FIRST, because each open one is a response that has not
+  // finished and `server.close` waits for every one of those. Without this a
+  // browser left open on a project holds the daemon past its own kill, and in
+  // development that is a restart that never comes.
+  closeAllFeeds();
   viteProxy?.close();
   server.close(() => process.exit(0));
+  // And a backstop, because the thing that would hold this open is by
+  // definition a connection this process failed to enumerate.
+  setTimeout(() => process.exit(0), 2_000).unref();
 }
 
 process.once("SIGINT", () => {
