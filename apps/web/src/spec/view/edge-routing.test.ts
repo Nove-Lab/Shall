@@ -245,26 +245,49 @@ function entersCard(from: Point, to: Point, card: CardBox): boolean {
  *     compares against.
  *
  * TODAY'S PLACEMENT IS `graphLayout` WITH AN EMPTY EDGE LIST, WHICH IS AN
- * IDENTITY AND NOT A SECOND COPY OF THE STACKING LOOP. A board with no
- * cross-column relation settles to exactly the stack it was handed —
- * `settle.ts` says why, under the column that comes back exactly stacked — so
- * withholding the relations from the LAYOUT while handing those same relations
- * to the ROUTER asks the only question worth asking: the same lines, over the
- * two placements. Restating the stacking loop here would be a second layout to
- * keep in step with the first, and the case below checks the identity against
- * the lattice arithmetic rather than trusting it.
+ * `"stacked"` IS THE BOARD BEFORE THE SETTLE STEP, and the point of routing it
+ * is that the ledger below compares the same lines over two placements. It is
+ * built by `stackedLayout` from the lattice rather than by withholding the
+ * relations from the layout: home is the middle of the board now, so a
+ * relationless graph is centred, and centred is not the board we started from.
+ * The case below checks that arithmetic instead of trusting it.
  */
 type BoardView = "grid" | "graph" | "stacked";
 
 /** What one board's relations came back as, plus the boxes they ran between. */
 type Routed = ReturnType<typeof routeBoard>;
 
+/**
+ * THE BOARD AS IT WAS BEFORE THE SETTLE STEP, built here rather than borrowed.
+ *
+ * It used to be `graphLayout` with the relations withheld, which was the same
+ * board only while a card with no relation stayed where the stack put it. Home
+ * is the middle of the board now, so a relationless graph is centred and not
+ * stacked — and the baseline every figure in the ledger is quoted against has
+ * to be the stack itself. Two lines of arithmetic, and they are the arithmetic
+ * the next case checks against the layout.
+ */
+function stackedLayout(nodes: readonly SpecNode[]): Layout {
+  const layout = graphLayout(nodes, []);
+  const rows = new Map<string, number>();
+  return {
+    ...layout,
+    placements: layout.placements.map((placement) => {
+      const row = rows.get(placement.type) ?? 0;
+      rows.set(placement.type, row + 1);
+      return { ...placement, y: LATTICE_TOP + LATTICE_PITCH * row };
+    }),
+  };
+}
+
 function routeBoard(fixture: Fixture, view: BoardView) {
   const geometry = view === "grid" ? GEOMETRY.grid : GEOMETRY.graph;
   const layout =
     view === "grid"
       ? gridLayout(fixture.nodes)
-      : graphLayout(fixture.nodes, view === "graph" ? fixture.edges : []);
+      : view === "graph"
+        ? graphLayout(fixture.nodes, fixture.edges)
+        : stackedLayout(fixture.nodes);
   const cards = cardsOf(layout);
   const boxes = new Map<string, CardBox>(
     cards.map((card) => [
@@ -520,13 +543,12 @@ test("the settled graph refuses nothing either", () => {
   );
 });
 
-test("today's placement is the stack itself", () => {
-  // WHAT LICENSES THE LEDGER'S LEFT-HAND COLUMN. `BoardView` says why the
-  // baseline is `graphLayout` with its relations withheld rather than a second
-  // stacking loop; this is that identity checked instead of assumed, against
-  // the lattice arithmetic and not against the layout that produced it. If it
-  // ever fails, every comparison the last case prints is between a settled
-  // board and something that is not the board we have today.
+test("the baseline is the stack itself", () => {
+  // WHAT LICENSES THE LEDGER'S LEFT-HAND COLUMN. `stackedLayout` builds it, and
+  // this is that arithmetic checked rather than assumed: every card on the row
+  // its column's order gave it, in id order, at the pitch. If it ever fails,
+  // every comparison the last case prints is between a settled board and
+  // something that is not the board we started from.
   for (const board of STACKED) {
     for (const column of columnsOf(board.layout)) {
       for (const [row, card] of column.entries()) {

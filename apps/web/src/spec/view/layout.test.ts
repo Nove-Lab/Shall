@@ -72,7 +72,8 @@ const EDGES: SpecEdge[] = [
   edge("R-0005", "MENTIONS", "T-0001"),
 ];
 
-const STACKED = graphLayout(NODES, []);
+/** The same board with its relations withheld: nothing but `HOME` acting. */
+const UNPULLED = graphLayout(NODES, []);
 const SETTLED = graphLayout(NODES, EDGES);
 
 /** The board's last row, which is the fullest column's. See `settleColumns`. */
@@ -86,15 +87,21 @@ const POPULATED = [
   "ImplementationTask",
 ];
 
-test("a graph with no relations is placed exactly as it always was", () => {
+test("a graph with no relations centres every column", () => {
   // THE ONE CASE THAT IS A LITERAL AND NOT A PROPERTY. Every other test here
-  // holds for a whole family of answers; this one is the picture this repo drew
-  // before there was a settle step, spelled out so that a change to any term of
-  // it — the padding, the header, the pitch, the column order, the id sort —
-  // has to be typed out here by whoever makes it.
-  assert.deepStrictEqual(STACKED.placements, [
-    { id: "T-0001", type: "Term", band: "Domain", x: 0, y: 46 },
-    { id: "T-0002", type: "Term", band: "Domain", x: 0, y: 108 },
+  // holds for a whole family of answers; this one is the whole picture, spelled
+  // out so that a change to any term of it — the padding, the header, the
+  // pitch, the column order, the id sort, the home — has to be typed out here
+  // by whoever makes it.
+  //
+  // WITH NOTHING TO PULL ON THEM, EVERY COLUMN SITS IN THE MIDDLE. The fullest
+  // column fills the board and so cannot move; the one-card column lands on the
+  // board's middle row; the others straddle it. That is `HOME` doing the only
+  // job it has when it is the only term acting, and it is why this case is no
+  // longer the stack — see `settle.ts`.
+  assert.deepStrictEqual(UNPULLED.placements, [
+    { id: "T-0001", type: "Term", band: "Domain", x: 0, y: 108 },
+    { id: "T-0002", type: "Term", band: "Domain", x: 0, y: 170 },
     { id: "R-0001", type: "Requirement", band: "Intent", x: 1316, y: 46 },
     { id: "R-0002", type: "Requirement", band: "Intent", x: 1316, y: 108 },
     { id: "R-0003", type: "Requirement", band: "Intent", x: 1316, y: 170 },
@@ -105,28 +112,28 @@ test("a graph with no relations is placed exactly as it always was", () => {
       type: "AcceptanceCriterion",
       band: "Intent",
       x: 1504,
-      y: 46,
+      y: 170,
     },
     {
       id: "IT-0001",
       type: "ImplementationTask",
       band: "Plan",
       x: 3008,
-      y: 46,
+      y: 108,
     },
     {
       id: "IT-0002",
       type: "ImplementationTask",
       band: "Plan",
       x: 3008,
-      y: 108,
+      y: 170,
     },
     {
       id: "IT-0003",
       type: "ImplementationTask",
       band: "Plan",
       x: 3008,
-      y: 170,
+      y: 232,
     },
   ]);
   // The columns those x's are: 0, 7, 8 and 16 of the canon's order.
@@ -146,7 +153,7 @@ test("the fullest column keeps the placement the stack gave it", () => {
 test("a relation does move the columns that are free to move", () => {
   // Without this the four cases below would all hold for a board that settles
   // to the stack, which is the one answer they must not be satisfied by.
-  assert.notDeepStrictEqual(SETTLED.placements, STACKED.placements);
+  assert.notDeepStrictEqual(SETTLED.placements, UNPULLED.placements);
 });
 
 test("no column is re-ordered, and no card is closer than the pitch", () => {
@@ -178,14 +185,14 @@ test("every card lands on a whole pixel, inside the board", () => {
 test("settling moves nothing sideways and resizes nothing", () => {
   assert.deepStrictEqual(
     SETTLED.placements.map(({ id, type, band, x }) => ({ id, type, band, x })),
-    STACKED.placements.map(({ id, type, band, x }) => ({ id, type, band, x })),
+    UNPULLED.placements.map(({ id, type, band, x }) => ({ id, type, band, x })),
   );
   // The extent is the stack's arithmetic and the box is what keeps that honest:
   // a settled card cannot leave the box the stack occupied, so the board that
   // held the stack holds the answer.
-  assert.deepStrictEqual(SETTLED.columns, STACKED.columns);
-  assert.equal(SETTLED.width, STACKED.width);
-  assert.equal(SETTLED.height, STACKED.height);
+  assert.deepStrictEqual(SETTLED.columns, UNPULLED.columns);
+  assert.equal(SETTLED.width, UNPULLED.width);
+  assert.equal(SETTLED.height, UNPULLED.height);
   assert.ok(BOTTOM + CARD_HEIGHT <= SETTLED.height);
 });
 

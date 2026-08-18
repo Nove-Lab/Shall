@@ -99,24 +99,31 @@ export type StackedColumn = readonly StackedCard[];
  * WHAT A CARD'S OWN STACKED PLACE IS WORTH AGAINST ONE RELATION — the whole of
  * the anchoring term, and the reason the objective has a minimum at all.
  *
- * IT IS THE WEIGHT THAT DECIDES A CARD NOTHING POINTS AT, which is the job it
- * was chosen for and the only one it has to do. At 0.01 such a card is held
- * exactly where the stack put it, because that term is then the only one
- * acting on it; take the term away and a column of unrelated cards may sit
- * anywhere the constraints allow, and the minimum stops being unique. A card
- * with one relation is governed by the relation and keeps a hundredth of a
- * vote for home, which is what "small enough to lose to one relation" is
- * asking for and the whole of what the value has to satisfy.
+ * IT DECIDES A CARD NOTHING POINTS AT, and it has a say in one the relations
+ * leave slack. A card with no relation is held at home, because that term is
+ * then the only one acting on it; take the term away and a column of unrelated
+ * cards may sit anywhere the constraints allow, and the minimum stops being
+ * unique.
  *
- * IT IS NOT INVISIBLE IN THE ANSWER, AND IT WAS ONCE CLAIMED HERE THAT IT WAS.
- * The rounding is what shows it: two placements within half a row of each other
- * are decided by that hundredth and the loser then moves a whole row. Measured
- * over the corpus against 0.01, a HOME of 0.001 redraws six of the forty boards
- * (130 cards of 3699) and one of 0.1 redraws twenty-five (705 cards). So moving
- * this number is a change to the board rather than a dial being turned, and the
- * bound on it is the paragraph above and not a taste.
+ * WHY IT IS THREE TENTHS AND NOT A HUNDREDTH. It was a hundredth while home
+ * meant the top of the column, where the only job it had was to break a tie —
+ * any weaker and the answer was not unique, any stronger and it dragged the
+ * board upward. Home is the middle of the board now, and the middle is
+ * something worth a vote rather than something to be overruled: a column the
+ * relations pin loosely should drift toward the centre rather than toward
+ * whichever end it started at. Measured over a real 66-node project, three
+ * tenths puts a four-card Goal column at rows 7..10 of twenty where a hundredth
+ * left it at 2..5 — and the mean distance between the two ends of a relation
+ * came DOWN, 2.00 rows to 1.85, so the centre is not being bought at the
+ * relations' expense. Past one it stops paying: a whole vote gives 1.91 and
+ * three gives 1.94, the middle winning arguments it should be losing.
+ *
+ * IT IS NOT INVISIBLE IN THE ANSWER. The rounding is what shows it: two
+ * placements within half a row of each other are decided by this weight and the
+ * loser then moves a whole row. Moving it is a change to the board rather than
+ * a dial being turned, and what bounds it is the paragraph above.
  */
-const HOME = 0.01;
+const HOME = 0.3;
 
 /**
  * SWEEP UNTIL NO CARD CHANGES ROW. THIS IS THE CAP ON THAT, AND NOT A QUALITY
@@ -145,7 +152,7 @@ const SWEEP_CAP = 100;
  */
 type Cell = {
   readonly id: string;
-  readonly stacked: number;
+  readonly home: number;
   readonly column: number;
   readonly neighbours: Cell[];
   y: number;
@@ -231,7 +238,9 @@ export function settleColumns(
     for (const card of column) {
       const cell: Cell = {
         id: card.id,
-        stacked: card.y,
+        // Filled in below: a home cannot be known until the board's own height
+        // is, and that is the tallest column, which may be the last one read.
+        home: card.y,
         column: grid.length,
         neighbours: [],
         y: card.y,
@@ -242,6 +251,28 @@ export function settleColumns(
     }
     if (cells.length > rows) rows = cells.length;
     grid.push(cells);
+  }
+
+  // A CARD NOTHING PULLS ON BELONGS IN THE MIDDLE, NOT AT THE TOP. The stack
+  // begins at the first row because a stack has to begin somewhere, and that is
+  // a fact about stacking rather than about the graph: nothing says a column of
+  // four goals prefers the top of a board twenty rows tall. Reading the stack as
+  // the home said exactly that, and it showed — every column the relations left
+  // any slack in drifted upward, and the whole intent chain crowded into the top
+  // third of a board whose bottom half held two columns.
+  //
+  // So home is the column standing in the MIDDLE of the board. It is the same
+  // arithmetic with a different constant, and it is better on both counts:
+  // measured over a real 66-node project, the columns spread across the board
+  // instead of hugging its top, AND the mean distance between the two ends of a
+  // relation FELL, from 2.00 rows to 1.85. A weak preference for the middle
+  // turns out to leave the relations more room than a weak preference for the
+  // top, which in hindsight is what "the middle" means.
+  for (const column of grid) {
+    const centre = top + Math.floor((rows - column.length) / 2) * pitch;
+    for (const [row, cell] of column.entries()) {
+      (cell as { home: number }).home = centre + row * pitch;
+    }
   }
 
   for (const edge of edges) {
@@ -336,7 +367,7 @@ function settleOne(
 
   const blocks: Block[] = [];
   for (const [row, cell] of column.entries()) {
-    let pull = HOME * cell.stacked;
+    let pull = HOME * cell.home;
     for (const other of cell.neighbours) pull += other.y;
     const weight = cell.neighbours.length + HOME;
     const target = pull / weight - row * pitch;
