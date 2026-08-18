@@ -14,6 +14,7 @@ import type { PanelMeta } from "../panels";
 import { PanelTable } from "../PanelTable";
 import { controlBase } from "../parts";
 import { KIND_LABEL, bundleSummary } from "./rows";
+import { useRevision } from "@/live";
 
 /**
  * WHAT IS WAITING ON A PERSON, ONE ROW PER DECISION.
@@ -74,6 +75,34 @@ export function ReviewQueue({ panel }: { panel: PanelMeta }) {
       live = false;
     };
   }, [project.id]);
+  /**
+   * A CHANGE ON DISK RE-READS WHAT IS ALREADY HERE, AND CLEARS NOTHING. The
+   * effect above owns the skeleton and the refusal because it owns the mount;
+   * this one owns neither, so a file an agent wrote does not blink the table
+   * back to skeletons on its way to being right. A failure here keeps the rows
+   * that are on screen and says nothing: the next change asks again, and a
+   * refusal that outlives the daemon is waiting on the next navigation, where
+   * somebody is looking for it.
+   */
+  const revision = useRevision();
+  useEffect(() => {
+    if (revision === 0) {
+      return;
+    }
+    let live = true;
+    api.spec.reviewQueue
+      .query({ projectId: project.id })
+      .then((queue) => {
+        if (live) {
+          setBundles(queue.bundles);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [revision, project.id]);
+
 
   const columns = panel.columns ?? [];
 

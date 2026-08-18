@@ -16,6 +16,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/EmptyState";
 import { cn } from "@/lib/utils";
 import { useProject } from "@/project-context";
+import { useRevision } from "@/live";
 import { ClosureMark, StatusDot, TaskStateMark } from "@/spec/review-parts";
 import { nodesById, type FixSpecItem, type ImplementItem, type Ref } from "@/spec/review";
 import { formatStamp, type SpecNode } from "@/spec/spec-node";
@@ -81,6 +82,37 @@ export function TaskItemPage() {
       live = false;
     };
   }, [project.id]);
+  /**
+   * A CHANGE ON DISK RE-READS WHAT IS ALREADY HERE, AND CLEARS NOTHING. The
+   * effect above owns the skeleton and the refusal because it owns the mount;
+   * this one owns neither, so a file an agent wrote does not blink the table
+   * back to skeletons on its way to being right. A failure here keeps the rows
+   * that are on screen and says nothing: the next change asks again, and a
+   * refusal that outlives the daemon is waiting on the next navigation, where
+   * somebody is looking for it.
+   */
+  const revision = useRevision();
+  useEffect(() => {
+    if (revision === 0) {
+      return;
+    }
+    let live = true;
+    void Promise.all([
+      api.spec.taskBoard.query({ projectId: project.id }),
+      api.spec.nodes.query({ projectId: project.id }),
+    ])
+      .then(([board, nextNodes]) => {
+        if (live) {
+          setRows(boardRows(board));
+          setNodes(nextNodes);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [revision, project.id]);
+
 
   const nodeById = useMemo(() => nodesById(nodes), [nodes]);
 

@@ -22,6 +22,7 @@ import { PANELS, type PanelMeta } from "./panels";
 import { controlBase } from "./parts";
 import { BOARD_KIND_LABEL, boardRows, rowSummary, rowTitle } from "./task-board/rows";
 import { KIND_LABEL, bundleSummary } from "./review-queue/rows";
+import { useRevision } from "@/live";
 import { useProject } from "@/project-context";
 
 /**
@@ -119,6 +120,32 @@ function PanelGlance({
       live = false;
     };
   }, [project.id, source]);
+
+  /**
+   * A CHANGE ON DISK RE-READS WHAT IS ALREADY HERE, AND CLEARS NOTHING. The
+   * effect above owns the skeleton because it owns the mount; this one owns
+   * neither it nor the refusal, so a file an agent wrote does not blink the
+   * card back to skeletons on its way to being right. A failure here keeps what
+   * is on screen and says nothing: the next change asks again.
+   */
+  const revision = useRevision();
+  useEffect(() => {
+    if (revision === 0) {
+      return;
+    }
+    let live = true;
+    GLANCE_ROWS[source]
+      .rows(project.id, controlBase(project.id))
+      .then((next) => {
+        if (live) {
+          setRows(next);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [revision, project.id, source]);
 
   if (error !== null) {
     return <p className="text-destructive text-sm">{error}</p>;

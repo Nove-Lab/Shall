@@ -515,6 +515,13 @@ export function NodePanel({
   // request re-aims the one already open instead, in the effect below. A reload
   // while someone is typing must not overwrite what they have typed, which is
   // why `node` and `nodes` are read in here and deliberately not depended on.
+  /** The bytes the editor was opened over, for the check below. */
+  const opened = useRef<{
+    shortName: string;
+    name: string;
+    body: string;
+  } | null>(null);
+
   const nodeId = node?.id ?? null;
   useEffect(() => {
     setError(null);
@@ -546,8 +553,17 @@ export function NodePanel({
       setShortName(node.shortName);
       setName(node.name);
       setBody(node.body);
+      // What the form was filled from, kept so that the same file arriving
+      // different can be noticed. It is a ref and not state because nothing is
+      // drawn from it directly — see `changedUnderneath` below.
+      opened.current = {
+        shortName: node.shortName,
+        name: node.name,
+        body: node.body,
+      };
       return;
     }
+    opened.current = null;
 
     const startingType = presetType ?? "";
     setType(startingType);
@@ -861,6 +877,29 @@ export function NodePanel({
    * form grows the editor the moment WorkLog is picked.
    */
   const isWorkLog = type.trim() === "WorkLog";
+  /**
+   * THE ONE PLACE A BACKGROUND REFETCH IS ALLOWED TO SPEAK.
+   *
+   * Everything else on this surface updates in silence, because a person
+   * reading a screen that has just become correct does not need telling. This
+   * is the exception: the file under an open editor has changed, the form still
+   * holds what it was filled with, and saving would write over whatever
+   * arrived. That costs something to accept, so it is said — and only said. The
+   * save is not blocked, because the person is the one who knows whether their
+   * draft or the file is the one worth keeping.
+   *
+   * It compares the bytes rather than the stamp: a write of identical content
+   * moves the mtime, and a warning nobody can act on teaches people to ignore
+   * warnings.
+   */
+  const changedUnderneath =
+    mode === "edit" &&
+    node !== null &&
+    opened.current !== null &&
+    (node.shortName !== opened.current.shortName ||
+      node.name !== opened.current.name ||
+      node.body !== opened.current.body);
+
   const canSave =
     type.trim() !== "" &&
     trimmedId !== "" &&
@@ -1796,6 +1835,12 @@ export function NodePanel({
             >
               Cancel
             </Button>
+            {changedUnderneath ? (
+              <p className="text-muted-foreground basis-full text-sm">
+                This file changed on disk while you were editing it — saving
+                writes over that. Cancel to read what arrived.
+              </p>
+            ) : null}
             {/* THE EXECUTION BAND HAS NO DELETE, because those files record
                 what happened and a record's one legitimate end is a retention
                 sweep. The daemon refuses the call too — this only spares the

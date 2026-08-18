@@ -56,6 +56,7 @@ import {
 } from "@/components/ui/resizable";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EmptyState } from "@/components/EmptyState";
+import { useRevision } from "@/live";
 import { useProject } from "@/project-context";
 import { NodePanel, type NodeDraft, type NodePanelMode } from "./NodePanel";
 import { MetamodelDialog } from "./metamodel/MetamodelDialog";
@@ -346,6 +347,30 @@ export function SpecPlane() {
       )
       .finally(() => setLoading(false));
   }, [load]);
+
+  /**
+   * A CHANGE ON DISK RE-READS THE GRAPH, AND THAT IS ALL IT DOES.
+   *
+   * It is a second effect and not a dependency of the one above, which is the
+   * whole trick: that effect closes every dialog and forgets the deep link
+   * because it is about arriving at a project, and a file an agent wrote is not
+   * an arrival. Putting the tick in `load` would put it in that effect's
+   * dependencies too, and a person would watch their connect dialog shut every
+   * time the folder moved.
+   *
+   * Nothing is cleared and nothing is said. The panel keeps what is typed into
+   * it, the camera keeps where it was, and a failure keeps the board that is on
+   * screen — the next change asks again.
+   */
+  const revision = useRevision();
+  const lastSeen = useRef(0);
+  useEffect(() => {
+    if (revision === lastSeen.current) {
+      return;
+    }
+    lastSeen.current = revision;
+    void load().catch(() => undefined);
+  }, [revision, load]);
 
   /**
    * THE QUEUE'S LINK, HONOURED ONCE, AFTER THE BOARD HAS ARRIVED.

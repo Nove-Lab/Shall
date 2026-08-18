@@ -27,6 +27,7 @@ import {
   SidebarGroupLabel,
   SidebarInset,
   SidebarMenu,
+  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarProvider,
@@ -37,6 +38,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PANELS } from "@/control/panels";
 import type { PanelId } from "@/control/panels";
 import { useIsNarrow } from "@/hooks/use-narrow";
+import { LiveProvider, useRevision } from "@/live";
 import { cn } from "@/lib/utils";
 import { ProjectProvider } from "@/project-context";
 import type { Project } from "@/project-context";
@@ -48,9 +50,59 @@ const PANEL_ICON: Record<PanelId, typeof ListChecks> = {
   vitals: ChartLine,
 };
 
+/**
+ * HOW MANY THINGS ARE WAITING, FOR THE TWO PANELS THAT KEEP A QUEUE.
+ *
+ * It asks the panels' OWN procedures rather than a summary one, for the reason
+ * the overview's cards do (see `ControlOverview`): both lists are computed on
+ * read either way, and a second endpoint counting the same rows would be a
+ * second place for them to disagree. One `Promise.all` is one request, since
+ * the client batches.
+ *
+ * A FAILURE KEEPS THE LAST NUMBER RATHER THAN SHOWING NOTHING. A badge is a
+ * pointer at a panel, not a place a fact lives; the panel behind it is where a
+ * refusal gets said properly.
+ */
+function useWaitingCounts(
+  projectId: string,
+  enabled: boolean,
+): { queue: number; board: number } {
+  const revision = useRevision();
+  const [counts, setCounts] = useState({ queue: 0, board: 0 });
+
+  useEffect(() => {
+    if (!enabled) {
+      return;
+    }
+    let live = true;
+    void Promise.all([
+      api.spec.reviewQueue.query({ projectId }),
+      api.spec.taskBoard.query({ projectId }),
+    ])
+      .then(([queue, board]) => {
+        if (live) {
+          setCounts({
+            queue: queue.bundles.length,
+            board: board.fixSpec.length + board.implement.length,
+          });
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [projectId, enabled, revision]);
+
+  return counts;
+}
+
 function ControlSidebar({ projectId }: { projectId: string }) {
   const { pathname } = useLocation();
   const base = `/p/${encodeURIComponent(projectId)}/control`;
+  // Only asked while this sidebar is on screen, which is only on the control
+  // plane: a person reading the graph has not asked for the queue to be counted
+  // every time a file moves.
+  const waiting = useWaitingCounts(projectId, true);
 
   return (
     // `collapsible="icon"` gives the narrow layout its icon rail. The panel is
@@ -75,6 +127,12 @@ function ControlSidebar({ projectId }: { projectId: string }) {
             </SidebarMenuItem>
             {PANELS.map((panel) => {
               const Icon = PANEL_ICON[panel.id];
+              const count =
+                panel.id === "review-queue"
+                  ? waiting.queue
+                  : panel.id === "task-board"
+                    ? waiting.board
+                    : 0;
               return (
                 <SidebarMenuItem key={panel.id}>
                   <SidebarMenuButton
@@ -92,6 +150,15 @@ function ControlSidebar({ projectId }: { projectId: string }) {
                     <Icon />
                     <span>{panel.title}</span>
                   </SidebarMenuButton>
+                  {/* A SIBLING OF THE BUTTON AND NOT A CHILD: the badge is
+                      positioned against the item and takes its offset from the
+                      button beside it. Nothing at zero — an empty queue is a
+                      state worth reading as quiet, not as a nought. The icon
+                      rail hides it, which is the component's own doing and
+                      right: there is no room to read a number there. */}
+                  {count > 0 ? (
+                    <SidebarMenuBadge>{count}</SidebarMenuBadge>
+                  ) : null}
                 </SidebarMenuItem>
               );
             })}
@@ -289,24 +356,28 @@ export function ShellLayout() {
         </div>
       ) : (
         <ProjectProvider project={project} refresh={load}>
-          {onControl ? (
-            // The provider only spans the region under the plane nav, so the
-            // section sidebar starts where the header ends.
-            <SidebarProvider
-              open={sidebarOpen}
-              onOpenChange={setSidebarOpen}
-              className="min-h-0 flex-1"
-            >
-              <ControlSidebar projectId={projectId} />
-              {/* `min-w-0` lets the content shrink past its own min-content
-                  width, so the rail never forces a horizontal scroll. */}
-              <SidebarInset className="min-w-0">
-                <Outlet />
-              </SidebarInset>
-            </SidebarProvider>
-          ) : (
-            <Outlet />
-          )}
+          {/* Inside the project and outside every surface: one stream per
+              project, and every page under it reads the same tick. */}
+          <LiveProvider projectId={projectId}>
+            {onControl ? (
+              // The provider only spans the region under the plane nav, so the
+              // section sidebar starts where the header ends.
+              <SidebarProvider
+                open={sidebarOpen}
+                onOpenChange={setSidebarOpen}
+                className="min-h-0 flex-1"
+              >
+                <ControlSidebar projectId={projectId} />
+                {/* `min-w-0` lets the content shrink past its own min-content
+                    width, so the rail never forces a horizontal scroll. */}
+                <SidebarInset className="min-w-0">
+                  <Outlet />
+                </SidebarInset>
+              </SidebarProvider>
+            ) : (
+              <Outlet />
+            )}
+          </LiveProvider>
         </ProjectProvider>
       )}
     </div>

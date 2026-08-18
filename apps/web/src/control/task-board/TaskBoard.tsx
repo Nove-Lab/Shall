@@ -4,6 +4,7 @@ import { api } from "@/api";
 import { Badge } from "@/components/ui/badge";
 import { TableCell, TableRow } from "@/components/ui/table";
 import { EmptyState } from "@/components/EmptyState";
+import { useRevision } from "@/live";
 import { useProject } from "@/project-context";
 import type { TaskBoard as Board } from "@/spec/review";
 import { formatStamp } from "@/spec/spec-node";
@@ -72,6 +73,34 @@ export function TaskBoard({ panel }: { panel: PanelMeta }) {
       live = false;
     };
   }, [project.id]);
+  /**
+   * A CHANGE ON DISK RE-READS WHAT IS ALREADY HERE, AND CLEARS NOTHING. The
+   * effect above owns the skeleton and the refusal because it owns the mount;
+   * this one owns neither, so a file an agent wrote does not blink the table
+   * back to skeletons on its way to being right. A failure here keeps the rows
+   * that are on screen and says nothing: the next change asks again, and a
+   * refusal that outlives the daemon is waiting on the next navigation, where
+   * somebody is looking for it.
+   */
+  const revision = useRevision();
+  useEffect(() => {
+    if (revision === 0) {
+      return;
+    }
+    let live = true;
+    api.spec.taskBoard
+      .query({ projectId: project.id })
+      .then((next) => {
+        if (live) {
+          setBoard(next);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [revision, project.id]);
+
 
   const columns = panel.columns ?? [];
   const rows = board === null ? [] : boardRows(board);
