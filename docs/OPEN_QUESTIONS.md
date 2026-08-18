@@ -18,6 +18,13 @@ more clause where `ensureDaemon` already compares the bind host
 a hash of the router, something else — is the part worth deciding rather than
 guessing.
 
+The same function believes the state file over the port. Observed once, with no
+reproduction: `~/.shall/daemon.json` was gone while a healthy daemon held 9461.
+The CLI coped — with no state to read it spawns a second daemon, that one loses
+the bind and exits, and `/health` is answered by the first — so every call pays
+for a process that was never going to live. Knocking on `/health` before
+spawning would settle both this and the marker above in one place.
+
 **Should the ledger folder be denied to reading as well as writing?** Shall
 writes two deny rules into a project's Claude settings, and only the write is
 denied. Not reading is now a convention, stated in `.claude/rules/shall.md` and
