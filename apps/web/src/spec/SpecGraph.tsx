@@ -220,9 +220,19 @@ export function SpecGraph({
   const canvasWidth = useStore((state) => state.width);
   const canvasHeight = useStore((state) => state.height);
 
+  /**
+   * WHERE EVERY CARD GOES — and in the graph view the relations are an input
+   * to that and not only something drawn over it: `graphLayout` settles each
+   * column against them, which is why `edges` is a key here.
+   *
+   * THE GRID'S ARM DOES NOT READ THEM, so a relation written while the grid is
+   * up rebuilds a board that cannot have changed. That is one pass over the
+   * nodes; the alternative is two memos and a second place where the two views
+   * are told apart, which costs more than it saves.
+   */
   const layout: Layout = useMemo(
-    () => (view === "grid" ? gridLayout(nodes) : graphLayout(nodes)),
-    [view, nodes],
+    () => (view === "grid" ? gridLayout(nodes) : graphLayout(nodes, edges)),
+    [view, nodes, edges],
   );
 
   const byId = useMemo(

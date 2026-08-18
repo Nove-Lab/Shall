@@ -117,9 +117,9 @@ export type RoutedPath = {
    * centres.
    *
    * IT IS UNREACHABLE FROM TODAY'S TWO LAYOUTS. `gridLayout` and `graphLayout`
-   * place cards on a pitch that keeps every step-out clear — measured, 25,376
-   * source/target pairs across both views and four canvas heights produced zero
-   * fallbacks, with 6px of slack at the deepest. It is latent, not live.
+   * place cards on a pitch that keeps every step-out clear — a corpus of 40
+   * boards and 3968 relations, routed in both views and over the graph stacked
+   * and settled alike, refuses none. `edge-routing.test.ts` holds it latent.
    */
   readonly fallback: boolean;
 };
