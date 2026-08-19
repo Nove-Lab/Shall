@@ -23,9 +23,16 @@ import { writeByRename } from "./atomic-write.js";
  *
  * IT IS THE FIRST OF THE THREE LAYERS. This is what is true in every session;
  * how to write a node is the `shall-authoring` skill, and how to elicit a
- * specification is `/shall:specify`. The rules that must not be broken live
- * here because the layers below are loaded only when something asks for them,
- * and an agent that never opens a skill still must not delete a spec file.
+ * specification or plan one is `/shall:specify` and `/shall:plan`. The rules
+ * that must not be broken live here because the layers below are loaded only
+ * when something asks for them, and an agent that never opens a skill still
+ * must not delete a spec file.
+ *
+ * WHAT EARNS A PARAGRAPH HERE is a rule NOTHING WILL CATCH. Every other line on
+ * this page guards something the doors or the check would otherwise let past —
+ * a colour worked out by hand, a file removed instead of proposed for removal —
+ * and the task rule is the newest of them: a task held by its own TARGETS line
+ * is anchored, so no check, no door and no board will ever say a word about it.
  *
  * Only the Claude adapter exists today, which is why this lands under
  * `.claude`. An agent that reads AGENTS.md is not covered yet.
@@ -66,11 +73,17 @@ that says which relations that type may draw and what its body might hold. A
 relation is written in the file it LEAVES, so anchoring a new child means
 editing the child's parent.
 
+**A task hangs off a module.** Never write an \`ImplementationTask\` that no
+\`ModuleDesign\` \`ALLOCATES\` — a task its criterion alone holds is anchored, so
+nothing will flag it, and a task with no design behind it is a stored backlog
+rather than a plan.
+
 Approving, rejecting and closing are a person's, made in the browser: \`shall\`
 with no arguments opens it. There is no \`shall approve\`.
 
 Working on the specification itself? \`/shall:specify\` runs the elicitation and
-the \`shall-authoring\` skill carries the rest, when the Shall plugin is loaded.
+\`/shall:plan\` turns an approved intent into modules, contracts and tasks; the
+\`shall-authoring\` skill carries the rest, when the Shall plugin is loaded.
 `;
 
 /** Where the page lives, as a project-relative path for anyone reporting it. */

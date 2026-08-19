@@ -304,13 +304,22 @@ function checkShallCalls(file, lines) {
   });
 }
 
-/** (d) The command has to interpolate the request it was given. */
-function checkCommandArguments(file, source) {
+/**
+ * (d) Every command has to interpolate the request it was given.
+ *
+ * It is asked of the whole `commands/` folder and not of one file by name. A
+ * command is the only document in the plugin the user's own words pass
+ * through, and a second command that forgot the slot would fail the same way
+ * the first would have: the process runs, interviews nobody about anything the
+ * person actually said, and produces a specification for a request it never
+ * read.
+ */
+function checkCommandArguments(file, relative, source) {
   if (!source.includes("$ARGUMENTS")) {
     report(
       file,
       1,
-      "commands/specify.md never mentions $ARGUMENTS, so the user's request never reaches the process.",
+      `${relative} never mentions $ARGUMENTS, so the user's request never reaches the process.`,
     );
   }
 }
@@ -386,8 +395,8 @@ for (const file of markdownFilesUnder(pluginRoot)) {
   checkTypeFlags(file, lines);
   checkShallCalls(file, lines);
   checkTemplateVocabulary(file, lines);
-  if (relative === path.join("commands", "specify.md")) {
-    checkCommandArguments(file, source);
+  if (path.dirname(relative) === "commands") {
+    checkCommandArguments(file, relative.split(path.sep).join("/"), source);
   }
 }
 
