@@ -186,7 +186,11 @@ WorkLog에 한해 `commits`, 그리고 기계 블록 하나(`deletionProposed`)�
   2026-08-17에 좁힘 — claim 없는 Evidence가 승인되는 구멍이 화면에 나타났다)(#22·#23·#24는 2026-08-16에 방향을 뒤집었다: 겨냥하는 쪽이 겨냥 대상을
   말하므로, 과제를 세우거나 작업을 시작하거나 주장을 적어도 기준·과제 파일은 한
   바이트도 움직이지 않는다). 문법 테이블과 교차검증된다
-- **겨냥 규칙(aim rule)** — WorkLog가 SUBMITS하는 Evidence는 그 WorkLog가
+- **겨냥 규칙(aim rule)** — 절이 셋이다. **과제는 기준을 최대 하나만 TARGETS한다**
+  (0 또는 1; 문법은 여러 줄을 허용하지만 계획은 허용하지 않는다 — 겨냥이 둘인
+  과제는 하나를 닫아도 끝나지 않아 보드가 done이라 부를 수 없다. 자기 파일 하나만
+  읽으므로 제일 먼저 물어지고, 위반은 그 과제 한 노드만 red로 만든다;
+  2026-08-19에 추가). WorkLog가 SUBMITS하는 Evidence는 그 WorkLog가
   ADDRESSES하는 과제가 TARGETS하는 기준만 CLAIMS할 수 있고, SUBMITS하는
   **VerificationReport는 그 ADDRESSES 대상 과제들 중 정확히 하나만** CLAIMS할 수
   있다(둘 이상 claim하면 제출자가 없어도 위반). 파일 셋을 한꺼번에 읽는 유일한

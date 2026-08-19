@@ -388,8 +388,18 @@ const CLAIMS = "CLAIMS";
  * allowed set is the addressed tasks themselves — and `workLogId` is null only
  * for the one breach that needs no submitter, a report claiming more than one
  * task. Enough for a sentence a person can act on from either node.
+ *
+ * THE TASK ARM IS SHORTER STILL, and names one file: a task that TARGETS two
+ * criteria has broken the rule inside its own lines, with no log and no
+ * claimant involved. It is the same rule read one hop earlier — the aim itself
+ * has to be a single thing before anything can be measured against it.
  */
 export type OffTarget =
+  | {
+      readonly claimant: "task";
+      readonly taskId: string;
+      readonly targets: readonly string[];
+    }
   | {
       readonly claimant: "evidence";
       readonly workLogId: string;
@@ -509,10 +519,20 @@ function reportBreachOf(
 }
 
 /**
- * THE AIM RULE, OVER BOTH CLAIMANTS: a work log that addresses a task submits
- * evidence only for the criteria that task targets, and submits verification
- * reports only for the addressed tasks themselves — exactly one task per
- * report, because a report that verified two things verified neither whole.
+ * THE AIM RULE, OVER THREE CLAIMANTS: a task aims at one criterion at most, a
+ * work log that addresses a task submits evidence only for the criteria that
+ * task targets, and submits verification reports only for the addressed tasks
+ * themselves — exactly one task per report, because a report that verified two
+ * things verified neither whole.
+ *
+ * THE TASK'S OWN CLAUSE IS ASKED FIRST because it is the shortest: it reads one
+ * file, needs no log and no claimant, and a task with two aims makes the two
+ * clauses below it unanswerable — evidence inside the aim of one half is
+ * outside the other. The canon ALLOWS a task several TARGETS lines (the
+ * grammar's cardinality is a triple's, not a count's); the plan does not, for
+ * the same reason a report claims one task: two aims close neither on their
+ * own, and a task nobody can finish by closing one thing is a task the board
+ * can never call done.
  *
  * It is the one rule of the canon that reads three files at once — the log's
  * `ADDRESSES`, the task's `TARGETS`, the claimant's `CLAIMS` — and it is a
@@ -546,6 +566,12 @@ export function offTargetOf(
   const node = subject.node;
   if (node === null) {
     return null;
+  }
+  if (node.type === "ImplementationTask") {
+    const targets = writtenTargetsOf(node.id, TARGETS, context);
+    return targets.length > 1
+      ? { claimant: "task", taskId: node.id, targets }
+      : null;
   }
   if (node.type === "WorkLog") {
     const aim = aimOf(node.id, context);
@@ -626,6 +652,11 @@ function listOf(ids: readonly string[]): string {
  * that a person can act on it wherever they meet it.
  */
 export function offTargetSentence(subjectId: string, breach: OffTarget): string {
+  // The task's own clause names one file, so there is only one point of view to
+  // say it from and the subject is not consulted.
+  if (breach.claimant === "task") {
+    return `${breach.taskId} targets ${listOf(breach.targets)} — a task aims at one criterion at most, because a task with two aims closes neither on its own. Split the task, or remove the TARGETS line this work is not for.`;
+  }
   if (breach.claimant === "report") {
     return reportSentence(subjectId, breach);
   }

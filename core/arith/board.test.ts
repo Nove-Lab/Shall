@@ -335,6 +335,8 @@ describe("the chain a task hangs from", () => {
   });
 
   test("counts a dangling far end and does not walk through it", () => {
+    // Two reasons the chain is not green here, and the assertion means both:
+    // AC-0404 is a hole, and a second TARGETS line is the aim rule's own red.
     const edges = [...SPINE, edge("IT-0001", "TARGETS", "AC-0404")];
     const context = colorContextOf(graphOf(SPINE_NODES, edges), settled());
     const chain = upwardChainOf(task, context);
@@ -661,6 +663,31 @@ describe("the Fix Spec column", () => {
       "R-0002 is a Requirement with no live anchor — it is held to the graph by a REQUIRES relation into it, and none stands. Draw the relation, or remove the node.",
     );
     assert.equal(row.kind, "grammar");
+  });
+
+  test("says what a task with two aims has to do about it", () => {
+    const second = node("AcceptanceCriterion", "AC-0002");
+    const nodes = [...SPINE_NODES, second];
+    const edges = [
+      ...SPINE,
+      edge("R-0001", "HAS_CRITERION", "AC-0002"),
+      edge("IT-0001", "TARGETS", "AC-0002"),
+    ];
+    const board = boardOf(nodes, edges, settled(nodes, edges));
+    const row = board.fixSpec.find((held) => held.id === "IT-0001");
+    assert.ok(row !== undefined);
+    assert.equal(row.kind, "grammar");
+    assert.equal(row.reason, "off-target");
+    assert.equal(
+      row.detail,
+      "IT-0001 targets AC-0001 and AC-0002 — a task aims at one criterion at most, because a task with two aims closes neither on its own. Split the task, or remove the TARGETS line this work is not for.",
+    );
+    // And it is off the Implement half while it is on this one: a task the
+    // board cannot say is aimed at anything is not a task to hand anybody.
+    assert.equal(
+      board.implement.some((held) => held.id === "IT-0001"),
+      false,
+    );
   });
 
   test("names every referrer of a hole in one row", () => {
