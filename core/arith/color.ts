@@ -15,6 +15,8 @@ import {
   type ParsedNode,
   type RejectionLedger,
 } from "../serialize/index.js";
+import { isCyclic, planCyclesOf } from "./plan-seams.js";
+import type { PlanCycles } from "./plan-seams.js";
 import type { SpecGraph } from "../store/file-store.js";
 
 /**
@@ -22,11 +24,11 @@ import type { SpecGraph } from "../store/file-store.js";
  * somebody wrote down, yellow for a change nobody has read, green for a node a
  * person approved and nothing has touched since.
  *
- * SEVEN PREDICATES AND ONE ORDER. Each question below is asked on its own and
+ * EIGHT PREDICATES AND ONE ORDER. Each question below is asked on its own and
  * answers about one fact — is the file there, does it parse, does anything hold
- * it, does its aim land where the grammar says it may, has a person refused it
- * at these bytes, has a person approved it, does that approval still fit the
- * bytes. `colorOf` is the ORDER those questions are
+ * it, does its aim land where the grammar says it may, does the plan around it
+ * wait on itself, has a person refused it at these bytes, has a person approved
+ * it, does that approval still fit the bytes. `colorOf` is the ORDER those questions are
  * asked in and it holds no judgement of its own: every rule about what is wrong
  * lives in a predicate, so a rule can be read, tested and changed in one place,
  * and the composition stays a list of ifs a person can check against the spec.
@@ -44,7 +46,15 @@ import type { SpecGraph } from "../store/file-store.js";
  * work thrown away — the chain answers the first thing that is wrong and stops.
  * The aim rule sits right after the anchor for the same reason: it is grammar,
  * a seam in the graph a person cannot approve over, and it is answered before
- * any book is opened.
+ * any book is opened. The loop rule sits behind it on the same grounds, and one
+ * place further back because it is the only one of the three that is a fact
+ * about the graph AROUND the node rather than about the node's own lines.
+ *
+ * WHY A LOOP IS INSIDE THE CHAIN AND A TASK'S READINESS IS NOT. This chain reads
+ * WHAT THE FILES SAY and never what a person decided about some other node —
+ * that is exactly the line `prematureAddressOf` sits on the far side of. A loop
+ * is written down: it is `DEPENDS_ON` lines and `EXPOSES`/`CONSUMES` pairs, read
+ * off the graph with no book opened and no other node's colour consulted.
  *
  * A REJECTION IS THE SAME ARITHMETIC POINTED THE OTHER WAY, which is why it
  * needs no branch of its own beyond one predicate. The record names the hash of
@@ -172,6 +182,13 @@ export interface ColorContext {
   readonly nodes: ReadonlyMap<string, SpecNode>;
   readonly incoming: ReadonlyMap<string, readonly SpecEdge[]>;
   readonly outgoing: ReadonlyMap<string, readonly SpecEdge[]>;
+  /**
+   * Every node standing on a loop, computed once for the whole graph — see
+   * `plan-seams.ts`. It is in here rather than asked per node because the
+   * question is about components of the graph, and answering it a node at a
+   * time would walk the same edges once per node.
+   */
+  readonly cycles: PlanCycles;
   readonly ledgers: Ledgers;
 }
 
@@ -210,7 +227,14 @@ export function colorContextOf(
     index(incoming, edge.toId, edge);
     index(outgoing, edge.fromId, edge);
   }
-  return { living, nodes, incoming, outgoing, ledgers };
+  return {
+    living,
+    nodes,
+    incoming,
+    outgoing,
+    cycles: planCyclesOf(graph),
+    ledgers,
+  };
 }
 
 /** Nothing indexed under an id is no edges, not a missing entry to guard against. */
@@ -278,6 +302,10 @@ export type ColorVerdict =
         | "malformed"
         | "orphan"
         | "off-target"
+        // A LOOP IN THE PLAN — work waiting on itself, or two modules that
+        // consume each other's contracts. Read off written lines like the two
+        // above it, so it stays inside the chain; see `plan-seams.ts`.
+        | "cyclic"
         // THE ONE REASON `colorOf` NEVER ANSWERS. Work logged under a task
         // whose turn has not come reads the ADDRESSED task's state — other
         // nodes' judgements — which the base chain cannot; `reviewGraph` asks
@@ -852,6 +880,9 @@ export function colorOf(
   }
   if (isOffTarget(subject, context)) {
     return { color: "red", reason: "off-target" };
+  }
+  if (isCyclic(subject, context)) {
+    return { color: "red", reason: "cyclic" };
   }
   if (isRejected(subject, context)) {
     return { color: "red", reason: "rejected" };

@@ -1005,6 +1005,268 @@ describe("a task's aim", () => {
   });
 });
 
+describe("a loop in the plan", () => {
+  // One responsibility, one module, and as many tasks as a test needs. The
+  // module ALLOCATES every task, so nothing here is red for want of an anchor
+  // and the loop is the only thing on trial.
+  const responsibility = node("SystemResponsibility", "SR-0001");
+  const module_ = node("ModuleDesign", "MD-0001");
+  const HELD = [edge("SR-0001", "IS_REALIZED_BY", "MD-0001")];
+
+  function tasksOf(...ids: string[]): {
+    nodes: SpecNode[];
+    edges: SpecEdge[];
+  } {
+    return {
+      nodes: [
+        responsibility,
+        module_,
+        ...ids.map((id) => node("ImplementationTask", id)),
+      ],
+      edges: [...HELD, ...ids.map((id) => edge("MD-0001", "ALLOCATES", id))],
+    };
+  }
+
+  function reviewOf(
+    parts: { nodes: SpecNode[]; edges: SpecEdge[] },
+    ...extra: SpecEdge[]
+  ): GraphReview {
+    return reviewGraph(
+      graphOf({ nodes: parts.nodes, edges: [...parts.edges, ...extra] }),
+      unapproved,
+    );
+  }
+
+  test("two tasks waiting on each other are both red, each told from where it stands", () => {
+    const review = reviewOf(
+      tasksOf("IT-0001", "IT-0002"),
+      edge("IT-0001", "DEPENDS_ON", "IT-0002"),
+      edge("IT-0002", "DEPENDS_ON", "IT-0001"),
+    );
+    assert.equal(statusOf(review, "IT-0001")?.reason, "cyclic");
+    assert.equal(
+      statusOf(review, "IT-0001")?.problem,
+      "IT-0001 waits on IT-0002, which waits on IT-0001 — a task cannot wait on itself through others, and no task on this loop can ever be called ready. Remove one DEPENDS_ON line, or split the task both halves need.",
+    );
+    assert.equal(
+      statusOf(review, "IT-0002")?.problem,
+      "IT-0002 waits on IT-0001, which waits on IT-0002 — a task cannot wait on itself through others, and no task on this loop can ever be called ready. Remove one DEPENDS_ON line, or split the task both halves need.",
+    );
+  });
+
+  test("a loop of three recites the way round, starting from the node it is under", () => {
+    const review = reviewOf(
+      tasksOf("IT-0001", "IT-0002", "IT-0003"),
+      edge("IT-0001", "DEPENDS_ON", "IT-0002"),
+      edge("IT-0002", "DEPENDS_ON", "IT-0003"),
+      edge("IT-0003", "DEPENDS_ON", "IT-0001"),
+    );
+    assert.ok(
+      statusOf(review, "IT-0002")?.problem?.startsWith(
+        "IT-0002 waits on IT-0003, which waits on IT-0001, which waits on IT-0002 —",
+      ),
+    );
+  });
+
+  test("a task waiting on the loop from outside it is not on the loop", () => {
+    // Standing on a loop is being able to get back to yourself, not being able
+    // to reach one. IT-0003 waits on the pair and nothing waits on it.
+    const review = reviewOf(
+      tasksOf("IT-0001", "IT-0002", "IT-0003"),
+      edge("IT-0001", "DEPENDS_ON", "IT-0002"),
+      edge("IT-0002", "DEPENDS_ON", "IT-0001"),
+      edge("IT-0003", "DEPENDS_ON", "IT-0001"),
+    );
+    assert.equal(statusOf(review, "IT-0003")?.reason, "unapproved");
+    assert.equal(statusOf(review, "IT-0001")?.reason, "cyclic");
+  });
+
+  test("a shortcut across a loop does not hide the node the shortcut skipped", () => {
+    // The case a walk that marks its own path gets wrong. With IT-0001 also
+    // waiting on IT-0003 directly, a path-marking walk can close the short
+    // loop first and then meet IT-0002 already finished — leaving a task on a
+    // loop with nothing said about it.
+    const review = reviewOf(
+      tasksOf("IT-0001", "IT-0002", "IT-0003"),
+      edge("IT-0001", "DEPENDS_ON", "IT-0002"),
+      edge("IT-0002", "DEPENDS_ON", "IT-0003"),
+      edge("IT-0003", "DEPENDS_ON", "IT-0001"),
+      edge("IT-0001", "DEPENDS_ON", "IT-0003"),
+    );
+    for (const id of ["IT-0001", "IT-0002", "IT-0003"]) {
+      assert.equal(statusOf(review, id)?.reason, "cyclic");
+    }
+    // And the sentence takes the short way round, because a person reads it.
+    assert.ok(
+      statusOf(review, "IT-0001")?.problem?.startsWith(
+        "IT-0001 waits on IT-0003, which waits on IT-0001 —",
+      ),
+    );
+  });
+
+  test("an orphan is told about its anchor before it is told about the loop", () => {
+    const parts = tasksOf("IT-0001", "IT-0002");
+    const review = reviewGraph(
+      graphOf({
+        nodes: parts.nodes,
+        // The module allocates only the first, so the second hangs off nothing
+        // — and a DEPENDS_ON is no anchor for a task.
+        edges: [
+          ...HELD,
+          edge("MD-0001", "ALLOCATES", "IT-0001"),
+          edge("IT-0001", "DEPENDS_ON", "IT-0002"),
+          edge("IT-0002", "DEPENDS_ON", "IT-0001"),
+        ],
+      }),
+      unapproved,
+    );
+    assert.equal(statusOf(review, "IT-0002")?.reason, "orphan");
+    assert.equal(statusOf(review, "IT-0001")?.reason, "cyclic");
+  });
+
+  test("a task with two aims is told about its aims before the loop it is on", () => {
+    const criterion = node("AcceptanceCriterion", "AC-0001");
+    const other = node("AcceptanceCriterion", "AC-0002");
+    const requirement = node("Requirement", "R-0001");
+    const parts = tasksOf("IT-0001", "IT-0002");
+    const review = reviewGraph(
+      graphOf({
+        nodes: [...parts.nodes, requirement, criterion, other],
+        edges: [
+          ...parts.edges,
+          edge("SR-0001", "REQUIRES", "R-0001"),
+          edge("R-0001", "HAS_CRITERION", "AC-0001"),
+          edge("R-0001", "HAS_CRITERION", "AC-0002"),
+          edge("IT-0001", "TARGETS", "AC-0001"),
+          edge("IT-0001", "TARGETS", "AC-0002"),
+          edge("IT-0001", "DEPENDS_ON", "IT-0002"),
+          edge("IT-0002", "DEPENDS_ON", "IT-0001"),
+        ],
+      }),
+      unapproved,
+    );
+    assert.equal(statusOf(review, "IT-0001")?.reason, "off-target");
+    assert.equal(statusOf(review, "IT-0002")?.reason, "cyclic");
+  });
+
+  test("waiting on a task no file names is a hole, and not a loop", () => {
+    const review = reviewOf(
+      tasksOf("IT-0001"),
+      edge("IT-0001", "DEPENDS_ON", "IT-9999"),
+    );
+    assert.equal(statusOf(review, "IT-0001")?.reason, "unapproved");
+    assert.deepEqual(
+      review.missing.map((entry) => entry.id),
+      ["IT-9999"],
+    );
+  });
+
+  test("two requirements waiting on each other are told it in the specification's words", () => {
+    const first = node("Requirement", "R-0001");
+    const second = node("Requirement", "R-0002");
+    const review = reviewGraph(
+      graphOf({
+        nodes: [responsibility, first, second],
+        edges: [
+          edge("SR-0001", "REQUIRES", "R-0001"),
+          edge("SR-0001", "REQUIRES", "R-0002"),
+          edge("R-0001", "DEPENDS_ON", "R-0002"),
+          edge("R-0002", "DEPENDS_ON", "R-0001"),
+        ],
+      }),
+      unapproved,
+    );
+    assert.equal(
+      statusOf(review, "R-0001")?.problem,
+      "R-0001 waits on R-0002, which waits on R-0001 — nothing in a specification waits on itself through others, so neither of these can be the one that comes first. Remove one DEPENDS_ON line, or write the shared part as a third node both depend on.",
+    );
+  });
+
+  test("two requirements that disagree with each other are not on a loop", () => {
+    // CONFLICTS_WITH runs both ways by design: it says they disagree, which is
+    // not an order and cannot be circular. The rule must never touch it.
+    const first = node("Requirement", "R-0001");
+    const second = node("Requirement", "R-0002");
+    const review = reviewGraph(
+      graphOf({
+        nodes: [responsibility, first, second],
+        edges: [
+          edge("SR-0001", "REQUIRES", "R-0001"),
+          edge("SR-0001", "REQUIRES", "R-0002"),
+          edge("R-0001", "CONFLICTS_WITH", "R-0002"),
+          edge("R-0002", "CONFLICTS_WITH", "R-0001"),
+        ],
+      }),
+      unapproved,
+    );
+    assert.equal(statusOf(review, "R-0001")?.reason, "unapproved");
+    assert.equal(statusOf(review, "R-0002")?.reason, "unapproved");
+  });
+
+  test("two modules that consume each other's contracts are red, and the contracts are not", () => {
+    const second = node("ModuleDesign", "MD-0002");
+    const first = node("Interface", "IF-0001");
+    const other = node("Interface", "IF-0002");
+    const review = reviewGraph(
+      graphOf({
+        nodes: [responsibility, module_, second, first, other],
+        edges: [
+          ...HELD,
+          edge("SR-0001", "IS_REALIZED_BY", "MD-0002"),
+          edge("MD-0001", "EXPOSES", "IF-0001"),
+          edge("MD-0002", "EXPOSES", "IF-0002"),
+          edge("MD-0001", "CONSUMES", "IF-0002"),
+          edge("MD-0002", "CONSUMES", "IF-0001"),
+        ],
+      }),
+      unapproved,
+    );
+    assert.equal(
+      statusOf(review, "MD-0001")?.problem,
+      "MD-0001 consumes IF-0002, which MD-0002 exposes, and MD-0002 consumes IF-0001, which MD-0001 exposes — a module's dependencies run one way, and a loop means neither module can be built, read or replaced without the other. Remove one CONSUMES line, or move what both need into a module of its own.",
+    );
+    assert.equal(statusOf(review, "MD-0002")?.reason, "cyclic");
+    // A contract is not on the loop. It is what the loop runs through, and
+    // there is nothing in either interface file to remove.
+    assert.equal(statusOf(review, "IF-0001")?.reason, "unapproved");
+    assert.equal(statusOf(review, "IF-0002")?.reason, "unapproved");
+  });
+
+  test("a module that calls the contract it publishes is talking to itself, not looping", () => {
+    const contract = node("Interface", "IF-0001");
+    const review = reviewGraph(
+      graphOf({
+        nodes: [responsibility, module_, contract],
+        edges: [
+          ...HELD,
+          edge("MD-0001", "EXPOSES", "IF-0001"),
+          edge("MD-0001", "CONSUMES", "IF-0001"),
+        ],
+      }),
+      unapproved,
+    );
+    assert.equal(statusOf(review, "MD-0001")?.reason, "unapproved");
+  });
+
+  test("a loop stays red after somebody approves both ends of it", () => {
+    const parts = tasksOf("IT-0001", "IT-0002");
+    const edges = [
+      ...parts.edges,
+      edge("IT-0001", "DEPENDS_ON", "IT-0002"),
+      edge("IT-0002", "DEPENDS_ON", "IT-0001"),
+    ];
+    const first = parts.nodes.find((held) => held.id === "IT-0001");
+    const second = parts.nodes.find((held) => held.id === "IT-0002");
+    assert.ok(first !== undefined && second !== undefined);
+    const review = reviewGraph(
+      graphOf({ nodes: parts.nodes, edges }),
+      ledgerOf(approve(first, edges), approve(second, edges)),
+    );
+    assert.equal(statusOf(review, "IT-0001")?.reason, "cyclic");
+    assert.equal(statusOf(review, "IT-0002")?.reason, "cyclic");
+  });
+});
+
 describe("the aim rule for verification reports", () => {
   // The report's own half of the rule: exactly one claim, and that one among
   // the tasks the submitting log addresses. The chain is read so that the log

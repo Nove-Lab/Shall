@@ -57,6 +57,33 @@ hand-keeps the list of `shall` subcommands, which `client/cli/src/args.ts` calls
 its own single home. Importing it would mean the lint depends on the CLI being
 built, which the root `test` script does not do today.
 
+## From the `/plan` round (2026-08-19)
+
+**Should a loop of `REFINES` between goals be red too?** The loop rule catches
+what the plan writes down — `DEPENDS_ON` between tasks or between requirements,
+and the module graph derived from `EXPOSES`/`CONSUMES` pairs. A goal that
+refines itself through others is the same defect wearing intent's clothes, and
+`upwardChainOf` already has a comment about terminating on one. It was left out
+because this round is the plan's and because the sentence would have to be a
+third one, in the intent plane's words. `planCyclesOf` in
+`core/arith/plan-seams.ts` would gain one adjacency and one arm; the module is
+named for the plan, so taking this would mean renaming it.
+
+**Should a node on a loop be a member of somebody's review bundle?** Today it is
+not: `isMember` in `core/arith/bundles.ts` carries yellow, plus the two reds a
+reviewer must see beside what they are judging (a standing rejection, and work
+that jumped its turn). A loop is a seam like an orphan and the aim rule, so it
+stays out and `shall check` is where it is said. The argument the other way is
+that a person looking at the card for the module above a looping pair sees
+nothing about them at all. Against it: nothing on that card can be approved into
+existence, so showing the loop there would be showing a person a problem with no
+door.
+
+**`RELATES_TO` is deliberately not a candidate.** Two domain entities that
+relate to each other are describing the world, not declaring an order, so a
+cycle in them is not a defect. Written down because it is the third self-loop in
+the canon and the question will be asked again.
+
 ## Older, still open
 
 **Closing a task whose prerequisites are unfinished.** A verification report can

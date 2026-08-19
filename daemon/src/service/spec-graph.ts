@@ -736,12 +736,16 @@ export async function checkSpec(
   }
   for (const status of review.statuses) {
     if (
-      (status.reason === "off-target" || status.reason === "premature") &&
+      (status.reason === "off-target" ||
+        status.reason === "cyclic" ||
+        status.reason === "premature") &&
       status.problem !== null
     ) {
-      // The aim rule and the blocked-address rule: seams that name other
-      // nodes, filed under the node each sentence is about — the aim rule's
-      // two ends carry one each.
+      // The aim rule, the loop rule and the blocked-address rule: seams that
+      // name other nodes, filed under the node each sentence is about — the
+      // aim rule's two ends carry one each, and a loop is filed under EVERY
+      // node standing on it, each sentence starting from the file it is under,
+      // because the line to cut may be in any of them.
       gaps.push({ file: fileFor(status.id), message: status.problem });
       continue;
     }

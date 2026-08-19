@@ -220,15 +220,18 @@ export function taskStateOf(
  * How deep in the prerequisite graph this task sits: 0 with nothing before it,
  * otherwise one more than the deepest thing it waits on.
  *
- * A CYCLE TERMINATES AND DOES NOT HANG. `DEPENDS_ON` is meant to be acyclic and
- * the daemon does not stop somebody writing a loop, so the walk carries the ids
- * it is currently inside and DROPS a prerequisite already on its own path: the
+ * A CYCLE TERMINATES AND DOES NOT HANG. `DEPENDS_ON` is acyclic by rule and the
+ * loader still does not refuse a loop — every task on one is red (`cyclic`, in
+ * `plan-seams.ts`) rather than rejected at the door, so a loop reaches this
+ * walk. It carries the ids it is currently inside and DROPS a prerequisite
+ * already on its own path: the
  * loop stops counting itself, and the number that comes back is the depth of
  * the acyclic part. Nothing is memoised across that guard — a cached answer
  * taken while a cycle was open would be a wrong number for a task outside the
  * cycle later. The order this feeds is a reading order and not a schedule, so a
  * cyclic pair sorting beside each other is the honest answer to a graph that
- * cannot say which of the two comes first.
+ * cannot say which of the two comes first. Neither of them is on the Implement
+ * list to be ordered anyway: the loop turned them red first.
  */
 export function depthOf(taskId: string, context: ColorContext): number {
   const settled = new Map<string, number>();
@@ -282,7 +285,8 @@ export function isClosableTask(type: string): boolean {
  * cannot yet account for.
  *
  * IT CANNOT BE A CLAUSE OF `colorOf`, and that is why it lives here: the base
- * chain answers one node from its own file and the books, and this question
+ * chain answers a node from what the files SAY — its own lines, the lines
+ * around it, and the books — and this question
  * reads the ADDRESSED task's state, which reads the colours of the chain
  * above that task. `reviewGraph` asks it after the base chain, only of a node
  * the chain left unred — so every deeper red keeps its own sentence, and every

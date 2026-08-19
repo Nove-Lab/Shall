@@ -195,6 +195,18 @@ function statusCopy(
           status.problem ??
           "This node sits on a seam between a work log, its task and its claims — the evidence or report claims what the task does not cover. Fix the ADDRESSES, TARGETS or CLAIMS line first.",
       };
+    // A LOOP IN THE PLAN: work waiting on itself through others, or two
+    // modules that consume each other's contracts. The sentence recites the
+    // way round — every id on the loop and, for modules, the contract each hop
+    // runs through — so it is quoted whole, from whichever node the person is
+    // standing on.
+    case "cyclic":
+      return {
+        title: "On a loop",
+        body:
+          status.problem ??
+          "This node stands on a loop: following what it waits on comes back here. Nothing on a loop can be first, so remove one of the lines that closes it.",
+      };
     // WORK BEFORE ITS TURN. The daemon composed the sentence — it names the
     // blocked task, which is more than this panel holds — so it is quoted
     // whole, like the aim rule's.

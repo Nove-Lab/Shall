@@ -254,6 +254,26 @@ describe("the Implement half", () => {
     );
   });
 
+  test("offers neither task when the two of them wait on each other", async () => {
+    // The Implement half's whole promise is that everything on it can be
+    // started. Two tasks waiting on each other can never satisfy that, so both
+    // leave this half — and turn up on the other one, with the line to cut.
+    const project = await greenProject();
+    await node(project, "ImplementationTask", "IT-0002");
+    await edge(project, "ALLOCATES", "MD-0001", "IT-0002");
+    await edge(project, "TARGETS", "IT-0002", "AC-0001");
+    await edge(project, "DEPENDS_ON", "IT-0001", "IT-0002");
+    await edge(project, "DEPENDS_ON", "IT-0002", "IT-0001");
+    const board = await taskBoard(project.id);
+    assert.deepEqual(board.implement, []);
+    assert.deepEqual(
+      board.fixSpec
+        .filter((row) => row.reason === "cyclic")
+        .map((row) => row.id),
+      ["IT-0001", "IT-0002"],
+    );
+  });
+
   test("is exactly the tasks the review badges as ready", async () => {
     const project = await greenProject();
     const ready = (await reviewSpec(project.id)).statuses

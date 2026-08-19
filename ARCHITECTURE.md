@@ -205,11 +205,22 @@ WorkLog에 한해 `commits`, 그리고 기계 블록 하나(`deletionProposed`)�
   **blocked**(사슬 미독 ∨ 선행 미완)면 그 로그는 red(`premature`)다: 일은 차례가 온
   과제 밑에서만 기록된다(demo1의 WL-0002 → blocked IT-0002 재현에서 나옴,
   2026-08-17). 과제가 ready/done이 되는 순간 스스로 풀린다. 다른 노드들의 판정
-  (과제의 상태)을 읽는 유일한 red라 `colorOf`의 여덟 번째 질문이 되지 못하고,
+  (과제의 상태)을 읽는 유일한 red라 `colorOf`의 아홉 번째 질문이 되지 못하고,
   `reviewGraph`가 기본 사슬이 red를 내지 않은 노드에만 얹는다(술어는
   `task-state.ts`의 `prematureAddressOf`). 문·보드·check가 모두 statuses를 읽으므로
   전부 같은 답을 본다. 승인 순서에 함의가 있다: 사슬을 먼저 승인하고, 로그는 그
   과제의 차례가 온 다음에(두 물결)
+- **순환 규칙(loop rule)** — 계획이 자기를 기다리면 그 위의 모든 노드가
+  red(`cyclic`)다(`core/arith/plan-seams.ts`, 2026-08-19). 두 갈래다: 쓰인
+  `DEPENDS_ON` 순환(과제끼리·요구끼리 — 순환 위 과제는 영원히 ready가 될 수 없다)과
+  **파생 모듈 그래프**의 순환(A가 CONSUMES한 계약을 B가 EXPOSES하면 A→B; 모듈끼리를
+  잇는 엣지는 canon에 없으므로 계약에서 유도한다). `CONFLICTS_WITH`는 순서가 아니라
+  불일치이므로 대상이 아니고, `RELATES_TO`도 아니다. 그래프당 한 번의 강한 연결 요소
+  계산이다 — 노드마다 걷지 않는다(colorContextOf가 read마다 부른다). 경로 스택 방식이
+  아닌 이유: A→B→C→A에 A→C가 더 있으면 짧은 쪽을 먼저 닫고 B를 놓친다. 문장은 순환
+  위 모든 파일 밑에 각자의 시점으로 실리고(끊을 줄이 어느 파일에 있어도 읽히도록),
+  최단 복귀 경로만 읊는다. 계약(Interface)은 red가 되지 않는다 — 순환이 지나가는
+  통로일 뿐 그 파일에 지울 줄이 없다
 - 판정 규칙 — id 형태, 두 이름, 본문의 문자·크기. 순수 함수 하나로 모아 두어
   파일 로더와 daemon의 door가 **같은 것**을 부른다. 문장도 발견 순서도 하나뿐이다
 - 섹션 가이드 — 타입마다 템플릿이 제안하는 `## <라벨>` 시작 형태. 데이터일 뿐,
@@ -257,10 +268,11 @@ core에서 파일시스템을 만지는 유일한 모듈이고, 노드가 어느
 **색 사슬**, **닫힘**, **번들**.
 
 - 색 — 위에서부터 첫 일치: missing(파일 부재∧참조 잔존) → 문법 위반 → 고아(살아있는
-  앵커 0) → **겨냥 규칙 위반**(off-target) → **반려 유효**(rejectedHash = 현재 페이로드
-  hash) → 장부에 기록 없음 → approvedHash ≠ 현재 hash → green. 일곱 판정이 각각 순수
-  술어 함수(`isMissing`·`hasSchemaViolation`·`isOrphan`·`isOffTarget`·`isRejected`·
-  `hasApproval`·`isHashMatched`)이고,
+  앵커 0) → **겨냥 규칙 위반**(off-target) → **계획의 순환**(cyclic) → **반려 유효**
+  (rejectedHash = 현재 페이로드 hash) → 장부에 기록 없음 → approvedHash ≠ 현재 hash →
+  green. 여덟 판정이 각각 순수
+  술어 함수(`isMissing`·`hasSchemaViolation`·`isOrphan`·`isOffTarget`·`isCyclic`·
+  `isRejected`·`hasApproval`·`isHashMatched`)이고,
   조합 함수는 우선순위만 쥔다 — 조건이 자라면 술어가, 순서가 바뀌면 조합이 바뀐다.
   반려가 승인보다 앞에 서 있어 둘 다 있으면 반려가 이긴다. canon의 모든 타입이
   색을 받는다. 색 밖에 남는 것은 삭제뿐이다: 기록은 지운다고 없던 일이 되지 않는다

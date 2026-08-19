@@ -1138,6 +1138,51 @@ describe("checkSpec", () => {
     ]);
   });
 
+  test("two tasks waiting on each other are a gap under each of their files", async () => {
+    // A loop is filed under every node standing on it: either DEPENDS_ON line
+    // closes it, and the person is standing on whichever file they opened.
+    const project = await newProject();
+    for (const [type, id] of [
+      ["Goal", "G-0001"],
+      ["Actor", "A-0001"],
+      ["UseCase", "UC-0001"],
+      ["Scenario", "SC-0001"],
+      ["SystemResponsibility", "SR-0001"],
+      ["ModuleDesign", "MD-0001"],
+      ["ImplementationTask", "IT-0001"],
+      ["ImplementationTask", "IT-0002"],
+    ] as const) {
+      await node(project, type, id, GOAL_BODY);
+    }
+    for (const [type, fromId, toId] of [
+      ["PURSUED_BY", "G-0001", "A-0001"],
+      ["PERFORMS", "A-0001", "UC-0001"],
+      ["DETAILS", "UC-0001", "SC-0001"],
+      ["DERIVES_RESPONSIBILITY", "SC-0001", "SR-0001"],
+      ["IS_REALIZED_BY", "SR-0001", "MD-0001"],
+      ["ALLOCATES", "MD-0001", "IT-0001"],
+      ["ALLOCATES", "MD-0001", "IT-0002"],
+      ["DEPENDS_ON", "IT-0001", "IT-0002"],
+      ["DEPENDS_ON", "IT-0002", "IT-0001"],
+    ] as const) {
+      await createSpecEdge({ projectId: project.id, type, fromId, toId });
+    }
+    const check = await checkSpec(project.path);
+    assert.deepEqual(check.problems, []);
+    assert.deepEqual(check.gaps, [
+      {
+        file: "plan/ImplementationTask/IT-0001.md",
+        message:
+          "IT-0001 waits on IT-0002, which waits on IT-0001 — a task cannot wait on itself through others, and no task on this loop can ever be called ready. Remove one DEPENDS_ON line, or split the task both halves need.",
+      },
+      {
+        file: "plan/ImplementationTask/IT-0002.md",
+        message:
+          "IT-0002 waits on IT-0001, which waits on IT-0002 — a task cannot wait on itself through others, and no task on this loop can ever be called ready. Remove one DEPENDS_ON line, or split the task both halves need.",
+      },
+    ]);
+  });
+
   test("a ledger nobody has written yet is no problem at all", async () => {
     const project = await newProject();
     await node(project, "Goal", "G-0001", GOAL_BODY);

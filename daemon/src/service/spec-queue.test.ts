@@ -561,6 +561,54 @@ describe("the aim rule at the doors", () => {
   });
 });
 
+describe("a loop at the doors", () => {
+  test("neither end of a loop can be approved, approved in bulk or rejected", async () => {
+    // Two tasks waiting on each other. The loop is grammar like the aim rule:
+    // agreeing to one node of it would be agreeing to an order with no
+    // beginning, so all three doors refuse and each keeps its own tail.
+    const project = await newProject();
+    await chain(project);
+    await node(project, "ModuleDesign", "MD-0001");
+    await node(project, "ImplementationTask", "IT-0001");
+    await node(project, "ImplementationTask", "IT-0002");
+    await edge(project, "IS_REALIZED_BY", "SR-0001", "MD-0001");
+    await edge(project, "ALLOCATES", "MD-0001", "IT-0001");
+    await edge(project, "ALLOCATES", "MD-0001", "IT-0002");
+    await edge(project, "DEPENDS_ON", "IT-0001", "IT-0002");
+    await edge(project, "DEPENDS_ON", "IT-0002", "IT-0001");
+
+    const status = await statusFor(project, "IT-0001");
+    assert.equal(status.reason, "cyclic");
+    const sentence =
+      "IT-0001 waits on IT-0002, which waits on IT-0001 — a task cannot wait on itself through others, and no task on this loop can ever be called ready. Remove one DEPENDS_ON line, or split the task both halves need.";
+    assert.equal(status.problem, sentence);
+    await says(
+      approveSpecNode({ projectId: project.id, id: "IT-0001" }),
+      "invalid",
+      `${sentence} Fix that first — there is nothing yet to approve.`,
+    );
+    await says(
+      approveSpecNodes({ projectId: project.id, ids: ["IT-0001"] }),
+      "invalid",
+      `${sentence} Fix that first — there is nothing yet to approve. Nothing was approved.`,
+    );
+    await says(
+      rejectSpecNode({ projectId: project.id, id: "IT-0001", rationale: "No." }),
+      "invalid",
+      `${sentence} Fix that first; a rejection is a judgement on a node the graph holds together.`,
+    );
+
+    // Cut one line and both are ordinary yellow again. Nothing was stored, so
+    // nothing had to be cleared.
+    await removeSpecEdge({
+      projectId: project.id,
+      id: formatEdgeId("IT-0002", "DEPENDS_ON", "IT-0001"),
+    });
+    assert.equal((await statusFor(project, "IT-0001")).reason, "unapproved");
+    assert.equal((await statusFor(project, "IT-0002")).reason, "unapproved");
+  });
+});
+
 describe("approving over a rejection", () => {
   test("the single door refuses a node somebody has refused", async () => {
     const project = await newProject();
