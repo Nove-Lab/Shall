@@ -1094,6 +1094,50 @@ describe("checkSpec", () => {
     ]);
   });
 
+  test("a task aiming at two criteria is one gap, under the task's own file", async () => {
+    // The aim rule's third clause reads one file, so it files one row — and
+    // it files it under the task, which is where both TARGETS lines are.
+    const project = await newProject();
+    for (const [type, id] of [
+      ["Goal", "G-0001"],
+      ["Actor", "A-0001"],
+      ["UseCase", "UC-0001"],
+      ["Scenario", "SC-0001"],
+      ["SystemResponsibility", "SR-0001"],
+      ["Requirement", "R-0001"],
+      ["AcceptanceCriterion", "AC-0001"],
+      ["AcceptanceCriterion", "AC-0002"],
+      ["ModuleDesign", "MD-0001"],
+      ["ImplementationTask", "IT-0001"],
+    ] as const) {
+      await node(project, type, id, GOAL_BODY);
+    }
+    for (const [type, fromId, toId] of [
+      ["PURSUED_BY", "G-0001", "A-0001"],
+      ["PERFORMS", "A-0001", "UC-0001"],
+      ["DETAILS", "UC-0001", "SC-0001"],
+      ["DERIVES_RESPONSIBILITY", "SC-0001", "SR-0001"],
+      ["REQUIRES", "SR-0001", "R-0001"],
+      ["HAS_CRITERION", "R-0001", "AC-0001"],
+      ["HAS_CRITERION", "R-0001", "AC-0002"],
+      ["IS_REALIZED_BY", "SR-0001", "MD-0001"],
+      ["ALLOCATES", "MD-0001", "IT-0001"],
+      ["TARGETS", "IT-0001", "AC-0001"],
+      ["TARGETS", "IT-0001", "AC-0002"],
+    ] as const) {
+      await createSpecEdge({ projectId: project.id, type, fromId, toId });
+    }
+    const check = await checkSpec(project.path);
+    assert.deepEqual(check.problems, []);
+    assert.deepEqual(check.gaps, [
+      {
+        file: "plan/ImplementationTask/IT-0001.md",
+        message:
+          "IT-0001 targets AC-0001 and AC-0002 — a task aims at one criterion at most, because a task with two aims closes neither on its own. Split the task, or remove the TARGETS line this work is not for.",
+      },
+    ]);
+  });
+
   test("a ledger nobody has written yet is no problem at all", async () => {
     const project = await newProject();
     await node(project, "Goal", "G-0001", GOAL_BODY);

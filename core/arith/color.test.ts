@@ -896,6 +896,115 @@ describe("the aim rule", () => {
   });
 });
 
+describe("a task's aim", () => {
+  // The rule's third clause, one hop earlier than the other two: it reads the
+  // task's own file and needs no work log at all. The module is here so the
+  // task is anchored by ALLOCATES and the TARGETS lines are what is on trial,
+  // rather than the thing holding the task to the graph.
+  const responsibility = node("SystemResponsibility", "SR-0001");
+  const module_ = node("ModuleDesign", "MD-0001");
+  const task = node("ImplementationTask", "IT-0001");
+  const requirement = node("Requirement", "R-0001");
+  const first = node("AcceptanceCriterion", "AC-0001");
+  const second = node("AcceptanceCriterion", "AC-0002");
+  const NODES = [responsibility, module_, task, requirement, first, second];
+  const HELD = [
+    edge("SR-0001", "IS_REALIZED_BY", "MD-0001"),
+    edge("SR-0001", "REQUIRES", "R-0001"),
+    edge("R-0001", "HAS_CRITERION", "AC-0001"),
+    edge("R-0001", "HAS_CRITERION", "AC-0002"),
+    edge("MD-0001", "ALLOCATES", "IT-0001"),
+  ];
+
+  function reviewWith(
+    aims: readonly SpecEdge[],
+    ledgers: Ledgers = unapproved,
+  ): GraphReview {
+    return reviewGraph(
+      graphOf({ nodes: NODES, edges: [...HELD, ...aims] }),
+      ledgers,
+    );
+  }
+
+  test("a task that targets two criteria is red, and the sentence names both", () => {
+    const review = reviewWith([
+      edge("IT-0001", "TARGETS", "AC-0001"),
+      edge("IT-0001", "TARGETS", "AC-0002"),
+    ]);
+    assert.deepEqual(
+      statusOf(review, "IT-0001"),
+      status(
+        "IT-0001",
+        "red",
+        "off-target",
+        null,
+        null,
+        "open",
+        null,
+        "IT-0001 targets AC-0001 and AC-0002 — a task aims at one criterion at most, because a task with two aims closes neither on its own. Split the task, or remove the TARGETS line this work is not for.",
+        "blocked",
+      ),
+    );
+  });
+
+  test("one aim is the rule kept, and no aim at all is a task the rule says nothing about", () => {
+    assert.equal(
+      statusOf(reviewWith([edge("IT-0001", "TARGETS", "AC-0001")]), "IT-0001")
+        ?.reason,
+      "unapproved",
+    );
+    assert.equal(statusOf(reviewWith([]), "IT-0001")?.reason, "unapproved");
+  });
+
+  test("a second aim at an id no file names counts, and the hole is still reported", () => {
+    // Read off the written lines, like the rest of the rule: an aim at a
+    // criterion nobody has written is still an aim the plan wrote down, and
+    // the missing rule says its own sentence about the id underneath.
+    const review = reviewWith([
+      edge("IT-0001", "TARGETS", "AC-0001"),
+      edge("IT-0001", "TARGETS", "AC-9999"),
+    ]);
+    assert.equal(statusOf(review, "IT-0001")?.reason, "off-target");
+    assert.ok(statusOf(review, "IT-0001")?.problem?.includes("AC-9999"));
+    assert.deepEqual(
+      review.missing.map((entry) => entry.id),
+      ["AC-9999"],
+    );
+  });
+
+  test("a task with two aims stays red after somebody approves it", () => {
+    const aims = [
+      edge("IT-0001", "TARGETS", "AC-0001"),
+      edge("IT-0001", "TARGETS", "AC-0002"),
+    ];
+    const review = reviewWith(aims, ledgerOf(approve(task, [...HELD, ...aims])));
+    assert.equal(statusOf(review, "IT-0001")?.reason, "off-target");
+    // The approval is carried on the row, as it is for an orphan: the book
+    // still says somebody agreed, and the seam is what is on the screen.
+    assert.deepEqual(statusOf(review, "IT-0001")?.approval, APPROVER);
+  });
+
+  test("a task nothing anchors is told about the anchor before its aims", () => {
+    // The order is the product: the chain answers the first thing that is
+    // wrong. Here the ALLOCATES line is gone, so both TARGETS lines are the
+    // only anchor the task has — and an orphan it is not, because TARGETS
+    // anchors a task too. So this is the aim rule again, from a task the
+    // module dropped.
+    const review = reviewGraph(
+      graphOf({
+        nodes: NODES,
+        edges: [
+          ...HELD.filter((held) => held.type !== "ALLOCATES"),
+          edge("IT-0001", "TARGETS", "AC-0001"),
+          edge("IT-0001", "TARGETS", "AC-0002"),
+        ],
+      }),
+      unapproved,
+    );
+    assert.equal(statusOf(review, "IT-0001")?.reason, "off-target");
+  });
+});
+
 describe("the aim rule for verification reports", () => {
   // The report's own half of the rule: exactly one claim, and that one among
   // the tasks the submitting log addresses. The chain is read so that the log
