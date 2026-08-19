@@ -8,7 +8,7 @@ Write down what modules owe each other where they meet: `Interface` nodes carryi
 
 ## What it needs from above
 
-Every module from phase 1 green in `shall status --json`. `EXPOSES` and `CONSUMES` are written in the **module's** file, so a module still yellow is a file you would be editing under a person's open judgement.
+Every module from phase 1 green in `shall status --json`. `EXPOSES` and `CONSUMES` are written in the **module's** file, so a module still yellow is a file you would be editing under a person's open judgment.
 
 In revision mode, clear Fix Spec first, and narrow to the modules whose boundaries the direction moves.
 

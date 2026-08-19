@@ -21,7 +21,7 @@ The order is not a convention. Each phase's nodes are held to the graph by the p
 
 ## Authoring is delegated
 
-Every file you write follows the **`shall-authoring`** skill. Load it before you write the first file and follow it for the path, the id, the frontmatter and the shape of the body.
+Every file you write follows the **`shall-authoring`** skill. Load it before you write the first file and follow it for the path, the id, the frontmatter and the shape of the body. The language of the spec is settled there too: an existing spec's language is followed, and an empty spec's is asked for once when the conversation is not in English.
 
 Nothing in this skill or in its phase files lists a type's fields, its body headings, or the choices a heading offers. `shall add-spec-node --type <Type>` writes a starting file whose commented header carries that vocabulary, and that starting file is the only copy of it. Keep the sections it suggests or reshape them — nothing parses the body.
 
@@ -45,7 +45,7 @@ Follow this literally at the close of every phase.
 2. **Write the files and anchor them.** The anchoring relation is written in the file of the node it leaves, so anchoring a new child means editing the parent, and that parent goes yellow again and comes back for review. That is the graph asking whether the parent still says the right thing now that something hangs off it.
 3. **Run `shall check`** (`--scope <path>` when you are working inside a subtree — it is a path filter, naming a file, a type folder, a band folder or a spec-relative prefix, and it never follows a relation). It prints a count line, then `file — sentence` per finding. Fix and re-run until it exits 0. A file that will not read is not in the graph at all.
 4. **Tell the person that one or more Spec approval cards are waiting** in the Review Queue, and tell them how to get there: running `shall` with no arguments opens the app in a browser. Say that sentence to them and do not run it yourself — it starts the daemon and holds the terminal until it is killed, and you need the terminal to keep talking to them. Say you will wait until they tell you they are done. Then stop. Do not poll `shall status`, do not guess that they approved, do not open the next phase, do not write the next phase's files ahead of time.
-5. **When they come back**, run `shall status --json` and read the colour of every id this phase wrote or changed.
+5. **When they come back**, run `shall status --json` and read the color of every id this phase wrote or changed.
 6. **If any id is still yellow**, nobody has judged it yet. Name those ids to the person, say they are still in the queue, and go back to step 4 and wait again. This is the ordinary case, not an error: a person working through several cards approves a few and comes back before the rest. **A phase is never closed on a partial pass** — count it closed and you open the next phase on nodes nobody has agreed to. Report what is outstanding once and then wait: do not raise it again unprompted, and do not re-explain a card that is already green.
 7. **If any id is red with a standing rejection**, read the rationale — `shall status` gives it whole, and it is the work order. Revise that node's file, tell the person it is back in the queue, and return to step 4.
 8. **When every id from this phase is green**, the phase is closed. Open the next one.

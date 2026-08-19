@@ -28,7 +28,7 @@ Work that genuinely spans — integration, the wiring between two modules — ta
 
 ## Aiming
 
-`ImplementationTask —TARGETS→ AcceptanceCriterion`, written in the **task's own** file — because planning work must not touch a criterion's file and put somebody's settled judgement back in the queue.
+`ImplementationTask —TARGETS→ AcceptanceCriterion`, written in the **task's own** file — because planning work must not touch a criterion's file and put somebody's settled judgment back in the queue.
 
 **Zero or one, never two.** `shall check` reports a task with two aims as a hole to fix, and the reason is arithmetic: a person closes a task over the verification reports claiming it, so a task pointing at two criteria closes neither on its own, and coverage counted over it counts one turn of work twice.
 
