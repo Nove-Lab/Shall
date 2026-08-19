@@ -1,7 +1,7 @@
 {
   "name": "shall",
-  "version": "0.1.0",
-  "description": "Runs Shall's elicitation process against a Shall project: /shall:specify interviews for the intent and domain planes, writes the node files, and hands each phase to the Review Queue for a person to approve. A PostToolUse hook runs shall check over every spec file the moment it is written.",
+  "version": "0.2.0",
+  "description": "Runs Shall's own processes against a Shall project: /shall:specify interviews for the intent and domain planes, and /shall:plan turns an approved specification into module designs, contracts and implementation tasks. Both write the node files and hand each phase to the Review Queue for a person to approve. A PostToolUse hook runs shall check over every spec file the moment it is written.",
   "author": {
     "name": "Nove Lab"
   },
@@ -11,6 +11,8 @@
     "requirements",
     "elicitation",
     "spec-driven",
+    "design",
+    "planning",
     "graph",
     "review"
   ]
