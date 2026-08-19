@@ -24,7 +24,9 @@ import type { NodeTypeName } from "./canon.js";
  * A few hints carry no roster memory at all — they are the authoring
  * conventions the /specify elicitation names, and they are seated here so that
  * an agent meets them in the file it is starting rather than in a skill
- * document it may never open.
+ * document it may never open. The plan band's hints are the same thing one
+ * layer down: the conventions the /plan process asks for, seated in the file
+ * an agent is starting a module, a contract or a task in.
  */
 
 /** One suggested section: its heading, and the hint the old roster carried for it. */
@@ -113,29 +115,70 @@ const GUIDE: Readonly<Record<NodeTypeName, readonly SectionGuide[]>> = {
     section("Rationale"),
   ],
   ModuleDesign: [
-    section("Role Description"),
-    section("Structural Design Description"),
-    section("Behavior Design Description"),
-    section("Rationale"),
+    section(
+      "Role Description",
+      "one sentence naming the one charge this module answers for",
+    ),
+    section(
+      "Hidden Decision",
+      "the one decision this module keeps to itself, so that changing it changes nothing outside",
+    ),
+    section(
+      "Structural Design Description",
+      "components and their arrangement, never classes, functions or files, naming the arrangement it follows and where it departs",
+    ),
+    section(
+      "Behavior Design Description",
+      "walk the scenarios through: who acts, who is asked, what is handed over, and the states and transitions when it holds any",
+    ),
+    section(
+      "Rationale",
+      "what was decided, what else was weighed, and which driver settled it, with the path to the convention when a convention settled it",
+    ),
   ],
   Interface: [
-    section("Contract Description"),
+    section(
+      "Contract Description",
+      "what is promised, and which modules consume it, exposing nothing they do not need",
+    ),
     section(
       "Interface Type",
       "API · Event · Message · File · Database · Hardware · User · Network · Library · CLI",
     ),
     section("Protocol"),
-    section("Preconditions"),
-    section("Postconditions"),
+    section("Preconditions", "what the caller guarantees before it calls"),
+    section("Postconditions", "what this module guarantees when it returns"),
+    section(
+      "Invariants",
+      "what holds before and after every call, whatever else happens",
+    ),
   ],
-  DataSchema: [section("Description")],
+  // Validity Rules and not Constraints: the canon already has a Constraint
+  // node, and a heading sharing its name would read as an instruction to write
+  // one here.
+  DataSchema: [
+    section(
+      "Description",
+      "what it carries, and why it is a schema of its own: an identity, a value compared whole, or a bundle kept consistent",
+    ),
+    section(
+      "Validity Rules",
+      "the format, range and presence rules the requirements already state",
+    ),
+  ],
   ImplementationTask: [
-    section("Description"),
+    section(
+      "Description",
+      "what is finished when this is done, never how it is done and never which files it touches",
+    ),
     section("Goal"),
     section("Non-Goals"),
-    section("Scope"),
+    section("Scope", "one turn of work, small enough to finish without stopping"),
     section("Deliverables"),
-    section("Definition of Done"),
+    section(
+      "Definition of Done",
+      "what a verifier reads to agree it is done, which is the targeted criterion when there is one",
+    ),
     section("Risks"),
   ],
   Journal: [
