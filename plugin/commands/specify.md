@@ -9,15 +9,11 @@ The request, in the user's own words:
 
 $ARGUMENTS
 
-If that is empty, ask the user what they need specified and stop there. Do not
-start on a guess: every phase below spends the user's attention, and spending it
-on the wrong subject costs more than one question.
+If that is empty, ask the user what they need specified and stop there. Do not start on a guess: every phase below spends the user's attention, and spending it on the wrong subject costs more than one question.
 
 ## Step 0 — the gate
 
-Run `shall status --json` in the project directory before anything else. It is
-the version check and the entry dispatch at once, so nothing further down is
-decidable without it.
+Run `shall status --json` in the project directory before anything else. It is the version check and the entry dispatch at once, so nothing further down is decidable without it.
 
 If the call fails, read **both** stdout and stderr, then match what you find:
 
@@ -28,25 +24,15 @@ If the call fails, read **both** stdout and stderr, then match what you find:
 | any message naming `.shall`, or saying this folder is not a Shall project | there is no `.shall` here | run `shall init` in this folder first |
 | anything else | you do not know why the gate failed, and guessing is how a broken install turns into a spec nobody can load | the exact output, quoted verbatim, and that `/shall:specify` cannot start until `shall status` answers |
 
-Match the daemon row on that substring and not on the whole sentence. The
-message comes from the router inside the daemon, which names the kind of
-procedure it was looking for — `No "query"-procedure on path "spec.status"`
-today — and the daemon and the CLI both hand it on unchanged. The verb is the
-part that can change without the fault changing, so matching the sentence whole
-would let the same broken install read as an unknown failure.
+Match the daemon row on the substring, never on the whole sentence: the router writes the kind of procedure it wanted into the message the CLI hands on unchanged (`No "query"-procedure on path "spec.status"` today), and that verb can change without the fault changing.
 
-Stop in every case. Do not work around any of them by reading the spec folder
-yourself: a specification written against a Shall that cannot read it back is a
-specification nobody has checked.
+Stop in every case. Do not work around any of them by reading the spec folder yourself: a specification written against a Shall that cannot read it back is a specification nobody has checked.
 
 ## Step 1 — load the skills
 
-Load both with the Skill tool, in this order: `shall:shall-authoring`, then
-`shall:shall-specify`. The first is how a node file is written, named and
-anchored; the second is the process you are about to run.
+Load both with the Skill tool, in this order: `shall:shall-authoring`, then `shall:shall-specify`. The first is how a node file is written, named and anchored; the second is the process you are about to run.
 
-If those namespaced specifiers are refused, read the two files directly instead
-and follow them the same way:
+If those namespaced specifiers are refused, read the two files directly instead and follow them the same way:
 
 - `${CLAUDE_PLUGIN_ROOT}/skills/shall-authoring/SKILL.md`
 - `${CLAUDE_PLUGIN_ROOT}/skills/shall-specify/SKILL.md`
@@ -55,18 +41,11 @@ and follow them the same way:
 
 Read the status you got in step 0.
 
-**Yellow in the intent or domain band → unapproved work, and it comes first.**
-A new session cannot tell a phase still waiting on a person from one nobody
-finished, and does not need to: either way nobody has agreed to those nodes, and
-the ids and their types name the phase they belong to. Ask with AskUserQuestion
-— carry that phase to its approval `(Recommended)`, or leave it standing and
-enter where this request lands — then follow the answer to a phase.
+**Yellow in the intent or domain band → unapproved work, and it comes first.** A new session cannot tell a phase still waiting on a person from one nobody finished, and does not need to: either way nobody has agreed to those nodes, and the ids and their types name the phase they belong to. Ask with AskUserQuestion — carry that phase to its approval `(Recommended)`, or leave it standing and enter where this request lands — then follow the answer to a phase.
 
-**No nodes in the intent band → new mode.** The specification does not exist
-yet. Enter at phase 1 and run the phases in order.
+**No nodes in the intent band → new mode.** The specification does not exist yet. Enter at phase 1 and run the phases in order.
 
-**Nothing yellow, and nodes already there → revision mode.** Work out the
-highest layer the request touches, and enter there:
+**Nothing yellow, and nodes already there → revision mode.** Work out the highest layer the request touches, and enter there:
 
 | The request is about | Enter at |
 |---|---|
@@ -76,33 +55,14 @@ highest layer the request touches, and enter there:
 | a system responsibility | phase 4 |
 | a requirement, a constraint, or an acceptance criterion | phase 5 |
 
-When the request genuinely fits two rows, ask with AskUserQuestion: one question,
-the candidate layers as options, the higher layer first with `(Recommended)`
-suffixed to its label. **Choose the higher layer whenever you are in doubt.** A
-change above stales what hangs below it and a change below never touches what is
-above, so entering too high costs one pass over nodes that turn out unchanged,
-while entering too low leaves the graph saying two things at once.
+When the request genuinely fits two rows, ask with AskUserQuestion: one question, the candidate layers as options, the higher layer first with `(Recommended)` suffixed to its label. **Choose the higher layer whenever you are in doubt.** A change above stales what hangs below it and a change below never touches what is above, so entering too high costs one pass over nodes that turn out unchanged, while entering too low leaves the graph saying two things at once.
 
 Revision mode has three standing rules the phases assume:
 
-- **Work out what the change reaches, then narrow to it.** `--scope` is a path
-  filter, not a graph walk: `shall status --scope <path> --json` narrows the
-  answer to the file, folder or spec-relative prefix you name, and follows no
-  relation out of it. What hangs off the node you are changing is found by
-  reading the relations `shall status --json` reports for that node and walking
-  them yourself, node by node, until nothing new turns up. Scope the commands to
-  the paths that walk landed on; nodes outside it are not this run's business.
-- **Revise, never replace.** Edit the file that is already there, so the node
-  keeps its id and everything pointing at it keeps pointing. A new file for an
-  old thought orphans the old one's children and leaves two answers in the graph.
-- **Delete only when the user asks for it.** A node that has gone quiet is not a
-  node to remove; removing one is a proposal a person judges in the browser like
-  any other.
+- **Work out what the change reaches, then narrow to it.** What hangs off a node is found by reading the relations `shall status --json` reports and walking them yourself until nothing new turns up — `--scope` is a path filter and follows no relation, so it cannot do that walk for you. Scope the commands to the paths the walk landed on; nodes outside it are not this run's business.
+- **Revise, never replace.** Edit the file that is already there, so the node keeps its id and everything pointing at it keeps pointing. A new file for an old thought orphans the old one's children and leaves two answers in the graph.
+- **Delete only when the user asks for it.** A node that has gone quiet is not a node to remove; removing one is a proposal a person judges in the browser like any other.
 
 ## Step 3 — hand over
 
-Enter `shall-specify` at the phase you chose and follow that phase's file to the
-letter — its own page says which file each phase is. From here the process
-steers and you do not: do not compress two phases into one pass, do not answer
-on the user's behalf a question the phase puts to them, and do not carry on past
-a phase's approval gate because the next step looks obvious.
+Enter `shall-specify` at the phase you chose and follow that phase's file to the letter — its own page says which file each phase is. From here the process steers and you do not: do not compress two phases into one pass, do not answer on the user's behalf a question the phase puts to them, and do not carry on past a phase's approval gate because the next step looks obvious.

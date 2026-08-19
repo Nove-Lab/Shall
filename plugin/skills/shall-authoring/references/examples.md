@@ -32,9 +32,7 @@ held to the graph by a REQUIRES relation into it, and none stands. Draw the
 relation, or remove the node.        (exit 1)
 ```
 
-The first line is always the count, and it is not a finding. It counts the whole
-project: `--scope` narrows which findings are printed under it, never the graph
-that was read.
+The first line is always the count, and it is not a finding. It counts the whole project: `--scope` narrows which findings are printed under it, never the graph that was read.
 
 The fix is the parent's file, `.../SystemResponsibility/SR-0004.md` afterwards:
 
@@ -70,9 +68,7 @@ $ shall check
 10 nodes and 13 relations under /home/dev/app.
 ```
 
-Both exit 0: a clean run is the count line and nothing under it. Three files are
-yellow now — the two you wrote and SR-0004, which you edited to hold R-0012. Say
-so when you hand the work over.
+Both exit 0: a clean run is the count line and nothing under it. Three files are yellow now — the two you wrote and SR-0004, which you edited to hold R-0012. Say so when you hand the work over.
 
 ## A goal with two sub-goals
 
@@ -80,8 +76,7 @@ so when you hand the work over.
 $ shall add-spec-node --type Goal      # twice: G-0004.md, then G-0005.md
 ```
 
-Both sub-goal files carry `short_name`, `name` and no `edges` at all. The
-decomposition is two lines in the parent, `G-0003.md`, sorted by target:
+Both sub-goal files carry `short_name`, `name` and no `edges` at all. The decomposition is two lines in the parent, `G-0003.md`, sorted by target:
 
 ```yaml
 edges:
@@ -91,10 +86,7 @@ edges:
     to: G-0005
 ```
 
-`shall check` will **not** complain if you forget those lines: `Goal` is
-rootless, so a sub-goal nothing refines to is a valid node — just a second top
-goal, which is not what you meant. Check the decomposition yourself: if all the
-sub-goals are achieved, is the parent achieved?
+`shall check` will **not** complain if you forget those lines: `Goal` is rootless, so a sub-goal nothing refines to is a valid node — just a second top goal, which is not what you meant. Check the decomposition yourself: if all the sub-goals are achieved, is the parent achieved?
 
 ## A deletion proposal
 
@@ -113,11 +105,7 @@ deletionProposed:
 ---
 ```
 
-Run `shall status --scope .shall/spec/intent/Requirement/R-0007.md` and read it
-back: R-0007 is yellow with the proposal against it, and stays in the graph
-until a person approves or rejects the deletion in the browser. No command does
-that. If they approve, every file still pointing at R-0007 reports a gap of its
-own — which is where the repair happens:
+Run `shall status --scope .shall/spec/intent/Requirement/R-0007.md` and read it back: R-0007 is yellow with the proposal against it, and stays in the graph until a person approves or rejects the deletion in the browser. No command does that. If they approve, every file still pointing at R-0007 reports a gap of its own — which is where the repair happens:
 
 ```
 .../Requirement/R-0012.md — R-0012 has a DEPENDS_ON relation to R-0007, and no
@@ -127,8 +115,7 @@ R-0007 attaches it again.
 
 ## A module, its contract and one task
 
-The plan band, and the same shape one layer down: write the child, then open
-the parent and add the line that holds it.
+The plan band, and the same shape one layer down: write the child, then open the parent and add the line that holds it.
 
 ```
 $ shall add-spec-node --type ModuleDesign
@@ -144,8 +131,7 @@ it is held to the graph by an IS_REALIZED_BY relation into it, and none stands.
 Draw the relation, or remove the node.        (exit 1)
 ```
 
-The fix is upstairs again, in the responsibility this module realises. The
-sorting is by type first, so the new line goes above the one that was there:
+The fix is upstairs again, in the responsibility this module realizes. The sorting is by type first, so the new line goes above the one that was there:
 
 ```yaml
 # .shall/spec/intent/SystemResponsibility/SR-0004.md
@@ -156,12 +142,9 @@ edges:
     to: R-0012
 ```
 
-A module realising two responsibilities gets one such line in **each** of them.
+A module realizing two responsibilities gets one such line in **each** of them.
 
-Now the contract. `Interface` is anchored by `EXPOSES` into it **or**
-`CONSUMES` into it, so the line goes in whichever module publishes it — and a
-second module that calls it writes its own `CONSUMES` line, which anchors
-nothing new and says who the consumer is:
+Now the contract. `Interface` is anchored by `EXPOSES` into it **or** `CONSUMES` into it, so the line goes in whichever module publishes it — and a second module that calls it writes its own `CONSUMES` line, which anchors nothing new and says who the consumer is:
 
 ```yaml
 # .shall/spec/plan/ModuleDesign/MD-0002.md — the module, publishing one contract
@@ -170,9 +153,7 @@ edges:
     to: IF-0003
 ```
 
-The data the contract carries hangs off the contract, and names the concept it
-comes from in its own file — `REPRESENTS` reaches into the domain band, which
-nothing in the plan band anchors and nothing there goes yellow for:
+The data the contract carries hangs off the contract, and names the concept it comes from in its own file — `REPRESENTS` reaches into the domain band, which nothing in the plan band anchors and nothing there goes yellow for:
 
 ```yaml
 # .shall/spec/plan/Interface/IF-0003.md
@@ -188,8 +169,7 @@ edges:
     to: DE-0002
 ```
 
-The task last. Two of its three lines are its own, because planning work must
-not touch a criterion's file and turn somebody's settled judgement yellow:
+The task last. Two of its three lines are its own, because planning work must not touch a criterion's file and turn somebody's settled judgment yellow:
 
 ```yaml
 # .shall/spec/plan/ImplementationTask/IT-0007.md — waiting on one, aiming at one
@@ -222,15 +202,6 @@ $ shall check
 15 nodes and 21 relations under /home/dev/app.
 ```
 
-Six files are yellow: the five you wrote, and SR-0004, which you edited to hold
-MD-0002. Say so when you hand the work over.
+Six files are yellow: the five you wrote, and SR-0004, which you edited to hold MD-0002. Say so when you hand the work over.
 
-**The check would have passed without the module's `ALLOCATES` line**, and the
-task would still have been wrong. A task is held to the graph by that line **or**
-by its own `TARGETS`, so a task aiming at a criterion and belonging to no module
-is a whole node nothing complains about — and work with no design behind it is
-a backlog somebody stored rather than a plan. Two things it **will** say, though,
-and both exit 1: a second `TARGETS` line on IT-0007 — a task aims at one
-criterion at most — and a `DEPENDS_ON` chain that comes back round to IT-0007
-through the tasks it waits on. Neither file is refused; both are read, and the
-graph they make is the thing that does not hold.
+**The check would have passed without the module's `ALLOCATES` line**, and the task would still have been wrong. A task is held to the graph by that line **or** by its own `TARGETS`, so a task aiming at a criterion and belonging to no module is a whole node nothing complains about — and work with no design behind it is a backlog somebody stored rather than a plan. Two things it **will** say, though, and both exit 1: a second `TARGETS` line on IT-0007 — a task aims at one criterion at most — and a `DEPENDS_ON` chain that comes back round to IT-0007 through the tasks it waits on. Neither file is refused; both are read, and the graph they make is the thing that does not hold.

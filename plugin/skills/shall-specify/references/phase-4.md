@@ -4,11 +4,11 @@ The spine is [`../SKILL.md`](../SKILL.md), the `shall-specify` skill itself: its
 
 ## Purpose
 
-Derive, from each approved scenario, the behaviours and qualities **the system** must guarantee for that scenario's steps to run — a set of `SystemResponsibility` nodes, each hanging off the scenario whose steps demand it.
+Derive, from each approved scenario, the behaviors and qualities **the system** must guarantee for that scenario's steps to run — a set of `SystemResponsibility` nodes, each hanging off the scenario whose steps demand it.
 
 ## What it needs from above
 
-Phase 2's map and Phase 3's dictionary, both green in `shall status --json`. A responsibility derived from a scenario still under judgement is one you will rewrite when the judgement lands, and from here on the dictionary is the controlled vocabulary every statement is written in.
+Phase 2's map and Phase 3's dictionary, both green in `shall status --json`. A responsibility derived from a scenario still under judgment is one you will rewrite when the judgment lands, and from here on the dictionary is the controlled vocabulary every statement is written in.
 
 In revision mode, clear Fix Spec first as the spine says, and scope the work to the scenarios the request actually moves.
 
@@ -18,7 +18,7 @@ This is why the phase exists, and **restating what the actor does is the failure
 
 | The step | Not a responsibility | A responsibility |
 |---|---|---|
-| The reviewer approves a node in the queue | "The reviewer approves each node of the bundle" — the actor, restated | "The system records an approval against the content the node held at that moment, and recomputes the node's colour from it on every read" |
+| The reviewer approves a node in the queue | "The reviewer approves each node of the bundle" — the actor, restated | "The system records an approval against the content the node held at that moment, and recomputes the node's color from it on every read" |
 
 If a candidate reads as a paraphrase of its step, you have not turned it yet.
 
@@ -32,7 +32,7 @@ The anchor sits one level below "derived from the use case", and that fineness i
 
 1. **Walk the steps of each approved scenario** and name what the system must do, and what must hold while it does it. Qualities count, not only actions.
 2. **Keep the declaration short**, the detail below it. A declaration that keeps growing clauses is two responsibilities mixed together: split it, and anchor both halves.
-3. **Write in the dictionary's words.** Object nouns are approved terms, spelled canonically. A concept the dictionary lacks sends you to [phase 3](./phase-3.md) step 1 to register it *before* the statement is written; built on an undefined noun, the statement is one you revise twice.
+3. **Write in the dictionary's words.** Object nouns are approved terms, spelled canonically, and the responsibility's own file draws `MENTIONS` to each term its declaration leans on — sparingly, the way [phase 3](./phase-3.md) step 6 draws it. A concept the dictionary lacks sends you to [phase 3](./phase-3.md) step 1 to register it *before* the statement is written; built on an undefined noun, the statement is one you revise twice.
 4. **Classify each responsibility by the removal test**: take it away, and does the scenario above it still stand? A scenario that collapses without it and one that merely degrades are two different answers, and the answer is written in the section the starting file suggests for it — the template carries the words to use.
 5. **Merge duplicates.** When several scenarios demand the same guarantee, keep one responsibility and give **each** scenario its own `DERIVES_RESPONSIBILITY` line to it. Two near-identical responsibilities are a merge you did not make.
 6. **Check coverage.** Every key use case reaches at least one responsibility, and every goal reaches one, along `Goal —PURSUED_BY→ Actor —PERFORMS→ UseCase —DETAILS→ Scenario —DERIVES_RESPONSIBILITY→ SystemResponsibility`. Nothing computes that chain for you: `shall status --json` prints each file's relations and you join them. A goal that reaches nothing sends you to [phase 2](./phase-2.md) step 2 to reinforce its use cases — the single return path for a coverage hole, because there is no edge upward to draw instead.

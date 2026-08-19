@@ -8,7 +8,7 @@ Derive who acts, what each actor pursues through the system, how each pursuit go
 
 ## What it needs from above
 
-Phase 1's goals, green — confirm with `shall status --json`, and clear Fix Spec first as the spine says. An actor is held to the graph by a line written into a **goal's** file, so a goal that does not exist is an actor you cannot anchor, and a goal still yellow is a file you would be rewriting under a person's open judgement.
+Phase 1's goals, green — confirm with `shall status --json`, and clear Fix Spec first as the spine says. An actor is held to the graph by a line written into a **goal's** file, so a goal that does not exist is an actor you cannot anchor, and a goal still yellow is a file you would be rewriting under a person's open judgment.
 
 ## The chain, and the edge that does not exist
 
@@ -18,9 +18,7 @@ That has one consequence you will meet in this phase: a use case whose actor pur
 
 ## Steps
 
-1. **Derive the actors from the approved goals** — who or what interacts with the system in order that a goal be achieved. One actor stands for the system acting on its own behalf: keep at most one per project, and use it only as the subject of work the system starts itself.
-   **Say in each actor's file which kind of actor it is**, in the section the starting file suggests for it — the template carries the words to use. Nothing parses that section, and the gate below leans on it: "every user actor has a use case" is a line nobody can check against a file that never said which actors are users.
-   If no person interacts with the system at all, confirm that once, in plain words. If confirmed, carry on with external-system and time-triggered actors as the subjects — callbacks, partner APIs, scheduled runs. **A project with no use cases cannot exist**, because every responsibility in [phase 4](./phase-4.md) is derived from a scenario and every scenario details a use case.
+1. **Derive the actors from the approved goals** — who or what interacts with the system in order that a goal be achieved. One actor stands for the system acting on its own behalf: keep at most one per project, and use it only as the subject of work the system starts itself. **Say in each actor's file which kind of actor it is**, in the section the starting file suggests for it — the template carries the words to use. Nothing parses that section, and the gate below leans on it: "every user actor has a use case" is a line nobody can check against a file that never said which actors are users. If no person interacts with the system at all, confirm that once, in plain words. If confirmed, carry on with external-system and time-triggered actors as the subjects — callbacks, partner APIs, scheduled runs. **A project with no use cases cannot exist**, because every responsibility in [phase 4](./phase-4.md) is derived from a scenario and every scenario details a use case.
 2. **Derive each actor's use cases**: what that actor pursues through the system, and the value it gets. A use case is what the actor does with the system, not what the system does inside — that turn comes in Phase 4.
 3. **Derive the scenarios of each use case.** One main scenario is **mandatory**, and it is filled all the way through: the state it starts from, the ordered steps with each action and its result, and the state of the world once it is done. Then interrogate every branch and every failure point in those steps. What you find are scenarios of the same rank — each its own file with its own `DETAILS` line, never a section tucked inside the main one. They differ only in the kind of scenario each says it is, and Phase 4 will come looking for exactly these: an idempotency responsibility has a duplicate-delivery exception under it, or it has nothing.
 4. **Give every scenario at least one integrative criterion** — whatever priority the use case above it carries, and the branches and failure paths included. It judges the scenario end to end: what to check across the starting state, the steps and the finishing state. Write it at spec level, general enough that several test cases could later be cut from it; not a script, not a fixture, not an input table.
@@ -37,7 +35,7 @@ Ask through AskUserQuestion under the spine's rules. What is worth asking here:
 | no human actor appears | is there really nobody who interacts with this system? | nobody, systems call it / nobody yet / there is a person | `Actors` |
 | a use case serves no approved goal | which goal is this for — or is one missing? | 2–3 approved goals / a goal is missing | `Goal fit` |
 | a step could go two ways | what happens when this branches or fails? | 2–4 outcomes | `Branch` |
-| a postcondition is soft | what would you look at to say this went right? | 2–4 observable outcomes | `Judgement` |
+| a postcondition is soft | what would you look at to say this went right? | 2–4 observable outcomes | `Judgment` |
 
 ## Authoring mechanics
 

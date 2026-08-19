@@ -19,11 +19,11 @@ You run **one phase at a time**, and a phase does not open until the phase above
 
 The order is not a convention. Each phase's nodes are held to the graph by the phase above: an `Interface` by the `ModuleDesign` that `EXPOSES` or `CONSUMES` it, an `ImplementationTask` by the `ModuleDesign` that `ALLOCATES` it. Write downward before the anchor exists and you have written orphans, and an orphan is red.
 
-**This plane is written on top of a specification a person has approved, and the command has already checked that.** It read the colour of every node above the responsibilities this direction touches and refused to hand over if any of them was unread. So the specification is settled ground here — and the moment this process finds a gap in it, that is not a failure of either document but the ordinary way a specification gets precise: go through `/shall:specify`, and come back to the step you left.
+**This plane is written on top of a specification a person has approved, and the command has already checked that.** It read the color of every node above the responsibilities this direction touches and refused to hand over if any of them was unread. So the specification is settled ground here — and the moment this process finds a gap in it, that is not a failure of either document but the ordinary way a specification gets precise: go through `/shall:specify`, and come back to the step you left.
 
 ## Authoring is delegated
 
-Every file you write follows the **`shall-authoring`** skill. Load it before you write the first file and follow it for the path, the id, the frontmatter and the shape of the body.
+Every file you write follows the **`shall-authoring`** skill. Load it before you write the first file and follow it for the path, the id, the frontmatter and the shape of the body. The language of the spec is settled there too: an existing spec's language is followed, and an empty spec's is asked for once when the conversation is not in English.
 
 Nothing in this skill or in its phase files lists a type's fields, its body headings, or the choices a heading offers. `shall add-spec-node --type <Type>` writes a starting file whose commented header carries that vocabulary, and that starting file is the only copy of it. Keep the sections it suggests or reshape them — nothing parses the body.
 
@@ -39,7 +39,7 @@ Nothing in this skill or in its phase files lists a type's fields, its body head
 
 Five more are this plane's own:
 
-**Read what the project already says, before the first boundary is drawn.** Its readme, a contributing guide, anything under a docs folder, a design record, the rules file it loads into every session. What you find sorts three ways, and none of the three is "note it and move on": a norm that genuinely **binds** is promoted to a `Constraint` through `/shall:specify` in revision mode, in this session, and you come back; a **convention** of arrangement or naming is followed, and the node whose design followed it names the document's path in its own body; a **conflict** with the user's direction is put to the user as an option question and never settled quietly in either direction. The reason a binding norm cannot stay a reference: an outside document can be revised without anything in the graph turning a colour, so a plan grounded in one is grounded in a dependency nothing tracks.
+**Read what the project already says, before the first boundary is drawn.** Its readme, a contributing guide, anything under a docs folder, a design record, the rules file it loads into every session. What you find sorts three ways, and none of the three is "note it and move on": a norm that genuinely **binds** is promoted to a `Constraint` through `/shall:specify` in revision mode, in this session, and you come back; a **convention** of arrangement or naming is followed, and the node whose design followed it names the document's path in its own body; a **conflict** with the user's direction is put to the user as an option question and never settled quietly in either direction. The reason a binding norm cannot stay a reference: an outside document can be revised without anything in the graph turning a color, so a plan grounded in one is grounded in a dependency nothing tracks.
 
 **Say what your grounds were, at the moment of approval.** Where an outside document or a piece of investigation actually decided something, the terminal explanation of that phase says **which decision followed which grounds**, naming the source. The line in the node's body is for tracing it back afterwards; this is so that nobody approves a decision without having seen what produced it.
 
@@ -57,7 +57,7 @@ Follow this literally at the close of every phase.
 2. **Write the files and anchor them.** The anchoring relation is written in the file of the node it leaves, so anchoring a new child means editing the parent, and that parent goes yellow again and comes back for review. That is the graph asking whether the parent still says the right thing now that something hangs off it.
 3. **Run `shall check`** (`--scope <path>` when you are working inside a subtree — it is a path filter, naming a file, a type folder, a band folder or a spec-relative prefix, and it never follows a relation). It prints a count line, then `file — sentence` per finding. Fix and re-run until it exits 0. A file that will not read is not in the graph at all.
 4. **Tell the person that one or more Spec approval cards are waiting** in the Review Queue, and tell them how to get there: running `shall` with no arguments opens the app in a browser. Say that sentence to them and do not run it yourself — it starts the daemon and holds the terminal until it is killed, and you need the terminal to keep talking to them. Say you will wait until they tell you they are done. Then stop. Do not poll `shall status`, do not guess that they approved, do not open the next phase, do not write the next phase's files ahead of time.
-5. **When they come back**, run `shall status --json` and read the colour of every id this phase wrote or changed.
+5. **When they come back**, run `shall status --json` and read the color of every id this phase wrote or changed.
 6. **If any id is still yellow**, nobody has judged it yet. Name those ids to the person, say they are still in the queue, and go back to step 4 and wait again. This is the ordinary case, not an error: a person working through several cards approves a few and comes back before the rest. **A phase is never closed on a partial pass** — count it closed and you open the next phase on nodes nobody has agreed to. Report what is outstanding once and then wait: do not raise it again unprompted, and do not re-explain a card that is already green.
 7. **If any id is red with a standing rejection**, read the rationale — `shall status` gives it whole, and it is the work order. Revise that node's file, tell the person it is back in the queue, and return to step 4.
 8. **When every id from this phase is green**, the phase is closed. Open the next one.
@@ -72,7 +72,7 @@ The queue cuts a bundle at each topmost yellow node and walks **down every outgo
 
 | Phase | What arrives |
 |---|---|
-| 1 | one card per **responsibility** that gained a module — `IS_REALIZED_BY` is written in the responsibility's file, so the responsibility is the topmost yellow node and the module rides inside its card. A module realising two responsibilities appears in both, marked as shared |
+| 1 | one card per **responsibility** that gained a module — `IS_REALIZED_BY` is written in the responsibility's file, so the responsibility is the topmost yellow node and the module rides inside its card. A module realizing two responsibilities appears in both, marked as shared |
 | 2 | one per module that gained a contract line, carrying the interfaces beneath it and the schemas those interfaces carry |
 | 3 | one per module that gained a task line. A task that waits on another module's task pulls that one in as a shared member; the criterion it aims at does **not** come along, because the walk does not follow a task's `TARGETS` forward |
 
@@ -104,7 +104,7 @@ Every relation this process uses, and the file each one is written in.
 
 Three consequences worth having in hand:
 
-- **A relation lives in the file of the node it leaves**, so anchoring a child edits the parent. The two exceptions are a task's own `DEPENDS_ON` and `TARGETS`, which run upward on purpose: planning work must not touch a criterion's file, because that would turn a green criterion yellow and put somebody's settled judgement back in the queue.
+- **A relation lives in the file of the node it leaves**, so anchoring a child edits the parent. The two exceptions are a task's own `DEPENDS_ON` and `TARGETS`, which run upward on purpose: planning work must not touch a criterion's file, because that would turn a green criterion yellow and put somebody's settled judgment back in the queue.
 - **A module's dependency can only be said as a contract.** There is no line between two modules, so "A depends on B" is written as A consuming what B exposes — and a dependency you cannot name a contract for is a dependency reaching past the boundary into B's internals, which is the thing the boundary was drawn to prevent.
 - **The drivers leave no trace.** The non-functional requirements and constraints that decided a boundary are read and never recorded, which is exactly why the grounds duty exists. A module whose only driver is a constraint has nothing to hang off either: go to `/shall:specify` and find the responsibility nobody wrote, and never invent one to hang a module on.
 
