@@ -1,6 +1,7 @@
 import { closureKindOf, compare, type SpecNode } from "../graph/index.js";
 import type { RefusedFile, SpecGraph } from "../store/file-store.js";
 import { closureVerdictOf } from "./closure.js";
+import { cyclicOf, cyclicSentence } from "./plan-seams.js";
 import {
   isClosableTask,
   prematureAddressOf,
@@ -132,9 +133,10 @@ export interface ReviewStatus {
   /**
    * THE SENTENCE A RULE OF THE GRAPH WROTE AGAINST THIS NODE, when its red came
    * from one that names other nodes — the aim rule (`off-target`), which needs
-   * the log, the task and the claims spelled out to be acted on, and the
-   * blocked-address rule (`premature`), which names the task whose turn has
-   * not come. The panel could not compose either from the one node it holds.
+   * the log, the task and the claims spelled out to be acted on, the loop rule
+   * (`cyclic`), which has to recite the way round, and the blocked-address rule
+   * (`premature`), which names the task whose turn has not come. The panel
+   * could not compose any of them from the one node it holds.
    * Null for every other reason: an orphan's sentence is the anchor phrase the
    * panel already composes from the type, and the books' reasons carry their
    * own records above.
@@ -167,12 +169,18 @@ function brokenOf(refusal: RefusedFile): BrokenFile {
   return { file: refusal.file, problems: [...refusal.problems] };
 }
 
-/** The aim rule's sentence, and only when that rule is what made the node red. */
+/** A seam's own sentence, and only when that seam is what made the node red. */
 function problemFor(
   node: SpecNode,
   reason: ColorVerdict["reason"],
   context: ColorContext,
 ): string | null {
+  if (reason === "cyclic") {
+    // Every node on the loop gets the sentence starting from itself, because a
+    // person meets it on whichever file they opened.
+    const cycle = cyclicOf(livingSubject(node), context);
+    return cycle === null ? null : cyclicSentence(node.id, cycle);
+  }
   if (reason !== "off-target") {
     return null;
   }
@@ -222,7 +230,7 @@ export function reviewGraph(
 
   for (const node of graph.nodes) {
     let verdict = colorOf(livingSubject(node), context);
-    // THE EIGHTH QUESTION — work logged under a task whose turn has not come —
+    // THE NINTH QUESTION — work logged under a task whose turn has not come —
     // is asked here and not inside `colorOf`, because it reads the addressed
     // task's STATE, which reads other nodes' colours; the base chain answers
     // one node from its own file and the books. Only a node the chain left

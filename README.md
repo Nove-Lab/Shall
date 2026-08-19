@@ -145,7 +145,20 @@ addresses target, and its verification report exactly one of the addressed
 tasks themselves — a log under no task targets nothing, so any claim under it
 breaks the rule too. Break it and both the work log and the claimant are red
 — an error to fix, before anybody is asked to approve — with one sentence
-naming the log, the task and the claims, under either node.
+naming the log, the task and the claims, under either node. The same rule is
+asked of the aim itself one step earlier: **a task targets one criterion at
+most**, because a task with two aims closes neither on its own and the board
+could never call it done.
+
+And **the plan may not wait on itself**. Two tasks that each wait on the other
+are both red (`cyclic`) — no task on a loop can ever be called ready, so the
+loop is a hole in the plan rather than a slow start — and so are two modules
+that consume each other's contracts, which is the same fact one layer up:
+neither can be built, read or replaced without the other, which is the whole of
+what a module boundary promises. Every node on the loop carries the sentence,
+each starting from itself, because the line to cut may be in any of their
+files. Contracts themselves stay out of it: a loop runs *through* an interface
+and there is nothing in that file to remove.
 
 One more rule reads across the axes: **work is logged only under a task whose
 turn has come**. A work log addressing a *blocked* task — its chain unread, or

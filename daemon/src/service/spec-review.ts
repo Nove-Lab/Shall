@@ -442,6 +442,14 @@ export function blockerFor(
       message: `${status.problem ?? `${id} is outside its task's aim`} Fix that first — there is nothing yet to approve.`,
     };
   }
+  if (status !== undefined && status.reason === "cyclic") {
+    // A loop in the plan, and the same family again: agreeing to one node of a
+    // loop is agreeing to an order that has no beginning.
+    return {
+      kind: "invalid",
+      message: `${status.problem ?? `${id} stands on a loop`} Fix that first — there is nothing yet to approve.`,
+    };
+  }
   if (status !== undefined && status.reason === "premature") {
     // Work under a task whose turn has not come — the same family of red: a
     // rule of the graph, named before any book is opened.

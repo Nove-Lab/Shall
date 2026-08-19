@@ -70,6 +70,7 @@ export interface FixSpecItem {
     | "malformed"
     | "orphan"
     | "off-target"
+    | "cyclic"
     | "premature"
     | "rejected";
   /** The rationale VERBATIM, or the rule's own sentence. Never summarised. */
@@ -114,17 +115,18 @@ export interface TaskBoard {
  * then the holes, then the files that would not read at all.
  *
  * IT IS THE COLOUR CHAIN'S PRIORITY READ BACKWARDS, deliberately: the chain
- * answers missing → malformed → orphan → off-target → rejected because that is
- * the order a single node's defects mask each other in, and this board sorts a
- * LIST for a person whose first job is the instructions people wrote. Both
- * orders are right for their own audience. `orphan` and `off-target` share a
- * rank on purpose — between them it is the tiebreak below (`at`, then
- * `updatedAt`, then id) that decides, oldest first.
+ * answers missing → malformed → orphan → off-target → cyclic → rejected because
+ * that is the order a single node's defects mask each other in, and this board
+ * sorts a LIST for a person whose first job is the instructions people wrote.
+ * Both orders are right for their own audience. The four seams the grammar
+ * found share a rank on purpose — between them it is the tiebreak below (`at`,
+ * then `updatedAt`, then id) that decides, oldest first.
  */
 const RANK: Readonly<Record<FixSpecItem["reason"], number>> = {
   rejected: 0,
   orphan: 1,
   "off-target": 1,
+  cyclic: 1,
   premature: 1,
   missing: 2,
   malformed: 3,
@@ -203,6 +205,16 @@ function fixOf(
       ...common,
       kind: "grammar",
       reason: "off-target",
+      detail: status.problem,
+      by: null,
+      at: null,
+    };
+  }
+  if (status.reason === "cyclic" && status.problem !== null) {
+    return {
+      ...common,
+      kind: "grammar",
+      reason: "cyclic",
       detail: status.problem,
       by: null,
       at: null,

@@ -756,18 +756,54 @@ describe("the Fix Spec column", () => {
     assert.equal(row.type, null);
   });
 
+  test("says which line to cut when two tasks wait on each other", () => {
+    const second = node("ImplementationTask", "IT-0002");
+    const nodes = [...SPINE_NODES, second];
+    const edges = [
+      ...SPINE,
+      edge("MD-0001", "ALLOCATES", "IT-0002"),
+      edge("IT-0001", "DEPENDS_ON", "IT-0002"),
+      edge("IT-0002", "DEPENDS_ON", "IT-0001"),
+    ];
+    const board = boardOf(nodes, edges, settled(nodes, edges));
+    const row = board.fixSpec.find((held) => held.id === "IT-0002");
+    assert.ok(row !== undefined);
+    assert.equal(row.kind, "grammar");
+    assert.equal(row.reason, "cyclic");
+    assert.equal(
+      row.detail,
+      "IT-0002 waits on IT-0001, which waits on IT-0002 — a task cannot wait on itself through others, and no task on this loop can ever be called ready. Remove one DEPENDS_ON line, or split the task both halves need.",
+    );
+    // Both ends get a row: either DEPENDS_ON line closes the loop, and the
+    // person is standing on whichever one they opened.
+    assert.deepEqual(
+      board.fixSpec.filter((held) => held.reason === "cyclic").map((held) => held.id),
+      ["IT-0001", "IT-0002"],
+    );
+    assert.deepEqual(board.implement, []);
+  });
+
   test("puts a person's refusal before the grammar's, and the holes after both", () => {
     const lone = node("Requirement", "R-0002");
-    const edges = [...SPINE, edge("R-0001", "DEPENDS_ON", "R-0404")];
-    const nodes = [...SPINE_NODES, lone];
+    const second = node("ImplementationTask", "IT-0002");
+    const edges = [
+      ...SPINE,
+      edge("R-0001", "DEPENDS_ON", "R-0404"),
+      edge("MD-0001", "ALLOCATES", "IT-0002"),
+      edge("IT-0001", "DEPENDS_ON", "IT-0002"),
+      edge("IT-0002", "DEPENDS_ON", "IT-0001"),
+    ];
+    const nodes = [...SPINE_NODES, lone, second];
     const ledgers = booksOf({
       approvals: nodes.map((held) => approve(held, edges)),
       rejections: [reject(requirement, edges)],
     });
     const board = boardOf(nodes, edges, ledgers);
+    // The four seams the grammar found share one rank, so between them it is
+    // the tiebreak that decides — here the ids, every row being of an age.
     assert.deepEqual(
       board.fixSpec.map((row) => row.reason),
-      ["rejected", "orphan", "missing"],
+      ["rejected", "cyclic", "cyclic", "orphan", "missing"],
     );
   });
 

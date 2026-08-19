@@ -51,6 +51,13 @@ export {
   unapprovedClaimantsOf,
   type ClosureVerdict,
 } from "./closure.js";
+export {
+  cyclicOf,
+  cyclicSentence,
+  isCyclic,
+  planCyclesOf,
+} from "./plan-seams.js";
+export type { ModuleHop, PlanCycle, PlanCycles } from "./plan-seams.js";
 export { missingSentence, reviewGraph } from "./review.js";
 export type {
   BrokenFile,

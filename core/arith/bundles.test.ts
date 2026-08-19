@@ -451,7 +451,13 @@ describe("the specification walk", () => {
     assert.deepEqual(memberIn(queue, "spec:G-0001", "G-0001").sharedWith, []);
   });
 
-  test("a cycle of DEPENDS_ON terminates and makes one bundle", () => {
+  test("a cycle of DEPENDS_ON terminates, and stands no bundle at all", () => {
+    // Two facts at once. The walk terminates — this test predates the loop
+    // rule and that is still what it is here to prove. And since the loop
+    // rule, both nodes are red for a reason the queue does not carry: a loop
+    // is a seam in the graph, like an orphan and like the aim rule, and a
+    // person cannot approve their way out of one. So neither roots a bundle,
+    // neither rides in anybody's, and `shall check` is where it is said.
     const second = node("Requirement", "R-0002");
     const queue = queueOf(
       [...SPINE, second],
@@ -463,8 +469,29 @@ describe("the specification walk", () => {
       ],
       { green: ABOVE },
     );
-    assert.deepEqual(bundleIds(queue), ["spec:R-0001"]);
-    assert.deepEqual(memberIds(queue, "spec:R-0001"), ["R-0001", "R-0002"]);
+    assert.deepEqual(bundleIds(queue), []);
+  });
+
+  test("a node that waits on a loop without being on it is still a card", () => {
+    // Membership is the component and not reachability: R-0003 waits on the
+    // pair and nothing waits on it, so it is not on the loop and the queue
+    // still has work for a person. The two on the loop stay out of its bundle.
+    const second = node("Requirement", "R-0002");
+    const third = node("Requirement", "R-0003");
+    const queue = queueOf(
+      [...SPINE, second, third],
+      [
+        ...SPINE_EDGES,
+        edge("SR-0001", "REQUIRES", "R-0002"),
+        edge("SR-0001", "REQUIRES", "R-0003"),
+        edge("R-0001", "DEPENDS_ON", "R-0002"),
+        edge("R-0002", "DEPENDS_ON", "R-0001"),
+        edge("R-0003", "DEPENDS_ON", "R-0001"),
+      ],
+      { green: ABOVE },
+    );
+    assert.deepEqual(bundleIds(queue), ["spec:R-0003"]);
+    assert.deepEqual(memberIds(queue, "spec:R-0003"), ["R-0003"]);
   });
 
   test("a vocabulary word stands alone, and no walk descends into it", () => {

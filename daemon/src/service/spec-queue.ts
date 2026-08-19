@@ -138,8 +138,9 @@ export async function rejectSpecNode(input: {
     throw missing(`Unknown node: ${input.id}`);
   }
   // `missing` and `malformed` cannot come back for a node that loaded — the
-  // review says so itself — so `orphan` and the aim rule's `off-target` are
-  // the grammar reds a living node can be caught by, and each has its sentence.
+  // review says so itself — so `orphan`, the aim rule's `off-target`, the loop
+  // rule's `cyclic` and the blocked-address rule's `premature` are the grammar
+  // reds a living node can be caught by, and each has its sentence.
   const status = statuses.get(input.id);
   if (status !== undefined && status.reason === "orphan") {
     throw invalid(orphanSentence(node));
@@ -147,6 +148,11 @@ export async function rejectSpecNode(input: {
   if (status !== undefined && status.reason === "off-target") {
     throw invalid(
       `${status.problem ?? `${input.id} is outside its task's aim`} Fix that first; a rejection is a judgement on a node the graph holds together.`,
+    );
+  }
+  if (status !== undefined && status.reason === "cyclic") {
+    throw invalid(
+      `${status.problem ?? `${input.id} stands on a loop`} Fix that first; a rejection is a judgement on a node the graph holds together.`,
     );
   }
   if (status !== undefined && status.reason === "premature") {
