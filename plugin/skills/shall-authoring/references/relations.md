@@ -47,6 +47,27 @@ answered by walking the chain, not by reading one edge. A responsibility hangs o
 whose steps demand it — never a use case as a whole, never a goal. Several
 scenarios may derive one responsibility; that is how duplication merges.
 
+## The plan chain, in canon names
+
+```
+SystemResponsibility ──IS_REALIZED_BY──▶ ModuleDesign
+ModuleDesign ──EXPOSES──▶ Interface ──CARRIES──▶ DataSchema ──REPRESENTS──▶ DomainEntity
+ModuleDesign ──CONSUMES──▶ Interface        (the contract this module calls)
+ModuleDesign ──ALLOCATES──▶ ImplementationTask ──DEPENDS_ON──▶ ImplementationTask
+ImplementationTask ──TARGETS──▶ AcceptanceCriterion   (written in the task)
+```
+
+**No relation joins two modules.** A module depends on another by consuming
+what that one exposes, so the dependency is two lines about one contract and
+never a line between the two files — which is also why a dependency you cannot
+name a contract for is a dependency reaching past a boundary into somebody's
+internals.
+
+**No relation joins a module to a requirement or a constraint.** Those are read
+while the boundaries are being cut and leave no trace in the graph, so the
+reasoning that used one has to be written into the module's own words or it is
+gone.
+
 ## Which end owns the line
 
 The source, always: a relation is written in the file of the node it leaves.
@@ -84,6 +105,10 @@ is **required** to reach one. `core/graph/anchors.ts` is the single source.
 | `Requirement` | `REQUIRES` into it |
 | `AcceptanceCriterion` | `HAS_CRITERION` into it |
 | `Constraint` | `HAS_CONSTRAINT` into it |
+| `ModuleDesign` | `IS_REALIZED_BY` into it |
+| `Interface` | `EXPOSES` into it **or** `CONSUMES` into it |
+| `DataSchema` | `CARRIES` into it |
+| `ImplementationTask` | `ALLOCATES` into it **or** its own `TARGETS` |
 | `Assumption` | `ASSUMES` into it |
 | `Question` | `RAISES` into it |
 | `Decision` | `RESOLVES` or `AFFECTS` **out of** it |
@@ -91,7 +116,14 @@ is **required** to reach one. `core/graph/anchors.ts` is the single source.
 Several anchors are an OR, never an AND: a task is held by `ALLOCATES` into it
 **or** by its own `TARGETS`, a work log by `LOGS` into it **or** by its own
 `ADDRESSES`; an evidence and a verification report are held by their own
-`CLAIMS` alone. Read `anchors.ts` before relying on a Plan or Execution row.
+`CLAIMS` alone. Read `anchors.ts` before relying on an Execution row.
+
+The task's OR is the one to watch, because it lets through a mistake nothing
+downstream will report. A task that targets a criterion and belongs to no module
+is a whole node: no check files it, no door refuses it, and the board will offer
+it to somebody the moment its chain goes green. It is still wrong — work with no
+design behind it is a backlog somebody stored, not a plan — so the module's
+`ALLOCATES` line is yours to remember.
 
 ## Two worked anchors
 

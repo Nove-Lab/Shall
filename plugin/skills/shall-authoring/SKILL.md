@@ -179,6 +179,24 @@ yours to keep:
   existing nodes means editing twenty files and turning twenty green nodes
   yellow. Nobody asked for that review.
 
+In the plan band, four more:
+
+- **A module says, in its own words, which decision it keeps to itself.** That
+  is what makes it a module rather than a stage in a pipeline — a boundary
+  whose answer is "because it is this step of the processing" hides nothing and
+  will be cut again the first time anything changes.
+- **A task says what is finished when it is done**, never how to do it and
+  never which files it touches. Paths, classes and functions are what the work
+  turns up while it is being done; written into the plan they are wrong before
+  the first turn of work ends. The one exception is a person asking for them in
+  so many words.
+- **A task aims at one criterion, or at none.** The canon lets you write two
+  `TARGETS` lines and `shall check` now reports it as a hole to fix, because a
+  task with two aims closes neither on its own.
+- **A task no `ModuleDesign` `ALLOCATES` is a task the plan dropped.** It is
+  neither an orphan nor a gap nor red — its own `TARGETS` line holds it to the
+  graph — so nothing anywhere will tell you. Draw the module's line yourself.
+
 ## 10. The CLI contract
 
 | Command | What it answers |
