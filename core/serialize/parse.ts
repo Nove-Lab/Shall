@@ -1,8 +1,10 @@
 import {
+  articleFor,
   formatEdgeId,
   isNodeType,
   judgeBody,
   judgeNodeId,
+  openingArticleFor,
   type NodeDeletionProposal,
   type SpecEdge,
   type SpecNode,
@@ -291,7 +293,7 @@ export function parseNodeFile(
       // still answered by type rather than skipped in silence.
       if (type !== typed.type) {
         problems.push(
-          `A ${type} does not carry ${typed.key} — ${typed.instead}.`,
+          `${openingArticleFor(type)} ${type} does not carry ${typed.key} — ${typed.instead}.`,
         );
       }
       continue;
@@ -536,7 +538,7 @@ export function parseNodeFile(
       if (!repeated.has(triple)) {
         repeated.add(triple);
         problems.push(
-          `${id} already has a ${edge.type} relation to ${edge.toId}.`,
+          `${id} already has ${articleFor(edge.type)} ${edge.type} relation to ${edge.toId}.`,
         );
       }
       continue;

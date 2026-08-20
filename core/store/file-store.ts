@@ -2,6 +2,7 @@ import type { Dirent } from "node:fs";
 import { mkdir, readdir, stat, unlink } from "node:fs/promises";
 import path from "node:path";
 import {
+  articleFor,
   BAND_FOLDERS,
   bandFolderOf,
   bandOfFolder,
@@ -772,7 +773,9 @@ async function writeNodeFile(
     // Unreachable, and a defect rather than a refusal if it ever is not: a
     // refusal is a sentence a person reads in a panel, and this would be the
     // emitter and the reader disagreeing about the format.
-    throw new Error(`Emitted a ${type} file that cannot be read back: ${id}`);
+    throw new Error(
+      `Emitted ${articleFor(type)} ${type} file that cannot be read back: ${id}`,
+    );
   }
 
   const band = bandFolderOf(type);
@@ -1203,7 +1206,7 @@ export async function restoreNodeFile(
       }
       if (standing.type !== type) {
         throw conflict(
-          `${id} is on disk as a ${standing.type} at ${standing.file}, so the ${type} git holds cannot be restored under that id.`,
+          `${id} is on disk as ${articleFor(standing.type)} ${standing.type} at ${standing.file}, so the ${type} git holds cannot be restored under that id.`,
         );
       }
       throw conflict(
@@ -1296,7 +1299,7 @@ export async function addEdge(
       )
     ) {
       throw conflict(
-        `${edge.fromId} already has a ${edge.type} relation to ${edge.toId}.`,
+        `${edge.fromId} already has ${articleFor(edge.type)} ${edge.type} relation to ${edge.toId}.`,
       );
     }
 

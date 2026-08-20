@@ -1,3 +1,4 @@
+import { articleFor } from "./article.js";
 import type { NodeTypeName } from "./canon.js";
 
 /**
@@ -209,7 +210,7 @@ export function grammarHint(fromType: string, toType: string): string {
     return `${hint} The reverse direction allows: ${reverse.join(", ")}.`;
   }
   return hint === ""
-    ? ` Nothing in the canon relates a ${fromType} to a ${toType}.`
+    ? ` Nothing in the canon relates ${articleFor(fromType)} ${fromType} to ${articleFor(toType)} ${toType}.`
     : hint;
 }
 

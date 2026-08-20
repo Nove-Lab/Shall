@@ -9,15 +9,16 @@ import {
 } from "react";
 import { Pencil, Plus, Trash2, X } from "lucide-react";
 import {
-  BAND_ORDER,
   anchorPhrase,
+  type Band,
+  BAND_ORDER,
   bandOf,
   closureKindOf,
   columnsInOrder,
   nextIdSuggestion,
-  sectionGuideFor,
-  type Band,
   type NodeTypeEntry,
+  openingArticleFor,
+  sectionGuideFor,
   type SpecEdge,
   type SpecNode,
 } from "@shall/core/graph";
@@ -181,7 +182,7 @@ function statusCopy(
         body:
           phrase === null
             ? `${opening} Draw a relation into it from the node it belongs under.`
-            : `${opening} A ${node.type} is anchored by ${phrase}.`,
+            : `${opening} ${openingArticleFor(node.type)} ${node.type} is anchored by ${phrase}.`,
       };
     }
     // THE AIM RULE: a work log under a task submits evidence only for what the

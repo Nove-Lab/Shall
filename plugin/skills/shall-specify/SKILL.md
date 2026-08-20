@@ -89,7 +89,7 @@ The process document names four relations that do not exist. Use the middle colu
 Two consequences the process never states, because it thought the edges were elsewhere:
 
 - **A relation lives in the file of the node it leaves.** To anchor a child you edit the parent, and to fix an orphan you edit the parent too — never the orphan.
-- **Nothing runs upward.** "Which goal does this serve" is answered by walking `Goal —PURSUED_BY→ Actor —PERFORMS→ UseCase —DETAILS→ Scenario —DERIVES_RESPONSIBILITY→ SystemResponsibility`, and coverage is checked along that chain rather than at one edge. A use case that serves no goal means a goal is missing: go back to Phase 1 rather than reaching for an edge upward.
+- **Nothing this process writes runs upward.** "Which goal does this serve" is answered by walking `Goal —PURSUED_BY→ Actor —PERFORMS→ UseCase —DETAILS→ Scenario —DERIVES_RESPONSIBILITY→ SystemResponsibility`, and coverage is checked along that chain rather than at one edge. A use case that serves no goal means a goal is missing: go back to Phase 1 rather than reaching for an edge upward. The canon does hold two relations that reach back up the bands — a `MENTIONS` at a term, and the `AFFECTS` a `Decision` draws at what it revises — and neither is a way to say which goal something serves.
 
 Anything absent from this table, do not invent. `shall check` refuses a relation the canon does not allow, and the **?** button beside the Spec plane's view tabs draws the whole canon if the person wants to look.
 

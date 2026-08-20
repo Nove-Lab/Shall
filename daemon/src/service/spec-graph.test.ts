@@ -609,7 +609,7 @@ describe("the edge doors", () => {
         toId: "AC-0001",
       }),
       "invalid",
-      "HAS_CRITERION is not allowed from Goal to AcceptanceCriterion. Nothing in the canon relates a Goal to a AcceptanceCriterion.",
+      "HAS_CRITERION is not allowed from Goal to AcceptanceCriterion. Nothing in the canon relates a Goal to an AcceptanceCriterion.",
     );
   });
 

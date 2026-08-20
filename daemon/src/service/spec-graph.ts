@@ -2,6 +2,7 @@ import path from "node:path";
 import { missingSentence, reviewGraph, type Ledgers } from "@shall/core/arith";
 import type { SpecEdge, SpecNode } from "@shall/core/graph";
 import {
+  articleFor,
   bandFolderOf,
   bandOf,
   canonTypesSentence,
@@ -300,7 +301,7 @@ export async function removeSpecNode(input: {
     graph.refused.find((entry) => entry.id === id);
   if (held !== undefined && bandOf(held.type) === "Execution") {
     throw invalid(
-      `${id} is a ${held.type}, and the execution band is append-only — what happened is not unhappened by deleting its record. Nothing was removed.`,
+      `${id} is ${articleFor(held.type)} ${held.type}, and the execution band is append-only — what happened is not unhappened by deleting its record. Nothing was removed.`,
     );
   }
   await served(deleteNodeFile(specDir, id));
@@ -388,7 +389,9 @@ export async function createSpecEdge(input: {
         edge.type === type && edge.fromId === fromId && edge.toId === toId,
     )
   ) {
-    throw conflict(`${fromId} already has a ${type} relation to ${toId}.`);
+    throw conflict(
+      `${fromId} already has ${articleFor(type)} ${type} relation to ${toId}.`,
+    );
   }
 
   return served(addEdge(specDir, { fromId, type, toId }));

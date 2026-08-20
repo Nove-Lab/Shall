@@ -43,7 +43,7 @@ Read the status you got in step 0. There are three questions here and they are a
 
 ### Unapproved plan work comes first
 
-**Yellow in the plan band → work nobody has agreed to, and it comes first.** A new session cannot tell a phase still waiting on a person from one nobody finished, and does not need to: either way nobody has agreed to those nodes. Ask with AskUserQuestion — carry that phase to its approval `(Recommended)`, or leave it standing and enter where this direction lands — then follow the answer.
+**Yellow in the plan band, a `Decision` aside → work nobody has agreed to, and it comes first.** A new session cannot tell a phase still waiting on a person from one nobody finished, and does not need to: either way nobody has agreed to those nodes. Ask with AskUserQuestion — carry that phase to its approval `(Recommended)`, or leave it standing and enter where this direction lands — then follow the answer.
 
 Two things belong to that work while sitting outside the plan band, and reading them as somebody else's is how a phase gets abandoned half-written:
 

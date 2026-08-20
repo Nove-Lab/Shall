@@ -1,4 +1,5 @@
 import {
+  articleFor,
   bandFolderOf,
   EDGE_GRAMMAR,
   formatNodeId,
@@ -85,7 +86,9 @@ function startingLines(
   const rows = EDGE_GRAMMAR.filter((row) => row.fromType === type);
   const [firstRow] = rows;
   if (firstRow === undefined) {
-    lines.push(`# From a ${type} the canon allows no outgoing relations.`);
+    lines.push(
+      `# From ${articleFor(type)} ${type} the canon allows no outgoing relations.`,
+    );
   } else {
     lines.push(
       "# Outgoing relations are written HERE and only here — never on the target.",
@@ -93,7 +96,7 @@ function startingLines(
     // `a` before every type name, `AcceptanceCriterion` included: every refusal
     // this codebase already writes chooses the article that way, and one voice
     // matters more here than one letter of grammar.
-    lines.push(`# From a ${type} the canon allows:`);
+    lines.push(`# From ${articleFor(type)} ${type} the canon allows:`);
     const arrow = Math.max(...rows.map((row) => row.edgeType.length)) + 1;
     for (const row of rows) {
       lines.push(`#   ${row.edgeType.padEnd(arrow)}-> ${row.toType}`);
@@ -176,7 +179,7 @@ export function emitTemplate(type: string): string {
     throw new Error(`Unknown node type: ${type}`);
   }
   return emitStartingFile(type, [
-    `# ${type} — the starting shape of a ${type} node.`,
+    `# ${type} — the starting shape of ${articleFor(type)} ${type} node.`,
     `# \`shall add-spec-node --type ${type}\` writes this file into the project at`,
     `# .shall/spec/${band}/${type}/<id>.md with the next free id as its name.`,
     "# (Writing it there by hand works too: the FILENAME is the id and the FOLDER",

@@ -54,7 +54,7 @@ Follow `shall-authoring` for the file itself. What is this phase's:
 
 Adding a line rewrites the parent, so a goal already approved goes yellow and is read again. That is the graph asking whether the parent still says the right thing now that something hangs off it.
 
-From a goal you write `REFINES` and `ASSUMES` in this phase — and `MENTIONS` only in a revision, once the vocabulary exists: in a new run there is no `Term` to mention until [phase 3](./phase-3.md). `PURSUED_BY` belongs to Phase 2. Nothing in the canon runs upward at all: later phases reach a goal by walking down from it, never by drawing an edge back.
+From a goal you write `REFINES` and `ASSUMES` in this phase — and `MENTIONS` only in a revision, once the vocabulary exists: in a new run there is no `Term` to mention until [phase 3](./phase-3.md). `PURSUED_BY` belongs to Phase 2. No phase of this process draws an edge back at a goal: later phases reach one by walking down from it. A `Decision` does revise a goal, through the `AFFECTS` it draws from the plan band, and that reaches this process as a revision to make rather than as a line to write.
 
 ## The gate
 

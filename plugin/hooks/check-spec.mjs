@@ -23,6 +23,14 @@
  * file, not by anything the Scenario says about itself. Writing the child first
  * and the parent's line second is the normal loop, and the sentence in between
  * is the loop working. Do not repair it by editing the child.
+ *
+ * A NODE HELD BY A LINE IT DRAWS ITSELF READS THAT SENTENCE THE OTHER WAY
+ * ROUND. A Decision is anchored by its own AFFECTS, an Evidence and a
+ * TaskCompletionReport by their own CLAIMS, so there is no parent to wait for
+ * and the line the check is asking for belongs in the file just written. An
+ * ImplementationTask and a WorkLog are held either way — by the module's
+ * ALLOCATES or the journal's LOGS above them, or by their own TARGETS or
+ * ADDRESSES — so for those two the sentence names a choice rather than a wait.
  */
 
 import { spawnSync } from "node:child_process";

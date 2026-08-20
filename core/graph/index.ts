@@ -39,6 +39,7 @@ export {
   closureKindOf,
 } from "./closure-kinds.js";
 export type { ClosureKind, ClosureSubject } from "./closure-kinds.js";
+export { articleFor, openingArticleFor } from "./article.js";
 export { compare } from "./order.js";
 export { sectionGuideFor } from "./guide.js";
 export type { SectionGuide } from "./guide.js";

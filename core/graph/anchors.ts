@@ -1,3 +1,4 @@
+import { articleFor } from "./article.js";
 import { bandOf, type NodeTypeName } from "./canon.js";
 
 /**
@@ -171,11 +172,6 @@ export function isColored(type: string): boolean {
   return bandOf(type) !== null;
 }
 
-/** "an" before a vowel letter, "a" before anything else — the edge types are ASCII. */
-function articleFor(word: string): string {
-  return /^[AEIOU]/i.test(word) ? "an" : "a";
-}
-
 /**
  * Any one of these will do, which is what "or" says here — and it is the whole
  * of what several anchors mean, so the same join serves the names inside a
@@ -243,7 +239,7 @@ export function anchorPhrase(type: string): string | null {
  */
 export function orphanStem(id: string, type: string): string {
   const phrase = anchorPhrase(type) ?? "nothing the canon names";
-  return `${id} is a ${type} with no live anchor — it is held to the graph by ${phrase}, and none stands`;
+  return `${id} is ${articleFor(type)} ${type} with no live anchor — it is held to the graph by ${phrase}, and none stands`;
 }
 
 /**
