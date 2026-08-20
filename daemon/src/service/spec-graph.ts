@@ -18,6 +18,7 @@ import {
   isCanonical,
   LEDGER_FILE,
   REJECTIONS_FILE,
+  valuesOf,
   type AcceptanceLedger,
   type ApprovalLedger,
   type RejectionLedger,
@@ -224,6 +225,9 @@ export async function createSpecNode(input: {
   body: string;
   /** A WorkLog's commits. Left out, a new node has none; on another type the reader refuses it. */
   commits?: readonly string[] | undefined;
+  /** A Finding's judgement and its hint list, on the same terms as the commits. */
+  blocking?: boolean | undefined;
+  relatedNodes?: readonly string[] | undefined;
 }): Promise<SpecNode> {
   const type = requireText("A node type", input.type);
   if (!isNodeType(type)) {
@@ -237,14 +241,10 @@ export async function createSpecNode(input: {
   }
   const specDir = await specDirFor(input.projectId);
 
-  return served(
-    createNodeFile(specDir, type, id, {
-      shortName: input.shortName,
-      name: input.name,
-      body: input.body,
-      commits: input.commits,
-    }),
-  );
+  // `valuesOf` and not an object written out here: every per-type key is
+  // optional, so a literal keeps compiling while quietly dropping the next key
+  // the format grows — and this door is where the panel's writes come in.
+  return served(createNodeFile(specDir, type, id, valuesOf(input)));
 }
 
 /**
@@ -267,18 +267,14 @@ export async function updateSpecNode(input: {
   body: string;
   /** Sent, the list replaces the file's; left out, the file's list rides along. */
   commits?: readonly string[] | undefined;
+  /** A Finding's two keys, on the same terms — sent, they replace; left out, they ride along. */
+  blocking?: boolean | undefined;
+  relatedNodes?: readonly string[] | undefined;
 }): Promise<SpecNode> {
   const id = requireText("An id", input.id);
   const specDir = await specDirFor(input.projectId);
 
-  return served(
-    updateNodeFile(specDir, id, {
-      shortName: input.shortName,
-      name: input.name,
-      body: input.body,
-      commits: input.commits,
-    }),
-  );
+  return served(updateNodeFile(specDir, id, valuesOf(input)));
 }
 
 /**

@@ -79,7 +79,7 @@ const NODES: readonly (readonly [string, string])[] = [
   ["ImplementationTask", "IT-0001"],
   ["Journal", "J-0001"],
   ["WorkLog", "WL-0001"],
-  ["VerificationReport", "VR-0001"],
+  ["TaskCompletionReport", "TCR-0001"],
 ];
 
 const EDGES: readonly (readonly [string, string, string])[] = [
@@ -94,8 +94,8 @@ const EDGES: readonly (readonly [string, string, string])[] = [
   ["TARGETS", "IT-0001", "AC-0001"],
   ["LOGS", "J-0001", "WL-0001"],
   ["ADDRESSES", "WL-0001", "IT-0001"],
-  ["SUBMITS", "WL-0001", "VR-0001"],
-  ["CLAIMS", "VR-0001", "IT-0001"],
+  ["SUBMITS", "WL-0001", "TCR-0001"],
+  ["CLAIMS", "TCR-0001", "IT-0001"],
 ];
 
 const EVERY_ID = NODES.map(([, id]) => id);
@@ -212,9 +212,9 @@ describe("the Implement half", () => {
     await node(project, "WorkLog", "WL-0002");
     await edge(project, "LOGS", "J-0001", "WL-0002");
     await edge(project, "ADDRESSES", "WL-0002", "IT-0002");
-    await node(project, "VerificationReport", "VR-0002");
-    await edge(project, "SUBMITS", "WL-0002", "VR-0002");
-    await edge(project, "CLAIMS", "VR-0002", "IT-0002");
+    await node(project, "TaskCompletionReport", "TCR-0002");
+    await edge(project, "SUBMITS", "WL-0002", "TCR-0002");
+    await edge(project, "CLAIMS", "TCR-0002", "IT-0002");
     // Wiring the new task moved the module's own file (ALLOCATES is written
     // there) and the task's (DEPENDS_ON is written in its own), so everything
     // is read again — the board is about what is settled, not about what was.
@@ -225,7 +225,7 @@ describe("the Implement half", () => {
       ids: [
         ...EVERY_ID.filter((id) => id !== "WL-0001"),
         "IT-0002",
-        "VR-0002",
+        "TCR-0002",
       ],
     });
     await approveSpecNodes({

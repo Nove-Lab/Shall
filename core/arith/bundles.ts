@@ -43,7 +43,7 @@ import { reviewGraph, type ReviewStatus } from "./review.js";
  *  - *AC closure* — a criterion is green and open and approved evidence now
  *    claims to satisfy it; decide whether it does.
  *  - *Task closure* — the same question over the other closure subject: a task
- *    is green and open and approved verification reports claim it; decide
+ *    is green and open and approved completion reports claim it; decide
  *    whether the work they report satisfies it.
  *
  * WORK REPORT IS CUT FIRST, and the order is load-bearing rather than
@@ -54,9 +54,9 @@ import { reviewGraph, type ReviewStatus } from "./review.js";
  * the spec pass then works over what is left. Cutting the other way round would
  * let a spec bundle reach sideways into a report and take a work log with it.
  *
- * THE SCAN ORDER IS THE CANON READ DOWNWARDS — Goal to DomainEntity — and it is
- * what picks the root when several nodes of one bundle are yellow: the highest
- * node in the specification is the one a person should be looking at, and the
+ * THE SCAN ORDER IS THE CANON READ DOWNWARDS — Decision, then Goal, down to
+ * DomainEntity — and it is what picks the root when several nodes of one bundle
+ * are yellow: the highest node is the one a person should be looking at, and the
  * rest of the piece hangs below it. A satellite has no place in that order of
  * its own, so it takes the rank of the DEEPEST node it hangs off, and sorts
  * after a non-satellite of that rank. Deepest and not highest: an Assumption
@@ -64,16 +64,22 @@ import { reviewGraph, type ReviewStatus } from "./review.js";
  * being judged now, and ranking it by the Goal would stand it up as a bundle of
  * its own beside the one it is part of.
  *
- * THE OUT-ANCHOR EDGES ARE READ BACKWARDS, and that is the one place the walk
- * does not simply follow the arrows. Almost every relation in the canon points
- * from the container to the contained, so "outgoing" and "downward" are the same
- * direction — except where the canon anchors a node by an edge it draws ITSELF:
- * a `Decision` is held by the `RESOLVES`/`AFFECTS` it points at, and an
- * `Evidence` by the `CLAIMS` it points at. Those arrows point at the PARENT, so
- * following them forwards would let one yellow Decision swallow the whole
- * requirement subtree it merely comments on, and reading them backwards is what
- * puts the decision inside its requirement's bundle where it belongs. The table
- * of which edges those are is `ANCHOR_RULES` and is not copied here.
+ * RANK IS NOT RESIDENCE, and `Decision` is where the two come apart. It is
+ * filed in the Plan band and it ranks above `Goal`, because a decision is the
+ * reason a revision was made: when one is yellow, everything it AFFECTS — a goal
+ * and a term as readily as a module — is one thing to judge, and only a type
+ * that outranks all of them can gather that into a single bundle.
+ *
+ * AN EDGE IS WALKED FORWARD DOWN THE ORDER AND BACKWARD UP IT, and that rule
+ * replaces the anchor table's. Almost every relation in the canon points from
+ * the container to the contained, so "outgoing" and "downward" are usually the
+ * same direction — except where the canon anchors a node by an edge it draws
+ * ITSELF: an `Evidence` is held by the `CLAIMS` it points at, a task by the
+ * `TARGETS` it aims. Those arrows point at the PARENT and are read backwards.
+ * The anchor table used to answer which ones they were, and it was exact for as
+ * long as no type outranked what it pointed at; a `Decision` is the first that
+ * does, so the question moved to the order, which is where the intent was all
+ * along. See `runsDownward`.
  *
  * ROOTS ARE YELLOW AND ONLY YELLOW. A rejected node is not the reviewer's turn
  * any more — somebody read it, said what is wrong, and handed it back — so it
@@ -88,11 +94,14 @@ import { reviewGraph, type ReviewStatus } from "./review.js";
  * `shall check` is where it is said — and the aim rule's red is its claimant's
  * own red too, so nothing there goes unseen.
  *
- * DOMAIN NODES STAND ALONE. `Term` and `DomainEntity` are the global sink —
- * everything MENTIONS them and they contain nothing — so a walk never descends
- * into Domain, and a yellow term reached from nowhere would otherwise never be
- * shown to anybody. One node, one bundle, which is the smallest arrangement that
- * keeps the promise that every yellow node is in at least one bundle.
+ * DOMAIN NODES STAND ALONE, EXCEPT WHERE A DECISION REVISES ONE. `Term` and
+ * `DomainEntity` are the global sink — everything MENTIONS them and they contain
+ * nothing — so a walk never descends into Domain, and a yellow term reached from
+ * nowhere would otherwise never be shown to anybody. One node, one bundle, which
+ * is the smallest arrangement that keeps the promise that every yellow node is in
+ * at least one bundle. The exception is `AFFECTS`: a mention is a reference and a
+ * revision is not, and the vocabulary a decision is rewriting belongs on the card
+ * that says why. One step, and no further — see `REVISES`.
  *
  * PURE AND BROWSER-SAFE like the rest of `core/arith`: a graph, three ledgers
  * and an injected hash in, JSON out, no clock and no filesystem anywhere.
@@ -207,7 +216,7 @@ export interface AcClosureBundle {
 }
 
 /**
- * A TASK WAITING TO BE CALLED DONE, on the verification reports that claim it.
+ * A TASK WAITING TO BE CALLED DONE, on the completion reports that claim it.
  *
  * IT IS THE CRITERION'S BUNDLE WITH THE OTHER SUBJECT IN IT: the same question
  * — is this list enough — asked about reports instead of about evidence, so
@@ -225,7 +234,7 @@ export interface TaskClosureBundle {
   title: string;
   since: number;
   task: BundleMember;
-  /** Every living verification report claiming the task, id order. */
+  /** Every living completion report claiming the task, id order. */
   reports: EvidenceMember[];
   /** Context only: the living criteria the task TARGETS, and where each stands. */
   targets: { id: string; name: string; closure: "open" | "closed" | null }[];
@@ -248,14 +257,22 @@ export interface ReviewQueue {
  * ------------------------------------------------------------------ */
 
 /**
- * The canon read downwards: the nineteen body types in the order a person meets
- * them, Domain last because it is the sink everything points into rather than a
- * place the walk descends to.
+ * The canon read downwards: the body types in the order a person meets them,
+ * Domain last because it is the sink everything points into rather than a place
+ * the walk descends to.
+ *
+ * `Decision` HEADS IT, ABOVE `Goal`, AND DOES NOT LIVE THERE. It is filed in the
+ * Plan band, and rank and residence are two axes: residence says which folder
+ * holds the file, rank says what contains what. A decision is the reason a
+ * revision was made, so when one is yellow the whole ripple it AFFECTS — a goal
+ * and a term as readily as a module — is one thing to judge, and only a type
+ * that outranks all of them can gather it into one bundle.
  *
  * `satisfies` and not a bare array, so a type the canon renames is a compile
  * error here rather than a node that silently sorts last.
  */
 const SCAN_ORDER = [
+  "Decision",
   "Goal",
   "Actor",
   "UseCase",
@@ -271,27 +288,33 @@ const SCAN_ORDER = [
   "Journal",
   "WorkLog",
   "Evidence",
-  "VerificationReport",
+  "TaskCompletionReport",
   "Finding",
   "Term",
   "DomainEntity",
 ] as const satisfies readonly NodeTypeName[];
 
-/** The three types whose rank is borrowed from whatever they hang off. */
+/**
+ * The types whose rank is borrowed from whatever they hang off. One today, and
+ * still a list with the machinery around it — because `ASSUMES` runs from three
+ * bands at once (a Goal, a responsibility or a requirement in Intent, a module
+ * in Plan, a work log in Execution), an assumption has no fixed depth AND no
+ * fixed side. Give it a static rank and either the walk climbs backwards out of
+ * a work log into the report, or a work log's assumption is judged on the spec
+ * side. Both of those are the borrow doing its job.
+ */
 const SATELLITE_TYPES = [
   "Assumption",
-  "Question",
-  "Decision",
 ] as const satisfies readonly NodeTypeName[];
 
 /**
- * All twenty-two, for counting a bundle's types in one fixed order. A COUNT IS
+ * Every type, for counting a bundle's types in one fixed order. A COUNT IS
  * ABOUT A TYPE AND NOT ABOUT A NODE, so it cannot borrow a satellite's derived
- * rank — the three sit at the end in canon order instead.
+ * rank — the satellite sits at the end instead.
  */
 const COUNT_ORDER: readonly string[] = [...SCAN_ORDER, ...SATELLITE_TYPES];
 
-/** Where a type sorts, and whether it is one of the three that borrow a rank. */
+/** Where a type sorts, and whether it is one of the ones that borrow a rank. */
 export interface ScanRank {
   readonly rank: number;
   readonly satellite: boolean;
@@ -303,9 +326,9 @@ export interface ScanRank {
  * A satellite answers with the rank it falls back to when nothing living holds
  * it, which is after every body type; the rank it actually sorts by depends on
  * the node and is worked out per node below. Exported so a test can walk
- * `NODE_TYPES` and prove that all twenty-two have an answer: a type with no rank
- * would sort somewhere arbitrary and nobody would notice until a queue looked
- * wrong.
+ * `NODE_TYPES` and prove that every one of them has an answer: a type with no
+ * rank would sort somewhere arbitrary and nobody would notice until a queue
+ * looked wrong.
  */
 export function scanRankOf(type: string): ScanRank | null {
   const at = SCAN_ORDER.indexOf(type as (typeof SCAN_ORDER)[number]);
@@ -349,11 +372,11 @@ const NOWHERE: ScanPlace = {
  * copy of it.
  *
  * The relations that hold a satellite are exactly the relations `ANCHOR_RULES`
- * names for its type: `ASSUMES` into an Assumption, `RAISES` into a Question,
- * `RESOLVES`/`AFFECTS` out of a Decision. So the far ends of a type's LIVE
- * anchor edges are its attachers, whichever way those edges run, and a canon
- * that grew a fourth satellite tomorrow would be walked correctly here without
- * this function being touched.
+ * names for its type: `ASSUMES` into an Assumption, which is the one satellite
+ * the canon has today. So the far ends of a type's LIVE anchor edges are its
+ * attachers, whichever way those edges run, and a canon that grew a second
+ * satellite tomorrow would be walked correctly here without this function being
+ * touched.
  */
 function attachersOf(node: SpecNode, context: ColorContext): string[] {
   const attachers: string[] = [];
@@ -380,11 +403,11 @@ function attachersOf(node: SpecNode, context: ColorContext): string[] {
  * One node's place, following a satellite's chain of attachers down to a body
  * type.
  *
- * THE VISITED SET IS NOT OPTIONAL. A `Decision` resolves a `Question` raised by
- * a `Requirement`, and the canon permits a Decision to resolve a Question that
- * another Decision raised nothing of — but nothing in the grammar forbids a
- * cycle among satellites in a hand-written file, and a queue that hung on one
- * would take the whole panel with it.
+ * THE VISITED SET IS NOT OPTIONAL, though the canon cannot reach it today: no
+ * `ASSUMES` source is itself a satellite, so there is no chain to walk and no
+ * cycle to fall into. It is four lines, the canon has carried three satellites
+ * before and could chain again, and a queue that hung on a cycle in a
+ * hand-written file would take the whole panel with it.
  */
 function placeAt(
   id: string,
@@ -404,13 +427,14 @@ function placeAt(
   }
   const seen = new Set<string>(visiting);
   seen.add(id);
-  // A HOMELESS ATTACHER NEVER OUTRANKS A HOMED ONE. A satellite chain that
-  // ends in nothing living (a Decision resolving a Question nobody raised)
-  // comes back as `NOWHERE`, whose rank is the last one — and "last" would win
-  // a plain deepest-rank comparison against a real WorkLog or Requirement,
-  // moving the satellite to the wrong side of the queue. So the choice is made
-  // among the homed attachers first, and only a satellite with no homed
-  // attacher at all is homeless itself.
+  // A HOMELESS ATTACHER NEVER OUTRANKS A HOMED ONE. A satellite chain that ends
+  // in nothing living comes back as `NOWHERE`, whose rank is the last one — and
+  // "last" would win a plain deepest-rank comparison against a real WorkLog or
+  // Requirement, moving the satellite to the wrong side of the queue. So the
+  // choice is made among the homed attachers first, and only a satellite with no
+  // homed attacher at all is homeless itself. With one single-hop satellite in
+  // the canon this cannot be reached either; it is the same four lines and the
+  // same reason as the visited set above.
   let deepest: ScanPlace | null = null;
   for (const attacher of attachersOf(node, context)) {
     if (seen.has(attacher)) {
@@ -442,7 +466,9 @@ function placesOf(context: ColorContext): Map<string, ScanPlace> {
 /**
  * The walk a node belongs to. A satellite with nothing living to hang off — a
  * shape the anchor rules already colour red — falls in with the specification,
- * which is where a person would go looking for it.
+ * which is where a person would go looking for it. A `Decision` lands here by
+ * its band like everything else: Plan is spec, and its rank is a separate fact
+ * settled in `SCAN_ORDER`.
  */
 function sideOf(home: Band | null): Side {
   if (home === "Execution") {
@@ -512,102 +538,110 @@ function byScan(scan: Scan): (a: string, b: string) => number {
   };
 }
 
-/** Whether this edge type is one the SOURCE type is anchored BY, pointing out. */
-function isOutAnchor(type: string, edgeType: string): boolean {
-  return anchorsFor(type).some(
-    (anchor) => anchor.direction === "out" && anchor.edgeType === edgeType,
-  );
+/**
+ * Whether this edge runs DOWN the scan order — which is to say, whether it
+ * points at something this node contains rather than at what contains it.
+ *
+ * THE SCAN ORDER ANSWERS THIS AND THE ANCHOR TABLE NO LONGER DOES. For as long
+ * as the canon had no type that outranked what it pointed at, `ANCHOR_RULES`
+ * was an exact stand-in: every out-anchor — a task's `TARGETS`, a work log's
+ * `ADDRESSES`, an evidence's and a report's `CLAIMS` — runs up the order, and
+ * nothing else does. A `Decision` broke the tie. It is held by the `AFFECTS` it
+ * draws, so the anchor table calls that edge parent-pointing; and it ranks above
+ * everything it affects, so the order calls it containing. The order is the one
+ * that carries the intent, so the two questions are separated here: the anchor
+ * table says what HOLDS a node to the graph, and the scan order says what
+ * CONTAINS it.
+ *
+ * LEVEL COUNTS AS DOWNWARD, and that is not a rounding choice. `DEPENDS_ON`,
+ * `CONFLICTS_WITH`, `REFINES` and `RELATES_TO` join two nodes of one rank, and
+ * an `Assumption` borrows the rank of the deepest thing it hangs off — so an
+ * `ASSUMES` into an assumption with one attacher is exactly level. A strict
+ * test would leave every such assumption unreached and standing a bundle of its
+ * own. The two tests are exact complements, so every live edge is walked once
+ * and one way.
+ *
+ * It reads the PER-NODE rank and not the type's, which is what makes the
+ * borrow work; `placesOf` has settled every one of them before any walk starts.
+ */
+function runsDownward(scan: Scan, fromId: string, toId: string): boolean {
+  return placeFor(scan, fromId).rank <= placeFor(scan, toId).rank;
 }
 
 /**
- * The children of a node on the specification side: everything it contains,
- * with the parent-pointing arrows turned around.
+ * The one relation that means REVISION and not reference.
  *
- * Forward along every live outgoing edge whose target is Intent or Plan, EXCEPT
- * the ones the canon anchors this node by — those point at the parent. Backward
- * along every live incoming edge that is an out-anchor of ITS source, which is
- * the same rule seen from the other end: the decision that affects this
- * requirement is inside it.
+ * Domain is the sink and a walk does not descend into it, because `MENTIONS` is
+ * a reference: a requirement that names a term does not contain it, and
+ * following those would put the vocabulary in every bundle. `AFFECTS` says the
+ * opposite thing — the decision REVISES the term, and that revision is part of
+ * what a person is being asked to judge — so this edge crosses the wall. One
+ * step only: the walk stops at what it reaches, because a `DENOTES` out of that
+ * term is a reference again.
  */
+const REVISES: ReadonlySet<string> = new Set(["AFFECTS"]);
+
+/** Same side, or the one step across the Domain wall that a revision makes. */
+function reaches(scan: Scan, side: Side, edgeType: string, id: string): boolean {
+  const there = sideFor(scan, id);
+  return there === side || (there === "domain" && REVISES.has(edgeType));
+}
+
+/**
+ * The children of a node: everything it contains, with the parent-pointing
+ * arrows turned around.
+ *
+ * Forward along every live outgoing edge that runs down the order, backward
+ * along every live incoming edge that runs up it — the same rule seen from both
+ * ends, which is why one body serves both sides. What differs between the two
+ * walks is only which side a child may be on.
+ *
+ * NO EDGE LEAVES THE SIDE, with the single exception a revision makes. A
+ * `WorkLog` that mentions a Term and an `Evidence` that claims a criterion both
+ * point OUT of the record at something the report is ABOUT rather than
+ * something it contains, and a `Decision` that RESOLVES a Finding points into
+ * the record from outside it — the same wall read from the other side. A
+ * finding is written down, read as part of the record that found it, and
+ * answered by a decision that names it; none of those three is a reason to drag
+ * a work report into a spec approval or the other way round.
+ */
+function childrenOf(scan: Scan, id: string, side: Side): string[] {
+  const children: string[] = [];
+  for (const edge of scan.context.outgoing.get(id) ?? []) {
+    if (!scan.context.living.has(edge.toId)) {
+      continue;
+    }
+    // Points at the parent.
+    if (!runsDownward(scan, id, edge.toId)) {
+      continue;
+    }
+    if (reaches(scan, side, edge.type, edge.toId)) {
+      children.push(edge.toId);
+    }
+  }
+  for (const edge of scan.context.incoming.get(id) ?? []) {
+    if (!scan.context.living.has(edge.fromId)) {
+      continue;
+    }
+    // Strictly upward only, so a level edge is not walked twice.
+    if (runsDownward(scan, edge.fromId, id)) {
+      continue;
+    }
+    if (reaches(scan, side, edge.type, edge.fromId)) {
+      children.push(edge.fromId);
+    }
+  }
+  return children;
+}
+
+/** The specification walk: Intent and Plan, plus a revision's step into Domain. */
 function specChildrenOf(scan: Scan, id: string): string[] {
-  const node = scan.context.nodes.get(id);
-  if (node === undefined) {
-    return [];
-  }
-  const children: string[] = [];
-  for (const edge of scan.context.outgoing.get(id) ?? []) {
-    if (!scan.context.living.has(edge.toId)) {
-      continue;
-    }
-    if (isOutAnchor(node.type, edge.type)) {
-      continue;
-    }
-    if (sideFor(scan, edge.toId) === "spec") {
-      children.push(edge.toId);
-    }
-  }
-  for (const edge of scan.context.incoming.get(id) ?? []) {
-    if (!scan.context.living.has(edge.fromId)) {
-      continue;
-    }
-    const source = scan.context.nodes.get(edge.fromId);
-    if (source === undefined || !isOutAnchor(source.type, edge.type)) {
-      continue;
-    }
-    if (sideFor(scan, edge.fromId) === "spec") {
-      children.push(edge.fromId);
-    }
-  }
-  return children;
+  return childrenOf(scan, id, "spec");
 }
 
-/**
- * The children of a node inside a report: every live outgoing edge that stays in
- * the execution record, with the same parent-pointing arrows turned around as
- * on the specification side.
- *
- * NO EDGE LEAVES THE BAND. A `Finding` that escalates to a Requirement, a
- * `WorkLog` that mentions a Term and an `Evidence` that claims a criterion all
- * point OUT of the record at something the report is about rather than
- * something the report contains — following any of them would drag half the
- * specification into a work report.
- *
- * THE OUT-ANCHOR RULE IS THE SAME RULE ON BOTH SIDES. A `Decision` that
- * resolves a question a work log raised hangs under that question, exactly as
- * it hangs under a requirement's question in the specification walk — read
- * forward, the decision would be a report of its own with the question inside
- * it, which is the tail wagging the dog.
- */
+/** The record walk: Execution and nothing else — see `childrenOf`. */
 function reportChildrenOf(scan: Scan, id: string): string[] {
-  const node = scan.context.nodes.get(id);
-  if (node === undefined) {
-    return [];
-  }
-  const children: string[] = [];
-  for (const edge of scan.context.outgoing.get(id) ?? []) {
-    if (!scan.context.living.has(edge.toId)) {
-      continue;
-    }
-    if (isOutAnchor(node.type, edge.type)) {
-      continue;
-    }
-    if (sideFor(scan, edge.toId) === "report") {
-      children.push(edge.toId);
-    }
-  }
-  for (const edge of scan.context.incoming.get(id) ?? []) {
-    if (!scan.context.living.has(edge.fromId)) {
-      continue;
-    }
-    const source = scan.context.nodes.get(edge.fromId);
-    if (source === undefined || !isOutAnchor(source.type, edge.type)) {
-      continue;
-    }
-    if (sideFor(scan, edge.fromId) === "report") {
-      children.push(edge.fromId);
-    }
-  }
-  return children;
+  return childrenOf(scan, id, "report");
 }
 
 /**

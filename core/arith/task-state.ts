@@ -11,7 +11,7 @@ import type { ColorContext } from "./color.js";
  * WHETHER AN IMPLEMENTATION TASK CAN BE PICKED UP — blocked, ready, or done.
  *
  * THREE WORDS, MUTUALLY EXCLUSIVE, AND EVERY TASK HAS EXACTLY ONE. `done` is
- * the closure axis: a person said the verification reports claiming this task
+ * the closure axis: a person said the completion reports claiming this task
  * satisfy it. `ready` is everything the board's Implement column asks for — nothing
  * above it is unread or refused, and everything it waits on is finished.
  * `blocked` is the rest, which is not a defect and not a warning: it is simply

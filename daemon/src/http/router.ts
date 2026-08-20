@@ -57,6 +57,15 @@ const t = initTRPC.create();
  */
 const COMMITS = z.array(z.string());
 
+/**
+ * A Finding's hint list, on the same terms. Nothing resolves these ids — a
+ * dangling one is not a fault and an empty list is not a fault — so shape is
+ * the whole of what can be asked here, and whether the type may carry the key
+ * at all is the reader's sentence over the bytes. `blocking` beside it is a
+ * bare boolean for the same reason.
+ */
+const RELATED_NODES = z.array(z.string());
+
 const STATUS_BY_KIND: Record<RefusalKind, TRPCError["code"]> = {
   invalid: "BAD_REQUEST",
   conflict: "CONFLICT",
@@ -151,6 +160,8 @@ export const appRouter = t.router({
           name: z.string(),
           body: z.string(),
           commits: COMMITS.optional(),
+          blocking: z.boolean().optional(),
+          relatedNodes: RELATED_NODES.optional(),
         }),
       )
       .mutation(({ input }) => createSpecNode(input)),
@@ -163,6 +174,8 @@ export const appRouter = t.router({
           name: z.string(),
           body: z.string(),
           commits: COMMITS.optional(),
+          blocking: z.boolean().optional(),
+          relatedNodes: RELATED_NODES.optional(),
         }),
       )
       .mutation(({ input }) => updateSpecNode(input)),

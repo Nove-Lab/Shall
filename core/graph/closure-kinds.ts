@@ -4,7 +4,7 @@ import type { NodeTypeName } from "./canon.js";
  * The two things a person CLOSES, and the relation that claims each of them.
  *
  * CLOSURE IS A SECOND AXIS AND IT NOW HAS TWO SUBJECTS. A criterion is met when
- * evidence shows it is; a task is done when a verification report shows it is —
+ * evidence shows it is; a task is done when a completion report shows it is —
  * the work logs that addressed it are how it was worked on, not what proves it
  * finished. Both judgements are the same act — a person reads a LIST of lower
  * nodes and says "yes, on these" or "not yet, and here is why" — so both are
@@ -44,12 +44,12 @@ export const CLOSURE_KINDS: readonly ClosureKind[] = [
     claim: "CLAIMS",
     claimantType: "Evidence",
   },
-  // #24— VerificationReport —CLAIMS→ ImplementationTask
+  // #24— TaskCompletionReport —CLAIMS→ ImplementationTask
   {
     kind: "task",
     subjectType: "ImplementationTask",
     claim: "CLAIMS",
-    claimantType: "VerificationReport",
+    claimantType: "TaskCompletionReport",
   },
 ];
 

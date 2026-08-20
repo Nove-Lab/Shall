@@ -111,7 +111,7 @@ const NODES: readonly (readonly [string, string])[] = [
   ["Journal", "J-0001"],
   ["WorkLog", "WL-0001"],
   ["Evidence", "EV-0001"],
-  ["VerificationReport", "VR-0001"],
+  ["TaskCompletionReport", "TCR-0001"],
 ];
 
 const EDGES: readonly (readonly [string, string, string])[] = [
@@ -128,8 +128,8 @@ const EDGES: readonly (readonly [string, string, string])[] = [
   ["ADDRESSES", "WL-0001", "IT-0001"],
   ["SUBMITS", "WL-0001", "EV-0001"],
   ["CLAIMS", "EV-0001", "AC-0001"],
-  ["SUBMITS", "WL-0001", "VR-0001"],
-  ["CLAIMS", "VR-0001", "IT-0001"],
+  ["SUBMITS", "WL-0001", "TCR-0001"],
+  ["CLAIMS", "TCR-0001", "IT-0001"],
 ];
 
 const EVERY_ID = NODES.map(([, id]) => id);
@@ -279,12 +279,12 @@ describe("what one node's row carries", () => {
     assert.equal(green.approval?.by, os.userInfo().username);
 
     // A node nobody has read yet, beside it.
-    await node(project, "Question", "Q-0001");
-    await edge(project, "RAISES", "G-0001", "Q-0001");
-    const asked = await statusOf(project, "Q-0001");
-    assert.equal(asked.color, "yellow");
-    assert.equal(asked.reason, "unapproved");
-    assert.equal(asked.approval, null);
+    await node(project, "Assumption", "AS-0001");
+    await edge(project, "ASSUMES", "G-0001", "AS-0001");
+    const unread = await statusOf(project, "AS-0001");
+    assert.equal(unread.color, "yellow");
+    assert.equal(unread.reason, "unapproved");
+    assert.equal(unread.approval, null);
   });
 
   test("a standing rejection arrives with the words the reviewer wrote", async () => {
@@ -376,22 +376,22 @@ describe("the relations a file draws", () => {
     const project = await newProject();
     await node(project, "Goal", "G-0001");
     await node(project, "Actor", "A-0001");
-    await node(project, "Question", "Q-0001");
+    await node(project, "Assumption", "AS-0001");
     await edge(project, "PURSUED_BY", "G-0001", "A-0001");
-    await edge(project, "RAISES", "G-0001", "Q-0001");
+    await edge(project, "ASSUMES", "G-0001", "AS-0001");
     // The target's file goes the way no door sanctions — by hand.
-    await rm(specFile(project, "intent/Question/Q-0001.md"));
+    await rm(specFile(project, "intent/Assumption/AS-0001.md"));
 
     const status = await statusSpec(project.path);
     const goal = status.nodes.find((row) => row.id === "G-0001");
     assert.ok(goal !== undefined);
     assert.deepEqual(goal.edges, [
+      { type: "ASSUMES", toId: "AS-0001" },
       { type: "PURSUED_BY", toId: "A-0001" },
-      { type: "RAISES", toId: "Q-0001" },
     ]);
     // The line is content; the hole it points at is the graph's own answer.
     assert.deepEqual(status.missing, [
-      { id: "Q-0001", referencedBy: [{ fromId: "G-0001", type: "RAISES" }] },
+      { id: "AS-0001", referencedBy: [{ fromId: "G-0001", type: "ASSUMES" }] },
     ]);
   });
 });
@@ -454,7 +454,7 @@ describe("a scope", () => {
       (await statusSpec(project.path, ["execution"])).nodes.map(
         (row) => row.id,
       ),
-      ["J-0001", "WL-0001", "EV-0001", "VR-0001"],
+      ["J-0001", "WL-0001", "EV-0001", "TCR-0001"],
     );
     assert.deepEqual(
       (
@@ -559,9 +559,9 @@ describe("a scope", () => {
   test("keeps a hole while any file still pointing at it is in scope", async () => {
     const project = await newProject();
     await node(project, "Goal", "G-0001");
-    await node(project, "Question", "Q-0001");
-    await edge(project, "RAISES", "G-0001", "Q-0001");
-    await rm(specFile(project, "intent/Question/Q-0001.md"));
+    await node(project, "Assumption", "AS-0001");
+    await edge(project, "ASSUMES", "G-0001", "AS-0001");
+    await rm(specFile(project, "intent/Assumption/AS-0001.md"));
     // A band with nothing in it, made by hand: the store writes a band folder
     // on the first node into it, and a scope naming a folder that is not there
     // is refused rather than answered.
@@ -573,7 +573,7 @@ describe("a scope", () => {
       (await statusSpec(project.path, ["intent/Goal"])).missing.map(
         (entry) => entry.id,
       ),
-      ["Q-0001"],
+      ["AS-0001"],
     );
     assert.deepEqual(
       (await statusSpec(project.path, ["domain"])).missing,

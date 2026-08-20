@@ -364,10 +364,10 @@ export function SpecNodeCard({ data }: NodeProps<CardNode>) {
  *
  * ITS HANDLES ARE INERT AND STILL EXIST, and both halves matter. React Flow
  * finds an edge's ends by querying `.source`/`.target` inside the node, so a
- * card with no handles is a card no relation can reach — the popup would draw
- * twenty-two boxes and no lines. `isConnectable={false}` keeps the bounds and
- * drops the `connectionindicator` class, which is what carries `pointer-events`
- * and the crosshair cursor: nothing on this canvas can start a drag, so nothing
+ * card with no handles is a card no relation can reach — the popup would draw a
+ * box per type and no lines. `isConnectable={false}` keeps the bounds and drops
+ * the `connectionindicator` class, which is what carries `pointer-events` and
+ * the crosshair cursor: nothing on this canvas can start a drag, so nothing
  * offers to. The DOM order trick the board's pair depends on is irrelevant here
  * for the same reason, and there is no `title`.
  */

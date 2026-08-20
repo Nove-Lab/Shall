@@ -17,21 +17,19 @@ export function controlBase(projectId: string): string {
 
 /**
  * THE WAY INTO THE FILE FROM A CONTROL-PLANE ROW. `back` is the caller's own
- * path, so the plane can offer the way home; `edit` opens the editor directly —
- * the door a Question needs, because a question routed somewhere to be answered
- * should not land in the reading pane first. The parameter order is the one
+ * path, so the plane can offer the way home. It lands in the reading pane and
+ * nowhere else: a link is handed to somebody so they can read what it names, and
+ * nothing in this app links into the editor. The parameter order is the one
  * `SpecPlane` reads, spelled once.
  */
 export function specLink(
   projectId: string,
   id: string,
   backPath: string,
-  options?: { edit?: boolean },
 ): string {
   return (
     `/p/${encodeURIComponent(projectId)}/spec` +
     `?node=${encodeURIComponent(id)}` +
-    (options?.edit === true ? "&mode=edit" : "") +
     `&back=${encodeURIComponent(backPath)}`
   );
 }

@@ -77,8 +77,8 @@ interface TypeGroup {
 }
 
 /**
- * The twenty-two types as the canvas orders them: the four bands in band
- * order, each holding its own columns in canon order.
+ * The types as the canvas orders them: the four bands in band order, each
+ * holding its own columns in canon order.
  *
  * Both facts are read off the canon rather than written here — `columnsInOrder`
  * is the very list the canvas lays its columns out from — so the dropdown and
@@ -242,11 +242,11 @@ const CLOSURE_WORDS: Record<
     many: (count) => `${String(count)} pieces of evidence claim this criterion.`,
   },
   task: {
-    none: "No verification report claims this task yet — nothing to close over.",
+    none: "No completion report claims this task yet — nothing to close over.",
     unread:
       "Approve this task first — until what it asks for is agreed there is nothing for the work to be done against.",
-    one: "One verification report claims this task.",
-    many: (count) => `${String(count)} verification reports claim this task.`,
+    one: "One completion report claims this task.",
+    many: (count) => `${String(count)} completion reports claim this task.`,
   },
 };
 
@@ -1617,9 +1617,9 @@ export function NodePanel({
                     <SelectTrigger id="node-type" autoFocus className="w-full">
                       <SelectValue placeholder="Choose a type" />
                     </SelectTrigger>
-                    {/* Item-aligned positioning would hang a twenty-two row
-                        list off the chosen row; in a docked panel this many
-                        rows only fit as a plain drop below the trigger. */}
+                    {/* Item-aligned positioning would hang the whole roster
+                        off the chosen row; in a docked panel a roster this long
+                        only fits as a plain drop below the trigger. */}
                     <SelectContent alignItemWithTrigger={false}>
                       {TYPE_GROUPS.map((group) => (
                         <SelectGroup key={group.band}>

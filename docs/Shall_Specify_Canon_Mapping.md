@@ -24,7 +24,7 @@ Decided 2026-08-17, in the round that built the `/specify` plugin.
 | `HAS_CRITERION(REQ)` | `Requirement —HAS_CRITERION→ AcceptanceCriterion` | the requirement's file |
 | `CONSTRAINS` | `Requirement —HAS_CONSTRAINT→ Constraint` | the requirement's file |
 | a default recorded as an assumption | `ASSUMES → Assumption`, and only from Goal, SystemResponsibility, Requirement, ModuleDesign or WorkLog | the assuming node's file |
-| a term used in prose | `MENTIONS → Term`, from any of sixteen types | the mentioning node's file |
+| a term used in prose | `MENTIONS → Term`, from any of fifteen types | the mentioning node's file |
 | a term that names a structure | `Term —DENOTES→ DomainEntity` | the term's file |
 
 Two consequences the process never states, because it thought the edges were
@@ -61,9 +61,9 @@ The process names `priority`, `actor_type`, `requirement_type`,
 `constraint_type`, `success_measure`, `benchmark`, `evaluation_process`,
 `aliases`, `key_attributes` and more as fields, several of them mandatory with a
 fixed vocabulary. **Shall has no such fields.** A node file carries `short_name`,
-`name` and `edges` above the fence — plus a work log's `commits` and the one
-machine block, `deletionProposed` — and everything below the fence is free
-markdown that nothing parses.
+`name` and `edges` above the fence — plus a work log's `commits`, a finding's
+`blocking` and `relatedNodes`, and the one machine block, `deletionProposed` —
+and everything below the fence is free markdown that nothing parses.
 
 The vocabulary survives as **template hints**: `shall add-spec-node` writes a
 starting file whose commented header offers `## Priority — High · Medium · Low`,
@@ -98,9 +98,10 @@ yellow node and walks down every outgoing spec relation, so a phase's output
 arrives as *one card per top-level thing changed* — one per **top-level** goal
 in Phase 1, sub-goals riding inside their parent's card because the walk follows
 `Goal —REFINES→ Goal` like any other relation, one per goal that gained an
-actor in Phase 2, one per term and per domain entity in Phase 3 (domain nodes are
-always cut one at a time), one per scenario that gained a responsibility in Phase
-4, one per responsibility that gained requirements in Phase 5. The skill tells
+actor in Phase 2, one per term and per domain entity in Phase 3 (a domain node is
+cut on its own, unless a `Decision` is revising it — and this process writes
+none), one per scenario that gained a responsibility in Phase 4, one per
+responsibility that gained requirements in Phase 5. The skill tells
 the person "one or more cards are waiting", never "a card".
 
 ## What the agent may ask the graph

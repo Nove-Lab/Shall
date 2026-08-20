@@ -43,10 +43,10 @@ function column(layout: Layout, type: string): Placement[] {
 }
 
 /**
- * A board with tension in it: four of the twenty-two columns populated, at four
+ * A board with tension in it: four of the canon's columns populated, at four
  * different heights, and relations that reach across the whole width of it —
- * Requirement is column 7 and ImplementationTask column 16, so a settled Task
- * has been pulled past nine empty columns to get level with its Requirement.
+ * Requirement is column 7 and ImplementationTask column 14, so a settled Task
+ * has been pulled past five empty columns to get level with its Requirement.
  *
  * Requirement is the fullest at five, which is what makes it the column every
  * other one is measured against here.
@@ -118,28 +118,28 @@ test("a graph with no relations centres every column", () => {
       id: "IT-0001",
       type: "ImplementationTask",
       band: "Plan",
-      x: 3008,
+      x: 2632,
       y: 108,
     },
     {
       id: "IT-0002",
       type: "ImplementationTask",
       band: "Plan",
-      x: 3008,
+      x: 2632,
       y: 170,
     },
     {
       id: "IT-0003",
       type: "ImplementationTask",
       band: "Plan",
-      x: 3008,
+      x: 2632,
       y: 232,
     },
   ]);
-  // The columns those x's are: 0, 7, 8 and 16 of the canon's order.
+  // The columns those x's are: 0, 7, 8 and 14 of the canon's order.
   assert.deepStrictEqual(
-    [0, 7, 8, 16].map((index) => index * COLUMN_PITCH),
-    [0, 1316, 1504, 3008],
+    [0, 7, 8, 14].map((index) => index * COLUMN_PITCH),
+    [0, 1316, 1504, 2632],
   );
 });
 

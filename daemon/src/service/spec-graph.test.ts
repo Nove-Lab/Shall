@@ -497,12 +497,12 @@ describe("the remove door", () => {
   test("takes its own file and leaves the relation into it as history", async () => {
     const project = await newProject();
     await node(project, "Goal", "G-0001", GOAL_BODY);
-    await node(project, "Question", "Q-0001", "## Question\n\nWhy?");
+    await node(project, "Term", "T-0001", "The repository the spec travels with.");
     await createSpecEdge({
       projectId: project.id,
-      type: "RAISES",
+      type: "MENTIONS",
       fromId: "G-0001",
-      toId: "Q-0001",
+      toId: "T-0001",
     });
     const referrer = path.join(
       project.path,
@@ -514,7 +514,7 @@ describe("the remove door", () => {
     );
     const before = await readFile(referrer, "utf8");
 
-    await removeSpecNode({ projectId: project.id, id: "Q-0001" });
+    await removeSpecNode({ projectId: project.id, id: "T-0001" });
 
     // A deletion touches one file: the neighbour is byte-identical.
     assert.equal(await readFile(referrer, "utf8"), before);
@@ -837,12 +837,12 @@ describe("the scaffold door", () => {
     assert.equal(scaffolded.id, "R-0008");
   });
 
-  test("refuses a type the canon does not have, and lists all twenty-two", async () => {
+  test("refuses a type the canon does not have, and lists all twenty-one", async () => {
     const project = await newProject();
     await says(
       scaffoldSpecNode({ path: project.path, type: "Widget" }),
       "invalid",
-      "Unknown node type: Widget. The canon's types are Term, DomainEntity, Goal, Actor, UseCase, Scenario, SystemResponsibility, Requirement, AcceptanceCriterion, Constraint, ModuleDesign, Interface, DataSchema, ImplementationTask, Journal, WorkLog, Evidence, VerificationReport, Finding, Assumption, Question, Decision.",
+      "Unknown node type: Widget. The canon's types are Term, DomainEntity, Goal, Actor, UseCase, Scenario, SystemResponsibility, Requirement, AcceptanceCriterion, Constraint, ModuleDesign, Interface, DataSchema, ImplementationTask, Decision, Journal, WorkLog, Evidence, TaskCompletionReport, Finding, Assumption.",
     );
   });
 
@@ -984,16 +984,16 @@ describe("checkSpec", () => {
     // target alone, with no orphan sentence of the source's own muddying it.
     const project = await newProject();
     await node(project, "Goal", "G-0001", GOAL_BODY);
-    await node(project, "Question", "Q-0001", "## Question\n\nWhy?");
+    await node(project, "Term", "T-0001", "The repository the spec travels with.");
     await createSpecEdge({
       projectId: project.id,
-      type: "RAISES",
+      type: "MENTIONS",
       fromId: "G-0001",
-      toId: "Q-0001",
+      toId: "T-0001",
     });
     // The target's file goes the way no door sanctions — by hand.
     await rm(
-      path.join(project.path, ".shall", "spec", "intent", "Question", "Q-0001.md"),
+      path.join(project.path, ".shall", "spec", "domain", "Term", "T-0001.md"),
     );
 
     const check = await checkSpec(project.path);
@@ -1006,7 +1006,7 @@ describe("checkSpec", () => {
       {
         file: "intent/Goal/G-0001.md",
         message:
-          "G-0001 has a RAISES relation to Q-0001, and no file names Q-0001. The relation is kept as written, so writing or restoring Q-0001 attaches it again.",
+          "G-0001 has a MENTIONS relation to T-0001, and no file names T-0001. The relation is kept as written, so writing or restoring T-0001 attaches it again.",
       },
     ]);
     // The line is still in the source file, exactly as it was written.
@@ -1016,7 +1016,7 @@ describe("checkSpec", () => {
           path.join(project.path, ".shall", "spec", "intent", "Goal", "G-0001.md"),
           "utf8",
         )
-      ).includes("to: Q-0001"),
+      ).includes("to: T-0001"),
     );
     // The canvas is not asked to draw a line to a box that is not there.
     assert.deepEqual(await listSpecEdges(project.id), []);

@@ -59,7 +59,10 @@ export type TaskClosureBundle = Extract<ReviewBundle, { kind: "task-closure" }>;
 export type BundleMember = SpecApprovalBundle["members"][number];
 /** A claimant, which is a member with the work log that submitted it. */
 export type EvidenceMember = AcClosureBundle["evidence"][number];
-/** The other kind of claimant: a work log, with the commits it produced. */
+/**
+ * The other kind of claimant: a completion report, with the work log that
+ * submitted it.
+ */
 export type ReportMember = TaskClosureBundle["reports"][number];
 /**
  * THE OTHER SURFACE COMPUTED ON READ — what the specification needs fixed, and

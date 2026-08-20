@@ -8,11 +8,14 @@ import {
   type SectionGuide,
 } from "../graph/index.js";
 import {
+  BLOCKING_KEY,
   COMMITS_KEY,
   COMMITS_TYPE,
   EDGES_KEY,
   FENCE,
+  FINDING_TYPE,
   NAME_KEY,
+  RELATED_NODES_KEY,
   SHORT_NAME_KEY,
 } from "./emit.js";
 
@@ -105,15 +108,35 @@ function startingLines(
     }
   }
 
-  // The one type-specific key. A WorkLog names the commits its work produced
-  // in its own frontmatter — sha and message, in the order they were made —
-  // and no other type carries the key, so no other template mentions it.
+  // The type-specific keys. Each belongs to one type and no other carries it, so
+  // no other template mentions it — and these comments are the ONLY place a
+  // type's own vocabulary is written down, which is why a key with no line here
+  // is a key nobody writing the file can find.
   if (type === COMMITS_TYPE) {
     lines.push(
       "# The commits this work produced, one sha per line, in the order they were made.",
     );
     lines.push(`# ${COMMITS_KEY}:`);
     lines.push("#   - 0123abc");
+  }
+  if (type === FINDING_TYPE) {
+    lines.push(
+      "# Whether this finding stopped the work that found it. Write the key only",
+    );
+    lines.push(
+      "# when it is true: nothing computed reads it, and a finding that is not",
+    );
+    lines.push("# blocking says nothing about it.");
+    lines.push(`# ${BLOCKING_KEY}: true`);
+    lines.push(
+      "# The nodes this finding is about, as a hint for whoever reads it. It is",
+    );
+    lines.push(
+      "# not a relation and nothing resolves it: an id no file answers to is not",
+    );
+    lines.push("# an error here, and an empty list is not one either.");
+    lines.push(`# ${RELATED_NODES_KEY}:`);
+    lines.push("#   - R-0001");
   }
 
   return lines;

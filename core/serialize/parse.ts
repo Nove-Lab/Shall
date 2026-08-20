@@ -8,12 +8,15 @@ import {
   type SpecNode,
 } from "../graph/index.js";
 import {
+  BLOCKING_KEY,
   COMMITS_KEY,
   COMMITS_TYPE,
   DELETION_PROPOSED_KEY,
   EDGES_KEY,
   FENCE,
+  FINDING_TYPE,
   NAME_KEY,
+  RELATED_NODES_KEY,
   SHORT_NAME_KEY,
 } from "./emit.js";
 import { LEDGER_FILE } from "./ledger.js";
@@ -85,15 +88,60 @@ const EDGE_SHAPE = "Every entry under edges is a map of exactly type and to.";
 /** The same rule for the WorkLog's commits: one list, one shape, said once. */
 const COMMIT_SHAPE = "Every entry under commits is a commit sha, as text.";
 
+/** And for a Finding's hint list, which is ids and not relations. */
+const RELATED_NODES_SHAPE =
+  "Every entry under relatedNodes is a node id, as text.";
+
+/** A `blocking` that is not a boolean — one sentence, said where the key is. */
+const BLOCKING_SHAPE =
+  "blocking is true or false, written plain — a finding is blocking the work that found it or it is not.";
+
+/**
+ * The keys one type carries and no other does, with the sentence a file on the
+ * wrong type hears.
+ *
+ * A TABLE AND NOT A CHAIN OF IFS, because there are three of them now and the
+ * order they are listed in is load-bearing twice: it is the order the emitter
+ * writes them, which `carriedKeys` promises below, and it is the order the
+ * stray-key sentence reads them in.
+ */
+const TYPED_KEYS: readonly {
+  readonly key: string;
+  readonly type: string;
+  readonly instead: string;
+}[] = [
+  {
+    key: COMMITS_KEY,
+    type: COMMITS_TYPE,
+    instead: `only a ${COMMITS_TYPE} records the commits its work produced`,
+  },
+  {
+    key: BLOCKING_KEY,
+    type: FINDING_TYPE,
+    instead: `only a ${FINDING_TYPE} says whether it is blocking the work that found it`,
+  },
+  {
+    key: RELATED_NODES_KEY,
+    type: FINDING_TYPE,
+    instead: `only a ${FINDING_TYPE} names the nodes it is about`,
+  },
+];
+
 /**
  * The keys a file of this type may carry above the fence, in the order the
  * emitter writes them — the sentence about a stray key names exactly these, so
  * a WorkLog hears about `commits` and a Requirement does not.
  */
 function carriedKeys(type: string): readonly string[] {
-  return type === COMMITS_TYPE
-    ? [SHORT_NAME_KEY, NAME_KEY, EDGES_KEY, COMMITS_KEY, DELETION_PROPOSED_KEY]
-    : [SHORT_NAME_KEY, NAME_KEY, EDGES_KEY, DELETION_PROPOSED_KEY];
+  return [
+    SHORT_NAME_KEY,
+    NAME_KEY,
+    EDGES_KEY,
+    ...TYPED_KEYS.filter((typed) => typed.type === type).map(
+      (typed) => typed.key,
+    ),
+    DELETION_PROPOSED_KEY,
+  ];
 }
 
 /** "a, b, c and d" — the list of carried keys as a sentence reads it. */
@@ -222,6 +270,8 @@ export function parseNodeFile(
   let name = "";
   let deletionProposed: NodeDeletionProposal | undefined;
   let commits: string[] | undefined;
+  let blocking: true | undefined;
+  let relatedNodes: string[] | undefined;
   // The keys the format does not carry, said once as one list: the rule is one
   // rule — the frontmatter holds the graph's three facts, a WorkLog's commits
   // and the one machine block, and the body holds everything else — and five
@@ -231,14 +281,17 @@ export function parseNodeFile(
     if (key === EDGES_KEY) {
       continue;
     }
-    if (key === COMMITS_KEY) {
+    const typed = TYPED_KEYS.find((entry) => entry.key === key);
+    if (typed !== undefined) {
       // Read below with the edges — but named here on the type that has no
       // business carrying it, by name rather than as a stray, because the
-      // person who wrote it was thinking of a WorkLog and the sentence should
-      // say which file it belongs in.
-      if (type !== COMMITS_TYPE) {
+      // person who wrote it was thinking of a WorkLog or a Finding and the
+      // sentence should say which file it belongs in. Named ABOVE the
+      // empty-value rule below, so a bare `blocking:` on a Requirement is
+      // still answered by type rather than skipped in silence.
+      if (type !== typed.type) {
         problems.push(
-          `A ${type} does not carry ${COMMITS_KEY} — only a ${COMMITS_TYPE} records the commits its work produced.`,
+          `A ${type} does not carry ${typed.key} — ${typed.instead}.`,
         );
       }
       continue;
@@ -348,6 +401,74 @@ export function parseNodeFile(
     }
   }
 
+  // A Finding's two keys. `blocking` is judged as a boolean and nothing else:
+  // `blocking: yes` under the core schema is the STRING "yes", and a reader
+  // that accepted it would be inventing a second spelling of a judgement that
+  // has exactly two. `false` is read as absent — the same fact as no key — so
+  // the next save drops it, the way an empty commit list is dropped.
+  if (type === FINDING_TYPE) {
+    const said = carried[BLOCKING_KEY];
+    if (said !== null && said !== undefined) {
+      if (typeof said !== "boolean") {
+        problems.push(BLOCKING_SHAPE);
+      } else if (said) {
+        blocking = true;
+      }
+    }
+
+    // The hint list. Judged like the commits — one sentence for the list's
+    // shape, however many entries are wrong — and then per entry, so a blank
+    // id is named as a blank id. `judgeNodeId` here asks only about the SHAPE
+    // of an id: whether a file answers to it is not asked, because these are
+    // hints and a dangling one is not a fault.
+    const hinted = carried[RELATED_NODES_KEY];
+    if (hinted !== null && hinted !== undefined) {
+      if (!Array.isArray(hinted)) {
+        problems.push(RELATED_NODES_SHAPE);
+      } else {
+        const read: string[] = [];
+        const seenHint = new Set<string>();
+        let saidShape = false;
+        for (const entry of hinted) {
+          if (typeof entry !== "string") {
+            if (!saidShape) {
+              saidShape = true;
+              problems.push(RELATED_NODES_SHAPE);
+            }
+            continue;
+          }
+          const hint = judgeIdentity("A related node id", entry);
+          problems.push(...hint.problems);
+          if (hint.value !== "") {
+            const shape = judgeNodeId(hint.value);
+            if (shape !== null) {
+              // The entry is named in front, because `judgeNodeId` answers
+              // about THE id of a file and its three sentences have no room
+              // for a subject. In a list of five hints, a sentence that does
+              // not say which one is a sentence nobody can act on.
+              problems.push(
+                `${RELATED_NODES_KEY} carries ${hint.value}, which is not shaped like an id. ${shape}`,
+              );
+            }
+          }
+          if (seenHint.has(hint.value)) {
+            problems.push(
+              `${id} names ${hint.value} twice under ${RELATED_NODES_KEY}.`,
+            );
+            continue;
+          }
+          seenHint.add(hint.value);
+          read.push(hint.value);
+        }
+        // An empty list is a finding that named nothing, which is the same fact
+        // as no key.
+        if (read.length > 0) {
+          relatedNodes = read;
+        }
+      }
+    }
+  }
+
   const edges: SpecEdge[] = [];
   const listed = carried[EDGES_KEY];
   if (listed !== null && listed !== undefined) {
@@ -441,6 +562,8 @@ export function parseNodeFile(
       // Spread in rather than assigned, so a node without a block has no key
       // for it either — one spelling of absence, here as in the file.
       ...(commits !== undefined ? { commits } : {}),
+      ...(blocking !== undefined ? { blocking } : {}),
+      ...(relatedNodes !== undefined ? { relatedNodes } : {}),
       ...(deletionProposed !== undefined ? { deletionProposed } : {}),
     },
     edges,

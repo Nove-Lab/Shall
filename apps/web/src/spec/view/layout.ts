@@ -48,7 +48,7 @@ import { settleColumns } from "./settle";
  * viewport is, so opening or collapsing a side panel cannot re-flow the board —
  * it clips and scrolls. On a narrow screen the grid scrolls horizontally from
  * zero nodes, which is accepted: no legible card width fits the Intent band's
- * eleven columns into a small viewport.
+ * nine columns into a small viewport.
  *
  * THERE IS A SETTLE STEP IN THE GRAPH VIEW, AND WHAT IT IS FOR IS THE DISTANCE
  * BETWEEN THE TWO ENDS OF A RELATION. A column is ordered by its own ids and
@@ -240,12 +240,16 @@ const GRID_ROW_GAP = 2 * STACK_GAP + RULE;
  * full Domain band is 205 tall (was 141 at that card and the 9px header this
  * repo does not draw), and the graph's row pitch is 62.
  *
- * CARD WIDTH 148 — the widest band is Intent (eight core types plus the three
- * satellites parked there, eleven columns), so the board is
- * `104 + 10 * (148 + 16) + 148 + 16 = 1908` across: a 1920px screen with 12px to
- * spare. Of the 148, about 85 is chrome and reserved id — a 9px signal square, the
- * gaps around it, and room for an id of at most seven mono glyphs — which leaves
- * roughly 63px of short name on the second line.
+ * CARD WIDTH 148 — the widest band is Intent (its eight core types plus the
+ * satellite parked there, nine columns), so the board is
+ * `104 + 8 * (148 + 16) + 148 + 16 = 1580` across. The width was searched against
+ * eleven columns, which is what Intent held while the canon gave three types no
+ * layer, and 148 was the widest that still fitted 1920. The band has since
+ * narrowed and the number stayed: a card does not become more legible for having
+ * room beside it, and re-flowing every board to spend the slack would be a diff
+ * nobody asked for. Of the 148, about 85 is chrome and reserved id — a 9px signal
+ * square, the gaps around it, and room for an id of at most seven mono glyphs —
+ * which leaves roughly 63px of short name on the second line.
  *
  * THE GAPS STAY DIFFERENT BETWEEN THE VIEWS, and only the gaps. A gap changes no
  * apparent card size: the graph needs room to route a relation between columns,

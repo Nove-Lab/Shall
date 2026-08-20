@@ -198,7 +198,7 @@ type Block = {
  * fault to go looking for — it is a board with no room in it.
  *
  * A YOUNG GRAPH IS NEARLY THAT BOARD, which is worth knowing before wondering
- * why nothing moved. Twenty-nine nodes over twenty columns — measured on a real
+ * why nothing moved. Twenty-nine nodes over the canon's columns — measured on a real
  * project — leave a fullest column of three and two rows of slack for
  * everything else, and every relation already within a fraction of a row of
  * level: the step ran and moved not one card. What it is for arrives later,

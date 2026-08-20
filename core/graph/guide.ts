@@ -181,6 +181,14 @@ const GUIDE: Readonly<Record<NodeTypeName, readonly SectionGuide[]>> = {
     ),
     section("Risks"),
   ],
+  // Filed in the plan band and reaching every band above it: a decision is the
+  // rationale a revision was made for, so the Rationale is the section the rest
+  // of the file exists to hold.
+  Decision: [
+    section("Decision"),
+    section("Description"),
+    section("Rationale"),
+  ],
   Journal: [
     section("Period"),
     section("Performer"),
@@ -193,9 +201,10 @@ const GUIDE: Readonly<Record<NodeTypeName, readonly SectionGuide[]>> = {
     section("Claim"),
     section("Verdict", "Pending · Approved · Rejected"),
   ],
-  // No Verdict, and that absence is the design: this type testifies and does
-  // not conclude (§3.19).
-  VerificationReport: [
+  // No Verdict, and that absence is the design: this type says what was done
+  // and does not conclude that it was enough (§3.19). Whether the task is
+  // finished is a person's word in the ledger, not a field in this file.
+  TaskCompletionReport: [
     section("Testimony"),
     section("Coverage"),
     section("Trigger"),
@@ -211,22 +220,11 @@ const GUIDE: Readonly<Record<NodeTypeName, readonly SectionGuide[]>> = {
     section("Description"),
     section("Basis"),
   ],
-  Question: [
-    section("Question"),
-    section("Description"),
-    section("State", "Open · Closed"),
-    section("Answer"),
-  ],
-  Decision: [
-    section("Decision"),
-    section("Description"),
-    section("Rationale"),
-  ],
 };
 
 /**
  * The sections this type's template suggests, in authoring order — or `null`
- * when the name is not one of the canon's 22, which is how a caller's string is
+ * when the name is not one of the canon's own, which is how a caller's string is
  * checked.
  */
 export function sectionGuideFor(

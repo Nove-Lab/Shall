@@ -10,7 +10,7 @@ import {
 } from "./anchors.js";
 import { NODE_TYPES } from "./canon.js";
 import { CLOSURE_KINDS, closureKindNamed, closureKindOf } from "./closure-kinds.js";
-import { EDGE_GRAMMAR, isPermittedTriple } from "./grammar.js";
+import { EDGE_GRAMMAR, EDGE_TYPE_NAMES, isPermittedTriple } from "./grammar.js";
 
 /**
  * The anchor table is hand-transcribed, so the tests below are what makes it
@@ -22,6 +22,12 @@ import { EDGE_GRAMMAR, isPermittedTriple } from "./grammar.js";
  * `EDGE_GRAMMAR` in the direction the row wrote, so an anchor naming a relation
  * that could never reach a node of that type — a typo, a direction flipped —
  * fails here instead of turning a healthy node red on somebody's screen.
+ *
+ * THE GRAMMAR IS HAND-TRANSCRIBED TOO, and no other file counts it. The
+ * `EDGE_GRAMMAR` block below is where its shape is written out by hand — how
+ * many rows, how many names, which types a decision may revise, and the two
+ * names nothing may answer to — because a table is the one thing that cannot
+ * be checked against itself.
  */
 
 describe("ANCHOR_RULES", () => {
@@ -63,11 +69,97 @@ describe("ANCHOR_RULES", () => {
     );
   });
 
+  test("holds a Finding from above, and it points at nothing", () => {
+    // The work log's own RECORDS line is the whole of what makes a finding part
+    // of the record, and there is no second way in: the canon gives a finding
+    // no outgoing relation at all, so the ids it concerns sit in its own
+    // frontmatter where nothing resolves them and a dangling one is not a
+    // fault. The empty filter is the executable half of that sentence — a
+    // relation drawn out of a finding would have to be invented here first.
+    assert.deepEqual(anchorsFor("Finding"), [
+      { direction: "in", edgeType: "RECORDS" },
+    ]);
+    assert.deepEqual(
+      EDGE_GRAMMAR.filter((row) => row.fromType === "Finding"),
+      [],
+    );
+  });
+
   test("does not call a type it has never heard of rootless", () => {
     // Both answer with no anchors, and only one of them may stand alone.
     assert.deepEqual(anchorsFor("Widget"), []);
     assert.equal(isRootless("Widget"), false);
     assert.equal(isRootless("Goal"), true);
+  });
+});
+
+describe("EDGE_GRAMMAR", () => {
+  test("is 64 rows under 28 names, and answers to neither ESCALATES nor RAISES", () => {
+    // The counts are a hand-written pair because membership alone is blind to
+    // a row added beside a row removed. The two names are written out for the
+    // opposite reason: they are the ones an old file, an old ledger or an old
+    // habit will reach back for, and a row put under either has to be invented
+    // here before it can reach a node. Nothing raises a question — the canon
+    // has no node to park one in — and a finding escalates nothing, because it
+    // starts no relation at all.
+    assert.equal(EDGE_GRAMMAR.length, 64);
+    assert.equal(EDGE_TYPE_NAMES.length, 28);
+    for (const name of ["ESCALATES", "RAISES"]) {
+      assert.equal(EDGE_TYPE_NAMES.includes(name), false);
+      assert.equal(
+        EDGE_GRAMMAR.some((row) => row.edgeType === name),
+        false,
+      );
+    }
+  });
+
+  test("lets a Decision AFFECTS every type of the three living bands and no record", () => {
+    // Written out by hand and in the table's own order, for the reason the
+    // rootless list is: a set read back out of the canon's roster would agree
+    // with any table at all, including one that let a decision revise a work
+    // log. What is absent is the point of the list — `Decision` itself, so
+    // that two of them cannot anchor each other while revising nothing, and
+    // every Execution type, because what happened is not revised by deciding
+    // something afterwards.
+    const affects = EDGE_GRAMMAR.filter((row) => row.edgeType === "AFFECTS");
+    assert.deepEqual(
+      affects.map((row) => row.toType),
+      [
+        "Term",
+        "DomainEntity",
+        "Goal",
+        "Actor",
+        "UseCase",
+        "Scenario",
+        "SystemResponsibility",
+        "Requirement",
+        "AcceptanceCriterion",
+        "Constraint",
+        "Assumption",
+        "ModuleDesign",
+        "Interface",
+        "DataSchema",
+        "ImplementationTask",
+      ],
+    );
+    // One source, so the fifteen above are the whole of the edge.
+    assert.deepEqual(
+      new Set(affects.map((row) => row.fromType)),
+      new Set(["Decision"]),
+    );
+  });
+
+  test("gives RESOLVES one row, and it is the row no anchor counts", () => {
+    // Nothing holds a decision by it, which is what makes answering no finding
+    // legal: a revision somebody simply wanted is as good a reason as one an
+    // agent reported, and three findings answered at once are still one
+    // decision. It is also the one row that runs from the specification into
+    // the record, which is why a bundle stops here rather than dragging a work
+    // report into a spec approval.
+    assert.deepEqual(
+      EDGE_GRAMMAR.filter((row) => row.edgeType === "RESOLVES"),
+      [{ fromType: "Decision", toType: "Finding", edgeType: "RESOLVES" }],
+    );
   });
 });
 
@@ -95,11 +187,11 @@ describe("anchorPhrase", () => {
     );
   });
 
-  test("says which way the relation runs, which for a Decision is outward", () => {
-    assert.equal(
-      anchorPhrase("Decision"),
-      "a RESOLVES or AFFECTS relation out of it",
-    );
+  test("holds a Decision outward, by what it revises and not by what it answers", () => {
+    // AFFECTS alone, and this sentence is where the canon's "at least one"
+    // reaches a person: a decision that revises nothing is not a decision,
+    // while one that answers no finding is merely a revision somebody wanted.
+    assert.equal(anchorPhrase("Decision"), "an AFFECTS relation out of it");
   });
 
   test("joins both directions when a type is held either way, as a WorkLog is", () => {

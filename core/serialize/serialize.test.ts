@@ -1029,14 +1029,17 @@ ${body}
 
 describe("the refusals", () => {
   test("a file that does not open with a fence", () => {
-    assert.deepEqual(problemsOf("Question", "Q-0002.md", "just some notes\n"), [
-      'Q-0002.md does not begin with a "---" frontmatter block, so it cannot be read as a spec node.',
-    ]);
+    assert.deepEqual(
+      problemsOf("Assumption", "AS-0002.md", "just some notes\n"),
+      [
+        'AS-0002.md does not begin with a "---" frontmatter block, so it cannot be read as a spec node.',
+      ],
+    );
   });
 
   test("a fence that never closes", () => {
-    assert.deepEqual(problemsOf("Question", "Q-0002.md", "---\nname: x\n"), [
-      'Q-0002.md does not begin with a "---" frontmatter block, so it cannot be read as a spec node.',
+    assert.deepEqual(problemsOf("Assumption", "AS-0002.md", "---\nname: x\n"), [
+      'AS-0002.md does not begin with a "---" frontmatter block, so it cannot be read as a spec node.',
     ]);
   });
 
@@ -1469,7 +1472,6 @@ name:                  # required · one line
 #   DEPENDS_ON     -> Requirement
 #   CONFLICTS_WITH -> Requirement
 #   ASSUMES        -> Assumption
-#   RAISES         -> Question
 #   MENTIONS       -> Term
 # edges:
 #   - type: HAS_CRITERION
@@ -1489,15 +1491,15 @@ name:                  # required · one line
     );
   });
 
-  test("the VerificationReport template shows the one line it may write: its claim", () => {
-    // #24— turned the verification round the way #24 turned the evidence: the
-    // report names the ONE task it verifies in its own file, so an agent
+  test("the completion report template shows the one line it may write: its claim", () => {
+    // #24— turned the report round the way #24 turned the evidence: the
+    // report names the ONE task it is filed about in its own file, so an agent
     // starting one sees where to aim it, and the task's file is never touched
     // by the claim being made.
-    const text = emitTemplate("VerificationReport");
+    const text = emitTemplate("TaskCompletionReport");
     assert.ok(
       text.includes(
-        "# From a VerificationReport the canon allows:\n#   CLAIMS -> ImplementationTask\n",
+        "# From a TaskCompletionReport the canon allows:\n#   CLAIMS -> ImplementationTask\n",
       ),
       text,
     );
@@ -1507,12 +1509,46 @@ name:                  # required · one line
     );
   });
 
-  test("every type now writes at least one outgoing relation — the no-outgoing branch is spare", () => {
-    // VerificationReport was the last type in the other branch, until #24—
-    // gave it its claim; MENTIONS already reaches everything else. The branch
-    // stays in the emitter against the day the canon grows a pure target
-    // again, and this loop is the record that nothing reaches it today.
+  test("the Finding template is where its two keys are written down", () => {
+    // THE `#` COMMENTS ARE THE ONLY COPY OF A TYPE'S VOCABULARY — the skills say
+    // so and delegate to them — so a key with no line here is a key nobody
+    // writing the file can find. Both are documented as optional, and the hint
+    // list says outright that nothing resolves it.
+    const finding = emitTemplate("Finding");
+    assert.ok(finding.includes("\n# blocking: true\n"), finding);
+    assert.ok(finding.includes("\n# relatedNodes:\n#   - R-0001\n"), finding);
+    assert.ok(finding.includes("Write the key only"), finding);
+    assert.ok(finding.includes("nothing resolves it"), finding);
+    // And no other type mentions either, the way no other mentions commits.
     for (const entry of NODE_TYPES) {
+      if (entry.name === "Finding") {
+        continue;
+      }
+      const other = emitTemplate(entry.name);
+      assert.ok(!other.includes("blocking"), entry.name);
+      assert.ok(!other.includes("relatedNodes"), entry.name);
+    }
+  });
+
+  test("a Finding is the whole of the no-outgoing branch, and every other type writes a relation", () => {
+    // A finding starts nothing. The ids one concerns sit in its own
+    // frontmatter as a hint nothing resolves, so the branch that stood empty
+    // since a completion report gained its claim holds exactly one again — and
+    // the Finding's template says the canon allows nothing where every other
+    // template shows an `edges:` example. That example is built from a row, and
+    // a Finding has no row.
+    const finding = emitTemplate("Finding");
+    assert.ok(
+      finding.includes(
+        "# From a Finding the canon allows no outgoing relations.\n",
+      ),
+      finding,
+    );
+    assert.equal(finding.includes("# edges:"), false, finding);
+    for (const entry of NODE_TYPES) {
+      if (entry.name === "Finding") {
+        continue;
+      }
       assert.equal(
         emitTemplate(entry.name).includes("allows no outgoing relations"),
         false,
@@ -1530,6 +1566,30 @@ name:                  # required · one line
     assert.ok(text.includes("# edges:\n#   - type: CLAIMS\n#     to: AC-0001\n"), text);
   });
 
+  test("the Decision template leads with AFFECTS, the line a decision cannot do without", () => {
+    // A decision that revises nothing is not a decision, and `ANCHOR_RULES`
+    // holds a Decision by that edge alone — so the example a person copies out
+    // has to be the AFFECTS, and not the RESOLVES, which a revision somebody
+    // simply wanted has none of.
+    const text = emitTemplate("Decision");
+    assert.ok(
+      text.includes(
+        "# From a Decision the canon allows:\n#   AFFECTS  -> Term\n",
+      ),
+      text,
+    );
+    assert.ok(
+      text.includes(
+        "#   AFFECTS  -> ImplementationTask\n#   RESOLVES -> Finding\n",
+      ),
+      text,
+    );
+    assert.ok(
+      text.includes("# edges:\n#   - type: AFFECTS\n#     to: T-0001\n"),
+      text,
+    );
+  });
+
   test("the WorkLog template shows where its commits go", () => {
     // The one type-specific key, and the only template that mentions it: an
     // agent starting a work log sees the shape of the list it will fill.
@@ -1538,23 +1598,23 @@ name:                  # required · one line
     assert.equal(emitTemplate("Journal").includes("commits"), false);
   });
 
-  test("all 22 types have a template, and generating twice writes the same bytes", () => {
-    assert.equal(NODE_TYPES.length, 22);
+  test("all 21 types have a template, and generating twice writes the same bytes", () => {
+    assert.equal(NODE_TYPES.length, 21);
     const written = new Set<string>();
     for (const entry of NODE_TYPES) {
       const once = emitTemplate(entry.name);
       assert.equal(emitTemplate(entry.name), once, entry.name);
       written.add(once);
     }
-    assert.equal(written.size, 22);
+    assert.equal(written.size, 21);
   });
 
   test("every template names the command that writes it and the path it lands at", () => {
     // The one line of a header that is not the same sentence for every type is
-    // the path, because the band folder is part of it. The two goldens above
-    // spell out `intent` and `execution`; this says the other twenty-one are
-    // `bandFolderOf`'s answer as well, so a type that moves band moves its
-    // template's path with it and nobody has to remember to.
+    // the path, because the band folder is part of it. The golden above spells
+    // out `intent`; this says the other twenty are `bandFolderOf`'s answer as
+    // well, so a type that moves band moves its template's path with it and
+    // nobody has to remember to.
     for (const entry of NODE_TYPES) {
       assert.equal(
         emitTemplate(entry.name).includes(
@@ -1680,18 +1740,18 @@ name:                  # required · one line
     );
   });
 
-  test("all 22 types have a scaffold, and generating twice writes the same bytes", () => {
+  test("all 21 types have a scaffold, and generating twice writes the same bytes", () => {
     const written = new Set<string>();
     for (const entry of NODE_TYPES) {
       const once = emitScaffold(entry.name);
       assert.equal(emitScaffold(entry.name), once, entry.name);
       written.add(once);
     }
-    assert.equal(written.size, 22);
+    assert.equal(written.size, 21);
   });
 
   test("every scaffold is its template with the header swapped and nothing else", () => {
-    // Said as a subtraction rather than as twenty-two more goldens. The two
+    // Said as a subtraction rather than as twenty-one more goldens. The two
     // files share their starting lines in the source, and those begin at
     // `short_name:` — so cut both files there, and below the cut the bytes must
     // be identical for every type, while above it the scaffold carries exactly
@@ -2133,6 +2193,202 @@ priority: high
       reading.edges,
       reading.node,
     );
+    assert.notEqual(payload, fewer);
+  });
+});
+
+/**
+ * The Finding's two keys — the judgement and the hint list.
+ *
+ * They are the second and third per-type keys the format has, after a WorkLog's
+ * commits, and they are held to the same bargain: one spelling of absence, a
+ * refusal by name on the wrong type, and inside the approval payload so that
+ * changing one asks somebody to read the node again.
+ *
+ * WHAT IS DELIBERATELY NOT TESTED HERE IS RESOLUTION. `relatedNodes` is a hint
+ * and not a relation: an id no file answers to is not a fault, and no test
+ * below asks the reader to look for one.
+ */
+describe("the Finding's blocking and relatedNodes", () => {
+  const FOUND = `---
+short_name: f
+name: A finding
+blocking: true
+relatedNodes:
+  - R-0001
+  - T-0002
+---
+
+The specification says nothing about what happens when the list is empty.
+`;
+
+  test("both keys read back as what the file carries", () => {
+    const reading = parseNodeFile("Finding", "F-0001.md", FOUND);
+    assert.deepEqual(reading.problems, []);
+    assert.equal(reading.node?.blocking, true);
+    assert.deepEqual(reading.node?.relatedNodes, ["R-0001", "T-0002"]);
+  });
+
+  test("the keys are written after the commits, and the file is a fixpoint", () => {
+    const reading = parseNodeFile("Finding", "F-0001.md", FOUND);
+    assert.ok(reading.node !== undefined);
+    assert.equal(
+      emitNodeFile(reading.node.type, reading.node, reading.edges, reading.node),
+      FOUND,
+    );
+    assert.equal(isCanonical("Finding", "F-0001.md", FOUND), true);
+  });
+
+  test("blocking is written as a bare boolean and never through the scalar rule", () => {
+    // The scalar rule quotes `true`, because it is there to make a STRING come
+    // back the string it was. A boolean written plain reads back the same value
+    // under every schema this repository pins, so it goes around that rule.
+    const written = emitNodeFile(
+      "Finding",
+      { shortName: "f", name: "F", body: "", blocking: true },
+      [],
+    );
+    assert.ok(written.includes("\nblocking: true\n"), written);
+    assert.equal(isPlainSafe("true"), false);
+  });
+
+  test("blocking false is the same fact as no key, and the next save says so", () => {
+    const said = FOUND.replace("blocking: true", "blocking: false");
+    const reading = parseNodeFile("Finding", "F-0001.md", said);
+    assert.deepEqual(reading.problems, []);
+    assert.equal(reading.node?.blocking, undefined);
+    assert.ok(!("blocking" in (reading.node ?? {})));
+    assert.ok(reading.node !== undefined);
+    assert.ok(
+      !emitNodeFile(
+        reading.node.type,
+        reading.node,
+        reading.edges,
+        reading.node,
+      ).includes("blocking"),
+    );
+  });
+
+  test("a finding with neither key has no key for either, in the object as in the file", () => {
+    const bare = `---\nshort_name: f\nname: F\n---\n`;
+    const reading = parseNodeFile("Finding", "F-0001.md", bare);
+    assert.deepEqual(reading.problems, []);
+    assert.ok(!("blocking" in (reading.node ?? {})));
+    assert.ok(!("relatedNodes" in (reading.node ?? {})));
+    assert.equal(isCanonical("Finding", "F-0001.md", bare), true);
+  });
+
+  test("blocking that is not a boolean is refused, and yes is not a boolean", () => {
+    // Under the core schema `yes` is the string "yes". A reader that took it
+    // would be inventing a second spelling of a judgement that has two.
+    for (const written of ["yes", '"true"', "1"]) {
+      assert.deepEqual(
+        parseNodeFile(
+          "Finding",
+          "F-0001.md",
+          FOUND.replace("blocking: true", `blocking: ${written}`),
+        ).problems,
+        [
+          "blocking is true or false, written plain — a finding is blocking the work that found it or it is not.",
+        ],
+      );
+    }
+  });
+
+  test("an id no file answers to is carried, because a hint is not a relation", () => {
+    const dangling = FOUND.replace("  - T-0002", "  - R-9999");
+    const reading = parseNodeFile("Finding", "F-0001.md", dangling);
+    assert.deepEqual(reading.problems, []);
+    assert.deepEqual(reading.node?.relatedNodes, ["R-0001", "R-9999"]);
+  });
+
+  test("the list is sorted on the way out, because it has no order of its own", () => {
+    const written = emitNodeFile(
+      "Finding",
+      { shortName: "f", name: "F", body: "", relatedNodes: ["T-0002", "R-0001"] },
+      [],
+    );
+    assert.ok(written.includes("relatedNodes:\n  - R-0001\n  - T-0002\n"), written);
+  });
+
+  test("an empty list is the same fact as no key", () => {
+    const empty = FOUND.replace("relatedNodes:\n  - R-0001\n  - T-0002\n", "relatedNodes: []\n");
+    const reading = parseNodeFile("Finding", "F-0001.md", empty);
+    assert.deepEqual(reading.problems, []);
+    assert.ok(!("relatedNodes" in (reading.node ?? {})));
+  });
+
+  test("the list's shape is one sentence, however many entries are wrong", () => {
+    const wrong = FOUND.replace("  - R-0001\n  - T-0002", "  - 4\n  - true");
+    assert.deepEqual(parseNodeFile("Finding", "F-0001.md", wrong).problems, [
+      "Every entry under relatedNodes is a node id, as text.",
+    ]);
+    const notAList = FOUND.replace("relatedNodes:\n  - R-0001\n  - T-0002\n", "relatedNodes: R-0001\n");
+    assert.deepEqual(parseNodeFile("Finding", "F-0001.md", notAList).problems, [
+      "Every entry under relatedNodes is a node id, as text.",
+    ]);
+  });
+
+  test("an entry that is not shaped like an id names the entry, not just the rule", () => {
+    // `judgeNodeId` answers about THE id of a file, so its sentence has no
+    // subject. In a list, a refusal that does not say which entry is one
+    // nobody can act on.
+    const misshapen = FOUND.replace("  - T-0002", "  - -bad");
+    assert.deepEqual(parseNodeFile("Finding", "F-0001.md", misshapen).problems, [
+      "relatedNodes carries -bad, which is not shaped like an id. An id uses letters, digits, dots, hyphens and underscores, starts with a letter or digit, and holds at most 64 characters.",
+    ]);
+  });
+
+  test("the same id twice is refused, once", () => {
+    const twice = FOUND.replace("  - T-0002", "  - R-0001");
+    assert.deepEqual(parseNodeFile("Finding", "F-0001.md", twice).problems, [
+      "F-0001 names R-0001 twice under relatedNodes.",
+    ]);
+  });
+
+  test("either key on another type is refused by name, and a bare one too", () => {
+    const misplaced = `---\nshort_name: r\nname: R\nblocking: true\n---\n`;
+    assert.deepEqual(parseNodeFile("Requirement", "R-0001.md", misplaced).problems, [
+      "A Requirement does not carry blocking — only a Finding says whether it is blocking the work that found it.",
+    ]);
+    const alsoMisplaced = `---\nshort_name: r\nname: R\nrelatedNodes:\n  - T-0001\n---\n`;
+    assert.deepEqual(parseNodeFile("Requirement", "R-0001.md", alsoMisplaced).problems, [
+      "A Requirement does not carry relatedNodes — only a Finding names the nodes it is about.",
+    ]);
+    // A key written with no value is still the key somebody meant, so the
+    // sentence names the type rather than skipping it as empty.
+    const bare = `---\nshort_name: r\nname: R\nblocking:\n---\n`;
+    assert.deepEqual(parseNodeFile("Requirement", "R-0001.md", bare).problems, [
+      "A Requirement does not carry blocking — only a Finding says whether it is blocking the work that found it.",
+    ]);
+  });
+
+  test("the stray sentence names both keys on a Finding and neither elsewhere", () => {
+    const stray = FOUND.replace("blocking: true\n", "priority: high\nblocking: true\n");
+    assert.deepEqual(parseNodeFile("Finding", "F-0001.md", stray).problems, [
+      "The frontmatter carries short_name, name, edges, blocking, relatedNodes and deletionProposed and nothing else — priority belongs in the body, below the closing fence.",
+    ]);
+  });
+
+  test("both keys are inside the payload the ledger's hash names", () => {
+    const reading = parseNodeFile("Finding", "F-0001.md", FOUND);
+    assert.ok(reading.node !== undefined);
+    const payload = approvalPayload("Finding", "F-0001", reading.node, reading.edges, reading.node);
+    const unblocked = approvalPayload(
+      "Finding",
+      "F-0001",
+      { ...reading.node, blocking: undefined },
+      reading.edges,
+      reading.node,
+    );
+    const fewer = approvalPayload(
+      "Finding",
+      "F-0001",
+      { ...reading.node, relatedNodes: reading.node.relatedNodes?.slice(0, 1) },
+      reading.edges,
+      reading.node,
+    );
+    assert.notEqual(payload, unblocked);
     assert.notEqual(payload, fewer);
   });
 });

@@ -16,7 +16,7 @@ Both `spec/` and `ledger/` belong in the repository: the specification and its j
 
 ## The four band folders
 
-`domain`, `intent`, `plan`, `execution`. The band is **derived from the type**, never chosen: Term and DomainEntity are domain; Goal, Actor, UseCase, Scenario, SystemResponsibility, Requirement, AcceptanceCriterion and Constraint are intent, and the three satellites (Assumption, Question, Decision) are filed there too; ModuleDesign, Interface, DataSchema and ImplementationTask are plan; Journal, WorkLog, Evidence, VerificationReport and Finding are execution.
+`domain`, `intent`, `plan`, `execution`. The band is **derived from the type**, never chosen: Term and DomainEntity are domain; Goal, Actor, UseCase, Scenario, SystemResponsibility, Requirement, AcceptanceCriterion and Constraint are intent, and Assumption — the one type the canon gives no layer of its own — is filed there too; ModuleDesign, Interface, DataSchema, ImplementationTask and Decision are plan; Journal, WorkLog, Evidence, TaskCompletionReport and Finding are execution.
 
 You never have to work this out. `shall add-spec-node --type <Type>` prints the path it wrote, and that path is already the right folder.
 

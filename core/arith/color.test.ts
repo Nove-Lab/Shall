@@ -277,37 +277,41 @@ describe("red", () => {
 
   test("an anchor whose far end did not parse is not a live one", () => {
     // Seen from both directions, because the two arrive differently. The
-    // Decision's own file parsed, so its RESOLVES line is in the graph and
-    // points at a Question whose file would not read — a line at a node the
-    // graph does not have. The Question's own anchor is written in by hand:
-    // the loader drops a refused file's edges, so it could not produce this
-    // arrangement, and the check is against the living set rather than against
-    // the edge list precisely so that no other assembly of a graph can make a
-    // dead referrer anchor something.
+    // Decision's own file parsed, so its AFFECTS line is in the graph and
+    // points at a Requirement whose file would not read — a line at a node the
+    // graph does not have. The second Requirement's own anchor is written in by
+    // hand: the loader drops a refused file's edges, so it could not produce
+    // this arrangement, and the check is against the living set rather than
+    // against the edge list precisely so that no other assembly of a graph can
+    // make a dead referrer anchor something.
     const review = reviewGraph(
       graphOf({
-        nodes: [node("Decision", "D-0001"), node("Question", "Q-0002")],
+        nodes: [node("Decision", "D-0001"), node("Requirement", "R-0002")],
         edges: [
-          edge("D-0001", "RESOLVES", "Q-0001"),
-          edge("G-0001", "RAISES", "Q-0002"),
+          edge("D-0001", "AFFECTS", "R-0001"),
+          edge("SR-0001", "REQUIRES", "R-0002"),
         ],
         refused: [
-          refusal("intent/Question/Q-0001.md", "Question", "Q-0001"),
-          refusal("intent/Goal/G-0001.md", "Goal", "G-0001"),
+          refusal("intent/Requirement/R-0001.md", "Requirement", "R-0001"),
+          refusal(
+            "intent/SystemResponsibility/SR-0001.md",
+            "SystemResponsibility",
+            "SR-0001",
+          ),
         ],
       }),
       unapproved,
     );
     assert.deepEqual(review.statuses, [
       status("D-0001", "red", "orphan"),
-      status("Q-0002", "red", "orphan"),
+      status("R-0002", "red", "orphan"),
     ]);
     // And neither far end is missing: there is a file at both paths, so the
     // answer about them is `broken` and not a hole.
     assert.deepEqual(review.missing, []);
     assert.deepEqual(review.broken.map((file) => file.file), [
-      "intent/Goal/G-0001.md",
-      "intent/Question/Q-0001.md",
+      "intent/Requirement/R-0001.md",
+      "intent/SystemResponsibility/SR-0001.md",
     ]);
   });
 
@@ -375,15 +379,16 @@ describe("anchors", () => {
     });
   }
 
-  test("a Decision is anchored by what it resolves, not by what reaches it", () => {
-    // The one row of the table that points outward. A Decision with a RESOLVES
-    // to a living Question is held; the same Decision with only a MENTIONS out
-    // of it is not, because MENTIONS is not what holds a Decision.
-    const question = node("Question", "Q-0001");
+  test("a Decision is anchored by what it affects — not by what reaches it, and not by what it answers", () => {
+    // Nothing in the canon points at a decision, so the anchor has to leave it.
+    // A Decision with an AFFECTS at a living Requirement is held; the same
+    // Decision with only a MENTIONS out of it is not, because naming a term is
+    // not revising anything.
+    const requirement = node("Requirement", "R-0001");
     const held = reviewGraph(
       graphOf({
-        nodes: [node("Decision", "D-0001"), question],
-        edges: [edge("D-0001", "RESOLVES", "Q-0001")],
+        nodes: [node("Decision", "D-0001"), requirement],
+        edges: [edge("D-0001", "AFFECTS", "R-0001")],
       }),
       unapproved,
     );
@@ -401,6 +406,22 @@ describe("anchors", () => {
     );
     assert.deepEqual(
       statusOf(loose, "D-0001"),
+      status("D-0001", "red", "orphan"),
+    );
+
+    // AND ANSWERING A FINDING IS NOT BEING HELD EITHER, which is what leaves a
+    // decision free to answer none: RESOLVES is not in the anchor table, so a
+    // decision that resolves and revises nothing is a card left lying on the
+    // canvas exactly like the one that only mentions a term.
+    const answering = reviewGraph(
+      graphOf({
+        nodes: [node("Decision", "D-0001"), node("Finding", "F-0001")],
+        edges: [edge("D-0001", "RESOLVES", "F-0001")],
+      }),
+      unapproved,
+    );
+    assert.deepEqual(
+      statusOf(answering, "D-0001"),
       status("D-0001", "red", "orphan"),
     );
   });
@@ -1267,7 +1288,7 @@ describe("a loop in the plan", () => {
   });
 });
 
-describe("the aim rule for verification reports", () => {
+describe("the aim rule for completion reports", () => {
   // The report's own half of the rule: exactly one claim, and that one among
   // the tasks the submitting log addresses. The chain is read so that the log
   // is never `premature` here — what is under test is the claim.
@@ -1283,7 +1304,7 @@ describe("the aim rule for verification reports", () => {
   const second = node("ImplementationTask", "IT-0002");
   const journal = node("Journal", "J-0001");
   const log = node("WorkLog", "WL-0001");
-  const report = node("VerificationReport", "VR-0001");
+  const report = node("TaskCompletionReport", "TCR-0001");
   const SPINE = [
     edge("G-0001", "PURSUED_BY", "A-0001"),
     edge("A-0001", "PERFORMS", "UC-0001"),
@@ -1296,7 +1317,7 @@ describe("the aim rule for verification reports", () => {
     edge("IT-0002", "TARGETS", "AC-0002"),
     edge("J-0001", "LOGS", "WL-0001"),
     edge("WL-0001", "ADDRESSES", "IT-0001"),
-    edge("WL-0001", "SUBMITS", "VR-0001"),
+    edge("WL-0001", "SUBMITS", "TCR-0001"),
   ];
   const NODES = [
     goal,
@@ -1326,7 +1347,7 @@ describe("the aim rule for verification reports", () => {
     approve(second, SPINE),
   );
   const RULE =
-    "a verification report claims exactly one task its work log addresses.";
+    "a task completion report claims exactly one task its work log addresses.";
 
   function reviewWith(edits: {
     drop?: (line: SpecEdge) => boolean;
@@ -1340,37 +1361,37 @@ describe("the aim rule for verification reports", () => {
   }
 
   test("one claim at the addressed task is inside the rule, and nothing is red", () => {
-    const review = reviewWith({ add: [edge("VR-0001", "CLAIMS", "IT-0001")] });
-    assert.equal(statusOf(review, "VR-0001")?.reason, "unapproved");
+    const review = reviewWith({ add: [edge("TCR-0001", "CLAIMS", "IT-0001")] });
+    assert.equal(statusOf(review, "TCR-0001")?.reason, "unapproved");
     assert.equal(statusOf(review, "WL-0001")?.reason, "unapproved");
   });
 
   test("a claim at a task the log does not address turns both ends red, said from each", () => {
-    const review = reviewWith({ add: [edge("VR-0001", "CLAIMS", "IT-0002")] });
+    const review = reviewWith({ add: [edge("TCR-0001", "CLAIMS", "IT-0002")] });
     assert.equal(
       statusOf(review, "WL-0001")?.problem,
-      `WL-0001 addresses IT-0001, but submits VR-0001, which claims IT-0002 — ${RULE}`,
+      `WL-0001 addresses IT-0001, but submits TCR-0001, which claims IT-0002 — ${RULE}`,
     );
     assert.equal(
-      statusOf(review, "VR-0001")?.problem,
-      `VR-0001 claims IT-0002, but the work log that submitted it, WL-0001, addresses IT-0001 — ${RULE}`,
+      statusOf(review, "TCR-0001")?.problem,
+      `TCR-0001 claims IT-0002, but the work log that submitted it, WL-0001, addresses IT-0001 — ${RULE}`,
     );
   });
 
   test("two claims are a breach with a submitter — and without one", () => {
     const review = reviewWith({
       add: [
-        edge("VR-0001", "CLAIMS", "IT-0001"),
-        edge("VR-0001", "CLAIMS", "IT-0002"),
+        edge("TCR-0001", "CLAIMS", "IT-0001"),
+        edge("TCR-0001", "CLAIMS", "IT-0002"),
       ],
     });
     assert.equal(
-      statusOf(review, "VR-0001")?.problem,
-      `VR-0001 claims IT-0001 and IT-0002 — ${RULE}`,
+      statusOf(review, "TCR-0001")?.problem,
+      `TCR-0001 claims IT-0001 and IT-0002 — ${RULE}`,
     );
     assert.equal(
       statusOf(review, "WL-0001")?.problem,
-      `WL-0001 submits VR-0001, which claims IT-0001 and IT-0002 — ${RULE}`,
+      `WL-0001 submits TCR-0001, which claims IT-0001 and IT-0002 — ${RULE}`,
     );
 
     // Submitted by nobody, the cardinality still holds — it is the report's
@@ -1378,13 +1399,13 @@ describe("the aim rule for verification reports", () => {
     const free = reviewWith({
       drop: (line) => line.type === "SUBMITS",
       add: [
-        edge("VR-0001", "CLAIMS", "IT-0001"),
-        edge("VR-0001", "CLAIMS", "IT-0002"),
+        edge("TCR-0001", "CLAIMS", "IT-0001"),
+        edge("TCR-0001", "CLAIMS", "IT-0002"),
       ],
     });
     assert.equal(
-      statusOf(free, "VR-0001")?.problem,
-      `VR-0001 claims IT-0001 and IT-0002 — ${RULE}`,
+      statusOf(free, "TCR-0001")?.problem,
+      `TCR-0001 claims IT-0001 and IT-0002 — ${RULE}`,
     );
     assert.equal(statusOf(free, "WL-0001")?.reason, "unapproved");
   });
@@ -1393,25 +1414,25 @@ describe("the aim rule for verification reports", () => {
     const aimless = `${RULE.slice(0, -1)}, and this log addresses no task at all.`;
     const review = reviewWith({
       drop: (line) => line.type === "ADDRESSES",
-      add: [edge("VR-0001", "CLAIMS", "IT-0001")],
+      add: [edge("TCR-0001", "CLAIMS", "IT-0001")],
     });
     assert.equal(
       statusOf(review, "WL-0001")?.problem,
-      `WL-0001 addresses no task, but submits VR-0001, which claims IT-0001 — ${aimless}`,
+      `WL-0001 addresses no task, but submits TCR-0001, which claims IT-0001 — ${aimless}`,
     );
     assert.equal(
-      statusOf(review, "VR-0001")?.problem,
-      `VR-0001 claims IT-0001, but the work log that submitted it, WL-0001, addresses no task — ${aimless}`,
+      statusOf(review, "TCR-0001")?.problem,
+      `TCR-0001 claims IT-0001, but the work log that submitted it, WL-0001, addresses no task — ${aimless}`,
     );
   });
 
   test("a claimless report is an orphan, and a dangling claim anchors nothing and is still the log's breach", () => {
     const claimless = reviewWith({});
-    assert.equal(statusOf(claimless, "VR-0001")?.reason, "orphan");
+    assert.equal(statusOf(claimless, "TCR-0001")?.reason, "orphan");
     assert.equal(statusOf(claimless, "WL-0001")?.reason, "unapproved");
 
-    const dangling = reviewWith({ add: [edge("VR-0001", "CLAIMS", "IT-9999")] });
-    assert.equal(statusOf(dangling, "VR-0001")?.reason, "orphan");
+    const dangling = reviewWith({ add: [edge("TCR-0001", "CLAIMS", "IT-9999")] });
+    assert.equal(statusOf(dangling, "TCR-0001")?.reason, "orphan");
     assert.equal(statusOf(dangling, "WL-0001")?.reason, "off-target");
     assert.ok(statusOf(dangling, "WL-0001")?.problem?.includes("claims IT-9999"));
   });

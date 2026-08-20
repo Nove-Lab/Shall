@@ -18,19 +18,24 @@ export interface EdgeTriple {
 }
 
 /**
- * Every triple the canon allows: 63 rows over 31 numbered edge types.
+ * Every triple the canon allows: 64 rows over 29 numbered edge types.
  *
- * v5 numbered 33; #19 PRODUCED and #20 CITES went with the Commit type, whose
+ * v5 numbered 33. #19 PRODUCED and #20 CITES went with the Commit type, whose
  * one job — naming the commits a piece of work produced — is now a `commits:`
- * list in the WorkLog's own frontmatter rather than a node of its own. The
- * numbers are kept as v5 wrote them so a reader can still diff this file
+ * list in the WorkLog's own frontmatter rather than a node of its own. #26
+ * RAISES went with the Question type, which the canon no longer has: an open
+ * point is settled in the conversation that found it and never parked as a
+ * node, so there is nothing left for the edge to reach. #29 ESCALATES is
+ * retired outright — a finding starts no relation at all now, and the ids it
+ * concerns sit in its own frontmatter as a hint nothing resolves. The numbers
+ * of the rest are kept as v5 wrote them so a reader can still diff this file
  * against the source document line by line.
  *
  * The triple is the key, never the bare name. v5 numbers `DEPENDS_ON` twice —
  * #9 Requirement→Requirement and #15 ImplementationTask→ImplementationTask — so
- * the 31 edge types live under 30 distinct names, and anything that indexes this
+ * the 29 edge types live under 28 distinct names, and anything that indexes this
  * table by name alone silently drops one of the two. HAS_CRITERION, SUBMITS, CLAIMS and
- * the fan-out families (ASSUMES, RAISES, AFFECTS, ESCALATES, MENTIONS) repeat
+ * the fan-out families (ASSUMES, AFFECTS, MENTIONS) repeat
  * their names too, but those are one edge type with several endpoints;
  * `DEPENDS_ON` is the one place where the same name means two different edges.
  */
@@ -60,7 +65,7 @@ export const EDGE_GRAMMAR: readonly EdgeTriple[] = [
   // node: a WorkLog names its commits in its own frontmatter now.
   { fromType: "Journal",              toType: "WorkLog",              edgeType: "LOGS" },                   // #16
   { fromType: "WorkLog",              toType: "Evidence",             edgeType: "SUBMITS" },                // #17
-  { fromType: "WorkLog",              toType: "VerificationReport",   edgeType: "SUBMITS" },                // #17—
+  { fromType: "WorkLog",              toType: "TaskCompletionReport", edgeType: "SUBMITS" },                // #17—
   { fromType: "WorkLog",              toType: "Finding",              edgeType: "RECORDS" },                // #18
 
   // §3-4 The four gateways between views: Intent → Plan → Execution.
@@ -76,37 +81,56 @@ export const EDGE_GRAMMAR: readonly EdgeTriple[] = [
   // #24 runs FROM the evidence: a claim is the evidence's own line, so writing
   // one never touches the criterion's file or moves its approval.
   { fromType: "Evidence",             toType: "AcceptanceCriterion",  edgeType: "CLAIMS" },                 // #24
-  // #24— a verification report claims the ONE task it verifies, from its own
+  // #24— a completion report claims the ONE task it is filed about, from its own
   // file, for the reason #24 runs from the evidence — and it is what a task's
   // closure is judged over, as #24 is a criterion's.
-  { fromType: "VerificationReport",   toType: "ImplementationTask",   edgeType: "CLAIMS" },                 // #24—
+  { fromType: "TaskCompletionReport", toType: "ImplementationTask",   edgeType: "CLAIMS" },                 // #24—
 
-  // §3-5 Satellites. ASSUMES and RAISES attach to the five chalk nodes of §0.5
-  // and to nothing else, so the five sources are written out rather than implied.
+  // §3-5 The assumption. ASSUMES attaches to the five chalk nodes of §0.5 and to
+  // nothing else, so the five sources are written out rather than implied.
   { fromType: "Goal",                 toType: "Assumption",           edgeType: "ASSUMES" },                // #25
   { fromType: "SystemResponsibility", toType: "Assumption",           edgeType: "ASSUMES" },                // #25
   { fromType: "Requirement",          toType: "Assumption",           edgeType: "ASSUMES" },                // #25
   { fromType: "ModuleDesign",         toType: "Assumption",           edgeType: "ASSUMES" },                // #25
   { fromType: "WorkLog",              toType: "Assumption",           edgeType: "ASSUMES" },                // #25
-  { fromType: "Goal",                 toType: "Question",             edgeType: "RAISES" },                 // #26
-  { fromType: "SystemResponsibility", toType: "Question",             edgeType: "RAISES" },                 // #26
-  { fromType: "Requirement",          toType: "Question",             edgeType: "RAISES" },                 // #26
-  { fromType: "ModuleDesign",         toType: "Question",             edgeType: "RAISES" },                 // #26
-  { fromType: "WorkLog",              toType: "Question",             edgeType: "RAISES" },                 // #26
-  { fromType: "Decision",             toType: "Question",             edgeType: "RESOLVES" },               // #27 same layer only
-  { fromType: "Decision",             toType: "Requirement",          edgeType: "AFFECTS" },                // #28
-  { fromType: "Decision",             toType: "Constraint",           edgeType: "AFFECTS" },                // #28—
-  { fromType: "Decision",             toType: "ModuleDesign",         edgeType: "AFFECTS" },                // #28—
-  { fromType: "Finding",              toType: "Goal",                 edgeType: "ESCALATES" },              // #29 feedback class
-  { fromType: "Finding",              toType: "SystemResponsibility", edgeType: "ESCALATES" },              // #29—
-  { fromType: "Finding",              toType: "Requirement",          edgeType: "ESCALATES" },              // #29—
-  { fromType: "Finding",              toType: "Constraint",           edgeType: "ESCALATES" },              // #29—
-  { fromType: "Finding",              toType: "ModuleDesign",         edgeType: "ESCALATES" },              // #29—
 
-  // §3-6 Domain, the global sink. MENTIONS #30 has exactly sixteen sources —
+  // §3-5b The revision edges, both out of a Decision and nothing else.
+  //
+  // AFFECTS IS WRITTEN FIRST BECAUSE IT IS THE ANCHOR. A decision that revises
+  // nothing is not a decision, so `ANCHOR_RULES` holds a Decision by this edge
+  // — which also makes it the row the template's commented `edges:` example is
+  // built from, and the example should show the line a decision cannot do
+  // without. It reaches every type of the three living bands: what a decision
+  // may revise is not a shorter list than what a specification is made of. Two
+  // are absent on purpose — a `Decision`, because a decision that supersedes a
+  // decision is a new decision and two of them naming each other would anchor
+  // both while revising nothing, and every Execution type, because a record of
+  // what happened is not revised by deciding something afterwards.
+  { fromType: "Decision",             toType: "Term",                 edgeType: "AFFECTS" },                // #28
+  { fromType: "Decision",             toType: "DomainEntity",         edgeType: "AFFECTS" },                // #28—
+  { fromType: "Decision",             toType: "Goal",                 edgeType: "AFFECTS" },                // #28—
+  { fromType: "Decision",             toType: "Actor",                edgeType: "AFFECTS" },                // #28—
+  { fromType: "Decision",             toType: "UseCase",              edgeType: "AFFECTS" },                // #28—
+  { fromType: "Decision",             toType: "Scenario",             edgeType: "AFFECTS" },                // #28—
+  { fromType: "Decision",             toType: "SystemResponsibility", edgeType: "AFFECTS" },                // #28—
+  { fromType: "Decision",             toType: "Requirement",          edgeType: "AFFECTS" },                // #28—
+  { fromType: "Decision",             toType: "AcceptanceCriterion",  edgeType: "AFFECTS" },                // #28—
+  { fromType: "Decision",             toType: "Constraint",           edgeType: "AFFECTS" },                // #28—
+  { fromType: "Decision",             toType: "Assumption",           edgeType: "AFFECTS" },                // #28—
+  { fromType: "Decision",             toType: "ModuleDesign",         edgeType: "AFFECTS" },                // #28—
+  { fromType: "Decision",             toType: "Interface",            edgeType: "AFFECTS" },                // #28—
+  { fromType: "Decision",             toType: "DataSchema",           edgeType: "AFFECTS" },                // #28—
+  { fromType: "Decision",             toType: "ImplementationTask",   edgeType: "AFFECTS" },                // #28—
+  // RESOLVES answers a finding, and answering none is allowed: a revision
+  // somebody simply wanted is as good a reason as one an agent reported.
+  { fromType: "Decision",             toType: "Finding",              edgeType: "RESOLVES" },               // #27
+
+  // §3-6 Domain, the global sink. MENTIONS #30 has exactly fifteen sources —
   // the rows that carry it in §4's Term column. Term, DomainEntity, Journal,
-  // Evidence, VerificationReport and Finding are not among them, and no
+  // Evidence, TaskCompletionReport and Finding are not among them, and no
   // stated rule predicts that: it is read off the table, so it is written out.
+  // A Decision names a term here and revises one above; the two are different
+  // facts and a decision may need both.
   { fromType: "Goal",                 toType: "Term",                 edgeType: "MENTIONS" },
   { fromType: "Actor",                toType: "Term",                 edgeType: "MENTIONS" },
   { fromType: "UseCase",              toType: "Term",                 edgeType: "MENTIONS" },
@@ -121,7 +145,6 @@ export const EDGE_GRAMMAR: readonly EdgeTriple[] = [
   { fromType: "ImplementationTask",   toType: "Term",                 edgeType: "MENTIONS" },
   { fromType: "WorkLog",              toType: "Term",                 edgeType: "MENTIONS" },
   { fromType: "Assumption",           toType: "Term",                 edgeType: "MENTIONS" },
-  { fromType: "Question",             toType: "Term",                 edgeType: "MENTIONS" },
   { fromType: "Decision",             toType: "Term",                 edgeType: "MENTIONS" },
   { fromType: "Term",                 toType: "DomainEntity",         edgeType: "DENOTES" },                // #31 the only edge out of Term
   { fromType: "DomainEntity",         toType: "DomainEntity",         edgeType: "RELATES_TO" },             // #32 self-loop by design
@@ -138,7 +161,7 @@ function distinctEdgeTypes(rows: readonly EdgeTriple[]): string[] {
 }
 
 /**
- * The 30 distinct names, in canon order. Thirty and not thirty-one
+ * The 28 distinct names, in canon order. Twenty-eight and not twenty-nine
  * because `DEPENDS_ON` covers two of the canon's edge types; a name alone
  * cannot tell them apart, which is why it is `EDGE_GRAMMAR` and not this list
  * that decides what is allowed. Read off the rows so the two cannot drift.

@@ -19,12 +19,16 @@ import { parseNodeFile } from "./parse.js";
  */
 export {
   approvalPayload,
+  BLOCKING_KEY,
   blocksOf,
   COMMITS_KEY,
   COMMITS_TYPE,
   DELETION_PROPOSED_KEY,
   emitNodeFile,
   FENCE,
+  FINDING_TYPE,
+  RELATED_NODES_KEY,
+  valuesOf,
 } from "./emit.js";
 export type { NodeFileBlocks, NodeFileEdge, NodeFileFields } from "./emit.js";
 export {

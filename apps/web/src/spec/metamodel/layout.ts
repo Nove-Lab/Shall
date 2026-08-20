@@ -13,9 +13,12 @@ import { relationLabel } from "./relations";
  * AcceptanceCriterion`). The types, the bands and the relations are all read out
  * of `@shall/core/graph`; only the coordinates are here, so a new type turns up
  * in its band's row automatically and a new relation is drawn without anybody
- * touching this file. What a canon change CAN cost is legibility — the gaps
- * below are sized by the longest label between two adjacent columns — so the
- * offline check named in the plan is what to re-run after one.
+ * touching this file. What a canon change CAN cost is legibility: the gaps below
+ * are sized by the longest label between two adjacent columns, but the band
+ * shifts are four searched numbers and nothing re-searches them. After a canon
+ * change, route every relation through `routedEdges` and ask `labelFits` of each
+ * one — a name that does not fit is simply not drawn, so the picture is wrong in
+ * the one way looking at it quickly will not show.
  *
  * THE GAPS ARE DERIVED AND NOT CHOSEN. `FloatingEdgePath` writes a relation's
  * name on the longest horizontal run of its route, and only when that run has
@@ -56,8 +59,8 @@ export const METAMODEL = {
   /**
    * How many cards a band puts in one row before it wraps.
    *
-   * SIX, SO THAT INTENT FOLDS. Intent holds eleven types — eight of its own and
-   * the three satellites drawn there — and in one row the board is 2 972 wide,
+   * SIX, SO THAT INTENT FOLDS. Intent holds nine types — eight of its own and
+   * the one satellite drawn there — and in one row the board is 2 492 wide,
    * which opens at about a third of full size: the shape is legible and the
    * names are not. Folded, the board is 1 745 x 660 and opens near half size.
    * It is one constant on purpose: the picture is a pure function of it, so it
@@ -68,10 +71,14 @@ export const METAMODEL = {
    * Where each band's first column starts, so that cross-band relations have a
    * horizontal leg long enough to write their names on. Searched against the
    * real router rather than chosen by eye — Execution moved 120 → 116 when
-   * #24— (VerificationReport CLAIMS ImplementationTask) joined the grammar and
-   * its label missed the old channel by a third of a pixel.
+   * #24— (TaskCompletionReport CLAIMS ImplementationTask) joined the grammar and
+   * its label missed the old channel by a third of a pixel; Plan moved 104 → 110
+   * when a Decision joined the band and `RESOLVES` missed by four. One card
+   * added to a band is enough to cost a name, which is why the picture is worth
+   * opening after a canon change and why these four numbers are searched and not
+   * chosen.
    */
-  shift: { Domain: 0, Intent: 120, Plan: 104, Execution: 116 } as Record<
+  shift: { Domain: 0, Intent: 120, Plan: 110, Execution: 116 } as Record<
     Band,
     number
   >,

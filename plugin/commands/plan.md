@@ -47,8 +47,12 @@ Read the status you got in step 0. There are three questions here and they are a
 
 Two things belong to that work while sitting outside the plan band, and reading them as somebody else's is how a phase gets abandoned half-written:
 
-- **An `Assumption` a module assumes is filed with the intent band**, because every satellite is. If a module hangs off it, it is this process's.
+- **An `Assumption` a module assumes is filed with the intent band**, being the one type the canon gives no layer of its own. If a module hangs off it, it is this process's.
 - **A `SystemResponsibility` yellow with the reason `changed`, whose relations now include an `IS_REALIZED_BY`,** is a responsibility this process edited in order to hold a module. A responsibility yellow with the reason `unapproved` is a specification nobody has read yet, and that one is `/shall:specify`'s. The reason word is the whole of the difference; do not guess from the color.
+
+One thing sits inside the plan band and is not this process's:
+
+- **A `Decision` is filed in the plan band, and no phase below writes one.** A yellow decision is a person's rationale waiting on its own approval: leave it standing, and do not offer to carry it. What it `AFFECTS` may well be yours, and that reaches you as a direction in words, not as a node to finish.
 
 ### The specification above this direction has to be agreed
 

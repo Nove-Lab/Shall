@@ -90,17 +90,19 @@ daemon 하나가 돌고, 사람은 localhost 웹 화면에서 스펙을 보고 �
 | 시각      | 파일시스템의 `mtime`. 파일 안에 시간 필드가 없다                    |
 
 `<band>`는 타입의 밴드를 소문자로 쓴 네 폴더 — `domain`·`intent`·`plan`·`execution`
-— 이고, 위성 셋(Assumption·Question·Decision)은 캔버스가 그리는 자리 그대로
-`intent`에 산다. 밴드는 타입에서 도출되므로 새 정보가 아니라 서랍이다: 노드가 수백
-개가 되어도 `spec/` 바로 아래는 폴더 넷이다. 타입 폴더가 밴드 밖이나 다른 밴드에
-있으면 옳은 자리를 이름한 문장으로 거부된다 — 옛 평평한 배치는 `git mv` 한 번
-거리다.
+— 이고, 층이 없는 위성은 Assumption 하나뿐이라 캔버스가 그리는 자리 그대로
+`intent`에 산다. Decision은 위성이 아니라 plan에 사는 타입이고, 그 서랍은
+`.shall/spec/plan/Decision/`이다. 밴드는 타입에서 도출되므로 새 정보가 아니라
+서랍이다: 노드가 수백 개가 되어도 `spec/` 바로 아래는 폴더 넷이다. 타입 폴더가
+밴드 밖이나 다른 밴드에 있으면 옳은 자리를 이름한 문장으로 거부된다 — 옛 평평한
+배치는 `git mv` 한 번 거리다.
 
 그래서 frontmatter의 `id:`·`type:` 키는 **금지**이고, 있으면 문장으로 거부한다
 ("A spec file does not carry id — the filename is the id." / "…the folder is the
 type."). 그 밖의 키도 마찬가지다 — frontmatter는 `short_name`·`name`·`edges`,
-WorkLog에 한해 `commits`, 그리고 기계 블록 하나(`deletionProposed`)만 나르고, 다른
-키는 본문으로 가라는 문장 하나로 거부된다(`commits`를 다른 타입에 쓰면 WorkLog의
+WorkLog에 한해 `commits`, Finding에 한해 `blocking`·`relatedNodes`, 그리고 기계 블록
+하나(`deletionProposed`)만 나르고, 다른 키는 본문으로 가라는 문장 하나로
+거부된다(`commits`를 다른 타입에 쓰면 WorkLog의
 키라는 문장으로, 옛 `approval:` 블록은 승인이 `.shall/ledger/approvals.yaml`로
 갔다는 문장으로). 엣지가 출발 파일에만 있으니 노드 파일을 지우면 나가는 엣지가
 함께 사라지고, 지울 것을 세는 장부가 따로 없다.
@@ -118,10 +120,11 @@ WorkLog에 한해 `commits`, 그리고 기계 블록 하나(`deletionProposed`)�
 1. **만든다.** `shall add-spec-node --type Requirement` — 타입마다 명령이 있는 게
    아니라 이 하나가 전부다. 데몬이 다음 빈 id를 골라
    `.shall/spec/intent/Requirement/<id>.md`에 시작 파일을 써 주고, 출력의 첫 줄이
-   그 절대 경로다. 손으로 만들어도 똑같이 읽힌다: 참조 템플릿 22개는
+   그 절대 경로다. 손으로 만들어도 똑같이 읽힌다: 타입마다의 참조 템플릿이
    `~/.shall/templates/`에 있고, 폴더가 타입·파일명이 id라는 규칙은 같다.
 2. **채운다.** frontmatter는 `short_name`·`name`, 나가는 관계가 있으면 `edges:`,
-   WorkLog라면 그 작업이 만든 커밋의 `commits:` 목록(sha만, 만든 순서) — 그리고
+   WorkLog라면 그 작업이 만든 커밋의 `commits:` 목록(sha만, 만든 순서), Finding이라면
+   작업을 멈춰 세웠을 때의 `blocking: true`와 관련 id 힌트 `relatedNodes:` — 그리고
    그게 전부다. 펜스 아래 본문이 스펙이고, 자유 마크다운이다: 템플릿이 깔아 준
    `## <라벨>` 헤딩들은 시작 형태일 뿐이라 그대로 채워도, 고쳐 써도, 전부 지우고
    다른 형태로 써도 된다. 템플릿의 `#` 주석은 남겨도 지워도 된다. 손대지 않은
@@ -167,38 +170,42 @@ WorkLog에 한해 `commits`, 그리고 기계 블록 하나(`deletionProposed`)�
 
 스펙 그래프의 문법을 정의한다.
 
-- 노드·엣지 타입 정의 — 타입은 canon의 22개, 노드의 내용은 자유 마크다운 본문 하나.
+- 노드·엣지 타입 정의 — 타입은 canon의 21개, 노드의 내용은 자유 마크다운 본문 하나.
   옛 Commit 타입은 사라졌다: 작업이 만든 커밋은 WorkLog frontmatter의 `commits:`
   목록(sha만 — 메시지는 git이 답한다)이지 노드가 아니다 — 한 줄의 사실에 파일 하나는
   과했다
-- 22개 타입의 네 밴드 배치: 도메인(Domain) · 의도(Intent) · 설계(Plan) ·
-  실행(Execution). 층이 없는 위성 셋은 매달린 노드를 따르되, 캔버스에 자리가 있도록
-  Intent 밴드에 그린다
+- 21개 타입의 네 밴드 배치: 도메인(Domain) · 의도(Intent) · 설계(Plan) ·
+  실행(Execution). 층이 없는 위성은 Assumption 하나뿐이고, 매달린 노드를 따르되
+  캔버스에 자리가 있도록 Intent 밴드에 그린다
 - 앵커 테이블 — 타입마다 노드를 그래프에 붙드는 관계(방향 포함). 뿌리 넷(Term·
   DomainEntity·Goal·Journal)만 앵커가 없고, 실행 밴드의 나머지는 그것을 제출·기록한
   WorkLog에 붙든다. 아래층이 겨냥 대상을 **자기 파일에 쓰는** 관계 셋이 있다 —
   ImplementationTask의 `TARGETS`(닫으려는 AcceptanceCriterion), WorkLog의
   `ADDRESSES`(다루는 과제), Evidence의 `CLAIMS`(만족시킨다는 기준) — 그래서 IT는
   ALLOCATES하는 모듈에 또는 자기 TARGETS 대상에, WorkLog는 LOGS하는 Journal에 또는
-  자기 ADDRESSES 대상에 붙들고, **Evidence와 VerificationReport는 자기 CLAIMS
+  자기 ADDRESSES 대상에 붙들고, **Evidence와 TaskCompletionReport는 자기 CLAIMS
   대상에만** 붙든다 — claim이 곧 그것을 그것이게 하는 것이라, claim 없는 둘은
   SUBMITS가 있어도 고아(red)다(SUBMITS는 누가 가져왔는지를 말할 뿐이다;
   2026-08-17에 좁힘 — claim 없는 Evidence가 승인되는 구멍이 화면에 나타났다)(#22·#23·#24는 2026-08-16에 방향을 뒤집었다: 겨냥하는 쪽이 겨냥 대상을
   말하므로, 과제를 세우거나 작업을 시작하거나 주장을 적어도 기준·과제 파일은 한
-  바이트도 움직이지 않는다). 문법 테이블과 교차검증된다
+  바이트도 움직이지 않는다). **Decision은 자기 `AFFECTS`로만 붙든다** — canon에서
+  결정을 가리키는 것이 아무것도 없고, 아무것도 개정시키지 않는 결정은 결정이 아니다.
+  `AFFECTS`의 1..N이 거기서 나온다: '살아있는 AFFECTS가 최소 하나'는 앵커 있는 모든
+  타입에 고아 규칙이 이미 묻는 것이라 카디널리티 전용 기계가 없어도 되고, 앵커가
+  아닌 `RESOLVES`는 그래서 0개가 합법이다(2026-08-21). 문법 테이블과 교차검증된다
 - **겨냥 규칙(aim rule)** — 절이 셋이다. **과제는 기준을 최대 하나만 TARGETS한다**
   (0 또는 1; 문법은 여러 줄을 허용하지만 계획은 허용하지 않는다 — 겨냥이 둘인
   과제는 하나를 닫아도 끝나지 않아 보드가 done이라 부를 수 없다. 자기 파일 하나만
   읽으므로 제일 먼저 물어지고, 위반은 그 과제 한 노드만 red로 만든다;
   2026-08-19에 추가). WorkLog가 SUBMITS하는 Evidence는 그 WorkLog가
   ADDRESSES하는 과제가 TARGETS하는 기준만 CLAIMS할 수 있고, SUBMITS하는
-  **VerificationReport는 그 ADDRESSES 대상 과제들 중 정확히 하나만** CLAIMS할 수
+  **TaskCompletionReport는 그 ADDRESSES 대상 과제들 중 정확히 하나만** CLAIMS할 수
   있다(둘 이상 claim하면 제출자가 없어도 위반). 파일 셋을 한꺼번에 읽는 유일한
   문법이고, 판정이 아니라 **문법**이라 색 사슬의 red(`off-target`)로 답한다 — 사람의
   승인 이전에 지켜야 하는 것. 위반은 WorkLog와 claimant **양쪽**을 red로 만들고 관련
   id를 전부 이름한 문장 하나를 단다(고칠 줄이 세 파일 중 어디에 있어도 같은 문장을
   읽도록). **과제를 ADDRESSES하지 않는 WorkLog는 빈 허용 집합 밑에 있다**: 로그
-  자체는 무죄지만, 그 밑의 Evidence·VR가 무언가를 claim하는 순간 양쪽이 red다
+  자체는 무죄지만, 그 밑의 Evidence·TCR가 무언가를 claim하는 순간 양쪽이 red다
   (예외였다가 2026-08-17에 닫힘 — aim 없는 로그의 evidence가 아무 기준이나 claim할
   수 있었다). 아무 WorkLog도 SUBMITS하지 않는 claimant만 소속 절 밖이다
 - **차단-작업 규칙(blocked-address rule)** — WorkLog가 ADDRESSES하는 과제가
@@ -283,9 +290,9 @@ core에서 파일시스템을 만지는 유일한 모듈이고, 노드가 어느
   green. spec에 없는 id의 레코드는 무시된다 — 삭제된 노드의 이력이고, 복원되면
   내용이 맞는 한 그대로다
 - **닫힘의 주체는 둘이다**(`core/graph/closure-kinds.ts`) — AC는 그것을 CLAIMS하는
-  Evidence로, ImplementationTask는 그것을 CLAIMS하는 VerificationReport로 닫힌다
+  Evidence로, ImplementationTask는 그것을 CLAIMS하는 TaskCompletionReport로 닫힌다
   (2026-08-17에 WorkLog·ADDRESSES에서 옮김: ADDRESSES는 "어느 과제 밑의 작업인가"라는
-  사실로 남고, 닫힘은 검증 보고서가 말한다). 어떤 타입이
+  사실로 남고, 닫힘은 완료 보고서가 말한다). 어떤 타입이
   어떤 관계로 닫히는지는 `ANCHOR_RULES`와 같은 성격의 canon 사실이라 core/graph의 표
   한 곳에 있고, 산술은 주체에서 그 표를 읽는다 — 두 주체가 두 코드 경로가 아니라
   목록만 다른 하나다. 레코드는 자기가 무엇을 닫았는지(kind)를 함께 들고, 종류가
@@ -299,17 +306,33 @@ core에서 파일시스템을 만지는 유일한 모듈이고, 노드가 어느
   고쳐지면 어느 기록이든 산술로 실효한다. 색은 등록의 축, 마크는 충족의 축 — 서로 다른
   답을 낼 수 있고 그래야 한다(green+open = 확정됐고 증거 대기; yellow+closed도 가능).
   둘이 만나는 곳은 하나뿐: AC의 **문구 자체**가 반려 중이면 닫힘을 묻지도, 쓰지도 않는다
-- 번들(`bundles.ts`) — 리뷰 큐. 먼저 Work report: Journal마다 나가는 엣지로 실행 층
-  (과 거기 매달린 위성)만 걸어 서브트리를 묶고(위성의 out-앵커는 스펙 쪽과 같은
-  규칙으로 뒤집어 읽는다), Journal이 닿지 않는 실행 yellow는 각자 뿌리. 다음 Spec approval: 순위표(Goal → Actor → UseCase → Scenario → SR →
+- 번들(`bundles.ts`) — 리뷰 큐. 먼저 Work report: Journal마다 실행 층(과 거기 매달린
+  위성)만 걸어 서브트리를 묶고, Journal이 닿지 않는 실행 yellow는 각자 뿌리. 다음
+  Spec approval: 순위표(Decision → Goal → Actor → UseCase → Scenario → SR →
   Requirement → AC → Constraint → 설계 타입 → 실행 → 도메인, 위성은 가장 깊은 부착
-  노드의 순위 뒤)로 훑어 아직 어느 번들에도 안 든 yellow를 만나면 뿌리로 삼고, Intent·
-  Plan 층 안의 나가는 엣지(out-앵커 — Decision의 AFFECTS/RESOLVES, Evidence의 CLAIMS
-  — 는 부모를 가리키므로 뒤집어)로 닿는 서브그래프의 yellow∪반려를 멤버로, green을
-  '무수정 확인' 목록으로 담는다. 뿌리 선택만 covered를 보고 도달은 안 본다 — 두
-  뿌리가 닿는 노드는 두 번들에 다 실리고 `sharedWith`로 서로를 가리킨다. Term·DE는
-  마지막에 각자 단일 번들. 마지막으로 두 closure: 주체가 green이고
-  claimant(AC면 CLAIMS하는 증거, task면 CLAIMS하는 VerificationReport)가 하나 이상
+  노드의 순위 뒤)로 훑어 아직 어느 번들에도 안 든 yellow를 만나면 뿌리로 삼고, 거기서
+  닿는 서브그래프의 yellow∪반려를 멤버로, green을 '무수정 확인' 목록으로 담는다.
+  **순위는 거주가 아니다.** Decision은 plan 서랍에 살면서 Goal 위에 선다 — 거주는 어느
+  폴더에 파일이 있는지를, 순위는 무엇이 무엇을 담는지를 말하는 별개의 축이다. 결정이
+  yellow일 때 그 AFFECTS 파급 전체(Goal도 Term도 모듈과 똑같이)가 한 판단거리이고,
+  그것을 한 번들로 모을 수 있는 것은 그들 전부보다 위에 있는 타입뿐이다.
+  **엣지를 어느 쪽으로 걷는지도 순위가 답한다.** 순위를 따라 내려가거나 같으면 나가는
+  엣지를 앞으로, 거슬러 오르면 들어오는 엣지를 뒤집어. 앵커 표가 아니다 — 앵커 표는
+  무엇이 노드를 그래프에 **붙드는지**를, 순위표는 무엇이 무엇을 **담는지**를 말한다.
+  자기가 그린 엣지로 붙드는 타입(과제의 TARGETS, 로그의 ADDRESSES, Evidence·TCR의
+  CLAIMS)이 전부 순위를 거슬러 오르는 동안은 두 표의 답이 우연히 같았고, Decision이
+  그 우연을 깼다: 자기 AFFECTS로 붙들리면서 그 대상들보다 위에 선다. **같음은 아래로
+  센다** — `DEPENDS_ON`·`REFINES` 같은 동급 엣지와 부착 노드의 순위를 빌린 위성이
+  걸려 있어, 엄격 비교로 쓰면 그 위성들이 전부 제 번들을 세운다.
+  도메인은 싱크라 walk가 내려가지 않는다(MENTIONS는 참조다 — 따라가면 용어집이 모든
+  번들에 들어간다). 예외는 `AFFECTS` 하나다: 개정은 참조가 아니라서, 결정이 고쳐 쓰는
+  용어는 그 이유가 적힌 카드에 함께 실린다. **한 걸음뿐**이고, 그 Term의 DENOTES는 다시
+  참조라 거기서 멈춘다. side를 건너는 엣지는 걷지 않는다 —
+  `Decision —RESOLVES→ Finding`은 합법이고 검증도 통과하지만, 결정이 발견에 답한다고
+  작업 보고서를 스펙 승인에 끌고 들어오지는 않는다. 뿌리 선택만 covered를 보고
+  도달은 안 본다 — 두 뿌리가 닿는 노드는 두 번들에 다 실리고 `sharedWith`로 서로를
+  가리킨다. Term·DE는 마지막에 각자 단일 번들. 마지막으로 두 closure: 주체가 green이고
+  claimant(AC면 CLAIMS하는 증거, task면 CLAIMS하는 TaskCompletionReport)가 하나 이상
   **전부 green**인데 지금 목록에 대해 closed도 left open도 말해진 적 없는 주체(문구가
   반려 중이거나 non-green이면 제외; 미승인 claimant가 하나라도 있으면 그냥 open, 큐 밖).
   정렬은 AC closure → Task closure → Spec approval → Work report, 그 안에서 멤버
@@ -425,9 +448,10 @@ core에서 파일시스템을 만지는 유일한 모듈이고, 노드가 어느
   **전에** 레지스트리로 확인한다: `EventSource`는 열렸다 닫힌 연결은 영원히 다시 걸고
   거절된 연결은 포기하므로, 모르는 id는 404여야 한다. shutdown은 `closeAllFeeds()`를
   먼저 부른다 — 열린 스트림은 끝나지 않은 응답이고 `server.close`는 그것을 기다린다
-- 기동할 때와 프로젝트를 열 때 `~/.shall/templates`의 참조 템플릿 22개를 바이트
-  비교해 다른 것만 다시 쓰고(canon에서 빠진 타입의 템플릿은 지운다), `spec/` 폴더가 있는지 보장하고, 옛 Shall이 프로젝트에
-  남긴 `.shall/templates`는 지우고, `.claude/settings.json`에
+- 기동할 때와 프로젝트를 열 때 `~/.shall/templates`의 참조 템플릿을 타입마다 바이트
+  비교해 다른 것만 다시 쓰고(canon에서 빠진 타입의 템플릿은 지운다), `spec/` 폴더가
+  있는지 보장하고, 옛 Shall이 프로젝트에 남긴 `.shall/templates`는 지우고,
+  `.claude/settings.json`에
   `Read(~/.shall/**)`·`Edit(/.shall/ledger/**)` 두 deny 규칙을 병합해 둔다(없는
   규칙만 뒤에 붙이고, 파싱 안 되는 파일은 바이트 그대로 두는, 조용한 관례 방어)
 - **상시 층은 `.claude/rules/shall.md` 한 장이다.** 매 세션 자동으로 읽히는 자리에
@@ -482,8 +506,8 @@ localhost 브라우저 화면. 사람의 관찰·편집 표면.
   전면에 판정 재료(뿌리의 diff/전문, Journal 본문, AC 본문)·멤버 목록(노드마다
   diff/전문, [Approve]·[Reject…]·[Open in Spec Plane])·접힌 무수정 확인 목록·번들 버튼
   하나 또는 둘([Approve all]/[Accept report]/[Close]+[Leave open…]). 번들은 네 종류다 —
-  AC closure · Task closure(그 task를 CLAIMS하는 VerificationReport 목록, 겨냥한 AC들의 마크를
-  문맥으로) · Spec approval · Work report. 반려는 인라인
+  AC closure · Task closure(그 task를 CLAIMS하는 TaskCompletionReport 목록, 겨냥한
+  AC들의 마크를 문맥으로) · Spec approval · Work report. 반려는 인라인
   팝오버 — 대상 id·이름, 필수 rationale, 확정/취소 — 이고 카드의 행 우클릭과 스펙
   플레인 카드 우클릭 어디서든 같은 팝오버다. 판정 직후 카드는 큐를 다시 계산하고,
   방금 내린 반려는 페이지의 '최근 판정' 줄에 [Undo]로 남는다. task board·activity·
@@ -577,24 +601,39 @@ MCP 서버 · webhook 수신 · 외부 cron · 추론 클라이언트와 그 게
 하므로, 바꾸지 않는다.
 
 - **파일 형식** — frontmatter 키의 순서(`short_name`·`name`·`edges`, WorkLog에만
-  `commits`, 그리고 `deletionProposed`), 스칼라의 맨몸/따옴표 판정, 본문은 자유
-  마크다운 그대로, LF·BOM 없음·말미 개행 하나. `approval` 블록은 2026-08-16에
-  **의도적으로 뺐다** — 외부 사용자가 생기기 전의 개정이고, 승인은 장부로 갔다.
+  `commits`, Finding에만 `blocking`과 `relatedNodes`, 그리고 `deletionProposed`),
+  스칼라의 맨몸/따옴표 판정, 본문은 자유 마크다운 그대로, LF·BOM 없음·말미 개행 하나.
+  Finding의 두 키는 2026-08-21에 붙었고 **둘 다 선택**이라, 어느 쪽도 안 실은 파일은
+  예전과 바이트가 같다 — 그래서 기존 승인이 전부 그대로 선다. `blocking`은 진짜 YAML
+  boolean이고 `true`일 때만 한 줄이 나온다(부재 = 차단 아님). `relatedNodes`는 힌트라
+  그 id가 아무 파일에도 응답하지 않아도, 목록이 비어 있어도 잘못이 아니다.
+  `approval` 블록은 2026-08-16에 **의도적으로 뺐다** — 외부 사용자가 생기기 전의
+  개정이고, 승인은 장부로 갔다.
   관대한 **읽기의 수용 범위**도 형식의 일부라 `yaml` 패키지 버전이 정확히 고정돼 있다
 - **승인 페이로드** — `<type>/<id>` 한 줄 + 정칙 파일, sha256. 이 정의가 바뀌면
   장부의 모든 레코드가 yellow로 돌아간다
 - **장부 세 권** — `.shall/ledger/approvals.yaml`(nodeId → `{approvedHash, by, at}`),
   `rejections.yaml`(nodeId → `{rejectedHash, by, at, rationale}`, 열어 둔 기록이면
   `evidence:` 또는 `reports:` 맵 하나를 더), `acceptances.yaml`(acId → `{acHash,
-  evidence: {evId → hash}, by, at}` 또는 taskId → `{taskHash, reports: {vrId → hash},
-  by, at}`), id 바이트 순, 파일 형식과 같은 스칼라 규칙과 yaml 계약. 뒤의 두 권은
+  evidence: {evId → hash}, by, at}` 또는 taskId → `{taskHash, reports: {tcrId → hash},
+  by, at}`), id 바이트 순, 파일 형식과 같은 스칼라 규칙과 yaml 계약. 그 맵의 키는
+  청구자 자신의 id라 개명이 닿지 않는다 — `VR-` id를 담은 책은 그대로 서고, 그래프만
+  그 이름에 응답하지 않게 된다. `reports:` 키 자체도 그대로다. 뒤의 두 권은
   2026-08-16의 리뷰 큐 라운드에 얼었고, task 쪽 두 키는 2026-08-17에 나란히 얼었다 —
   criterion 레코드의 바이트는 그대로다
 - **엣지 #22·#23·#24의 방향** — `ImplementationTask —TARGETS→ AcceptanceCriterion`,
   `WorkLog —ADDRESSES→ ImplementationTask`, `Evidence —CLAIMS→ AcceptanceCriterion`,
-  `VerificationReport —CLAIMS→ ImplementationTask`
+  `TaskCompletionReport —CLAIMS→ ImplementationTask`
   (2026-08-16에 옛 `IS_PLANNED_BY`·`IS_ADDRESSED_BY`·`IS_CLAIMED_BY`를 뒤집었다). 문법의
-  다른 행은 얼지 않았지만, 이 세 행은 아래층 파일의 바이트에 남으므로 여기 적는다
+  다른 행은 얼지 않았지만, 이 세 행은 아래층 파일의 바이트에 남으므로 여기 적는다.
+  마지막 행의 출발 타입은 2026-08-21에 `VerificationReport`에서 개명했다. **얼린 것은
+  방향이지 이름이 아니다** — 항목의 제목이 그렇게 적혀 있고, 근거도 그 차이에 있다.
+  방향을 뒤집으면 이미 쓰인 바이트가 **조용히** 다른 뜻이 되지만, 이름을 바꾸면 그
+  바이트는 아예 안 읽히고 로더가 red로 답한다. 조용한 오독과 시끄러운 거절은 같은
+  위험이 아니고, 이 freeze는 앞의 것을 막으려 쓰였다. 근거는 하나 더 있다: 이 문서는
+  이미 한 번 근거를 대고 freeze를 깼다 — 위 `approval` 블록을 뺀 것이, 외부 사용자가
+  생기기 전이라는 근거로. 개명은 정확히 그 근거 위에 선다. 그 시점이 지나면, 이 문단은
+  개명을 금지하는 문단이 된다
 - **경로가 정체성** — `.shall/spec/<band>/<Type>/<id>.md`. 밴드 폴더 넷, 폴더가
   타입, 파일명이 id, 엣지는 출발 파일에만, 시각은 `mtime`
 

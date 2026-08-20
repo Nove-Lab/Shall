@@ -402,7 +402,7 @@ test("the corpus is a graph Shall could hold", () => {
 
 test("the columns fill unevenly, the way a real project's do", () => {
   // WITHOUT THIS THE WHOLE CORPUS COULD BE FLAT and every case below would be
-  // testing one shape of board twenty-two columns wide. A `board` fixture puts
+  // testing one shape of board as wide as the canon. A `board` fixture puts
   // three nodes in five into a single type, so its fullest column dwarfs the
   // rest — which is the case the settle step moves furthest and the case where
   // a merged y-span swallows the lanes.

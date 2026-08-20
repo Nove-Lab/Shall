@@ -564,33 +564,33 @@ describe("the deletion doors", () => {
     await goal(project, "G-0001");
     await createSpecNode({
       projectId: project.id,
-      type: "Question",
-      id: "Q-0001",
-      shortName: "why",
-      name: "Why the thing",
-      body: "## Question\n\nWhy?",
+      type: "Assumption",
+      id: "AS-0001",
+      shortName: "one-repo",
+      name: "One repository per project",
+      body: "## Assumption\n\nThe spec never spans two checkouts.",
     });
     await createSpecEdge({
       projectId: project.id,
-      type: "RAISES",
+      type: "ASSUMES",
       fromId: "G-0001",
-      toId: "Q-0001",
+      toId: "AS-0001",
     });
     await commitSpec({ projectId: project.id, message: "Commit the pair" });
-    const sealed = await readFile(specFile(project, "intent/Question/Q-0001.md"), "utf8");
+    const sealed = await readFile(specFile(project, "intent/Assumption/AS-0001.md"), "utf8");
     // Approved AFTER the commit, so the ledger names the committed bytes.
-    const approved = await approveSpecNode({ projectId: project.id, id: "Q-0001" });
+    const approved = await approveSpecNode({ projectId: project.id, id: "AS-0001" });
 
-    await rm(specFile(project, "intent/Question/Q-0001.md"));
+    await rm(specFile(project, "intent/Assumption/AS-0001.md"));
     const review = await reviewSpec(project.id);
     assert.deepEqual(review.missing, [
-      { id: "Q-0001", referencedBy: [{ fromId: "G-0001", type: "RAISES" }] },
+      { id: "AS-0001", referencedBy: [{ fromId: "G-0001", type: "ASSUMES" }] },
     ]);
 
-    const restored = await restoreSpecNode({ projectId: project.id, id: "Q-0001" });
-    assert.deepEqual(restored, { file: "intent/Question/Q-0001.md" });
+    const restored = await restoreSpecNode({ projectId: project.id, id: "AS-0001" });
+    assert.deepEqual(restored, { file: "intent/Assumption/AS-0001.md" });
     assert.equal(
-      await readFile(specFile(project, "intent/Question/Q-0001.md"), "utf8"),
+      await readFile(specFile(project, "intent/Assumption/AS-0001.md"), "utf8"),
       sealed,
     );
     // The record outlived the file, and the restored bytes are the bytes it
@@ -598,8 +598,8 @@ describe("the deletion doors", () => {
     const after = await reviewSpec(project.id);
     assert.deepEqual(after.missing, []);
     assert.deepEqual(
-      after.statuses.find((entry) => entry.id === "Q-0001"),
-      status("Q-0001", "green", "approved", stamped(approved)),
+      after.statuses.find((entry) => entry.id === "AS-0001"),
+      status("AS-0001", "green", "approved", stamped(approved)),
     );
   });
 

@@ -26,7 +26,7 @@ import { bandOf, type NodeTypeName } from "./canon.js";
  * nothing in the canon points at a journal. The rest of the execution band is
  * anchored like everything else — a work log by the journal that logs it or
  * the task it addresses, a finding by the work log that recorded it, and
- * evidence and a verification report by their own claim alone — because a
+ * evidence and a completion report by their own claim alone — because a
  * record nothing reaches is as much a card left lying on the canvas as a
  * requirement nothing requires.
  *
@@ -37,12 +37,14 @@ import { bandOf, type NodeTypeName } from "./canon.js";
 /**
  * Which way the anchoring relation runs, seen FROM THE NODE. `in` is the usual
  * one — the canon flows downward and a node is held by whatever above it
- * reaches down. `out` is the satellite `Decision`, which is held by the
- * question it answers rather than by anything that points at it — and, since
+ * reaches down.
+ *
+ * `out` IS THE NODE THAT NAMES ITS OWN SUBJECT. A `Decision` is held by what it
+ * revises, because nothing in the canon points at a decision at all; and, since
  * the aim, the addressing and the claim became the lower node's own lines, an
- * `ImplementationTask` held by the criterion it targets, a `WorkLog` held by
- * the task it addresses, an `Evidence` held by the criterion it claims to
- * satisfy and a `VerificationReport` by the task it claims to verify.
+ * `ImplementationTask` is held by the criterion it targets, a `WorkLog` by the
+ * task it addresses, an `Evidence` by the criterion it claims to satisfy and a
+ * `TaskCompletionReport` by the task it says is finished.
  */
 export type AnchorDirection = "in" | "out";
 
@@ -88,28 +90,39 @@ export const ANCHOR_RULES: readonly AnchorRule[] = [
   { type: "DataSchema",           anchors: [{ direction: "in", edgeType: "CARRIES" }] },
   { type: "ImplementationTask",   anchors: [{ direction: "in", edgeType: "ALLOCATES" }, { direction: "out", edgeType: "TARGETS" }] },
 
+  // A DECISION IS HELD BY WHAT IT REVISES, and this row is where the canon's
+  // "at least one" lives. Nothing in the canon points at a decision, so the
+  // anchor has to leave it; `AFFECTS` and not `RESOLVES` because a decision
+  // that revises nothing is not a decision, while one that answers no finding
+  // is merely a revision somebody wanted. Written this way the cardinality
+  // needs no machinery of its own: "at least one live AFFECTS" is exactly what
+  // the orphan rule already asks of every anchored type, so a decision with
+  // none is red for the same reason and in the same sentence as any other node
+  // nothing holds.
+  { type: "Decision",             anchors: [{ direction: "out", edgeType: "AFFECTS" }] },
+
   // Execution. The journal is the root of the record; a finding is held by the
   // work log that recorded it, and a work log by the journal that logs it or
   // by the task its own ADDRESSES line reaches — either of those will do.
-  // EVIDENCE AND A VERIFICATION REPORT ARE HELD BY THEIR CLAIM ALONE: evidence
-  // is shown AGAINST a criterion and a report verifies A task, so the `CLAIMS`
-  // line is not one way to anchor either but the thing that makes each what it
-  // is. The SUBMITS line says who brought them, never what they are about, and
-  // holding a claimless one to the graph by its submitter is exactly how an
-  // evidence got approved while claiming nothing.
+  // A FINDING IS HELD FROM ABOVE AND POINTS AT NOTHING. It starts no relation
+  // in the canon at all, so the `RECORDS` line in the work log's file is the
+  // whole of what makes it part of the record; the ids it concerns live in its
+  // own frontmatter, where nothing resolves them and a dangling one is not a
+  // fault.
+  // EVIDENCE AND A COMPLETION REPORT ARE HELD BY THEIR CLAIM ALONE: evidence
+  // is shown AGAINST a criterion and a report is filed ABOUT a task, so the
+  // `CLAIMS` line is not one way to anchor either but the thing that makes each
+  // what it is. The SUBMITS line says who brought them, never what they are
+  // about, and holding a claimless one to the graph by its submitter is exactly
+  // how an evidence got approved while claiming nothing.
   { type: "Journal",              anchors: [] },
   { type: "WorkLog",              anchors: [{ direction: "in", edgeType: "LOGS" }, { direction: "out", edgeType: "ADDRESSES" }] },
   { type: "Evidence",             anchors: [{ direction: "out", edgeType: "CLAIMS" }] },
-  { type: "VerificationReport",   anchors: [{ direction: "out", edgeType: "CLAIMS" }] },
+  { type: "TaskCompletionReport", anchors: [{ direction: "out", edgeType: "CLAIMS" }] },
   { type: "Finding",              anchors: [{ direction: "in", edgeType: "RECORDS" }] },
 
-  // Satellites. Two hang off the chalk node that raised them; the third is the
-  // one row in this table that points the other way — a `Decision` is held by
-  // the question it resolves or by what it affects, and nothing in the canon
-  // points at a `Decision` at all.
+  // The satellite, which hangs off the chalk node that assumed it.
   { type: "Assumption",           anchors: [{ direction: "in", edgeType: "ASSUMES" }] },
-  { type: "Question",             anchors: [{ direction: "in", edgeType: "RAISES" }] },
-  { type: "Decision",             anchors: [{ direction: "out", edgeType: "RESOLVES" }, { direction: "out", edgeType: "AFFECTS" }] },
 ];
 
 /**
@@ -188,7 +201,7 @@ function directionClause(direction: AnchorDirection): string {
  * EVERY ROW OF THE TABLE IS SINGLE-DIRECTION TODAY, and the code below does not
  * assume it will stay that way: the anchors are grouped by direction, each group
  * gets its own article and clause, and the groups join with the same " or ".
- * A row mixing the two would read "an EXPOSES relation into it or a RESOLVES
+ * A row mixing the two would read "an EXPOSES relation into it or an AFFECTS
  * relation out of it", which is still one sentence a person can act on.
  */
 export function anchorPhrase(type: string): string | null {

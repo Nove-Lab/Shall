@@ -132,7 +132,7 @@ const RECORD: readonly (readonly [string, string])[] = [
   ["Journal", "J-0001"],
   ["WorkLog", "WL-0001"],
   ["Evidence", "EV-0001"],
-  ["VerificationReport", "VR-0001"],
+  ["TaskCompletionReport", "TCR-0001"],
 ];
 
 const RECORD_EDGES: readonly (readonly [string, string, string])[] = [
@@ -140,9 +140,9 @@ const RECORD_EDGES: readonly (readonly [string, string, string])[] = [
   ["LOGS", "J-0001", "WL-0001"],
   ["ADDRESSES", "WL-0001", "IT-0001"],
   ["SUBMITS", "WL-0001", "EV-0001"],
-  ["SUBMITS", "WL-0001", "VR-0001"],
+  ["SUBMITS", "WL-0001", "TCR-0001"],
   ["CLAIMS", "EV-0001", "AC-0001"],
-  ["CLAIMS", "VR-0001", "IT-0001"],
+  ["CLAIMS", "TCR-0001", "IT-0001"],
 ];
 
 const EVERY_ID = [...CHAIN, ...RECORD].map(([, id]) => id);
@@ -1230,7 +1230,7 @@ describe("the review queue", () => {
     // and the report hang below the log inside it.
     assert.deepEqual(
       report.unchanged.map((entry) => entry.id),
-      ["J-0001", "EV-0001", "VR-0001"],
+      ["J-0001", "EV-0001", "TCR-0001"],
     );
 
     // Judged, the bundles leave the queue — nothing was stored, so nothing has
@@ -1424,12 +1424,12 @@ describe("closing a task", () => {
     assert.equal(closed.kind, "task");
     assert.deepEqual(
       closed.claimants.map((entry) => entry.id),
-      ["VR-0001"],
+      ["TCR-0001"],
     );
     assert.deepEqual(await fileState(taskFile), before);
     const book = await readFile(acceptancesAt(project), "utf8");
     assert.ok(book.includes("IT-0001:\n  taskHash: "), book);
-    assert.ok(book.includes("  reports:\n    VR-0001: "), book);
+    assert.ok(book.includes("  reports:\n    TCR-0001: "), book);
     assert.equal(await statusFor(project, "IT-0001").then((s) => s.closure), "closed");
     assert.equal(
       await statusFor(project, "IT-0001").then((s) => s.taskState),
@@ -1465,7 +1465,7 @@ describe("closing a task", () => {
     assert.equal(await readFile(acceptancesAt(project), "utf8"), "");
     const book = await readFile(rejectionsAt(project), "utf8");
     assert.ok(book.includes("IT-0001:\n  rejectedHash: "), book);
-    assert.ok(book.includes("  reports:\n    VR-0001: "), book);
+    assert.ok(book.includes("  reports:\n    TCR-0001: "), book);
     // The left-open word is not a rejection of the task's own wording: the
     // colour is untouched and only the closure axis heard it.
     const status = await statusFor(project, "IT-0001");
@@ -1478,13 +1478,13 @@ describe("closing a task", () => {
 
   test("refuses while a report claiming it is unread", async () => {
     const project = await planned();
-    await node(project, "VerificationReport", "VR-0002");
-    await edge(project, "SUBMITS", "WL-0001", "VR-0002");
-    await edge(project, "CLAIMS", "VR-0002", "IT-0001");
+    await node(project, "TaskCompletionReport", "TCR-0002");
+    await edge(project, "SUBMITS", "WL-0001", "TCR-0002");
+    await edge(project, "CLAIMS", "TCR-0002", "IT-0001");
     await says(
       acceptSpecClosure({ projectId: project.id, id: "IT-0001" }),
       "invalid",
-      "VR-0002 claims IT-0001 and is not approved yet — a task is closed, or left open, only over reports a person has read. Approve it first (or reject it and have it fixed), and the task comes back to the queue.",
+      "TCR-0002 claims IT-0001 and is not approved yet — a task is closed, or left open, only over reports a person has read. Approve it first (or reject it and have it fixed), and the task comes back to the queue.",
     );
   });
 
@@ -1492,12 +1492,12 @@ describe("closing a task", () => {
     const project = await planned();
     await removeSpecEdge({
       projectId: project.id,
-      id: formatEdgeId("VR-0001", "CLAIMS", "IT-0001"),
+      id: formatEdgeId("TCR-0001", "CLAIMS", "IT-0001"),
     });
     await says(
       acceptSpecClosure({ projectId: project.id, id: "IT-0001" }),
       "invalid",
-      "Nothing claims IT-0001 yet — a task is closed, or left open, over the verification reports attached to it, and there is none. A VerificationReport draws a CLAIMS relation at the task in its own file.",
+      "Nothing claims IT-0001 yet — a task is closed, or left open, over the completion reports attached to it, and there is none. A TaskCompletionReport draws a CLAIMS relation at the task in its own file.",
     );
 
     const second = await planned();
@@ -1516,13 +1516,13 @@ describe("closing a task", () => {
   test("asks again when another report claims it", async () => {
     const project = await planned();
     await acceptSpecClosure({ projectId: project.id, id: "IT-0001" });
-    await node(project, "VerificationReport", "VR-0002");
-    await edge(project, "SUBMITS", "WL-0001", "VR-0002");
-    await edge(project, "CLAIMS", "VR-0002", "IT-0001");
+    await node(project, "TaskCompletionReport", "TCR-0002");
+    await edge(project, "SUBMITS", "WL-0001", "TCR-0002");
+    await edge(project, "CLAIMS", "TCR-0002", "IT-0001");
     // A different list, so the record lapses: open again, and off the queue
     // only until the new report is read.
     assert.equal(await statusFor(project, "IT-0001").then((s) => s.closure), "open");
-    await approveSpecNodes({ projectId: project.id, ids: ["VR-0002"] });
+    await approveSpecNodes({ projectId: project.id, ids: ["TCR-0002"] });
     assert.equal(
       (await reviewQueue(project.id)).bundles.some(
         (bundle) => bundle.id === "completion:IT-0001",
