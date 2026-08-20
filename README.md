@@ -123,7 +123,7 @@ everything it waits on is finished, which is exactly the Task Board's Implement
 column, or whether a person has called the work done. The node panel has the
 toggle for both: on once at least one claimant is attached and every one of them
 is approved, it closes the subject over everything claiming it now — evidence
-for a criterion, verification reports for a task; off asks for a reason and leaves it open
+for a criterion, completion reports for a task; off asks for a reason and leaves it open
 (see the Review Queue below). The daemon never commits on its
 own — a **Commit spec** button appears when the project is a git repository and
 the spec folder or a ledger has uncommitted changes, and makes one commit
@@ -134,14 +134,14 @@ green.
 
 The lower node names what it aims at in its own file: a task targets the
 criterion it means to close (`TARGETS`), a work log names the task it addresses
-(`ADDRESSES`), an evidence claims the criterion it satisfies and a verification
-report claims the one task it verifies (`CLAIMS`) — so
+(`ADDRESSES`), an evidence claims the criterion it satisfies and a completion
+report claims the one task it is filed about (`CLAIMS`) — so
 planning, starting work or making a claim never touches the criterion's or the
 task's file, and never moves their approval. The claim is also what holds an
 evidence to the graph at all: an evidence that claims nothing is an orphan,
 red, whoever submitted it. One rule of grammar then ties the three files
 together: a work log's evidence may claim only what the tasks that log
-addresses target, and its verification report exactly one of the addressed
+addresses target, and its completion report exactly one of the addressed
 tasks themselves — a log under no task targets nothing, so any claim under it
 breaks the rule too. Break it and both the work log and the claimant are red
 — an error to fix, before anybody is asked to approve — with one sentence
@@ -189,18 +189,26 @@ graph and the three ledgers, so a save, a hand edit or a `git checkout` moves
 the queue with nobody told. Four kinds:
 
 - **Spec approval** — a subgraph of yellow nodes in the Intent and Plan layers,
-  rooted at the topmost yellow node the scan meets (Goal → Actor → UseCase →
-  Scenario → SystemResponsibility → Requirement → AcceptanceCriterion →
-  Constraint → the Plan types; a satellite follows what it hangs off). The card
-  shows the root's diff or full text, the members with their own diffs, a
+  rooted at the topmost yellow node the scan meets (Decision → Goal → Actor →
+  UseCase → Scenario → SystemResponsibility → Requirement →
+  AcceptanceCriterion → Constraint → the rest of the Plan types; an assumption
+  follows what it hangs off). A decision is filed in the Plan band and still
+  heads the order: it is the reason a revision was made, so everything it
+  affects — a goal and a term as readily as a module — is one thing to judge,
+  and only a type above all of them gathers that into one card. The card shows
+  the root's diff or full text, the members with their own diffs, a
   count per type, the green nodes in the same subgraph under "unchanged —
   confirm this is intended", and a cross-reference on any node another bundle
-  also holds. Terms and domain entities come last, one bundle each.
+  also holds. Terms and domain entities come last, one bundle each: a mention
+  is a reference, and following those would put the vocabulary in every
+  bundle. A decision's `AFFECTS` is the one edge that crosses into them,
+  because a revision is not a reference — the term a decision is rewriting
+  rides on the card that says why. One step, and no further.
 - **Work report** — a Journal's subtree (`LOGS` → work logs → `SUBMITS`
-  evidence and reports, `RECORDS` findings, plus the assumptions and questions
-  a work log raised), with the journal's text in front and **Accept report**
-  approving every yellow node under it in one write.
-- **Task closure** — an implementation task that verification reports claim,
+  evidence and reports, `RECORDS` findings, plus the assumptions a work log
+  raised), with the journal's text in front and **Accept report** approving
+  every yellow node under it in one write.
+- **Task closure** — an implementation task that completion reports claim,
   every one of them approved, about whose current list nobody has said a word.
   The card shows the task, the reports claiming it (each with the work log that
   submitted it and its commits), and — as context, never as buttons — the
@@ -224,8 +232,8 @@ the queue with nobody told. Four kinds:
 
 A spec-approval or work-report card has **Approve** and **Reject…** on every
 node; a closure card lists what claims the subject and has **Close** and **Leave
-open…**. Every row has **Open in Spec plane** (a question's says **Answer**),
-and every card has one bundle-wide button. Approving or rejecting recomputes the queue at once: a
+open…**. Every row has **Open in Spec plane**, and every card has one
+bundle-wide button. Approving or rejecting recomputes the queue at once: a
 bundle whose members are all green is gone, and yellow that is left regroups
 into new bundles. A rejected node stays listed, red with its rationale, while a
 yellow root still reaches it; a rejection on its own leaves the queue — that is
@@ -282,10 +290,10 @@ screenful of yellow: the review says which book and why.
 The `.gitignore` Shall writes covers one thing: the `*.tmp` a write leaves if
 it dies between writing and renaming. It also ignored a `shall.db` for as long
 as any folder still held one from before the spec moved into files; those files
-are gone and the lines went with them. The 22 reference
-templates are not in the project any more: they are the machine's, regenerated
-under `~/.shall/templates/`, and a set an older Shall committed into a project
-is removed on the next open.
+are gone and the lines went with them. The reference templates are not in the
+project any more: they are the machine's, regenerated under
+`~/.shall/templates/`, and a set an older Shall committed into a project is
+removed on the next open.
 
 Opening or creating a project also writes two deny rules into the project's
 `.claude/settings.json` — `Read(~/.shall/**)`, Shall's own home, and
@@ -341,8 +349,9 @@ walking up from the directory you are standing in, the way `git` does.
 - `shall add-spec-node --type <Type>` starts a new node — the daemon picks the
   next free id, writes the starting file at its own path, and the command prints
   that path on its first line so an agent knows exactly where to write. One
-  command for all 22 types; the type argument is resolved case-insensitively,
-  and one the canon does not have is refused with the whole list.
+  command for every type in the canon; the type argument is resolved
+  case-insensitively, and one the canon does not have is refused with the
+  whole list.
 
 A scope is a file, a folder, or the spec-relative prefix the rows are printed in
 (`intent/Goal`), given as many times as there are places you care about, and it

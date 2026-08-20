@@ -412,7 +412,7 @@ const CLAIMS = "CLAIMS";
  * One breach of the aim rule, named at both ends and tagged by which claimant
  * broke it. The evidence arm carries the whole chain — the work log, the tasks
  * it addresses, what those tasks target, and what the evidence claims. The
- * report arm is one hop shorter: a verification report claims a TASK, so the
+ * report arm is one hop shorter: a completion report claims a TASK, so the
  * allowed set is the addressed tasks themselves — and `workLogId` is null only
  * for the one breach that needs no submitter, a report claiming more than one
  * task. Enough for a sentence a person can act on from either node.
@@ -518,7 +518,7 @@ function breachOf(
 }
 
 /**
- * Whether one verification report's claim falls inside its work log's
+ * Whether one completion report's claim falls inside its work log's
  * addressing — the report's own half of the aim rule, one hop shorter than the
  * evidence's: a report claims a TASK, so the allowed set is the tasks the
  * submitting log addresses, as written.
@@ -549,7 +549,7 @@ function reportBreachOf(
 /**
  * THE AIM RULE, OVER THREE CLAIMANTS: a task aims at one criterion at most, a
  * work log that addresses a task submits evidence only for the criteria that
- * task targets, and submits verification reports only for the addressed tasks
+ * task targets, and submits completion reports only for the addressed tasks
  * themselves — exactly one task per report, because a report that verified two
  * things verified neither whole.
  *
@@ -611,7 +611,7 @@ export function offTargetOf(
       const breach =
         submitted.type === "Evidence"
           ? breachOf(node.id, submittedId, aim, context)
-          : submitted.type === "VerificationReport"
+          : submitted.type === "TaskCompletionReport"
             ? reportBreachOf(node.id, submittedId, context)
             : null;
       if (breach !== null) {
@@ -620,12 +620,12 @@ export function offTargetOf(
     }
     return null;
   }
-  if (node.type === "Evidence" || node.type === "VerificationReport") {
+  if (node.type === "Evidence" || node.type === "TaskCompletionReport") {
     // A REPORT CLAIMING SEVERAL TASKS IS A BREACH WHOEVER SUBMITTED IT — the
     // cardinality is the rule's own clause, not the submitter's, so it is
     // asked before the submitters are, and an unsubmitted report cannot carry
     // two claims either.
-    if (node.type === "VerificationReport") {
+    if (node.type === "TaskCompletionReport") {
       const claims = writtenTargetsOf(node.id, CLAIMS, context);
       if (claims.length > 1) {
         return {
@@ -731,7 +731,7 @@ function reportSentence(
   subjectId: string,
   breach: Extract<OffTarget, { claimant: "report" }>,
 ): string {
-  const rule = "a verification report claims exactly one task its work log addresses.";
+  const rule = "a task completion report claims exactly one task its work log addresses.";
   // More than one claim breaks the rule whoever submitted the report, so the
   // sentence needs no work log — and for the one with no submitter there is
   // none to name.

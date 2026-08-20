@@ -352,7 +352,7 @@ const WORDS: Readonly<
   },
   task: {
     nothingClaims: (id) =>
-      `Nothing claims ${id} yet — a task is closed, or left open, over the verification reports attached to it, and there is none. A VerificationReport draws a CLAIMS relation at the task in its own file.`,
+      `Nothing claims ${id} yet — a task is closed, or left open, over the completion reports attached to it, and there is none. A TaskCompletionReport draws a CLAIMS relation at the task in its own file.`,
     unreadOne: (id, claimant) =>
       `${claimant} claims ${id} and is not approved yet — a task is closed, or left open, only over reports a person has read. Approve it first (or reject it and have it fixed), and the task comes back to the queue.`,
     unreadMany: (id, claimants) =>

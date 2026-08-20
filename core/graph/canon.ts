@@ -1,17 +1,19 @@
 /**
- * The canon's 22 node types: the one roster, and where each type is drawn.
+ * The canon's 21 node types: the one roster, and where each type is drawn.
  *
  * A *layer* is the canon's own fact — v5 §1 puts every body type in Domain,
- * Intent, Plan or Execution, and gives the three satellites none, because a
- * satellite's layer follows the chalk node it hangs off rather than being a
- * property of the satellite. A *band* is a presentation answer, which is ours
- * to make: it is the layer where there is one, and Intent for the satellites,
- * so a canvas always has a column to put them in.
+ * Intent, Plan or Execution, and gives `Assumption` none, because an
+ * assumption's layer follows the chalk node it hangs off rather than being a
+ * property of the assumption. A *band* is a presentation answer, which is ours
+ * to make: it is the layer where there is one, and Intent for the one type with
+ * none, so a canvas always has a column to put it in.
  *
  * Domain leads the band order because v5 numbers `Term` 1 and `DomainEntity` 2
  * and a specification is authored vocabulary-first. That ordering has a stated
- * cost: v5 §0 rule 3 makes Domain the global sink, so `MENTIONS` edges are the
- * one kind that draws back up the bands while everything else flows down.
+ * cost: v5 §0 rule 3 makes Domain the global sink, so an edge that draws back up
+ * the bands is the exception rather than the rule. There are two — `MENTIONS`,
+ * which names a term from anywhere, and `AFFECTS`, which reaches out of a
+ * `Decision` in Plan to the intent and domain it revises.
  */
 
 /** The four bands, in the order they are laid out. */
@@ -20,13 +22,17 @@ export const BAND_ORDER = ["Domain", "Intent", "Plan", "Execution"] as const;
 export type Band = (typeof BAND_ORDER)[number];
 
 /**
- * The roster itself, in v5's own row order: §1's twenty body types, then §2's
- * three satellites. `NodeTypeName` is read back off this table rather than
- * spelled out a second time, so a type the union knows and the data does not
- * cannot exist.
+ * The roster itself, in v5's own row order: the body types by band, then the one
+ * satellite. `NodeTypeName` is read back off this table rather than spelled out
+ * a second time, so a type the union knows and the data does not cannot exist.
  *
  * The prefixes are pinned. They end up in ids a person reads in a panel, a URL
  * or their own notes, so changing one renames every id already written.
+ *
+ * ROW ORDER IS WHAT `canonTypesSentence` PRINTS, so a type sits with its band
+ * and not where it was first written. `Decision` is in the Plan block for that
+ * reason: it was a satellite once, and leaving it at the end would make the
+ * refusal that teaches the roster lie about where a decision lives.
  */
 const CANON = [
   { name: "Term", layer: "Domain", prefix: "T" },
@@ -43,14 +49,13 @@ const CANON = [
   { name: "Interface", layer: "Plan", prefix: "IF" },
   { name: "DataSchema", layer: "Plan", prefix: "DS" },
   { name: "ImplementationTask", layer: "Plan", prefix: "IT" },
+  { name: "Decision", layer: "Plan", prefix: "D" },
   { name: "Journal", layer: "Execution", prefix: "J" },
   { name: "WorkLog", layer: "Execution", prefix: "WL" },
   { name: "Evidence", layer: "Execution", prefix: "EV" },
-  { name: "VerificationReport", layer: "Execution", prefix: "VR" },
+  { name: "TaskCompletionReport", layer: "Execution", prefix: "TCR" },
   { name: "Finding", layer: "Execution", prefix: "F" },
   { name: "Assumption", layer: null, prefix: "AS" },
-  { name: "Question", layer: null, prefix: "Q" },
-  { name: "Decision", layer: null, prefix: "D" },
 ] as const;
 
 export type NodeTypeName = (typeof CANON)[number]["name"];
@@ -70,9 +75,10 @@ export interface NodeTypeEntry {
 export const NODE_TYPES = CANON satisfies readonly NodeTypeEntry[];
 
 /**
- * Where a satellite's column goes. v5 states no layer for the three, so a
- * layout has to choose one, and this is that choice — a presentation decision
- * that claims nothing about the canon.
+ * Where a layerless type's column goes. v5 states no layer for `Assumption`, so
+ * a layout has to choose one, and this is that choice — a presentation decision
+ * that claims nothing about the canon. It is one type today and stays a named
+ * constant, because the choice is the canon's silence and not the type's.
  */
 export const SATELLITE_BAND: Band = "Intent";
 
@@ -98,12 +104,12 @@ export function nodeTypeEntry(type: string): NodeTypeEntry | null {
   return NODE_TYPES.find((entry) => entry.name === type) ?? null;
 }
 
-/** The canon's own layer — null for the satellites and for an unknown type alike. */
+/** The canon's own layer — null for a satellite and for an unknown type alike. */
 export function layerOf(type: string): Band | null {
   return nodeTypeEntry(type)?.layer ?? null;
 }
 
-/** The band a type is drawn in: its layer, or Intent for a satellite. */
+/** The band a type is drawn in: its layer, or Intent for the one type with none. */
 export function bandOf(type: string): Band | null {
   const entry = nodeTypeEntry(type);
   if (entry === null) {
@@ -118,16 +124,17 @@ export function typesInBand(band: Band): readonly NodeTypeEntry[] {
 
 /**
  * The band as a FOLDER NAME — the level between `spec/` and the type folder,
- * so two hundred nodes fan out over four drawers instead of twenty-two.
+ * so two hundred nodes fan out over four drawers instead of one per type.
  *
  * Lowercase on purpose: the type folder beside it is canon-spelled and
  * CamelCase, and the two reading differently is what keeps a path legible —
  * `spec/intent/Requirement/R-0001.md` says which segment is whose at a glance.
+ * ONLY THE BAND IS LOWERCASED, so a type is spelled here exactly as the canon
+ * spells it and there is no second rule to remember about any one folder.
  *
- * THIS PROMOTES THE BAND FROM A DRAWING CHOICE TO A STORAGE FACT. The
- * satellites go where `bandOf` draws them (Intent), and moving that choice
- * later would move committed files, so it is now as pinned as the prefixes
- * above.
+ * THIS PROMOTES THE BAND FROM A DRAWING CHOICE TO A STORAGE FACT. A satellite
+ * goes where `bandOf` draws it (Intent), and moving that choice later would move
+ * committed files, so it is now as pinned as the prefixes above.
  */
 export function bandFolderOf(type: string): string | null {
   const band = bandOf(type);
@@ -148,9 +155,9 @@ export function bandOfFolder(folder: string): Band | null {
  * Every type, grouped by band and keeping canon order inside each band — the
  * column order of both Spec-plane views.
  *
- * It is a stable partition and nothing else. Because the satellites sit at the
- * end of `NODE_TYPES` with no layer and `bandOf` sends them to Intent, they
- * fall in after `Constraint` on their own; the list's order is what makes that
+ * It is a stable partition and nothing else. Because the one satellite sits at
+ * the end of `NODE_TYPES` with no layer and `bandOf` sends it to Intent, it
+ * falls in after `Constraint` on its own; the list's order is what makes that
  * true, so there is no special case here to keep in step with it.
  */
 export function columnsInOrder(): readonly NodeTypeEntry[] {

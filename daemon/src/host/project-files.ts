@@ -100,7 +100,7 @@ export function getProjectAcceptancesPath(projectPath: string): string {
 }
 
 /**
- * The 22 reference templates, regenerated under Shall's own home — one set for
+ * The 21 reference templates, regenerated under Shall's own home — one set for
  * the machine, not one per project. A project carries its spec and nothing
  * else; the starting shapes are Shall's to keep current, and a copy in every
  * repository was a copy that went stale the day Shall was upgraded.
@@ -192,7 +192,7 @@ export async function writeProjectMetadata(
 }
 
 /**
- * The 22 templates, WRITTEN ONLY WHERE THE BYTES DIFFER.
+ * The 21 templates, WRITTEN ONLY WHERE THE BYTES DIFFER.
  *
  * `emitTemplate` is a pure function of the canon, so regenerating is
  * byte-idempotent and this can run on every start and every open. Comparing

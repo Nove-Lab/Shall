@@ -10,12 +10,17 @@ import {
   type Ledgers,
   type ReviewStatus,
 } from "@shall/core/arith";
-import { orphanStem, type SpecNode } from "@shall/core/graph";
+import {
+  orphanStem,
+  type SpecNode,
+  type SpecNodeValues,
+} from "@shall/core/graph";
 import {
   approvalPayload,
   blocksOf,
   emitNodeFile,
   parseNodeFile,
+  valuesOf,
   type ApprovalRecord,
 } from "@shall/core/serialize";
 import {
@@ -294,12 +299,7 @@ async function approvedVersionFor(
   node: SpecNode,
   record: ApprovalRecord | undefined,
 ): Promise<{
-  values: {
-    shortName: string;
-    name: string;
-    body: string;
-    commits: readonly string[] | undefined;
-  };
+  values: SpecNodeValues;
   edges: readonly { type: string; toId: string }[];
   deletionProposed: SpecNode["deletionProposed"];
 } | null> {
@@ -335,12 +335,7 @@ async function approvedVersionFor(
     );
     if (payloadHash(payload) === record.approvedHash) {
       return {
-        values: {
-          shortName: reading.node.shortName,
-          name: reading.node.name,
-          body: reading.node.body,
-          commits: reading.node.commits,
-        },
+        values: valuesOf(reading.node),
         edges: reading.edges,
         // Inside the payload, so a match carries it faithfully — in practice
         // always undefined, because the approve door refuses to record over one.
@@ -680,12 +675,7 @@ export async function restoreSpecNode(input: {
       specDir,
       type,
       input.id,
-      {
-        shortName: reading.node.shortName,
-        name: reading.node.name,
-        body: reading.node.body,
-        commits: reading.node.commits,
-      },
+      valuesOf(reading.node),
       reading.edges,
       blocksOf(reading.node),
     ),

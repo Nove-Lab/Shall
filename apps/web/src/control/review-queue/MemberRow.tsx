@@ -46,9 +46,9 @@ import { controlBase, specLink } from "../parts";
  * books and a file somebody can read — so they are one component. What differs
  * between the three cards is WHICH DOORS ARE OPEN, and that arrives as flags
  * rather than as three near-identical rows drifting apart: a Finding is not
- * approved from here, a Question is answered rather than read, and A CLAIMANT
- * IS NOT JUDGED AT ALL — the closure card decides over the whole list of them
- * at once, so its rows are here to be read and opened and carry no verdict.
+ * approved from here, and A CLAIMANT IS NOT JUDGED AT ALL — the closure card
+ * decides over the whole list of them at once, so its rows are here to be read
+ * and opened and carry no verdict.
  *
  * THE ROW NEVER WRITES. Every verdict goes up to the page through a callback,
  * because the page is what refetches — the queue is recomputed from the graph
@@ -85,8 +85,6 @@ export interface MemberRowProps {
   canReject: boolean;
   /** The root of a spec approval opens showing its diff — it is what the card is about. */
   defaultOpen?: boolean;
-  /** A Question is answered rather than read, so its one door opens the editor. */
-  answer?: boolean;
   /** One line under the top line: who submitted this, or why this row has no buttons. */
   caption?: ReactNode;
   showLabel?: string;
@@ -116,7 +114,6 @@ export function MemberRow({
   canApprove,
   canReject,
   defaultOpen = false,
-  answer = false,
   caption = null,
   showLabel = "Show changes",
   hideLabel = "Hide changes",
@@ -269,12 +266,13 @@ export function MemberRow({
 
   /**
    * THE WAY OUT OF THE QUEUE AND INTO THE FILE. `back` is this card's path, so
-   * the plane can offer the way home; `mode=edit` is the door a Question needs,
-   * because a question with no answer in it is routed here to be answered and
-   * landing in the reading pane would make that one more click on every row.
+   * the plane can offer the way home. Every row goes to the reading pane: a row
+   * in this queue is a node somebody is deciding about, and deciding is done
+   * from the card it is on.
    */
-  const planeLink = specLink(projectId, member.id, backPath, { edit: answer });
-  const openLabel = answer ? "Answer" : "Open in Spec plane";
+  const planeLink = specLink(projectId, member.id, backPath);
+  /** One door said once: the button and the row's menu are the same way in. */
+  const openLabel = "Open in Spec plane";
 
   return (
     <ContextMenu>

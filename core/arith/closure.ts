@@ -93,7 +93,7 @@ import {
  * The relation that makes the list is read here rather than named as a
  * constant, because the pairing lives in `core/graph/closure-kinds.ts` —
  * `CLAIMS` into a criterion from Evidence, `CLAIMS` into a task from a
- * VerificationReport.
+ * TaskCompletionReport.
  */
 function kindAt(id: string, context: ColorContext): ClosureKind | null {
   const node = context.nodes.get(id);
@@ -102,7 +102,7 @@ function kindAt(id: string, context: ColorContext): ClosureKind | null {
 
 /**
  * Every living node whose own file draws the claiming line at this subject, in
- * id order — the Evidence that CLAIMS a criterion, the VerificationReport that
+ * id order — the Evidence that CLAIMS a criterion, the TaskCompletionReport that
  * CLAIMS a task.
  *
  * READ OFF THE INCOMING EDGES, because both claims are the CLAIMANT's line and
@@ -113,7 +113,7 @@ function kindAt(id: string, context: ColorContext): ClosureKind | null {
  *
  * NOTHING FILTERS THE CLAIMANT'S TYPE, and that is not an omission: the loader
  * refuses a file whose relation the canon does not allow, so only an Evidence
- * can draw `CLAIMS` at a criterion and only a VerificationReport at a task. A
+ * can draw `CLAIMS` at a criterion and only a TaskCompletionReport at a task. A
  * filter here would be a second copy of the grammar.
  */
 export function claimantsOf(

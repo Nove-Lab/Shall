@@ -911,17 +911,42 @@ async function readNodeFile(
  * bytes, so that one set of sentences answers for both doors and for the
  * loader, and in the order a person reads a file: names first, body after.
  */
-function settleFields(
-  values: SpecNodeValues,
-  commits: readonly string[] | undefined,
-): NodeFileFields {
+/** The per-type keys: what a file carries that its type alone may carry. */
+type CarriedKeys = Pick<NodeFileFields, "commits" | "blocking" | "relatedNodes">;
+
+/**
+ * The per-type keys an edit settles on: what it sent, or what the file already
+ * held.
+ *
+ * ABSENT MEANS CARRY OVER, and `held` is what an update passes — a caller that
+ * never heard of a key leaves it exactly as it was, which is what lets an older
+ * client edit a name without dropping a Finding's judgement. A create, a revert
+ * and a restore pass no `held` at all, because there is nothing behind them to
+ * carry from.
+ *
+ * `??` AND NOT `||`, because `blocking: false` is a judgement somebody made and
+ * only `undefined` means they did not reach the key.
+ */
+function carriedOf(values: SpecNodeValues, held?: CarriedKeys): CarriedKeys {
+  return {
+    commits: values.commits ?? held?.commits,
+    blocking: values.blocking ?? held?.blocking,
+    relatedNodes: values.relatedNodes ?? held?.relatedNodes,
+  };
+}
+
+function settleFields(values: SpecNodeValues, carried: CarriedKeys): NodeFileFields {
   return {
     shortName: judgeText("A short name", values.shortName).value,
     name: judgeText("A name", values.name).value,
     body: judgeBody(values.body).value,
-    // A WorkLog's commit shas ride along unsettled: each is judged by the
-    // reader over the emitted bytes, like everything else.
-    commits,
+    // The per-type keys ride along unsettled: each is judged by the reader over
+    // the emitted bytes, like everything else. They arrive as one object rather
+    // than one parameter each so that the next key added to the format reaches
+    // every door without a signature change nobody would notice was missing.
+    commits: carried.commits,
+    blocking: carried.blocking,
+    relatedNodes: carried.relatedNodes,
   };
 }
 
@@ -951,7 +976,7 @@ export async function createNodeFile(
     if (!isNodeType(type)) {
       throw invalid(`Unknown node type: ${type}`);
     }
-    const fields = settleFields(values, values.commits);
+    const fields = settleFields(values, carriedOf(values));
     const shape = judgeNodeId(id);
     if (shape !== null) {
       throw invalid(shape);
@@ -1077,7 +1102,7 @@ export async function updateNodeFile(
     // an edit MAY reach — sent, they replace; left out, they ride along too.
     // The changed content un-matches the approved hash by itself — that is
     // arithmetic, not this door's job.
-    const fields = settleFields(values, values.commits ?? held.node.commits);
+    const fields = settleFields(values, carriedOf(values, held.node));
     return writeNodeFile(
       root,
       found.type,
@@ -1139,7 +1164,7 @@ export async function revertNodeFile(
       root,
       found.type,
       id,
-      settleFields(values, values.commits),
+      settleFields(values, carriedOf(values)),
       edges,
       blocks,
     );
@@ -1189,7 +1214,7 @@ export async function restoreNodeFile(
       root,
       type,
       id,
-      settleFields(values, values.commits),
+      settleFields(values, carriedOf(values)),
       edges,
       blocks,
     );

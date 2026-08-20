@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import {
+  EDGE_GRAMMAR,
   NODE_TYPES,
+  anchorsFor,
   closureKindOf,
   formatEdgeId,
   type SpecEdge,
@@ -249,12 +251,77 @@ describe("the scan order", () => {
     assert.equal(scanRankOf("Sandwich"), null);
   });
 
-  test("the three satellites are flagged, and every body type is not", () => {
-    assert.deepEqual(scanRankOf("Decision"), {
-      rank: 19,
-      satellite: true,
-    });
-    assert.deepEqual(scanRankOf("Goal"), { rank: 0, satellite: false });
+  test("the one satellite is flagged, and every body type is not", () => {
+    assert.deepEqual(scanRankOf("Decision"), { rank: 0, satellite: false });
+    assert.deepEqual(scanRankOf("Goal"), { rank: 1, satellite: false });
+    // `ASSUMES` runs from three bands at once, so an assumption has no depth of
+    // its own: the flag is what sends it to borrow one per node, and the rank
+    // here is only the fallback it takes when nothing living holds it.
+    assert.deepEqual(scanRankOf("Assumption"), { rank: 20, satellite: true });
+  });
+
+  test("a Decision outranks every type the canon has", () => {
+    // Said as a property and not as the number 0, because the number moves
+    // whenever the canon does. A type slipped in above `Decision` would gather
+    // a decision's own ripple into somebody else's bundle, and the card a
+    // person reads would stop leading with the reason for the revision.
+    const decision = scanRankOf("Decision");
+    assert.ok(decision !== null);
+    for (const entry of NODE_TYPES) {
+      if (entry.name === "Decision") {
+        continue;
+      }
+      const other = scanRankOf(entry.name);
+      assert.ok(other !== null, `${entry.name} has no rank`);
+      assert.ok(
+        decision.rank < other.rank,
+        `${entry.name} ranks ${other.rank}, at or above Decision's ${decision.rank}`,
+      );
+    }
+  });
+
+  test("every relation the canon allows runs down the scan order, except the ones the canon anchors upward", () => {
+    // THE TWO TABLES SAY ONE THING FROM TWO SIDES, and this is where they are
+    // held to it. `runsDownward` reads the order alone, so an edge that runs UP
+    // it is the one walked backwards — and the only edges that may are the
+    // handful the canon anchors a node BY: a task's TARGETS, a log's ADDRESSES,
+    // a claim. Any other row pointing up the order is a bundle swallowing its
+    // own parent, and any out-anchor pointing down is a node nothing reaches.
+    //
+    // A satellite borrows its rank per node, so a row with an `Assumption` at
+    // either end of it is not this test's question.
+    for (const row of EDGE_GRAMMAR) {
+      const from = scanRankOf(row.fromType);
+      const to = scanRankOf(row.toType);
+      assert.ok(from !== null && to !== null);
+      if (from.satellite || to.satellite) {
+        continue;
+      }
+      const anchored = anchorsFor(row.fromType).some(
+        (anchor) =>
+          anchor.direction === "out" && anchor.edgeType === row.edgeType,
+      );
+      const said = `${row.fromType} ${row.edgeType} ${row.toType}`;
+      // THE ONE DECLARED EXCEPTION, and the reason the question moved off the
+      // anchor table. A `Decision` is held by the `AFFECTS` it draws, because
+      // nothing in the canon points at a decision; and it outranks everything
+      // it revises, because one yellow decision has to gather its whole ripple
+      // into one bundle. The order wins — AFFECTS is walked forwards — and the
+      // anchor table is left saying what HOLDS a decision rather than what
+      // contains it.
+      if (row.fromType === "Decision" && row.edgeType === "AFFECTS") {
+        assert.ok(anchored, `${said} is what anchors the decision`);
+        assert.ok(from.rank < to.rank, `${said} does not run down the order`);
+        continue;
+      }
+      assert.equal(
+        from.rank > to.rank,
+        anchored,
+        `${said} runs ${from.rank > to.rank ? "up" : "down"} the order and is ${
+          anchored ? "" : "not "
+        }an out-anchor`,
+      );
+    }
   });
 });
 
@@ -263,19 +330,18 @@ describe("every yellow node is in at least one bundle", () => {
     assertEveryYellowIsBundled(SPINE, SPINE_EDGES);
   });
 
-  test("a report with a satellite and a finding hanging off it", () => {
+  test("a report with an assumption and a finding hanging off it", () => {
     const journal = node("Journal", "J-0001");
     const workLog = node("WorkLog", "WL-0001");
-    const question = node("Question", "Q-0001");
+    const assumption = node("Assumption", "AS-0001");
     const finding = node("Finding", "F-0001");
     assertEveryYellowIsBundled(
-      [...SPINE, journal, workLog, question, finding],
+      [...SPINE, journal, workLog, assumption, finding],
       [
         ...SPINE_EDGES,
         edge("J-0001", "LOGS", "WL-0001"),
-        edge("WL-0001", "RAISES", "Q-0001"),
+        edge("WL-0001", "ASSUMES", "AS-0001"),
         edge("WL-0001", "RECORDS", "F-0001"),
-        edge("F-0001", "ESCALATES", "R-0001"),
       ],
       { green: ABOVE },
     );
@@ -368,6 +434,12 @@ describe("the specification walk", () => {
     // A green Goal and a yellow Requirement share one assumption. Ranked by the
     // Goal it would stand up a bundle of its own beside the requirement's; it is
     // ranked by the requirement instead, and there is one bundle.
+    //
+    // IT IS ALSO THE LEVEL CASE `runsDownward` IS WRITTEN FOR. The assumption
+    // borrows the requirement's own rank, so the `ASSUMES` into it is exactly
+    // level; compared strictly, every assumption in every project would be
+    // unreached and would stand a bundle of its own beside the node that made
+    // it. Mutate the `<=` and this test is one of the ones that says so.
     const assumption = node("Assumption", "AS-0001");
     const queue = queueOf(
       [...SPINE, assumption],
@@ -382,46 +454,178 @@ describe("the specification walk", () => {
     assert.deepEqual(memberIds(queue, "spec:R-0001"), ["R-0001", "AS-0001"]);
   });
 
-  test("a decision is read backwards into the requirement it affects", () => {
-    // Its AFFECTS points at the parent. Followed forwards, one yellow decision
-    // would swallow the requirement subtree it merely comments on.
+  test("a decision roots the bundle of what it affects", () => {
+    // A decision is the reason a revision was made, so it leads the piece the
+    // revision touched rather than riding at the bottom of it: the requirement
+    // hangs under the decision, and a person reads the why first.
     const decision = node("Decision", "D-0001");
     const queue = queueOf(
       [...SPINE, decision],
       [...SPINE_EDGES, edge("D-0001", "AFFECTS", "R-0001")],
       { green: ABOVE },
     );
-    assert.deepEqual(bundleIds(queue), ["spec:R-0001"]);
-    assert.deepEqual(memberIds(queue, "spec:R-0001"), ["R-0001", "D-0001"]);
+    assert.deepEqual(bundleIds(queue), ["spec:D-0001"]);
+    assert.deepEqual(memberIds(queue, "spec:D-0001"), ["D-0001", "R-0001"]);
     const bundle = queue.bundles[0];
     assert.ok(bundle !== undefined && bundle.kind === "spec-approval");
     assert.deepEqual(bundle.counts, [
-      { type: "Requirement", count: 1 },
       { type: "Decision", count: 1 },
+      { type: "Requirement", count: 1 },
     ]);
   });
 
-  test("a decision that resolves a question takes the question's rank, not the last one", () => {
-    // The rank recurses through the satellite chain: D → Q → R. Ranked at the
-    // fallback instead, the decision would sort after the question rather than
-    // beside it.
-    const question = node("Question", "Q-0001");
+  test("a yellow decision gathers its whole ripple into one bundle", () => {
+    // THE WHOLE REASON RANK IS NOT RESIDENCE. The decision is filed in Plan and
+    // outranks Goal, so a revision that reaches up into intent and sideways into
+    // the vocabulary is ONE thing to judge and not three cards with no reason on
+    // any of them. What it merely resolves is not part of that: RESOLVES crosses
+    // into the record, and the finding stays in the report that found it.
+    const module = node("ModuleDesign", "MD-0001");
+    const term = node("Term", "T-0001");
     const decision = node("Decision", "D-0001");
-    const queue = queueOf(
-      [...SPINE, question, decision],
+    const journal = node("Journal", "J-0001");
+    const workLog = node("WorkLog", "WL-0001");
+    const finding = node("Finding", "F-0001");
+    const nodes = [
+      ...SPINE,
+      module,
+      term,
+      decision,
+      journal,
+      workLog,
+      finding,
+    ];
+    const edges = [
+      ...SPINE_EDGES,
+      edge("SR-0001", "IS_REALIZED_BY", "MD-0001"),
+      edge("D-0001", "AFFECTS", "G-0001"),
+      edge("D-0001", "AFFECTS", "T-0001"),
+      edge("D-0001", "AFFECTS", "MD-0001"),
+      edge("D-0001", "RESOLVES", "F-0001"),
+      edge("J-0001", "LOGS", "WL-0001"),
+      edge("WL-0001", "RECORDS", "F-0001"),
+    ];
+    const queue = assertEveryYellowIsBundled(nodes, edges, {
+      green: [
+        actor,
+        useCase,
+        scenario,
+        responsibility,
+        requirement,
+        module,
+        journal,
+        workLog,
+      ],
+    });
+    assert.deepEqual(bundleIds(queue), ["spec:D-0001", "report:J-0001"]);
+    // The goal and the term are in the decision's bundle and stand none of
+    // their own — which is what the rank buys.
+    assert.deepEqual(memberIds(queue, "spec:D-0001"), [
+      "D-0001",
+      "G-0001",
+      "T-0001",
+    ]);
+    const bundle = queue.bundles.find((held) => held.id === "spec:D-0001");
+    assert.ok(bundle !== undefined && bundle.kind === "spec-approval");
+    // The green module it also revises is named and not judged.
+    assert.deepEqual(
+      bundle.unchanged.map((held) => held.id),
+      ["A-0001", "UC-0001", "SC-0001", "SR-0001", "R-0001", "MD-0001"],
+    );
+    // The finding is in neither list, and the counts say so over both at once.
+    assert.equal(
+      bundle.counts.some((count) => count.type === "Finding"),
+      false,
+    );
+    assert.deepEqual(memberIds(queue, "report:J-0001"), ["F-0001"]);
+  });
+
+  test("a decision that affects a term does not descend into the vocabulary", () => {
+    // One step across the Domain wall and no further. The term is being
+    // rewritten and belongs on the card that says why; the entity it denotes is
+    // a reference again, and stands where every domain node stands — alone.
+    const decision = node("Decision", "D-0001");
+    const term = node("Term", "T-0001");
+    const entity = node("DomainEntity", "DE-0001");
+    const queue = assertEveryYellowIsBundled(
+      [decision, term, entity],
+      [
+        edge("D-0001", "AFFECTS", "T-0001"),
+        edge("T-0001", "DENOTES", "DE-0001"),
+      ],
+    );
+    assert.deepEqual(bundleIds(queue), ["spec:D-0001", "spec:DE-0001"]);
+    assert.deepEqual(memberIds(queue, "spec:D-0001"), ["D-0001", "T-0001"]);
+    assert.deepEqual(memberIds(queue, "spec:DE-0001"), ["DE-0001"]);
+  });
+
+  test("a decision does not swallow the vocabulary it merely mentions", () => {
+    // The crossing is keyed on the EDGE and never on the type at its tail. The
+    // same decision may revise one word and name another, and naming one is not
+    // asking anybody to read it.
+    const decision = node("Decision", "D-0001");
+    const term = node("Term", "T-0001");
+    const queue = assertEveryYellowIsBundled(
+      [...SPINE, decision, term],
       [
         ...SPINE_EDGES,
-        edge("R-0001", "RAISES", "Q-0001"),
-        edge("D-0001", "RESOLVES", "Q-0001"),
+        edge("D-0001", "AFFECTS", "R-0001"),
+        edge("D-0001", "MENTIONS", "T-0001"),
       ],
       { green: ABOVE },
     );
+    assert.deepEqual(bundleIds(queue), ["spec:D-0001", "spec:T-0001"]);
+    assert.deepEqual(memberIds(queue, "spec:D-0001"), ["D-0001", "R-0001"]);
+    assert.deepEqual(memberIds(queue, "spec:T-0001"), ["T-0001"]);
+  });
+
+  test("a decision is never somebody else's member", () => {
+    // THE ACCEPTED LOSS, pinned here so nobody hands it back. Read backwards, a
+    // green decision would ride along in the bundle of everything it ever
+    // affected — and one old decision affecting two unrelated requirements would
+    // weld their two bundles into one piece nobody decided to judge together. So
+    // a decision roots its own bundle or it is not in the queue at all, and the
+    // requirement below is judged on its own words.
+    const decision = node("Decision", "D-0001");
+    const queue = assertEveryYellowIsBundled(
+      [...SPINE, decision],
+      [...SPINE_EDGES, edge("D-0001", "AFFECTS", "R-0001")],
+      { green: [...ABOVE, decision] },
+    );
     assert.deepEqual(bundleIds(queue), ["spec:R-0001"]);
-    assert.deepEqual(memberIds(queue, "spec:R-0001"), [
-      "R-0001",
-      "D-0001",
-      "Q-0001",
+    assert.deepEqual(memberIds(queue, "spec:R-0001"), ["R-0001"]);
+    const bundle = queue.bundles[0];
+    assert.ok(bundle !== undefined && bundle.kind === "spec-approval");
+    // Not in the unchanged list either: it is not reached, so it is not there
+    // to be named.
+    assert.deepEqual(bundle.unchanged, []);
+  });
+
+  test("two decisions affecting one requirement each stand a bundle, and the requirement says so", () => {
+    // Two reasons are two cards. Only the root choice looks at what is covered,
+    // so the requirement is a member of both, and each row points at the other
+    // bundle — a person approving one is told the other is waiting on it too.
+    const first = node("Decision", "D-0001");
+    const second = node("Decision", "D-0002");
+    const queue = queueOf(
+      [...SPINE, first, second],
+      [
+        ...SPINE_EDGES,
+        edge("D-0001", "AFFECTS", "R-0001"),
+        edge("D-0002", "AFFECTS", "R-0001"),
+      ],
+      { green: ABOVE },
+    );
+    assert.deepEqual(bundleIds(queue), ["spec:D-0001", "spec:D-0002"]);
+    assert.deepEqual(memberIds(queue, "spec:D-0001"), ["D-0001", "R-0001"]);
+    assert.deepEqual(memberIds(queue, "spec:D-0002"), ["D-0002", "R-0001"]);
+    assert.deepEqual(memberIn(queue, "spec:D-0001", "R-0001").sharedWith, [
+      "spec:D-0002",
     ]);
+    assert.deepEqual(memberIn(queue, "spec:D-0002", "R-0001").sharedWith, [
+      "spec:D-0001",
+    ]);
+    assert.deepEqual(memberIn(queue, "spec:D-0001", "D-0001").sharedWith, []);
   });
 
   test("a node two roots both reach is in both bundles and each says so", () => {
@@ -515,48 +719,52 @@ describe("the work report", () => {
   const journal = node("Journal", "J-0001");
   const workLog = node("WorkLog", "WL-0001", { commits: ["a1b2c3", "d4e5f6"] });
 
-  test("a question a work log raised belongs to the report and roots nothing", () => {
-    const question = node("Question", "Q-0001");
+  test("an assumption a work log made belongs to the report and roots nothing", () => {
+    // A satellite takes the rank AND the side of what it hangs off, so an
+    // assumption made in the middle of the work is judged as part of the record
+    // that made it rather than standing up on the specification side.
+    const assumption = node("Assumption", "AS-0001");
     const queue = queueOf(
-      [journal, workLog, question],
+      [journal, workLog, assumption],
       [
         edge("J-0001", "LOGS", "WL-0001"),
-        edge("WL-0001", "RAISES", "Q-0001"),
+        edge("WL-0001", "ASSUMES", "AS-0001"),
       ],
     );
     assert.deepEqual(bundleIds(queue), ["report:J-0001"]);
     assert.deepEqual(memberIds(queue, "report:J-0001"), [
       "J-0001",
       "WL-0001",
-      "Q-0001",
+      "AS-0001",
     ]);
   });
 
-  test("a decision whose one question hangs off nothing still goes with the work log its other question was raised by", () => {
-    // Two questions: one raised by the work log, one raised by nobody (an
-    // orphan, red by the anchor rules). The decision resolves both. Its place
-    // must follow the LIVING, HOMED chain — through Q-0001 to WL-0001, into the
-    // report — and not the homeless one, whose fallback rank happens to be the
-    // last one and would win a plain "deepest" comparison.
-    const asked = node("Question", "Q-0001");
-    const stray = node("Question", "Q-0002");
-    const decision = node("Decision", "D-0001");
+  test("a satellite hanging off a homeless one keeps the side of its homed attacher", () => {
+    // THE GUARD THIS PINS IS DEFENSIVE AND THE CANON CANNOT REACH IT. `ASSUMES`
+    // runs from five body types and from nothing else, so an assumption cannot
+    // hold an assumption in any graph the loader will build — the triple below
+    // is one `shall check` refuses, and the file carrying it never reaches the
+    // arithmetic. But `attachersOf` selects by EDGE TYPE and never asks what the
+    // far node is, so the shape arrives here whole, and `placeAt` prefers a
+    // homed attacher over a homeless one for a reason: `NOWHERE` ranks last, and
+    // last would win a plain deepest-rank comparison and carry the assumption to
+    // the specification side, out of the record that made it.
+    //
+    // Written against an ungrammatical fixture on purpose. The alternative was a
+    // guard nothing pins, which is a guard somebody deletes.
+    const assumption = node("Assumption", "AS-0001");
+    const homeless = node("Assumption", "AS-0002");
     const queue = queueOf(
-      [journal, workLog, asked, stray, decision],
+      [journal, workLog, assumption, homeless],
       [
         edge("J-0001", "LOGS", "WL-0001"),
-        edge("WL-0001", "RAISES", "Q-0001"),
-        edge("D-0001", "RESOLVES", "Q-0001"),
-        edge("D-0001", "RESOLVES", "Q-0002"),
+        edge("WL-0001", "ASSUMES", "AS-0001"),
+        edge("AS-0002", "ASSUMES", "AS-0001"),
       ],
-      { green: [journal, workLog] },
     );
-    // Q-0001 is yellow, so the report stands; D-0001 is read backwards into
-    // Q-0001's report and is not a report — or a spec approval — of its own.
-    // The two share a rank (the decision takes the question's), so the id
-    // decides the order between them.
-    assert.deepEqual(bundleIds(queue), ["report:J-0001"]);
-    assert.deepEqual(memberIds(queue, "report:J-0001"), ["D-0001", "Q-0001"]);
+    assert.ok(bundleIds(queue).includes("report:J-0001"));
+    assert.ok(memberIds(queue, "report:J-0001").includes("AS-0001"));
+    assert.ok(!bundleIds(queue).includes("spec:AS-0001"));
   });
 
   test("a work log no journal logs is a report of its own", () => {
@@ -578,25 +786,31 @@ describe("the work report", () => {
     assert.deepEqual(memberIds(queue, "report:WL-0001"), ["WL-0001"]);
   });
 
-  test("a finding that escalates does not drag the requirement into the report", () => {
-    // ESCALATES points OUT of the record at something the report is about. The
-    // counts are over the members and the unchanged together, in canon order.
+  test("a finding stays in the report, and a mention does not drag the vocabulary in", () => {
+    // A FINDING STARTS NO RELATION AT ALL, so nothing points out of the record
+    // at the spec it concerns — the ids it is about sit in its own frontmatter,
+    // where nothing resolves them. What still points out is MENTIONS: the log
+    // names a term, and the term is not part of the record for it. The counts
+    // are over the members and the unchanged together, in canon order.
     const finding = node("Finding", "F-0001");
     // A second finding, already read, is the green member here: an evidence or
     // a report would each need the whole claim-and-aim chain this test is not
     // about — both are anchored by their claim now.
     const noted = node("Finding", "F-0002");
-    const nodes = [...SPINE, journal, workLog, finding, noted];
+    const term = node("Term", "T-0001");
+    const nodes = [...SPINE, journal, workLog, finding, noted, term];
     const edges = [
       ...SPINE_EDGES,
       edge("J-0001", "LOGS", "WL-0001"),
       edge("WL-0001", "RECORDS", "F-0001"),
       edge("WL-0001", "RECORDS", "F-0002"),
-      edge("F-0001", "ESCALATES", "R-0001"),
+      edge("WL-0001", "MENTIONS", "T-0001"),
     ];
     const queue = queueOf(nodes, edges, { green: [...SPINE, noted] });
-    assert.deepEqual(bundleIds(queue), ["report:J-0001"]);
-    const bundle = queue.bundles[0];
+    // The term is yellow and reached by nobody, so it stands alone — which is
+    // the domain rule, and the proof that the report did not take it.
+    assert.deepEqual(bundleIds(queue), ["spec:T-0001", "report:J-0001"]);
+    const bundle = queue.bundles.find((held) => held.id === "report:J-0001");
     assert.ok(bundle !== undefined && bundle.kind === "work-report");
     assert.deepEqual(bundle.members.map((member) => member.id), [
       "J-0001",
@@ -837,10 +1051,10 @@ describe("task closure", () => {
   const journal = node("Journal", "J-0001");
   const log = node("WorkLog", "WL-0001", { commits: ["a1b2c3"] });
   const otherLog = node("WorkLog", "WL-0002", { commits: [] });
-  const first = node("VerificationReport", "VR-0001");
-  const later = node("VerificationReport", "VR-0002");
+  const first = node("TaskCompletionReport", "TCR-0001");
+  const later = node("TaskCompletionReport", "TCR-0002");
 
-  // THE CLAIMANTS ARE VERIFICATION REPORTS: each is submitted by a log that
+  // THE CLAIMANTS ARE COMPLETION REPORTS: each is submitted by a log that
   // addresses the task, and claims that one task — the aim rule's shape for
   // reports, kept legal so what is under test is the closure and not the aim.
   const NODES = [
@@ -866,10 +1080,10 @@ describe("task closure", () => {
     edge("J-0001", "LOGS", "WL-0002"),
     edge("WL-0001", "ADDRESSES", "IT-0001"),
     edge("WL-0002", "ADDRESSES", "IT-0001"),
-    edge("WL-0001", "SUBMITS", "VR-0001"),
-    edge("WL-0002", "SUBMITS", "VR-0002"),
-    edge("VR-0001", "CLAIMS", "IT-0001"),
-    edge("VR-0002", "CLAIMS", "IT-0001"),
+    edge("WL-0001", "SUBMITS", "TCR-0001"),
+    edge("WL-0002", "SUBMITS", "TCR-0002"),
+    edge("TCR-0001", "CLAIMS", "IT-0001"),
+    edge("TCR-0002", "CLAIMS", "IT-0001"),
   ];
   /** Everything read — so the task is asked about and nothing else is waiting. */
   const SETTLED: Books = { green: NODES };
@@ -884,7 +1098,7 @@ describe("task closure", () => {
     assert.equal(bundle.task.closure, "open");
     assert.deepEqual(
       bundle.reports.map((held) => held.id),
-      ["VR-0001", "VR-0002"],
+      ["TCR-0001", "TCR-0002"],
     );
     // The thread back to the work: who submitted the report, and its commits.
     assert.deepEqual(bundle.reports[0]?.submittedBy, [
@@ -899,10 +1113,10 @@ describe("task closure", () => {
 
   test("waits while a report is unread, and asks again once it is approved", () => {
     const queue = queueOf(NODES, EDGES, {
-      green: NODES.filter((held) => held.id !== "VR-0002"),
+      green: NODES.filter((held) => held.id !== "TCR-0002"),
     });
     assert.equal(bundleIds(queue).includes("completion:IT-0001"), false);
-    assert.deepEqual(memberIds(queue, "report:J-0001"), ["VR-0002"]);
+    assert.deepEqual(memberIds(queue, "report:J-0001"), ["TCR-0002"]);
   });
 
   test("leaves the queue on either word, and comes back when the list moves", () => {
@@ -914,12 +1128,12 @@ describe("task closure", () => {
 
     // A third report claims the task: a different list, so the question is
     // asked again even though the record still names the first two.
-    const third = node("VerificationReport", "VR-0003");
+    const third = node("TaskCompletionReport", "TCR-0003");
     const grown = [...NODES, third];
     const wired = [
       ...EDGES,
-      edge("WL-0001", "SUBMITS", "VR-0003"),
-      edge("VR-0003", "CLAIMS", "IT-0001"),
+      edge("WL-0001", "SUBMITS", "TCR-0003"),
+      edge("TCR-0003", "CLAIMS", "IT-0001"),
     ];
     const again = queueOf(grown, wired, {
       green: grown,
@@ -930,9 +1144,9 @@ describe("task closure", () => {
 
   test("a report claiming two tasks is the aim rule's red, and neither task is asked", () => {
     // The sharedWith mechanics a work log used to have are impossible here by
-    // cardinality: a verification report claims exactly one task, so a second
+    // cardinality: a completion report claims exactly one task, so a second
     // CLAIMS line is a breach — not a second seat.
-    const wired = [...EDGES, edge("VR-0001", "CLAIMS", "IT-0002")];
+    const wired = [...EDGES, edge("TCR-0001", "CLAIMS", "IT-0002")];
     const queue = queueOf(NODES, wired, { green: NODES });
     assert.equal(
       queue.bundles.some((held) => held.kind === "task-closure"),
@@ -952,10 +1166,10 @@ describe("task closure", () => {
 
     const fixed = { ...later, body: "The retry, now shown." };
     const healed = queueOf(
-      NODES.map((held) => (held.id === "VR-0002" ? fixed : held)),
+      NODES.map((held) => (held.id === "TCR-0002" ? fixed : held)),
       EDGES,
       {
-        green: NODES.map((held) => (held.id === "VR-0002" ? fixed : held)),
+        green: NODES.map((held) => (held.id === "TCR-0002" ? fixed : held)),
         rejected: [later],
       },
     );
@@ -965,7 +1179,7 @@ describe("task closure", () => {
     assert.ok(bundle !== undefined && bundle.kind === "task-closure");
     assert.deepEqual(
       bundle.history.map((row) => row.reportId),
-      ["VR-0002"],
+      ["TCR-0002"],
     );
   });
 

@@ -49,6 +49,23 @@ export interface SpecNode {
    */
   commits?: string[] | undefined;
   /**
+   * Whether this finding is stopping the work that found it — a Finding's key
+   * and no other type's. It is the author's judgement and not a lock: nothing
+   * computed reads it, no gate consults it, and a task is neither blocked nor
+   * freed by one. Absent and `false` are one state, so only `true` is ever
+   * written; a finding that is not blocking says nothing about it.
+   */
+  blocking?: boolean | undefined;
+  /**
+   * The nodes a finding is about, as a hint for whoever reads it — a Finding's
+   * key and no other type's, and NOT a relation. Nothing resolves these ids:
+   * one the graph cannot answer to is not a fault, an empty list is not a
+   * fault, and no walk follows them. A finding starts no relation at all, so
+   * this is how it says what it concerns without a line in somebody else's
+   * file.
+   */
+  relatedNodes?: string[] | undefined;
+  /**
    * The one machine block, in a file that is otherwise the author's. A person
    * does not edit it by hand, and every ordinary save carries it over
    * untouched. The explicit `| undefined` is what lets a caller build a node
@@ -76,10 +93,17 @@ export interface SpecNode {
  * list over untouched; present means "this is the list now", and an empty
  * list is a work log that produced no commit. On any other type the reader
  * refuses the key by name, so a Requirement cannot pick one up by accident.
+ *
+ * `blocking` AND `relatedNodes` ARE THAT SAME BARGAIN FOR A FINDING. Absent
+ * carries over, present replaces. The carry-over is written `??` and not `||`
+ * for `blocking`, because `false` is a judgement somebody made and only
+ * `undefined` means they did not reach the key.
  */
 export interface SpecNodeValues {
   shortName: string;
   name: string;
   body: string;
   commits?: readonly string[] | undefined;
+  blocking?: boolean | undefined;
+  relatedNodes?: readonly string[] | undefined;
 }

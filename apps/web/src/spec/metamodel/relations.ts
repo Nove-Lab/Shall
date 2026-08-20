@@ -4,13 +4,14 @@ import type { Incidence } from "../view/edges";
 /**
  * EVERY RELATION THE CANON ALLOWS, ONE PER PAIR OF TYPES.
  *
- * THE PAIR IS THE UNIT AND NOT THE NAME. `EDGE_GRAMMAR` has 63 rows over 31
- * numbered edge types, and two of its pairs carry two names each —
+ * THE PAIR IS THE UNIT AND NOT THE NAME. `EDGE_GRAMMAR` has 64 rows over 29
+ * numbered edge types, and three of its pairs carry two names each —
  * `ModuleDesign → Interface` is EXPOSES and CONSUMES, `Requirement →
- * Requirement` is DEPENDS_ON and CONFLICTS_WITH. Drawn per row those two would
- * be two lines on one route, one printed over the other; drawn per pair they
- * are one line whose label names both, which is what the picture is actually
- * saying: from here to there, the canon allows these.
+ * Requirement` is DEPENDS_ON and CONFLICTS_WITH, `Decision → Term` is AFFECTS
+ * and MENTIONS. Drawn per row those would be two lines on one route, one
+ * printed over the other; drawn per pair they are one line whose label names
+ * both, which is what the picture is actually saying: from here to there, the
+ * canon allows these.
  *
  * NOTHING IS TRANSCRIBED. The types, their bands and this table all come out of
  * `@shall/core/graph`, so the day a relation is added, turned around or removed

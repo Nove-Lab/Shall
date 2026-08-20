@@ -40,7 +40,7 @@ async function newFolder(): Promise<string> {
 }
 
 describe("the shared templates are regenerated safely", () => {
-  test("two writers over the shared folder both finish, and write the same 22 files", async () => {
+  test("two writers over the shared folder both finish, and write the same 21 files", async () => {
     for (let attempt = 0; attempt < 5; attempt += 1) {
       const settled = await Promise.allSettled([
         writeSharedTemplates(),
@@ -77,7 +77,7 @@ describe("the shared templates are regenerated safely", () => {
 
   test("a second pass over current templates writes nothing at all", async () => {
     // The byte compare is what keeps the folder's mtimes quiet on every start,
-    // so a regeneration that rewrote identical bytes would churn 22 files
+    // so a regeneration that rewrote identical bytes would churn 21 files
     // nobody touched.
     await writeSharedTemplates();
     const templates = getSharedTemplatesPath();

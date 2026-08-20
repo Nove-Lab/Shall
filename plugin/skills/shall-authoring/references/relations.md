@@ -59,11 +59,12 @@ The source, always: a relation is written in the file of the node it leaves. Dow
 | `ImplementationTask —TARGETS→ AcceptanceCriterion` | the task |
 | `WorkLog —ADDRESSES→ ImplementationTask` | the work log |
 | `Evidence —CLAIMS→ AcceptanceCriterion` | the evidence |
-| `VerificationReport —CLAIMS→ ImplementationTask` | the report |
-| `Decision —RESOLVES→ Question`, and `Decision —AFFECTS→` a Requirement, a Constraint or a ModuleDesign | the decision |
-| `Finding —ESCALATES→` a Goal, a SystemResponsibility, a Requirement, a Constraint or a ModuleDesign | the finding |
+| `TaskCompletionReport —CLAIMS→ ImplementationTask` | the report |
+| `Decision —RESOLVES→ Finding`, and `Decision —AFFECTS→` anything in domain, intent or plan except another decision | the decision |
 
-The reason is approval: planning work, starting work, making a claim or filing what went wrong must not touch the criterion's, the task's or the requirement's file, because that would turn a green node yellow and put somebody's settled judgment back in the queue.
+The reason is approval: planning work, starting work, making a claim or deciding a revision must not touch the criterion's, the task's or the requirement's file, because that would turn a green node yellow and put somebody's settled judgment back in the queue.
+
+**A finding starts no relation at all.** The ids it concerns go in its own `relatedNodes` list, which is a hint and not a relation: nothing checks that those ids answer to a file, an empty list is not a fault, and no walk follows them. What answers a finding is a `Decision` that `RESOLVES` it, written afterwards in the decision's own file — so a finding is never edited to record that somebody dealt with it. That decision is held to the graph by what it revises and not by the finding it answers, so a `RESOLVES` line on its own leaves it an orphan.
 
 ## What holds a node in the graph
 
@@ -84,10 +85,9 @@ An *anchor* is the one relation a node must be on the right end of to be part of
 | `DataSchema` | `CARRIES` into it |
 | `ImplementationTask` | `ALLOCATES` into it **or** its own `TARGETS` |
 | `Assumption` | `ASSUMES` into it |
-| `Question` | `RAISES` into it |
-| `Decision` | `RESOLVES` or `AFFECTS` **out of** it |
+| `Decision` | its own `AFFECTS` |
 
-Several anchors are an OR, never an AND: a task is held by `ALLOCATES` into it **or** by its own `TARGETS`, a work log by `LOGS` into it **or** by its own `ADDRESSES`; an evidence and a verification report are held by their own `CLAIMS` alone. Read `anchors.ts` before relying on an Execution row.
+Several anchors are an OR, never an AND: a task is held by `ALLOCATES` into it **or** by its own `TARGETS`, a work log by `LOGS` into it **or** by its own `ADDRESSES`; an evidence and a completion report are held by their own `CLAIMS` alone. Read `anchors.ts` before relying on an Execution row.
 
 The task's OR is the one to watch, because it lets through a mistake nothing downstream will report. A task that targets a criterion and belongs to no module is a whole node: no check files it, no door refuses it, and the board will offer it to somebody the moment its chain goes green. It is still wrong — work with no design behind it is a backlog somebody stored, not a plan — so the module's `ALLOCATES` line is yours to remember.
 

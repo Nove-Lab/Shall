@@ -36,7 +36,7 @@ The anchor sits one level below "derived from the use case", and that fineness i
 4. **Classify each responsibility by the removal test**: take it away, and does the scenario above it still stand? A scenario that collapses without it and one that merely degrades are two different answers, and the answer is written in the section the starting file suggests for it — the template carries the words to use.
 5. **Merge duplicates.** When several scenarios demand the same guarantee, keep one responsibility and give **each** scenario its own `DERIVES_RESPONSIBILITY` line to it. Two near-identical responsibilities are a merge you did not make.
 6. **Check coverage.** Every key use case reaches at least one responsibility, and every goal reaches one, along `Goal —PURSUED_BY→ Actor —PERFORMS→ UseCase —DETAILS→ Scenario —DERIVES_RESPONSIBILITY→ SystemResponsibility`. Nothing computes that chain for you: `shall status --json` prints each file's relations and you join them. A goal that reaches nothing sends you to [phase 2](./phase-2.md) step 2 to reinforce its use cases — the single return path for a coverage hole, because there is no edge upward to draw instead.
-7. **Resolve what is left.** A phase does not close over an open point, and this process parks nothing as a `Question` node.
+7. **Resolve what is left.** A phase does not close over an open point, and the canon has no node to park one in.
 
 ## The questions
 

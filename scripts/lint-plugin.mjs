@@ -255,7 +255,7 @@ function checkShouts(file, lines) {
   });
 }
 
-/** (b) A `--type` argument names one of the canon's 22 types, or a placeholder. */
+/** (b) A `--type` argument names one of the canon's own types, or a placeholder. */
 function checkTypeFlags(file, lines) {
   lines.forEach((text, index) => {
     for (const match of text.matchAll(TYPE_FLAG)) {

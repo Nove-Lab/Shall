@@ -7,7 +7,12 @@ import {
   type ReactNode,
 } from "react";
 import { Link, useParams } from "react-router";
-import { BAND_ORDER, bandOf } from "@shall/core/graph";
+import {
+  BAND_ORDER,
+  bandOf,
+  isNodeType,
+  type NodeTypeName,
+} from "@shall/core/graph";
 import { api } from "@/api";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -764,14 +769,17 @@ function ApprovalCard({
  * ------------------------------------------------------------------ */
 
 /**
- * FINDINGS AND QUESTIONS ARE NOT APPROVED ONE AT A TIME. A finding is a thing
- * an agent noticed and a question is one it could not answer; neither is a
- * claim about the specification that a person signs off in isolation, and both
- * ride along in the report being accepted. What they DO get is the door to the
- * place they are dealt with — and for a question that door opens the editor,
- * because an unanswered question is routed here to be answered.
+ * A FINDING IS NOT APPROVED ONE AT A TIME. It is a thing an agent noticed, not
+ * a claim about the specification that a person signs off in isolation, so it
+ * rides along in the report being accepted. What it DOES get is the door to the
+ * file, because reading it is the whole of what happens here: what answers a
+ * finding is a `Decision` written afterwards that `RESOLVES` it, and that is
+ * somebody else's card.
+ *
+ * TYPED AGAINST THE CANON, so a type renamed there is a compile error on this
+ * line rather than a set that quietly matches nothing.
  */
-const RIDES_ALONG = new Set(["Finding", "Question"]);
+const RIDES_ALONG: ReadonlySet<NodeTypeName> = new Set(["Finding"]);
 
 function ReportCard({
   bundle,
@@ -831,7 +839,9 @@ function TypeSection({
   nodeById: ReadonlyMap<string, SpecNode>;
 } & RowWiring) {
   const [open, setOpen] = useState(true);
-  const judged = !RIDES_ALONG.has(type);
+  // A member wears whatever type its file claimed, so the canon's own guard
+  // narrows the string before the set is asked about it.
+  const judged = !(isNodeType(type) && RIDES_ALONG.has(type));
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
       <CollapsibleTrigger
@@ -849,7 +859,6 @@ function TypeSection({
             verb="Reject"
             canApprove={judged}
             canReject={judged}
-            answer={type === "Question"}
             {...wiring}
           />
         ))}
@@ -1006,7 +1015,7 @@ function ClosureCard({
  *
  * THE THREAD BACK TO THE WORK IS THE EVIDENCE CARD'S OWN: each report row says
  * which log submitted it and that log's commits, because the claimant here is
- * the verification report and the log is its provenance — exactly the
+ * the completion report and the log is its provenance — exactly the
  * arrangement the criterion's card keeps.
  */
 function TaskClosureCard({

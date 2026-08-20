@@ -18,7 +18,7 @@ If the project is not empty you are in revision mode. Run `shall board --json` a
 2. **Write each candidate goal as one sentence.** The statement carries the achieved end state, not the road to it, and the achievement has to be imaginable: if you cannot picture the world in which that sentence is true, it is still a means, or still a slogan. The detail goes below the statement, never inside it.
 3. **Draft the success measure** — how achievement would be gauged, said in words. No numbers, no metrics, no targets: the quantity arrives later, in an acceptance criterion's benchmark, and a number written here is a number nobody can judge. If the gauge does not come at once, narrow it with an option question. If it still will not settle, leave it out and settle it at [phase 2](./phase-2.md)'s benchmark check — absent beats invented.
 4. **Decompose what is too large**, writing `REFINES` in the parent, then ask the sufficiency question out loud: *if all of these sub-goals are achieved, is the parent achieved?* If the answer is no, a sub-goal is missing and you find it before moving on. If the answer arrives with an "and also…", that clause is the missing sub-goal.
-5. **Resolve what is left.** A phase does not close over an open point, and this process never parks one as a `Question` node — every open point is settled inside the phase, by a default recorded as an Assumption or by asking.
+5. **Resolve what is left.** A phase does not close over an open point, and the canon has no node to park one in — every open point is settled inside the phase, by a default recorded as an Assumption or by asking.
 
 ## The questions
 

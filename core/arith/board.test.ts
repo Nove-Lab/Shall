@@ -186,7 +186,7 @@ const term = node("Term", "T-0001");
 const journal = node("Journal", "J-0001");
 const workLog = node("WorkLog", "WL-0001");
 /** The task's claimant since #24— : a report, submitted by the log, claiming one task. */
-const report = node("VerificationReport", "VR-0001");
+const report = node("TaskCompletionReport", "TCR-0001");
 
 const SPINE_NODES = [
   parentGoal,
@@ -382,8 +382,8 @@ describe("whether a task can be picked up", () => {
       edge("IT-0001", "DEPENDS_ON", "IT-0002"),
       edge("J-0001", "LOGS", "WL-0001"),
       edge("WL-0001", "ADDRESSES", "IT-0002"),
-      edge("WL-0001", "SUBMITS", "VR-0001"),
-      edge("VR-0001", "CLAIMS", "IT-0002"),
+      edge("WL-0001", "SUBMITS", "TCR-0001"),
+      edge("TCR-0001", "CLAIMS", "IT-0002"),
     ];
     const green = settled(nodes, edges);
     const waiting = colorContextOf(graphOf(nodes, edges), green);
@@ -422,8 +422,8 @@ describe("whether a task can be picked up", () => {
       ...SPINE,
       edge("J-0001", "LOGS", "WL-0001"),
       edge("WL-0001", "ADDRESSES", "IT-0001"),
-      edge("WL-0001", "SUBMITS", "VR-0001"),
-      edge("VR-0001", "CLAIMS", "IT-0001"),
+      edge("WL-0001", "SUBMITS", "TCR-0001"),
+      edge("TCR-0001", "CLAIMS", "IT-0001"),
     ];
     const ledgers = booksOf({
       approvals: nodes.map((held) => approve(held, edges)),
@@ -442,8 +442,8 @@ describe("whether a task can be picked up", () => {
       ...SPINE,
       edge("J-0001", "LOGS", "WL-0001"),
       edge("WL-0001", "ADDRESSES", "IT-0001"),
-      edge("WL-0001", "SUBMITS", "VR-0001"),
-      edge("VR-0001", "CLAIMS", "IT-0001"),
+      edge("WL-0001", "SUBMITS", "TCR-0001"),
+      edge("TCR-0001", "CLAIMS", "IT-0001"),
     ];
     const ledgers = booksOf({
       approvals: nodes.map((held) => approve(held, edges)),
@@ -847,8 +847,8 @@ describe("the board and the queue", () => {
       ...SPINE,
       edge("J-0001", "LOGS", "WL-0001"),
       edge("WL-0001", "ADDRESSES", "IT-0001"),
-      edge("WL-0001", "SUBMITS", "VR-0001"),
-      edge("VR-0001", "CLAIMS", "IT-0001"),
+      edge("WL-0001", "SUBMITS", "TCR-0001"),
+      edge("TCR-0001", "CLAIMS", "IT-0001"),
     ];
     const ledgers = settled(nodes, edges);
     const graph = graphOf(nodes, edges);

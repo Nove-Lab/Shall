@@ -30,11 +30,11 @@ Work that genuinely spans — integration, the wiring between two modules — ta
 
 `ImplementationTask —TARGETS→ AcceptanceCriterion`, written in the **task's own** file — because planning work must not touch a criterion's file and put somebody's settled judgment back in the queue.
 
-**Zero or one, never two.** `shall check` reports a task with two aims as a hole to fix, and the reason is arithmetic: a person closes a task over the verification reports claiming it, so a task pointing at two criteria closes neither on its own, and coverage counted over it counts one turn of work twice.
+**Zero or one, never two.** `shall check` reports a task with two aims as a hole to fix, and the reason is arithmetic: a person closes a task over the completion reports claiming it, so a task pointing at two criteria closes neither on its own, and coverage counted over it counts one turn of work twice.
 
 The other direction is one-to-many: several tasks may share a criterion between them. And the coverage that has to hold at the end runs that way — **every criterion in scope is aimed at by at least one task**, scenario-attached and requirement-attached alike. A criterion nothing aims at is a plan that is not finished.
 
-A task aiming at nothing is allowed — preparation, internal tidying — with one consequence to say out loud: its completion cannot be read off a criterion closing. It is done when a person closes the verification reports claiming it, and evidence cannot be filed under it at all, because evidence is shown against a criterion and this task names none.
+A task aiming at nothing is allowed — preparation, internal tidying — with one consequence to say out loud: its completion cannot be read off a criterion closing. It is done when a person closes the completion reports claiming it, and evidence cannot be filed under it at all, because evidence is shown against a criterion and this task names none.
 
 ## No order is stored
 

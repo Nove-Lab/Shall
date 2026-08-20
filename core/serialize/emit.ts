@@ -1,4 +1,8 @@
-import { isNodeType, type NodeDeletionProposal } from "../graph/index.js";
+import {
+  isNodeType,
+  type NodeDeletionProposal,
+  type SpecNodeValues,
+} from "../graph/index.js";
 import { emitScalar } from "./scalar.js";
 
 /**
@@ -55,6 +59,27 @@ export const COMMITS_KEY = "commits";
 export const COMMITS_TYPE = "WorkLog";
 
 /**
+ * A Finding's two keys and no other type's.
+ *
+ * `blocking` is the author's judgement that this finding stopped the work that
+ * found it. Only `true` is ever written — absent and `false` are one state, the
+ * way an empty `edges` list is no list at all — and nothing computed reads it:
+ * it is a signal for whoever is looking, never an input to a colour or a gate.
+ *
+ * `relatedNodes` is the ids a finding concerns, and it is NOT a relation. A
+ * finding starts no relation at all, so this is the only way it can name what it
+ * is about; nothing resolves the ids, and one no file answers to is not a fault.
+ * The list is sorted here because it has no intrinsic order — unlike the commits
+ * below, whose chronology is the author's fact.
+ */
+export const BLOCKING_KEY = "blocking";
+
+export const RELATED_NODES_KEY = "relatedNodes";
+
+/** The type that carries `blocking:` and `relatedNodes:`. */
+export const FINDING_TYPE = "Finding";
+
+/**
  * The one machine block, camelCase where the three author keys are not: it is
  * the spelling an agent is told to type and the daemon writes back, chosen
  * with the user spec and kept even beside `short_name` — reversing the choice
@@ -77,6 +102,12 @@ export interface NodeFileFields {
    * the way the edges are. `undefined` and empty both emit as no key.
    */
   readonly commits?: readonly string[] | undefined;
+  /**
+   * The Finding's judgement and its hint list. `false` and `undefined` both
+   * emit as no key; an empty hint list does too.
+   */
+  readonly blocking?: boolean | undefined;
+  readonly relatedNodes?: readonly string[] | undefined;
 }
 
 /**
@@ -102,6 +133,28 @@ export interface NodeFileBlocks {
 /** The blocks of a parse, on their own — what every carry-over hands back. */
 export function blocksOf(node: NodeFileBlocks): NodeFileBlocks {
   return { deletionProposed: node.deletionProposed };
+}
+
+/**
+ * A parse back into the values a write door takes, with every per-type key
+ * carried.
+ *
+ * IT EXISTS SO THAT A NEW KEY REACHES THE REWRITERS FOR FREE. A caller that
+ * spells the object out — `{ shortName, name, body, commits }` — keeps
+ * compiling when a key is added, because every one of them is optional, and
+ * quietly drops it: a restore would hand back a Finding with its `blocking`
+ * judgement gone, and nothing would have said so. Building the values here
+ * instead makes that impossible to get wrong twice.
+ */
+export function valuesOf(node: NodeFileFields): SpecNodeValues {
+  return {
+    shortName: node.shortName,
+    name: node.name,
+    body: node.body,
+    commits: node.commits,
+    blocking: node.blocking,
+    relatedNodes: node.relatedNodes,
+  };
 }
 
 /**
@@ -174,6 +227,32 @@ export function emitNodeFile(
       // Through the scalar rule like an id: a seven-digit sha of nothing but
       // digits would come back a number written plain.
       lines.push(`  - ${emitScalar(sha)}`);
+    }
+  }
+
+  // The Finding's judgement, written as a bare YAML boolean and NOT through the
+  // scalar rule. That rule exists so a STRING comes back the string it was, and
+  // `isPlainSafe("true")` is false — routing a boolean through it would write
+  // `blocking: "true"` and hand the reader a string to un-string. A boolean has
+  // no round-trip hazard to defend against: `true` written plain reads back the
+  // same value under YAML 1.1 and the 1.2 core schema alike, which is the whole
+  // union the scalar rule judges against. Only `true` is written; `false` is the
+  // same fact as no key, and two spellings of one state is what this format
+  // refuses everywhere else.
+  if (node.blocking === true) {
+    lines.push(`${BLOCKING_KEY}: true`);
+  }
+
+  // The hint list, sorted — it has no intrinsic order, so leaving it as given
+  // would let two people who wrote the same hints produce different bytes. Each
+  // id goes through the scalar rule for the reason an edge's ends do.
+  const relatedNodes = [...(node.relatedNodes ?? [])].sort((a, b) =>
+    a === b ? 0 : a < b ? -1 : 1,
+  );
+  if (relatedNodes.length > 0) {
+    lines.push(`${RELATED_NODES_KEY}:`);
+    for (const relatedId of relatedNodes) {
+      lines.push(`  - ${emitScalar(relatedId)}`);
     }
   }
 

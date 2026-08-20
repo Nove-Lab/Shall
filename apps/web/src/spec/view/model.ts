@@ -1,10 +1,10 @@
 /**
  * What the Spec plane's two views are computed from.
  *
- * The roster itself is canon and lives in `@shall/core/graph`: the twenty-two
- * types, their layers, the band order and the column order. This file re-exports
- * the pieces the views read so a view module has one import, and owns the two
- * things that are *presentation* and therefore not the canon's to hold.
+ * The roster itself is canon and lives in `@shall/core/graph`: the types, their
+ * layers, the band order and the column order. This file re-exports the pieces
+ * the views read so a view module has one import, and owns the two things that
+ * are *presentation* and therefore not the canon's to hold.
  *
  * Nothing here reads a clock, a random source or the DOM, and nothing iterates an
  * unordered collection. The same graph must draw the same picture on every
@@ -41,7 +41,7 @@ import type { Band, SpecNode } from "@shall/core/graph";
  *
  * THAT DISTINCTION IS THE POINT AND NOT A SHORTCUT. Naming MENTIONS and
  * REPRESENTS would be a second roster to keep in step with the canon's, and it
- * would answer wrongly the day a twenty-fourth type gets a relation into Domain.
+ * would answer wrongly the day another type gets a relation into Domain.
  * The crossing answers those two today, and it also answers the two that stay
  * SOLID for the right reason rather than by omission: DENOTES runs Term →
  * DomainEntity and RELATES_TO runs DomainEntity → DomainEntity, so both begin
@@ -51,7 +51,7 @@ import type { Band, SpecNode } from "@shall/core/graph";
  * because the caller already holds two: `bandOf` is where a node's band comes
  * from, the layout calls it when it places a card, and `Placement.band` is that
  * same answer — so the canvas needs no second lookup. A satellite therefore
- * counts as the band it is presented in, and a Question pointing at a Term
+ * counts as the band it is presented in, and an Assumption pointing at a Term
  * sinks into Domain like anything else outside it.
  */
 export function sinksIntoDomain(sourceBand: Band, targetBand: Band): boolean {

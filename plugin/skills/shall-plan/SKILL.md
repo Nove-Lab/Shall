@@ -78,10 +78,11 @@ The queue cuts a bundle at each topmost yellow node and walks **down every outgo
 
 So say "one or more cards are waiting". Never "approve the card" — a person told to look for one card stops after the first and the phase never goes green.
 
-Two corrections to the count, both worth predicting rather than discovering:
+Three corrections to the count, all worth predicting rather than discovering:
 
 - **A task no module allocates arrives as a card of its own, holding one node.** Its own `TARGETS` line anchors it, so it is a whole node and it is yellow, and being the topmost yellow node it roots a bundle. That lone card is what a dropped task looks like in the queue — if one turns up, the module's `ALLOCATES` line is missing.
 - **A module nothing anchors has no card at all.** It is red as an orphan, and a red the grammar found is outside the queue: `shall check` and the board's Fix Spec half are the only places it is said.
+- **A yellow `Decision` stands above every other type, `Goal` included.** It roots one bundle carrying everything its `AFFECTS` reaches, so a responsibility or a module this phase turned yellow rides inside that card instead of heading one of its own. A decision only turns up where there was already something to revise, so revision mode is where to expect that card rather than to be surprised by it.
 
 ## The canon, for this plane
 
@@ -108,7 +109,7 @@ Three consequences worth having in hand:
 - **A module's dependency can only be said as a contract.** There is no line between two modules, so "A depends on B" is written as A consuming what B exposes — and a dependency you cannot name a contract for is a dependency reaching past the boundary into B's internals, which is the thing the boundary was drawn to prevent.
 - **The drivers leave no trace.** The non-functional requirements and constraints that decided a boundary are read and never recorded, which is exactly why the grounds duty exists. A module whose only driver is a constraint has nothing to hang off either: go to `/shall:specify` and find the responsibility nobody wrote, and never invent one to hang a module on.
 
-`Decision —AFFECTS→` and `Finding —ESCALATES→` reach into this plane from elsewhere. This process writes neither. Anything absent from this table, do not invent: `shall check` refuses a relation the canon does not allow, and the **?** button beside the Spec plane's view tabs draws the whole canon if the person wants to look.
+A `Decision` is filed in the plan band and this process never writes one. It is the rationale a revision was made for: its `AFFECTS` lines reach the domain, intent and plan planes — never the execution one, because a record of what happened is not revised by deciding something afterwards — and the revision one asks of this plane arrives the ordinary way, as a direction in words. A `Finding` starts no relation at all. Anything absent from this table, do not invent: `shall check` refuses a relation the canon does not allow, and the **?** button beside the Spec plane's view tabs draws the whole canon if the person wants to look.
 
 ## Fix Spec comes first
 

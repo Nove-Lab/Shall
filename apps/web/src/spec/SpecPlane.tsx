@@ -195,10 +195,10 @@ export function SpecPlane() {
   const project = useProject();
   /**
    * WHERE THE QUEUE SENT US, AS THE URL AND NOTHING ELSE. A card in the review
-   * queue links to `?node=<id>&mode=view|edit&back=<path>`, which makes the deep
-   * link a page a person can bookmark, reload and share rather than a message
-   * passed between two mounted components. Read once — see the effect below —
-   * because after that the panel is theirs to move.
+   * queue links to `?node=<id>&back=<path>`, which makes the deep link a page a
+   * person can bookmark, reload and share rather than a message passed between
+   * two mounted components. Read once — see the effect below — because after
+   * that the panel is theirs to move.
    */
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -381,10 +381,10 @@ export function SpecPlane() {
    * is answered by leaving the board as it is rather than by an error about a URL
    * nobody typed.
    *
-   * `mode=edit` IS A DOOR THE QUEUE NEEDS: a Question with no answer in it is
-   * routed here to be answered, and arriving in the reading pane would make that
-   * one more click on every row. Anything else — including a missing `mode` — is
-   * the reading pane, which is what a link to a node means by default.
+   * IT ALWAYS OPENS THE READING PANE, which is what a link to a node means.
+   * Nothing in this app links into the editor: a link is handed to somebody so
+   * they can read what it names, and the way into editing is the panel's own
+   * button, beside the words it would change.
    */
   useEffect(() => {
     if (deepLinked.current) {
@@ -395,11 +395,7 @@ export function SpecPlane() {
       return;
     }
     deepLinked.current = true;
-    if (searchParams.get("mode") === "edit") {
-      setPanel({ mode: "edit", id: wanted });
-    } else {
-      openNode(wanted);
-    }
+    openNode(wanted);
   }, [nodes, searchParams]);
 
   /**

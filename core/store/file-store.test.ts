@@ -14,7 +14,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, describe, test } from "node:test";
-import { TEXT_BYTE_CAP } from "../graph/index.js";
+import { bandFolderOf, NODE_TYPES, TEXT_BYTE_CAP } from "../graph/index.js";
 import {
   approvalPayload,
   blocksOf,
@@ -608,7 +608,7 @@ describe("a node file has one place, and every other place is a sentence", () =>
     const graph = await loadGraph(specDir);
     assert.deepEqual(graph.nodes, []);
     assert.deepEqual(messages(graph.problems), [
-      "intent/notes is not one of the canon's node types — rename it to one of them, or move it out of the spec folder. The canon's types are Term, DomainEntity, Goal, Actor, UseCase, Scenario, SystemResponsibility, Requirement, AcceptanceCriterion, Constraint, ModuleDesign, Interface, DataSchema, ImplementationTask, Journal, WorkLog, Evidence, VerificationReport, Finding, Assumption, Question, Decision.",
+      "intent/notes is not one of the canon's node types — rename it to one of them, or move it out of the spec folder. The canon's types are Term, DomainEntity, Goal, Actor, UseCase, Scenario, SystemResponsibility, Requirement, AcceptanceCriterion, Constraint, ModuleDesign, Interface, DataSchema, ImplementationTask, Decision, Journal, WorkLog, Evidence, TaskCompletionReport, Finding, Assumption.",
       "intent/notes is not one of the canon's node types, so intent/notes/deep/R-0001.md is not read as a node. A node file lives at <band>/<Type>/<id>.md.",
     ]);
     assert.equal(graph.problems[0]?.file, "intent/notes");
@@ -1535,6 +1535,43 @@ describe("the scaffold door starts a node without pretending it is one", () => {
       await readFile(path.join(specDir, made.file), "utf8"),
       emitScaffold("Term"),
     );
+  });
+
+  /**
+   * A DECISION IS FILED WHERE IT LIVES AND NOT WHERE IT REACHES. Its AFFECTS
+   * runs to every type of the three living bands, Domain included, so a folder
+   * chosen by reach would be all three at once. The residence is Plan.
+   */
+  test("a decision lands in plan, whatever it affects", async () => {
+    assert.equal(bandFolderOf("Decision"), "plan");
+    const specDir = await makeSpecDir();
+    const made = await scaffoldNodeFile(specDir, "Decision");
+    assert.deepEqual(made, { id: "D-0001", file: "plan/Decision/D-0001.md" });
+    assert.equal(
+      await readFile(path.join(specDir, made.file), "utf8"),
+      emitScaffold("Decision"),
+    );
+  });
+
+  /**
+   * THE ONE TYPE THE CANON GIVES NO LAYER still needs a drawer, and `bandOf`
+   * hands it Intent so there is one. That single choice covers the roster only
+   * while `Assumption` is alone in it — a second layerless type would be a
+   * second choice, made by nobody, in the same line of code.
+   */
+  test("the one layerless type is filed by the band choice, not by a layer", async () => {
+    assert.deepEqual(
+      NODE_TYPES.filter((entry) => entry.layer === null).map(
+        (entry) => entry.name,
+      ),
+      ["Assumption"],
+    );
+    const specDir = await makeSpecDir();
+    const made = await scaffoldNodeFile(specDir, "Assumption");
+    assert.deepEqual(made, {
+      id: "AS-0001",
+      file: "intent/Assumption/AS-0001.md",
+    });
   });
 
   /**

@@ -36,7 +36,7 @@ honest `cat` is noise. The line is one entry in
 `daemon/src/host/agent-settings.ts`.
 
 **Where does a `MENTIONS` relation come from?** The domain phase harvests terms
-from prose, and the canon lets sixteen types point at a term — but drawing that
+from prose, and the canon lets fifteen types point at a term — but drawing that
 relation edits a node that may already be green, which sends it back for
 approval for a reason nobody asked about. The plugin's rule is to draw MENTIONS
 only from a node it is already writing. The alternative is a pass that anchors
@@ -84,9 +84,37 @@ relate to each other are describing the world, not declaring an order, so a
 cycle in them is not a defect. Written down because it is the third self-loop in
 the canon and the question will be asked again.
 
+## From the decision-and-finding round (2026-08-21)
+
+**Should the review queue and `shall status` order by an unanswered blocking
+`Finding`?** A finding now carries `blocking`, and the specification that added
+it draws the upper bound in the same breath — display and ordering material,
+never a lock. This round stopped at the field. The ordering half is small:
+`byScan` and the queue comparator in `core/arith/bundles.ts` are where a bundle
+gets its place, and `NodeStatus` in `daemon/src/service/spec-status.ts` would
+have to carry the flag to the wire before a row could be ordered by it.
+"Unanswered" is the larger half and is not a field at all: a finding is answered
+when some `Decision` `RESOLVES` it and unanswered when none does, so it wants a
+name and a home in `core/arith` first. Left out deliberately — the completion
+criterion asked for the field and no further, and the two halves are worth
+taking together rather than the cheap one now.
+
+**Should `AFFECTS` reach an `Assumption`, and should a `Decision` affect another
+`Decision`?** Settled by hand while the rows were being written — assumption
+yes, decision no — and recorded because the second half is a gap somebody will
+propose closing. `AFFECTS` is what anchors a `Decision`, so two decisions naming
+each other would hold each other to the graph while revising nothing, and no
+loop rule catches it: `planCyclesOf` in `core/arith/plan-seams.ts` reads
+`DEPENDS_ON` and the `EXPOSES`/`CONSUMES` pair and deliberately nothing else. The
+assumption arm was taken with one consequence accepted: an `Assumption` hanging
+off a `WorkLog` sits on the report side of the bundle walk, so a `Decision` that
+affects it is legal and passes check and still does not gather it onto its card.
+The rows are in `EDGE_GRAMMAR` (`core/graph/grammar.ts`); a `Decision` row there
+would need a cycle rule or a cardinality that does not exist today.
+
 ## Older, still open
 
-**Closing a task whose prerequisites are unfinished.** A verification report can
+**Closing a task whose prerequisites are unfinished.** A completion report can
 close an ImplementationTask that is green but blocked — nothing consults the
 task's state at the closure door. `closureAsks` in `core/arith/closure.ts` is
 where the clause would go. Left open deliberately: a person closing a task with

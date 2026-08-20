@@ -29,7 +29,7 @@ A norm that **binds** requirements. The boundary test is one question: does the 
 
 1. **Decompose each approved responsibility into requirements**, functional and non-functional alike, each obeying the four rules above.
 2. **Separate out the norms that bind** and write them as constraints, settled by the boundary test. A constraint binding several requirements gets its line in **each** of their files: one holds it to the graph, the rest name who else is bound.
-3. **Resolve what is left.** A phase does not close over an open point, and this process parks nothing as a `Question` node.
+3. **Resolve what is left.** A phase does not close over an open point, and the canon has no node to park one in.
 4. **Get terminal approval of the requirement and constraint list before you write a single criterion.** Explain the whole list in plain sentences and get a yes. The order matters because the criterion pass is a *test of the requirement* — a requirement nobody can write a judgeable criterion for is a wish — and that finding is worth something only once the person has committed to the sentence. Write the criteria first and a late scope objection kills the sentences and every criterion under them together. If writing a criterion then forces a requirement to be rewritten, that requirement's approval is spent: take the rewrite back before going on.
 5. **Give every approved requirement at least one unit criterion.** Phase 2 put integrative criteria on scenarios under the same relation name from a different parent; these are the unit verdicts, and they are their own nodes.
    - It names an observable outcome. No sentence form is enforced — judgeability is the only condition of validity.
