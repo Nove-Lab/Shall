@@ -1,4 +1,9 @@
-import { closureKindOf, compare, type SpecNode } from "../graph/index.js";
+import {
+  articleFor,
+  closureKindOf,
+  compare,
+  type SpecNode,
+} from "../graph/index.js";
 import type { RefusedFile, SpecGraph } from "../store/file-store.js";
 import { closureVerdictOf } from "./closure.js";
 import { cyclicOf, cyclicSentence } from "./plan-seams.js";
@@ -198,7 +203,7 @@ export function missingSentence(
   id: string,
   referrer: MissingNode["referencedBy"][number],
 ): string {
-  return `${referrer.fromId} has a ${referrer.type} relation to ${id}, and no file names ${id}. The relation is kept as written, so writing or restoring ${id} attaches it again.`;
+  return `${referrer.fromId} has ${articleFor(referrer.type)} ${referrer.type} relation to ${id}, and no file names ${id}. The relation is kept as written, so writing or restoring ${id} attaches it again.`;
 }
 
 export function reviewGraph(

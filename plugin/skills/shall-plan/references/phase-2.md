@@ -82,7 +82,7 @@ edges:
     to: IF-0003
 ```
 
-`REPRESENTS` points into the domain band, which is the one line here that turns nothing yellow: a relation is written in the file it leaves, so naming the concept a schema comes from edits the schema and never the concept.
+`REPRESENTS` points into the domain band, and like the `MENTIONS` above it turns nothing yellow: a relation is written in the file it leaves, so naming the concept a schema comes from edits the schema and never the concept.
 
 Anchoring edits the parent, so every module you touch goes yellow again. **An orphan interface is repaired in a module's file, and an orphan schema in an interface's — never in the orphan's own.**
 

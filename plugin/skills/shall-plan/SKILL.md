@@ -17,7 +17,7 @@ module designs → the contracts between them → the work, cut into tasks.
 
 You run **one phase at a time**, and a phase does not open until the phase above it has been approved by a person in the browser. You never run two phases in one pass and never write a lower layer because you happen to be there already.
 
-The order is not a convention. Each phase's nodes are held to the graph by the phase above: an `Interface` by the `ModuleDesign` that `EXPOSES` or `CONSUMES` it, an `ImplementationTask` by the `ModuleDesign` that `ALLOCATES` it. Write downward before the anchor exists and you have written orphans, and an orphan is red.
+The order is not a convention. Each phase's nodes are held to the graph by the phase above: an `Interface` by the `ModuleDesign` that `EXPOSES` or `CONSUMES` it, an `ImplementationTask` by the `ModuleDesign` that `ALLOCATES` it or by the criterion its own `TARGETS` line aims at. Write downward before the anchor exists and you have written orphans, and an orphan is red.
 
 **This plane is written on top of a specification a person has approved, and the command has already checked that.** It read the color of every node above the responsibilities this direction touches and refused to hand over if any of them was unread. So the specification is settled ground here — and the moment this process finds a gap in it, that is not a failure of either document but the ordinary way a specification gets precise: go through `/shall:specify`, and come back to the step you left.
 
@@ -68,7 +68,7 @@ Why revising is the whole repair: a rejection stands against the content it was 
 
 ## Why the card count varies
 
-The queue cuts a bundle at each topmost yellow node and walks **down every outgoing spec relation** from it. A phase therefore arrives as **several cards, not one**:
+The queue cuts a bundle at each topmost yellow node and walks **down the order, never back up it** — an outgoing relation that points at what holds the node is left alone. A phase therefore arrives as **several cards, not one**:
 
 | Phase | What arrives |
 |---|---|
@@ -105,7 +105,7 @@ Every relation this process uses, and the file each one is written in.
 
 Three consequences worth having in hand:
 
-- **A relation lives in the file of the node it leaves**, so anchoring a child edits the parent. The two exceptions are a task's own `DEPENDS_ON` and `TARGETS`, which run upward on purpose: planning work must not touch a criterion's file, because that would turn a green criterion yellow and put somebody's settled judgment back in the queue.
+- **A relation lives in the file of the node it leaves**, so anchoring a child edits the parent. The two exceptions are a task's own `DEPENDS_ON`, which joins two tasks of one rank, and its own `TARGETS`, which runs upward on purpose: planning work must not touch a criterion's file, because that would turn a green criterion yellow and put somebody's settled judgment back in the queue.
 - **A module's dependency can only be said as a contract.** There is no line between two modules, so "A depends on B" is written as A consuming what B exposes — and a dependency you cannot name a contract for is a dependency reaching past the boundary into B's internals, which is the thing the boundary was drawn to prevent.
 - **The drivers leave no trace.** The non-functional requirements and constraints that decided a boundary are read and never recorded, which is exactly why the grounds duty exists. A module whose only driver is a constraint has nothing to hang off either: go to `/shall:specify` and find the responsibility nobody wrote, and never invent one to hang a module on.
 

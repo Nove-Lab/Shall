@@ -48,7 +48,7 @@ A command carries no process. It dispatches and delegates, so a change to how a 
 
 Every write or edit of a `.md` file under a `.shall/spec/` folder is checked at once. Anything else — source code, notes, a file somewhere else entirely — exits silently, and the hook costs that write nothing.
 
-A newly written child node reports **no live anchor** until its parent gains the relation line that reaches it. That is not a failure and it is not fixed by editing the child: a relation lives in the file of the node it leaves, so a new Scenario is held to the graph by a line in the UseCase's file. Write the child, then write the parent's line, and the sentence goes away.
+A newly written child node reports **no live anchor** until its parent gains the relation line that reaches it. That is not a failure and it is not fixed by editing the child: a relation lives in the file of the node it leaves, so a new Scenario is held to the graph by a line in the UseCase's file. Write the child, then write the parent's line, and the sentence goes away. A node the canon holds by a line it draws itself reads that the other way round: a `Decision` is anchored by its own `AFFECTS`, an `Evidence` and a `TaskCompletionReport` by their own `CLAIMS`, so the line the check asks for belongs in the file just written. An `ImplementationTask` and a `WorkLog` are held either way — from above, or by their own `TARGETS` and `ADDRESSES` — so for those two it names a choice rather than a wait.
 
 If the hook says the `shall` CLI is not on PATH, nothing was checked. Link the CLI (`bun link` in `client/cli`) and the loop resumes.
 

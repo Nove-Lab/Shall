@@ -25,8 +25,9 @@ daemon 하나가 돌고, 사람은 localhost 웹 화면에서 스펙을 보고 �
   한 두 사람은 충돌 없이 병합된다.
 - **frontmatter는 기계의 것, 본문은 저자의 것.** 펜스 위에는 그래프가 필요로 하는
   세 가지 — `short_name`·`name`·`edges` — 와, WorkLog 하나만 나르는 `commits`(그
-  작업이 만든 커밋의 sha 목록 — 메시지는 git의 것), 그리고 기계가 스스로 쓰는 블록
-  하나 — 에이전트가 삭제를 청하는 `deletionProposed` — 만 산다. 펜스 아래는 스펙 그
+  작업이 만든 커밋의 sha 목록 — 메시지는 git의 것), Finding 하나만 나르는
+  `blocking`·`relatedNodes`, 그리고 기계가 스스로 쓰는 블록 하나 — 에이전트가
+  삭제를 청하는 `deletionProposed` — 만 산다. 펜스 아래는 스펙 그
   자체이고, 자유 마크다운이다: 어떤 헤딩이든, 어떤 형태든, 쓴 그대로 읽히고
   그려진다. 템플릿의 `## <라벨>` 헤딩들은 시작을 돕는 제안이지 규칙이 아니다.
 - **spec/은 순수 저작물이다.** 노드 파일 안에는 자기 판정 상태에 대한 어떤 주장도
@@ -52,8 +53,9 @@ daemon 하나가 돌고, 사람은 localhost 웹 화면에서 스펙을 보고 �
   버튼은 장부에 레코드 하나를 적을 뿐 노드 파일은 한 바이트도 건드리지 않는다.
   장부는 에이전트가 쓰지 않기로 한 파일이다(deny 규칙 — 관례 방어).
 - **번들도 저장하지 않는다.** 리뷰 큐가 보이는 번들(Spec approval · Work report ·
-  AC closure)은 로드마다 그래프와 장부 세 권에서 다시 계산한 배치이지 테이블의 행이
-  아니다 — 저장·손편집·`git checkout`이 큐를 움직이고, 아무에게도 알릴 것이 없다.
+  AC closure · Task closure)은 로드마다 그래프와 장부 세 권에서 다시 계산한 배치이지
+  테이블의 행이 아니다 — 저장·손편집·`git checkout`이 큐를 움직이고, 아무에게도 알릴
+  것이 없다.
 - **전체가 하나의 TypeScript 프로그램.** "쓰기 경로가 몇 개인가" 같은 질문에 코드
   전체를 훑어 답할 수 있어야 한다.
 
@@ -178,8 +180,8 @@ WorkLog에 한해 `commits`, Finding에 한해 `blocking`·`relatedNodes`, 그�
   실행(Execution). 층이 없는 위성은 Assumption 하나뿐이고, 매달린 노드를 따르되
   캔버스에 자리가 있도록 Intent 밴드에 그린다
 - 앵커 테이블 — 타입마다 노드를 그래프에 붙드는 관계(방향 포함). 뿌리 넷(Term·
-  DomainEntity·Goal·Journal)만 앵커가 없고, 실행 밴드의 나머지는 그것을 제출·기록한
-  WorkLog에 붙든다. 아래층이 겨냥 대상을 **자기 파일에 쓰는** 관계 셋이 있다 —
+  DomainEntity·Goal·Journal)만 앵커가 없고, Finding은 그것을 RECORDS한 WorkLog에
+  붙든다. 아래층이 겨냥 대상을 **자기 파일에 쓰는** 관계 셋이 있다 —
   ImplementationTask의 `TARGETS`(닫으려는 AcceptanceCriterion), WorkLog의
   `ADDRESSES`(다루는 과제), Evidence의 `CLAIMS`(만족시킨다는 기준) — 그래서 IT는
   ALLOCATES하는 모듈에 또는 자기 TARGETS 대상에, WorkLog는 LOGS하는 Journal에 또는
@@ -299,13 +301,15 @@ core에서 파일시스템을 만지는 유일한 모듈이고, 노드가 어느
   다른 레코드는 hash가 맞아도 서지 않는다
 - 닫힘(`closure.ts`) — 주체의 open/closed와, 큐가 물어야 하는지. 판정은 **목록**에
   대한 것이다: 그 주체를 claim하는 살아있는 노드 전부의 id→hash. acceptance 기록이 있고
-  **AC의 hash가 그대로**이고 **기록된 목록이 지금 목록과 같으면**(같은 id, 같은 hash,
-  더도 덜도 없이) closed; rejections에 `evidence` 목록을 실은 기록이 같은 두 조건으로
-  서면 "left open"(마크는 open, 사유가 함께); 둘 다 아니면 아무도 이 목록에 대해 말한
-  적이 없는 것 — `closureAsks`가 참이고 큐가 묻는다. 증거가 추가·철회·수정되거나 AC가
-  고쳐지면 어느 기록이든 산술로 실효한다. 색은 등록의 축, 마크는 충족의 축 — 서로 다른
-  답을 낼 수 있고 그래야 한다(green+open = 확정됐고 증거 대기; yellow+closed도 가능).
-  둘이 만나는 곳은 하나뿐: AC의 **문구 자체**가 반려 중이면 닫힘을 묻지도, 쓰지도 않는다
+  **주체의 hash가 그대로**이고 **기록된 목록이 지금 목록과 같으면**(같은 id, 같은 hash,
+  더도 덜도 없이) closed; rejections에 청구자 목록을 실은 기록이 같은 두 조건으로
+  서면 "left open"(마크는 open, 사유가 함께). 그 목록의 키는 주체마다 다르다 — AC면
+  `evidence`, task면 `reports` — 이고 한 기록이 둘을 함께 싣는 일은 없다. 둘 다 아니면
+  아무도 이 목록에 대해 말한 적이 없는 것 — `closureAsks`가 참이고 큐가 묻는다. 청구가
+  추가·철회·수정되거나 주체가 고쳐지면 어느 기록이든 산술로 실효한다. 색은 등록의 축,
+  마크는 충족의 축 — 서로 다른 답을 낼 수 있고 그래야 한다(green+open = 확정됐고 청구
+  대기; yellow+closed도 가능). 둘이 만나는 곳은 하나뿐: 주체의 **문구 자체**가 반려
+  중이면 닫힘을 묻지도, 쓰지도 않는다
 - 번들(`bundles.ts`) — 리뷰 큐. 먼저 Work report: Journal마다 실행 층(과 거기 매달린
   위성)만 걸어 서브트리를 묶고, Journal이 닿지 않는 실행 yellow는 각자 뿌리. 다음
   Spec approval: 순위표(Decision → Goal → Actor → UseCase → Scenario → SR →
@@ -351,9 +355,9 @@ core에서 파일시스템을 만지는 유일한 모듈이고, 노드가 어느
 그래프와 바이트 사이. 순수 함수만 있다 — 파일시스템도, 시계도, 난수도 없다.
 
 - **동결된 형식** — frontmatter 블록(`short_name`·`name`·`edges`, WorkLog에만
-  `commits`, 그리고 기계 블록 `deletionProposed`) + 자유 마크다운 본문. UTF-8, BOM
-  없음, LF, 말미 개행 하나. 키 순서·엣지 순서가 각각 하나뿐이고, 본문은 저자의
-  바이트 그대로다
+  `commits`, Finding에만 `blocking`·`relatedNodes`, 그리고 기계 블록
+  `deletionProposed`) + 자유 마크다운 본문. UTF-8, BOM 없음, LF, 말미 개행 하나.
+  키 순서·엣지 순서가 각각 하나뿐이고, 본문은 저자의 바이트 그대로다
 - **승인 페이로드** — `<type>/<id>` 한 줄 + 정칙 파일 전체. 경로 정체성이 앞에 붙어
   승인된 파일을 다른 id로 복사해도 레코드가 따라가지 않고, 해시가 정칙 emit
   기준이므로 되읽어 같은 노드가 되는 재포맷은 승인을 살려 둔다. 파일 안에 승인은
@@ -361,7 +365,8 @@ core에서 파일시스템을 만지는 유일한 모듈이고, 노드가 어느
 - **장부 형식 세 권** — `.shall/ledger/approvals.yaml`(nodeId → `{approvedHash, by,
   at}`), `rejections.yaml`(nodeId → `{rejectedHash, by, at, rationale}` — rationale은
   여러 줄일 수 있고 `\n` 이스케이프의 따옴표 스칼라로 앉는다), `acceptances.yaml`
-  (acId → `{acHash, evidence: {evId → hash, …}, by, at}` — evidence는 항목 하나
+  (acId → `{acHash, evidence: {evId → hash, …}, by, at}` 또는 taskId →
+  `{taskHash, reports: {tcrId → hash, …}, by, at}` — 청구자 맵은 항목 하나
   이상의 중첩 맵). 셋 다 id 바이트 순, 키와 값 전부 같은 스칼라 규칙, 같은 yaml
   계약(`yaml.ts` 한 곳)으로 읽고, 루트 읽기(BOM/CRLF → YAML → 맵 → 맨몸/따옴표
   쌍둥이 키 → id 판정)는 `ledger-common.ts` 한 곳을 지난다. 산문이 없는 순수
@@ -410,8 +415,8 @@ core에서 파일시스템을 만지는 유일한 모듈이고, 노드가 어느
   않는 읽기 하나다 — 보드의 모든 열이 장부에서 세어지므로 장부가 안 읽히면 통째로
   거부한다;
   둘 다 상대 장부의 기록을 먼저 지우고 쓴다(사이에서 실패하면 아무 말도 없는 상태 =
-  큐가 다시 묻는 안전한 쪽). 증거가 하나도 없거나, 증거 중 green이 아닌 것이 있거나(그
-  id를 이름해 거부), AC의 문구가 반려 중이면 둘 다 거부.
+  큐가 다시 묻는 안전한 쪽). 청구가 하나도 없거나, 청구 중 green이 아닌 것이 있거나(그
+  id를 이름해 거부), 주체의 문구가 반려 중이면 둘 다 거부.
   에이전트의 계약은 파일 전용이라 이 문을 두드릴 이유가 없고, 장부는 deny 규칙이
   가린다(관례 방어 — 로컬 토큰은 daemon이 신뢰하지 않는 호출자가 생기는 날의 일).
   세 권 중 하나라도 안 읽히면 리뷰·큐·판정은 어느 권인지 이름한 문장 하나로 거부한다
@@ -458,7 +463,8 @@ core에서 파일시스템을 만지는 유일한 모듈이고, 노드가 어느
   Shall이 **통째로 소유하는** 생성 파일로 두고(템플릿처럼 바이트가 다를 때만 다시
   쓴다), 파일 스스로 말하지 못하는 것만 반 페이지로 싣는다 — 쓰기는 제안이라는
   것, 삭제는 `deletionProposed`라는 것, 장부는 열지 않는다는 것, 색은 계산하지 말고
-  `shall status`에 묻는다는 것. 옆집 `settings.json`과 태도가 정반대인 것이 요점:
+  `shall status`에 묻는다는 것, 노드는 `shall add-spec-node`로 시작한다는 것(그
+  주석 머리말이 타입의 키와 관계가 적힌 유일한 자리다), task는 모듈에 매달린다는 것. 옆집 `settings.json`과 태도가 정반대인 것이 요점:
   저쪽은 남의 문서에 두 줄을 병합하고, 이쪽은 Shall의 출력이 남의 폴더에 산다.
   사람이 손댄 것은 다음 open에 사라지고, 자기 규칙은 옆 파일에 쓴다
 - **훅을 설치하지 않고, 스스로 커밋하지 않는다.** 스펙의 이력은 사람이 만든다 —
@@ -502,7 +508,7 @@ localhost 브라우저 화면. 사람의 관찰·편집 표면.
   먼저, rationale은 **전문**; 그다음 문법 red, 구멍, 안 읽히는 파일), 아래가
   Implement(미완료 ∧ 선행 전부 닫힘 ∧ 상향 사슬 all-green인 task만 — 조건 미달은 이유
   없이 아예 안 보인다). 두 열 다 저장 없음. **Review Queue**가 채워졌다: 목록은 `[종류 배지] 제목 — 요약
-  수치` 한 줄씩(AC closure → Spec approval → Work report, 오래된 것 먼저), 카드는
+  수치` 한 줄씩(AC closure → Task closure → Spec approval → Work report, 오래된 것 먼저), 카드는
   전면에 판정 재료(뿌리의 diff/전문, Journal 본문, AC 본문)·멤버 목록(노드마다
   diff/전문, [Approve]·[Reject…]·[Open in Spec Plane])·접힌 무수정 확인 목록·번들 버튼
   하나 또는 둘([Approve all]/[Accept report]/[Close]+[Leave open…]). 번들은 네 종류다 —
@@ -588,7 +594,8 @@ localhost 브라우저 화면. 사람의 관찰·편집 표면.
 ## 레거시에서 사라진 것
 
 MCP 서버 · webhook 수신 · 외부 cron · 추론 클라이언트와 그 게이트 · 등급/계량 ·
-멀티테넌트 격리 · 독립 Verifier (증언 리포트의 노드 타입만 스키마에 예약해 둔다).
+멀티테넌트 격리 · 독립 Verifier (그 리포트는 TaskCompletionReport 노드 타입으로
+남았다).
 
 이번 전환으로 둘이 더 빠졌다 — **SQLite 저장소**(정본이 커밋되는 마크다운으로
 옮겨갔다)와 **세션/base/draft/제출 기계**(git이 그 일을 한다). 옛 `shall.db`는
@@ -625,12 +632,15 @@ MCP 서버 · webhook 수신 · 외부 cron · 추론 클라이언트와 그 게
   `WorkLog —ADDRESSES→ ImplementationTask`, `Evidence —CLAIMS→ AcceptanceCriterion`,
   `TaskCompletionReport —CLAIMS→ ImplementationTask`
   (2026-08-16에 옛 `IS_PLANNED_BY`·`IS_ADDRESSED_BY`·`IS_CLAIMED_BY`를 뒤집었다). 문법의
-  다른 행은 얼지 않았지만, 이 세 행은 아래층 파일의 바이트에 남으므로 여기 적는다.
+  다른 행은 얼지 않았지만, 이 네 행은 아래층 파일의 바이트에 남으므로 여기 적는다.
   마지막 행의 출발 타입은 2026-08-21에 `VerificationReport`에서 개명했다. **얼린 것은
   방향이지 이름이 아니다** — 항목의 제목이 그렇게 적혀 있고, 근거도 그 차이에 있다.
-  방향을 뒤집으면 이미 쓰인 바이트가 **조용히** 다른 뜻이 되지만, 이름을 바꾸면 그
-  바이트는 아예 안 읽히고 로더가 red로 답한다. 조용한 오독과 시끄러운 거절은 같은
-  위험이 아니고, 이 freeze는 앞의 것을 막으려 쓰였다. 근거는 하나 더 있다: 이 문서는
+  방향을 뒤집으면 그 관계를 적은 줄이 반대편 파일로 옮겨 가 이미 쓰인 스펙을 양쪽
+  끝에서 다시 써야 하지만, 이름을 바꾸면 서랍 하나를 `git mv`하는 것으로 끝난다 —
+  옛 서랍에는 로더가 로스터를 이름한 문장으로 답하고, 파일 안의 바이트는 한 줄도
+  움직이지 않는다(그 타입 노드들의 승인만 페이로드의 `<type>/<id>` 때문에 실효한다).
+  남의 파일을 다시 쓰게 하는 것과 서랍 이름 하나를 옮기게 하는 것은 같은 위험이
+  아니고, 이 freeze는 앞의 것을 막으려 쓰였다. 근거는 하나 더 있다: 이 문서는
   이미 한 번 근거를 대고 freeze를 깼다 — 위 `approval` 블록을 뺀 것이, 외부 사용자가
   생기기 전이라는 근거로. 개명은 정확히 그 근거 위에 선다. 그 시점이 지나면, 이 문단은
   개명을 금지하는 문단이 된다

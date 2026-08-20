@@ -8,6 +8,7 @@ import {
   isRootless,
   orphanStem,
 } from "./anchors.js";
+import { articleFor, openingArticleFor } from "./article.js";
 import { NODE_TYPES } from "./canon.js";
 import { CLOSURE_KINDS, closureKindNamed, closureKindOf } from "./closure-kinds.js";
 import { EDGE_GRAMMAR, EDGE_TYPE_NAMES, isPermittedTriple } from "./grammar.js";
@@ -215,6 +216,44 @@ describe("anchorPhrase", () => {
   });
 });
 
+describe("a or an, in front of the canon's own names", () => {
+  // THE ARTICLE SHIPS IN THE TEMPLATES, so getting it wrong is not a typo in a
+  // rare refusal — it is `a Actor` in the file a person reads before writing
+  // their first node. The rule has one home and this walks the whole canon
+  // against it, which is the only arrangement in which a type added later
+  // cannot arrive with the wrong article.
+  test("every canon name reads correctly, and UseCase is the one whose letter lies", () => {
+    const AN = new Set([
+      "Actor",
+      "AcceptanceCriterion",
+      "Assumption",
+      "Evidence",
+      "Interface",
+      "ImplementationTask",
+    ]);
+    for (const entry of NODE_TYPES) {
+      assert.equal(
+        articleFor(entry.name),
+        AN.has(entry.name) ? "an" : "a",
+        entry.name,
+      );
+    }
+    // Written out rather than derived: `UseCase` opens with a vowel and says
+    // "yoo", and a test that computed the answer would agree with any rule.
+    assert.equal(articleFor("UseCase"), "a");
+    assert.equal(openingArticleFor("UseCase"), "A");
+    assert.equal(openingArticleFor("Evidence"), "An");
+  });
+
+  test("every relation the canon has takes the letter's answer", () => {
+    // No edge type needs the exception: the vowel-initial ones all say their
+    // vowel. If one ever does not, it belongs beside `UseCase` and this fails.
+    for (const name of EDGE_TYPE_NAMES) {
+      assert.equal(articleFor(name), /^[AEIOU]/.test(name) ? "an" : "a", name);
+    }
+  });
+});
+
 describe("orphanStem", () => {
   test("names the node, its type and what would have held it", () => {
     assert.equal(
@@ -237,7 +276,7 @@ describe("orphanStem", () => {
     assert.equal(stem.endsWith("and none stands"), true);
     assert.equal(
       stem,
-      "EV-0001 is a Evidence with no live anchor — it is held to the graph by a CLAIMS relation out of it, and none stands",
+      "EV-0001 is an Evidence with no live anchor — it is held to the graph by a CLAIMS relation out of it, and none stands",
     );
   });
 });

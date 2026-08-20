@@ -1562,7 +1562,7 @@ name:                  # required · one line
     // starting an evidence file sees where to aim it, and the criterion's file
     // is never touched by a claim being made.
     const text = emitTemplate("Evidence");
-    assert.ok(text.includes("# From a Evidence the canon allows:\n#   CLAIMS -> AcceptanceCriterion\n"), text);
+    assert.ok(text.includes("# From an Evidence the canon allows:\n#   CLAIMS -> AcceptanceCriterion\n"), text);
     assert.ok(text.includes("# edges:\n#   - type: CLAIMS\n#     to: AC-0001\n"), text);
   });
 

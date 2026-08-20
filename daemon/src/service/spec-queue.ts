@@ -8,12 +8,13 @@ import {
   type ReviewQueue,
 } from "@shall/core/arith";
 import {
+  articleFor,
+  type ClosureKind,
   closureKindOf,
+  type ClosureSubject,
   compare,
   judgeBody,
   orphanStem,
-  type ClosureKind,
-  type ClosureSubject,
   type SpecNode,
 } from "@shall/core/graph";
 import type { ApprovalRecord, RejectionRecord } from "@shall/core/serialize";
@@ -389,7 +390,7 @@ function subjectFor(
   const kind = closureKindOf(subject.type);
   if (kind === null) {
     throw invalid(
-      `${id} is a ${subject.type}, and only an AcceptanceCriterion or an ImplementationTask is a thing that can be closed or left open — evidence is shown against a criterion, work against a task, and against nothing else.`,
+      `${id} is ${articleFor(subject.type)} ${subject.type}, and only an AcceptanceCriterion or an ImplementationTask is a thing that can be closed or left open — evidence is shown against a criterion, work against a task, and against nothing else.`,
     );
   }
   const words = WORDS[kind.kind];

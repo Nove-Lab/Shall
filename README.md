@@ -48,11 +48,11 @@ someone on the same panel — there is no hidden "current project" state.
 ```
 
 `panelId` ∈ `review-queue | task-board | activity-feed | vitals`. A bundle id is
-`spec:<root>`, `report:<journal>` or `closure:<criterion>` — the node the bundle
-hangs off, so the link says what it is about. `?node=` opens the node's panel
-(add `&mode=edit` to land in the form) and `?back=` puts a **Back to review**
-button in the toolbar, which is how a card sends you to the canvas and gets you
-back.
+`spec:<root>`, `report:<journal>`, `closure:<criterion>` or `completion:<task>` —
+the node the bundle hangs off, so the link says what it is about. `?node=` opens
+the node's panel — the reading pane, always — and `?back=` puts a
+**Back to review** button in the toolbar, which is how a card sends you to the
+canvas and gets you back.
 
 ## Spec plane
 
@@ -188,7 +188,7 @@ bundles. Nothing about a bundle is stored: every load recomputes them from the
 graph and the three ledgers, so a save, a hand edit or a `git checkout` moves
 the queue with nobody told. Four kinds:
 
-- **Spec approval** — a subgraph of yellow nodes in the Intent and Plan layers,
+- **Spec approval** — a subgraph of yellow nodes outside the execution record,
   rooted at the topmost yellow node the scan meets (Decision → Goal → Actor →
   UseCase → Scenario → SystemResponsibility → Requirement →
   AcceptanceCriterion → Constraint → the rest of the Plan types; an assumption
@@ -305,8 +305,10 @@ It writes one more file, and this one is Shall's own: `.claude/rules/shall.md`,
 half a page an agent reads at the start of every session. What is on it is the
 handful of things the files cannot say about themselves — that writing a spec
 file is a proposal and not a decision, that a node is retired by proposing its
-deletion rather than by deleting it, that the ledgers are nobody's to open, and
-that a colour is asked for rather than worked out. It is generated output, kept
+deletion rather than by deleting it, that the ledgers are nobody's to open, that
+a colour is asked for rather than worked out, that a node is started with
+`shall add-spec-node` because its commented header is the only place a type's
+own keys and relations are written down, and that a task hangs off a module. It is generated output, kept
 current on every open the way the reference templates are, so a hand edit to it
 is lost; anything of your own belongs in another file beside it. There is one
 adapter today, which is why the page lands under `.claude`.

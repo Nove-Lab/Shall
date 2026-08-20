@@ -69,9 +69,9 @@ yourself; you will disagree with the screen.
 
 **Start a node with \`shall add-spec-node --type <Type>\`.** It writes the file at
 its own path with the next free id, and its commented header is the only place
-that says which relations that type may draw and what its body might hold. A
-relation is written in the file it LEAVES, so anchoring a new child means
-editing the child's parent.
+that says which relations that type may draw, which keys its own type carries
+and what its body might hold. A relation is written in the file it LEAVES, so
+anchoring a new child means editing the child's parent.
 
 **A task hangs off a module.** Never write an \`ImplementationTask\` that no
 \`ModuleDesign\` \`ALLOCATES\` — a task its criterion alone holds is anchored, so
