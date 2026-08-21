@@ -117,6 +117,8 @@ R-0007 attaches it again.
 
 The plan band, and the same shape one layer down: write the child, then open the parent and add the line that holds it.
 
+**What is shown below is the frontmatter and the relations, and the bodies are left out** — not because they are small, but because this passage is about anchoring. A plan-band body is a document: the module's four parts, the task's seven sections, each given what the starting file asks of it. Do not read the elision here as the shape of the file.
+
 ```
 $ shall add-spec-node --type ModuleDesign
 /home/dev/app/.shall/spec/plan/ModuleDesign/MD-0002.md

@@ -1,6 +1,6 @@
 ---
 name: shall-plan
-description: Carries the Shall /plan process — the phase-gated design pass that turns an approved specification into a project's plan plane: module designs and the decisions they hide, the contracts between them, and the implementation tasks the board hands out, one approved phase at a time. Loaded by the /shall:plan command.
+description: Carries the Shall /plan process — the phase-gated design pass that turns an approved specification into a project's plan plane: module designs and the decisions they hide, the contracts between them, and the implementation tasks the board hands out, one approved phase at a time, or in one run whose approval comes at the end when it was asked for with --auto. Loaded by the /shall:plan command.
 allowed-tools: Bash(shall:*)
 user-invocable: false
 ---
@@ -15,11 +15,11 @@ A design pass that fills the plan plane, in three phases:
 
 module designs → the contracts between them → the work, cut into tasks.
 
-You run **one phase at a time**, and a phase does not open until the phase above it has been approved by a person in the browser. You never run two phases in one pass and never write a lower layer because you happen to be there already.
+You run **one phase at a time**, and a phase does not open until the phase above it has been approved by a person in the browser — **unless the run was asked for with `--auto`, which moves that judgment to the end and leaves everything else where it is.** You never run two phases in one pass and never write a lower layer because you happen to be there already.
 
-The order is not a convention. Each phase's nodes are held to the graph by the phase above: an `Interface` by the `ModuleDesign` that `EXPOSES` or `CONSUMES` it, an `ImplementationTask` by the `ModuleDesign` that `ALLOCATES` it or by the criterion its own `TARGETS` line aims at. Write downward before the anchor exists and you have written orphans, and an orphan is red.
+The order is not a convention, and it is not the approval that fixes it. Each phase's nodes are held to the graph by the phase above: an `Interface` by the `ModuleDesign` that `EXPOSES` or `CONSUMES` it, an `ImplementationTask` by the `ModuleDesign` that `ALLOCATES` it or by the criterion its own `TARGETS` line aims at. Write downward before the anchor exists and you have written orphans, and an orphan is red. That is why `--auto` may move the waiting and may never move the order.
 
-**This plane is written on top of a specification a person has approved, and the command has already checked that.** It read the color of every node above the responsibilities this direction touches and refused to hand over if any of them was unread. So the specification is settled ground here — and the moment this process finds a gap in it, that is not a failure of either document but the ordinary way a specification gets precise: go through `/shall:specify`, and come back to the step you left.
+**This plane is written on top of a specification a person has approved, and the command has already checked that.** It read the color of every node above the responsibilities this direction touches and refused to hand over if any of them was unread — **and `--auto` does not touch that gate**, because it defers this run's own approval and never somebody else's. So the specification is settled ground here — and the moment this process finds a gap in it, that is not a failure of either document but the ordinary way a specification gets precise: go through `/shall:specify`, and come back to the step you left.
 
 ## Authoring is delegated
 
@@ -41,7 +41,7 @@ Five more are this plane's own:
 
 **Read what the project already says, before the first boundary is drawn.** Its readme, a contributing guide, anything under a docs folder, a design record, the rules file it loads into every session. What you find sorts three ways, and none of the three is "note it and move on": a norm that genuinely **binds** is promoted to a `Constraint` through `/shall:specify` in revision mode, in this session, and you come back; a **convention** of arrangement or naming is followed, and the node whose design followed it names the document's path in its own body; a **conflict** with the user's direction is put to the user as an option question and never settled quietly in either direction. The reason a binding norm cannot stay a reference: an outside document can be revised without anything in the graph turning a color, so a plan grounded in one is grounded in a dependency nothing tracks.
 
-**Say what your grounds were, at the moment of approval.** Where an outside document or a piece of investigation actually decided something, the terminal explanation of that phase says **which decision followed which grounds**, naming the source. The line in the node's body is for tracing it back afterwards; this is so that nobody approves a decision without having seen what produced it.
+**Say what your grounds were, at the moment of approval.** Where an outside document or a piece of investigation actually decided something, the terminal explanation of that phase says **which decision followed which grounds**, naming the source, so that nobody approves a decision without having seen what produced it. The node's body carries that reasoning too, and carries it in full: the terminal explanation is spoken once to the person in the room, and the body is what anybody reads a year from now when the decision is questioned. A rationale reduced to a breadcrumb because it was already said out loud is a rationale that only existed in a conversation nobody kept.
 
 **Modules and components, and no further.** Classes, functions, file layouts and paths are not written in this plane — they are what the work turns up while it is being done, and a plan naming them is wrong before the first turn of work ends. One exception, and it is the user's: if the direction asks for paths in so many words, confirm it once in phase 3, record them in the task's own body, and say in the terminal explanation that the level rule was relaxed on request.
 
@@ -66,6 +66,12 @@ Follow this literally at the close of every phase.
 
 Why revising is the whole repair: a rejection stands against the content it was written against, so **the moment the file's content changes the rejection lapses by arithmetic** and the node is yellow and back in the queue. You never ask anyone to withdraw a rejection, and you never delete a rejected node to clear it.
 
+**`--auto` moves the second stage; it does not remove it.** Steps 1 to 3 run at the close of every phase exactly as written — the explanation, the yes, the files, the check to zero — and Phase 1's two terminal yeses are two of those, unchanged. Steps 4 to 8 do not run between phases: opening the next phase on nodes nobody has judged yet is the whole of what the flag changes. After the last phase, run steps 4 to 8 **once**, over every id the run wrote or changed.
+
+**The run is never closed on a partial pass**, for the reason a phase never was. If some ids are still yellow when the person comes back, name them once, say they are still in the queue, and wait again. The run is finished when all of them are green and not before.
+
+**A rejection found in that one pass costs more than it would have, and that is the price of the flag.** A module refused after its contracts and its tasks were written on top of it is a boundary re-cut and everything under it with it, so the repair is the revision path: re-enter at the layer that node belongs to and run that phase **and every phase below it**, still under `--auto`. Say that cost out loud when you offer the flag — three waits become one, and a boundary refused at the end re-cuts what hangs off it.
+
 ## Why the card count varies
 
 The queue cuts a bundle at each topmost yellow node and walks **down the order, never back up it** — an outgoing relation that points at what holds the node is left alone. A phase therefore arrives as **several cards, not one**:
@@ -83,6 +89,8 @@ Three corrections to the count, all worth predicting rather than discovering:
 - **A task no module allocates arrives as a card of its own, holding one node.** Its own `TARGETS` line anchors it, so it is a whole node and it is yellow, and being the topmost yellow node it roots a bundle. That lone card is what a dropped task looks like in the queue — if one turns up, the module's `ALLOCATES` line is missing.
 - **A module nothing anchors has no card at all.** It is red as an orphan, and a red the grammar found is outside the queue: `shall check` and the board's Fix Spec half are the only places it is said.
 - **A yellow `Decision` stands above every other type, `Goal` included.** It roots one bundle carrying everything its `AFFECTS` reaches, so a responsibility or a module this phase turned yellow rides inside that card instead of heading one of its own. A decision only turns up where there was already something to revise, so revision mode is where to expect that card rather than to be surprised by it.
+
+**Under `--auto` that table says what would have arrived had you stopped there.** Nothing arrives until the end, and what arrives then is the phase 1 shape carrying all three phases' work: **one card per responsibility that gained a module**, holding that module, the assumptions it hangs off, the interfaces it exposes or consumes, the schemas those carry and the tasks allocated to it — with that responsibility's own untouched requirements and criteria listed underneath as unchanged. The roots do not move down; the waves merge. A node two cards both hold is approved once and green on both.
 
 ## The canon, for this plane
 
@@ -113,7 +121,7 @@ A `Decision` is filed in the plan band and this process never writes one. It is 
 
 ## Fix Spec comes first
 
-At the start of every phase, and every time you resume after waiting on the queue, run `shall board --json`.
+At the start of every phase, and every time you resume after waiting on the queue, run `shall board --json`. Under `--auto` there is one such resume and it is at the end; the check at the head of each phase runs as it always did, and it is unaffected — Fix Spec holds what is red, and nothing goes red for want of approval.
 
 Anything in **Fix Spec** is somebody's turn right now and that somebody is you. Clear it before new work: a person's rejection first — its rationale is given to you whole because it is a work order — then the seams the grammar found, then the ids nothing answers to, then the files that would not read at all.
 
@@ -146,5 +154,9 @@ Phase 3 closes `/plan`. Check the final gate first — every line is answerable 
 | Something can actually be started | `shall board --json` — the Implement half is not empty |
 
 Then declare it: tell the person `/plan` is finished, the plan plane holds together, and name the tasks the board says can be started now. **If a task you named in the terminal is not on that board, do not explain it away** — something in its chain has not been agreed, and the board is right.
+
+**Under `--auto` this is where the run's one approval lands, and the order of the gate changes with it.** Four of the five lines above are answerable with nothing approved — check those first and fix what they turn up. The fifth, *something can actually be started*, cannot be: readiness is computed over a task's whole chain, and until the approval lands that chain is this run's own yellow. **A board with an empty Implement half before the approval is the right answer, not a fault** — do not go looking for what is wrong with the plan. So: the four gates, then the two-stage approval's steps 4 to 8 once over everything this run wrote or changed, then wait until every id is green, then read the board and name what can start, then declare.
+
+**If an `--auto` run breaks off before the end** — a session that runs out, a terminal that closes — nothing is lost and nothing is announced. What is on disk is a plan nobody has been asked about yet. Either the person approves what is there, or `/shall:plan <direction>` picks it up again: the entry dispatch names what is yellow and the run carries on from where the writing stopped.
 
 Changes to the plan after that come back through `/shall:plan <request>`, which enters in revision mode and runs only the affected layer and below.

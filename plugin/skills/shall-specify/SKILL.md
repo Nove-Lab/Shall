@@ -1,6 +1,6 @@
 ---
 name: shall-specify
-description: Carries the Shall /specify elicitation process — the staged, phase-gated interview that fills a project's intent and domain planes with goals, actors, use cases, scenarios, terms, responsibilities, requirements, constraints and acceptance criteria, one approved phase at a time. Loaded by the /shall:specify command.
+description: Carries the Shall /specify elicitation process — the staged, phase-gated interview that fills a project's intent and domain planes with goals, actors, use cases, scenarios, terms, responsibilities, requirements, constraints and acceptance criteria, one approved phase at a time, or in one run whose approval comes at the end when it was asked for with --auto. Loaded by the /shall:specify command.
 allowed-tools: Bash(shall:*)
 user-invocable: false
 ---
@@ -15,9 +15,9 @@ A staged elicitation that fills the intent and domain planes, in six phases:
 
 goals → actors, use cases and scenarios → the vocabulary → system responsibilities → requirements, constraints and criteria → a closing domain review.
 
-You run **one phase at a time**, and a phase does not open until the phase above it has been approved by a person in the browser. You never run two phases in one pass and never write a lower layer because you happen to be there already.
+You run **one phase at a time**, and a phase does not open until the phase above it has been approved by a person in the browser — **unless the run was asked for with `--auto`, which moves that judgment to the end and leaves everything else where it is.** You never run two phases in one pass and never write a lower layer because you happen to be there already.
 
-The order is not a convention. Each phase's nodes are held to the graph by the phase above: a Scenario by the UseCase that `DETAILS` it, a SystemResponsibility by the Scenario that `DERIVES_RESPONSIBILITY` to it. Write downward before the anchor exists and you have written orphans, and an orphan is red.
+The order is not a convention, and it is not the approval that fixes it. Each phase's nodes are held to the graph by the phase above: a Scenario by the UseCase that `DETAILS` it, a SystemResponsibility by the Scenario that `DERIVES_RESPONSIBILITY` to it. Write downward before the anchor exists and you have written orphans, and an orphan is red. That is why `--auto` may move the waiting and may never move the order.
 
 ## Authoring is delegated
 
@@ -52,6 +52,12 @@ Follow this literally at the close of every phase.
 
 Why revising is the whole repair: a rejection stands against the content it was written against, so **the moment the file's content changes the rejection lapses by arithmetic** and the node is yellow and back in the queue. You never ask anyone to withdraw a rejection, and you never delete a rejected node to clear it.
 
+**`--auto` moves the second stage; it does not remove it.** Steps 1 to 3 run at the close of every phase exactly as written — the explanation, the yes, the files, the check to zero. Steps 4 to 8 do not run between phases: opening the next phase on nodes nobody has judged yet is the whole of what the flag changes. After the last phase, run steps 4 to 8 **once**, over every id the run wrote or changed.
+
+**The run is never closed on a partial pass**, for the reason a phase never was. If some ids are still yellow when the person comes back, name them once, say they are still in the queue, and wait again. The run is finished when all of them are green and not before.
+
+**A rejection found in that one pass costs more than it would have, and that is the price of the flag.** A node refused at the top was built on by everything below it, so the repair is the revision path: re-enter at the layer that node belongs to and run that phase **and every phase below it**, still under `--auto`. Say that cost out loud when you offer the flag — six waits become one, and a goal refused at the end re-cuts everything under it.
+
 ## Why the card count varies
 
 The queue cuts a bundle at each topmost yellow node and walks **down every outgoing spec relation** from it, and domain nodes are cut one at a time. A phase therefore arrives as **several cards, not one**:
@@ -65,6 +71,8 @@ The queue cuts a bundle at each topmost yellow node and walks **down every outgo
 | 5 | one per responsibility that gained requirements |
 
 So say "one or more cards are waiting". Never "approve the card" — a person told to look for one card stops after the first and the phase never goes green.
+
+**Under `--auto` that table says what would have arrived had you stopped there.** Nothing arrives until the end, and what arrives then is fewer cards and bigger ones: **one per top-level goal**, carrying its sub-goals, its actors, their use cases and scenarios, the responsibilities under those and the requirements, criteria, constraints and assumptions under them — plus one per term and one per domain entity, since the vocabulary is always cut one node at a time. The roots do not move down; the waves merge. Anchoring a child edits its parent, so the parent was already the topmost yellow node in every one of those five rows — the flag only stops the queue emptying between them. A node two of those cards both hold is approved once and green on both; the rows say which other card shares it.
 
 ## The canon, for these two planes
 
@@ -95,7 +103,7 @@ Anything absent from this table, do not invent. `shall check` refuses a relation
 
 ## Fix Spec comes first
 
-At the start of every phase, and every time you resume after waiting on the queue, run `shall board --json`.
+At the start of every phase, and every time you resume after waiting on the queue, run `shall board --json`. Under `--auto` there is one such resume and it is at the end; the check at the head of each phase runs as it always did, and it is unaffected — Fix Spec holds what is red, and nothing goes red for want of approval.
 
 Anything in **Fix Spec** is somebody's turn right now and that somebody is you. Clear it before new work: a person's rejection first — its rationale is given to you whole because it is a work order — then the seams the grammar found, then the ids nothing answers to, then the files that would not read at all.
 
@@ -129,5 +137,9 @@ Phase 6 closes `/specify`. Check the final gate first — all three are answerab
 | No orphan nodes | `shall check` — a node no live anchor holds is a gap, and gaps exit 1 |
 
 Then declare loop-ready: tell the person `/specify` is finished, the intent and domain planes hold together, and the specification is ready for the plan layer. If Phase 6 produced no additions and no revisions, skip the queue wait and close on terminal confirmation alone — an empty set is owed no approval.
+
+**Under `--auto` this is where the run's one approval lands, and the order is: gates that need nobody, then the approval, then the rest.** All three lines above are answerable from the CLI with nothing approved, so check them first and fix what they turn up. Then run the two-stage approval's steps 4 to 8 once, over everything this run wrote or changed, and wait until every id is green. Only then declare loop-ready — a run that announced itself finished while its own specification sat unread would be announcing the opposite of what `/specify` is for.
+
+**If an `--auto` run breaks off before the end** — a session that runs out, a terminal that closes — nothing is lost and nothing is announced. What is on disk is a specification nobody has been asked about yet. Either the person approves what is there, or `/shall:specify <request>` picks it up again: the entry dispatch names what is yellow and the run carries on from where the writing stopped.
 
 Intent changes after that come back through `/shall:specify <request>`, which enters in revision mode and runs only the affected layer and below.

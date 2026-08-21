@@ -12,6 +12,8 @@ Rescan the prose of everything this run wrote — goals, actors, use cases, scen
 
 Phases 1 through 5 green, and Fix Spec cleared first as the spine says — a red node's prose is prose somebody is about to rewrite, and rescanning it now is scanning a draft.
 
+Under `--auto` the phase above is **written and agreed in the terminal** rather than green, and that is not the hazard this line was written against: nobody is mid-judgment on a file you are about to edit, because nobody has been asked yet. The one approval covers it all at the end.
+
 In a revision run the scan covers only what this run wrote or changed, not the whole project. `shall status --scope <path> --json` over the subtree you worked in gives you that list.
 
 ## Steps
@@ -52,7 +54,9 @@ Draw `MENTIONS` the way Phase 3 draws it: sparingly, only where the term is load
 
 ## The gate
 
-This is the run's final gate, not only this phase's. Close with the spine's two-stage approval — expect one card per term and one per domain entity, since domain nodes are cut one at a time and come last, plus one spec bundle for each intent node step 4 made you revise.
+This is the run's final gate, not only this phase's — and under `--auto` it is where the whole run's one approval lands, over everything the six phases wrote and not only over this one's. Close with the spine's two-stage approval — expect one card per term and one per domain entity, since domain nodes are cut one at a time and come last, plus one spec bundle for each intent node step 4 made you revise.
+
+Under `--auto` the card lines below belong to the run's one approval and not to this phase's close; the spine says when they are checked. Everything else here is checked now, as written.
 
 | The line | What proves it |
 |---|---|

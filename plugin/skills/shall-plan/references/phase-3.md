@@ -10,6 +10,8 @@ Cut the designed modules into work a person can pick up: `ImplementationTask` no
 
 Every module and contract green in `shall status --json`, and every criterion in scope green too. A task's readiness is computed over its whole upward chain — its modules, the responsibility above them, the requirements and criteria beside it — so a yellow criterion anywhere in that chain is a task that will sit blocked however well it is written.
 
+**Under `--auto` this line splits in two.** The modules and contracts above are this run's own, written and agreed in the terminal and not yet judged — that is the flag working, and nothing here is waiting on them. The criteria are the specification's, and they are green or the command never handed over. So the tasks you write here are correct and **blocked**, every one of them, until the run's one approval lands: see the gate below.
+
 In revision mode, clear Fix Spec first, and narrow to the tasks the direction moves.
 
 ## Every task has a module
@@ -52,6 +54,8 @@ Write the precedences as `DEPENDS_ON` in the waiting task's own file, and nothin
    - **Method-free** — what is finished when it is done, never how, and never which files. If the direction explicitly asked for paths, confirm it once with the `Paths?` question below, record them in the task's own body, and say in the terminal explanation that the level rule was relaxed on request.
    - **Traceable** — zero or one criterion aimed at.
    - **Sized** — finishable in one turn of work. Bigger than that, split it. Do not go smaller than that: chopping finer only lengthens the chain of things waiting on each other.
+   - **Stated as work** — a task names something to be done, not something that exists. What the reader has to be able to see in it is the act somebody performs; a noun phrase naming a part of the design is that part's name, and the module already has one. Name a task after its module and the board hands a person a list of what the project contains instead of a list of what they can pick up.
+   - **Written out** — the starting file suggests seven sections for a reason: what is finished, what it is for, what it is not, how far it reaches, what it leaves behind, how a verifier agrees it is done, and what could go wrong. Somebody who was not in this conversation picks the task up off the board and has only this file. Give each section what it asks for.
 5. **Store no order and no labels.**
 6. **Close the coverage.** Find every criterion in scope that no task aims at, and derive the task that will close it — the walkthroughs say which module it belongs to.
 7. Close with the spine's two-stage approval.
@@ -98,6 +102,8 @@ A spanning task gets its `ALLOCATES` line in **each** parent module's file. Anch
 
 Close with the spine's two-stage approval. Expect **one card per module that gained a task line**. A task that waits on another module's task pulls that one in as a shared member; the criterion it aims at does not come along, because the walk does not follow `TARGETS` forward.
 
+Under `--auto` the card lines below belong to the run's one approval and not to this phase's close; the spine says when they are checked. Everything else here is checked now, as written.
+
 | The line | What proves it |
 |---|---|
 | Nothing is orphaned and no id answers to nothing | `shall check --scope .shall/spec/plan` — gaps exit 1 |
@@ -108,7 +114,9 @@ Close with the spine's two-stage approval. Expect **one card per module that gai
 | Every criterion in scope is aimed at | `shall status --json`, joining the criteria against the tasks' `TARGETS`. The check does not file this either |
 | No task names a path, a file, a class or a function | you read them — and if the user asked for paths, you said so in the terminal explanation |
 | Every task is one turn of work | you read them |
-| Something can be started | `shall board --json` — the Implement half is not empty |
+| Every task reads as work to be done, not as a part that exists | you read them — no command reads a sentence |
+| Every task says enough that somebody who was not here could pick it up | you read them |
+| Something can be started | `shall board --json` — the Implement half is not empty. **Under `--auto` this one is read after the run's approval and not before**: readiness runs over a task's whole chain, and until then that chain is this run's own unjudged work |
 | Every card from this phase is green | `shall status --json` after the person says they are done |
 
 ## When the gate fails
@@ -120,5 +128,6 @@ Close with the spine's two-stage approval. Expect **one card per module that gai
 | a criterion nothing aims at | step 6 — derive the task that closes it |
 | a criterion nobody could judge | `/shall:specify` — the criterion is the problem, and it is a person's to fix |
 | a task that will not fit one turn | step 4, and split it |
-| the board is empty after approval | step 4's first test was broken: something every task waits on is not agreed, or the tasks wait on each other in a chain with no beginning. Do not explain it away — the board is right |
+| a task that names a part of the design rather than the work | step 4 — say the act, and check the module is not simply being named twice |
+| the board is empty after approval | step 4's first test was broken: something every task waits on is not agreed, or the tasks wait on each other in a chain with no beginning. Do not explain it away — the board is right. **Before** the approval, under `--auto`, an empty board is the right answer and not this row |
 | a node red with a rejection | read the rationale whole from `shall status --json` and revise that file; it lapses when the content changes |

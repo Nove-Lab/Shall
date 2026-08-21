@@ -75,9 +75,15 @@ Relations pointing at the node stay written on purpose. If the file does go, the
 
 ## 6. One node, one file, one concern
 
-A statement is one sentence; everything else belongs in the description. A statement that keeps growing — "and", "as well as", a second subject — is two nodes: split it and relate the halves. A file longer than a screen is overloaded and will be reviewed badly: a person approves what they can hold in their head at once.
+A statement is one sentence; everything else belongs in the description. A statement that keeps growing — "and", "as well as", a second subject — is two nodes: split it and relate the halves. That rule is about the statement and not about the file.
 
-Say each thing once, in the node whose thing it is. Where a neighbor already carries a fact, draw the relation and let it stand: a node that reads well only because it repeats its neighbors is approved once and wrong ever after.
+**How long a node is follows what the node is for.** The things a specification would have put in one row of a table — a goal, a requirement, a term, a criterion — are one claim and what makes it judgeable, and padding them buries the claim a reviewer came to read. The things that are documents in their own right are documents here too: a module design carries a walkthrough, a structure and the reasoning that settled them; an implementation task carries enough that somebody who was not in the conversation can pick it up; a record of work carries what happened. Writing one of those thin does not make it easier to approve — it makes it something nobody can build from, which is the harder failure to see and the more expensive one to fix.
+
+**Where the job is written down is the starting file, and that is what to read.** `shall add-spec-node --type <Type>` names the sections that type carries and says what each one is for, and those hints are the measure: a section that says to walk the scenarios through is asking for the walkthrough, not for a sentence about one; a section that asks for a single sentence is asking for a single sentence. Give each what it asks for, and let the length be whatever that comes to.
+
+**Nothing is truncated anywhere, so a screen is never the reason.** The panel scrolls, the card in the queue is the width of the browser, and no view cuts a body off. Nobody is served by a design shortened to fit something that was never a limit.
+
+Say each thing once, in the node whose thing it is. Where a neighbor already carries a fact, draw the relation and let it stand: a node that reads well only because it repeats its neighbors is approved once and wrong ever after. That is what is wrong at any length — repetition, and saying a neighbour's thing — and it is a different question from how much a node holds.
 
 **A finding needs a reader.** Write a `Finding` only when at least one of two things is true: what you found has to reach whoever works next — the next session included — or it recurs and the work is done twice; or it asks for a change to the specification or the plan, which is what a person writes a decision over. If neither is true it is not a finding, however unexpected it was: something you met, settled on the spot and that changes nothing belongs in the work log's narrative. What the spec or the plan already says, ordinary implementation detail and a choice that was yours to make were never findings at all. A node nobody will read is a card somebody judges for nothing.
 

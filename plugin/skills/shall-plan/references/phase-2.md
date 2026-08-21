@@ -10,6 +10,8 @@ Write down what modules owe each other where they meet: `Interface` nodes carryi
 
 Every module from phase 1 green in `shall status --json`. `EXPOSES` and `CONSUMES` are written in the **module's** file, so a module still yellow is a file you would be editing under a person's open judgment.
 
+Under `--auto` the phase above is **written and agreed in the terminal** rather than green, and that is not the hazard this line was written against: nobody is mid-judgment on a file you are about to edit, because nobody has been asked yet. The one approval covers it all at the end.
+
 In revision mode, clear Fix Spec first, and narrow to the modules whose boundaries the direction moves.
 
 ## Contracts are harvested, not invented
@@ -89,6 +91,8 @@ Anchoring edits the parent, so every module you touch goes yellow again. **An or
 ## The gate
 
 Close with the spine's two-stage approval. Expect **one card per module that gained a contract line**, carrying its interfaces and their schemas in the same bundle. If every module in scope is internal, write nothing and hold no approval rite — an empty set is owed none.
+
+Under `--auto` the card lines below belong to the run's one approval and not to this phase's close; the spine says when they are checked. Everything else here is checked now, as written.
 
 | The line | What proves it |
 |---|---|

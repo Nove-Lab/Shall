@@ -60,6 +60,8 @@ From a goal you write `REFINES` and `ASSUMES` in this phase — and `MENTIONS` o
 
 Close with the spine's two-stage approval. Expect **one card per top-level goal**, not one card for the phase and not one card per goal you wrote. The queue cuts a bundle at the topmost yellow node and walks down every outgoing spec relation from there, and `Goal —REFINES→ Goal` is one of those: a decomposition rides inside its parent's card, however deep it runs. A parent and its three sub-goals are one card carrying four nodes. In a revision where you edited a sub-goal and its parent stayed green, that sub-goal is itself the topmost yellow node and gets a card of its own.
 
+Under `--auto` the card lines below belong to the run's one approval and not to this phase's close; the spine says when they are checked. Everything else here is checked now, as written.
+
 | The line | What proves it |
 |---|---|
 | Every file reads and every `to:` answers to a file that exists | `shall check` whole — an orphan is filed under the orphan's own file, and a missing id under each file that still points at it, so a scope narrower than the spec hides exactly the findings this line is about |

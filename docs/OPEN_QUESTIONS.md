@@ -4,6 +4,35 @@ Decisions that came up while building and were deliberately not taken. Each one
 names where it would land, so taking it later is an edit and not an
 investigation.
 
+## From the batched-approval round (2026-08-22)
+
+**What does a person actually see when the board is blank?** `--auto` writes a
+whole run before anybody judges it, and between the writing and the one approval
+`shall board` is empty on both halves — nothing red to fix, and every task
+blocked because its chain is this run's own unjudged work. That is the correct
+computed answer and the skills now say so, but nobody has watched a person meet
+it. The phase-gated run gives a different experience: green accumulates band by
+band and the board fills as it goes. Whether the blank board reads as "wait" or
+as "broken" is unmeasured.
+
+**How many cards does a whole run actually produce?** Both dogfood logs already
+name that measurement as the thing Round 2 exists to take — one card per top-level
+thing changed, per phase. `--auto` changes exactly that number: the waves merge
+into one card per top-level goal, and one per responsibility that gained a
+module. The prediction is written into both spines from a simulation over
+`core/arith`; the observation is still owed, and the two logs are where it goes.
+
+**Is a rejection at the end as expensive as the flag's own warning says?** The
+spines tell an agent to say the cost out loud when offering `--auto`, and the
+repair is the revision path from the rejected layer down. Nobody has run that
+repair. If it turns out cheap in practice the warning is over-stated; if it
+turns out to cost the run, the flag wants a narrower default than "offer it".
+
+One thing this round resolved rather than deferred: the `MENTIONS` re-approval
+cost recorded below does not bind during an `--auto` run at all, because the
+nodes a term would be mentioned from are already yellow when the vocabulary is
+harvested. It is a cost of the gated rhythm, not of the relation.
+
 ## From the `/specify` plugin round (2026-08-18)
 
 **Should a stale daemon be recognised rather than adopted?** The CLI reuses

@@ -10,6 +10,8 @@ Harvest the project's terms from the approved prose and give the structured ones
 
 Phase 2's map, green — confirm with `shall status --json`, and clear Fix Spec first as the spine says.
 
+Under `--auto` the phase above is **written and agreed in the terminal** rather than green, and that is not the hazard this line was written against: nobody is mid-judgment on a file you are about to edit, because nobody has been asked yet. The one approval covers it all at the end.
+
 The phase stands here for one reason: **terms are harvested from narrative, not squeezed out of a blank page.** The approved use-case and scenario prose is the harvest ground and the goal statements are the second pass. Run this before the narratives exist and you write a dictionary nobody speaks.
 
 ## Steps
@@ -63,6 +65,8 @@ Follow `shall-authoring` for the file itself. What is this phase's:
 ## The gate
 
 Close with the spine's two-stage approval, and expect the shape of it to be different here. **Domain nodes are cut into the queue one at a time and come last**, so a dictionary of nine terms and three entities is twelve cards — plus one spec bundle for every approved scenario you corrected under step 4.2. Say cards are waiting, expect the approvals piecemeal, and do not treat a first yes as the phase.
+
+Under `--auto` the card lines below belong to the run's one approval and not to this phase's close; the spine says when they are checked. Everything else here is checked now, as written.
 
 | The line | What proves it |
 |---|---|

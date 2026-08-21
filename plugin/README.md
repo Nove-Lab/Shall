@@ -4,11 +4,11 @@ Shall keeps a specification as markdown files and asks a person to approve every
 
 It adds six commands — two for the specification, and four for the work done against it.
 
-`/shall:specify` is the staged elicitation that fills a project's intent and domain planes; `/shall:plan` is the design pass one layer below, turning an approved specification into module designs, the contracts between them, and the implementation tasks the board hands out. Both run phase by phase, and both stop at each phase for a person to approve what they wrote in the Review Queue.
+`/shall:specify` is the staged elicitation that fills a project's intent and domain planes; `/shall:plan` is the design pass one layer below, turning an approved specification into module designs, the contracts between them, and the implementation tasks the board hands out. Both run phase by phase, and both stop at each phase for a person to approve what they wrote in the Review Queue — or, with `--auto`, run every phase through and ask for that approval once at the end. The flag moves the browser judgment and nothing else: the questions inside each phase and the yes before anything is written happen either way.
 
 `/shall:work` runs one turn of the work cycle: it surveys the board, proposes a bundle of at most three items, leaves the development itself alone, and writes the turn up as one journal for the queue — with `--auto` to run it without stopping and `--dry` to forecast it without writing. Its two parts are commands of their own: `/shall:work.todo` surveys and writes nothing, `/shall:work.report` writes up work already done, reconstructing it from git when the notes are gone. `/shall:raise <question>` is the other door — for a doubt rather than a request: it explores, says what it found, and records a finding, a decision the person dictated, both, or nothing.
 
-**The four work commands are not phase-gated.** They finish a turn in one session and hand the record to the queue, because a record is read after the fact rather than agreed to in advance.
+**The four work commands have no phase gate to move.** They finish a turn in one session and hand the record to the queue, because a record is read after the fact rather than agreed to in advance — which is why they need no flag to say so.
 
 ## What it needs
 
@@ -18,7 +18,7 @@ The folder you run in must already be a Shall project. `shall init` makes one.
 
 `/shall:work` needs a board with something on it — a plan whose tasks are ready, or a specification with something red in it. An empty board is not an error there: the turn ends before it starts, and what unblocks it is a person judging what is waiting, or `/shall:plan` cutting more work. `/shall:raise` needs neither, only `shall status`.
 
-`/shall:plan` needs one thing more: a specification a person has approved above whatever it is being asked to plan. It walks the responsibilities the direction touches, up to the goals and out to the criteria and constraints, and refuses to start if any of those is not green — naming the ids and sending you to `/shall:specify`. That set is exactly what a task's readiness is computed over later, so a plan built on an unread node would produce tasks nobody could start.
+`/shall:plan` needs one thing more, and `--auto` does not relax it: a specification a person has approved above whatever it is being asked to plan. It walks the responsibilities the direction touches, up to the goals and out to the criteria and constraints, and refuses to start if any of those is not green — naming the ids and sending you to `/shall:specify`. That set is exactly what a task's readiness is computed over later, so a plan built on an unread node would produce tasks nobody could start.
 
 ## Running it without installing
 
@@ -44,8 +44,8 @@ The first checks the manifest and the file layout. The second checks the prose: 
 | Path | What it is |
 |---|---|
 | `.claude-plugin/plugin.json` | the manifest. `name` is `shall`, which is what puts every command under `/shall:` |
-| `commands/specify.md` | the entry point for the specification. Checks the CLI is current, loads the two skills, works out which phase the request enters at, and hands over |
-| `commands/plan.md` | the same, one plane down — and one question more: whether the specification above the direction has been approved |
+| `commands/specify.md` | the entry point for the specification. Reads `--auto`, checks the CLI is current, loads the two skills, works out which phase the request enters at, and hands over |
+| `commands/plan.md` | the same, one plane down — and one question more: whether the specification above the direction has been approved, which `--auto` does not excuse |
 | `commands/work.md` | one turn of the cycle. Reads `--auto` and `--dry`, checks the CLI, loads the skills, and hands over at the survey |
 | `commands/work.todo.md` | the survey alone, with the writing tools refused outright |
 | `commands/work.report.md` | the write-up alone, which is always the reconstruction — and the way back after a session broke off mid-turn |

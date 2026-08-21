@@ -10,6 +10,8 @@ Derive who acts, what each actor pursues through the system, how each pursuit go
 
 Phase 1's goals, green — confirm with `shall status --json`, and clear Fix Spec first as the spine says. An actor is held to the graph by a line written into a **goal's** file, so a goal that does not exist is an actor you cannot anchor, and a goal still yellow is a file you would be rewriting under a person's open judgment.
 
+Under `--auto` the phase above is **written and agreed in the terminal** rather than green, and that is not the hazard this line was written against: nobody is mid-judgment on a file you are about to edit, because nobody has been asked yet. The one approval covers it all at the end.
+
 ## The chain, and the edge that does not exist
 
 **There is no relation from a use case to a goal, and there never will be.** A use case is tied to its goal through the actor, so "which goal does this serve" is answered by walking `Goal —PURSUED_BY→ Actor —PERFORMS→ UseCase`.
@@ -64,6 +66,8 @@ Anchoring edits the parent, so every goal you touch goes yellow again along with
 ## The gate
 
 Close with the spine's two-stage approval. Expect **one card per goal that gained an actor**, each carrying the use cases, scenarios and criteria beneath it.
+
+Under `--auto` the card lines below belong to the run's one approval and not to this phase's close; the spine says when they are checked. Everything else here is checked now, as written.
 
 | The line | What proves it |
 |---|---|

@@ -10,6 +10,8 @@ Decompose each approved responsibility into normative sentences, fence those sen
 
 Every responsibility from Phase 4 green in `shall status --json`: a requirement is anchored by a line written into a responsibility's file, so a responsibility still yellow is a file you would be rewriting under a person's open judgment. Phase 3's dictionary is still the controlled vocabulary; a concept it lacks sends you to [phase 3](./phase-3.md) step 1 before the sentence is written.
 
+Under `--auto` the phase above is **written and agreed in the terminal** rather than green, and that is not the hazard this line was written against: nobody is mid-judgment on a file you are about to edit, because nobody has been asked yet. The one approval covers it all at the end.
+
 ## What a requirement is
 
 **One SHALL or MUST sentence carrying exactly one behavior.** Four rules, all of them yours to keep:
@@ -79,6 +81,8 @@ Anchoring edits the parent, so every responsibility you touch goes yellow again.
 ## The gate
 
 Close with the spine's two-stage approval. Expect **one card per responsibility that gained requirements**, carrying its constraints and criteria in the same bundle.
+
+Under `--auto` the card lines below belong to the run's one approval and not to this phase's close; the spine says when they are checked. Everything else here is checked now, as written.
 
 | The line | What proves it |
 |---|---|

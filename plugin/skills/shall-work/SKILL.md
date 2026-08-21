@@ -17,7 +17,7 @@ survey → **stop 1**, the pick → develop → **stop 2**, the write-up → the
 
 One turn is one journal. One item is one work log. Three commands come in here — `/shall:work` runs the whole cycle, `/shall:work.todo` runs the survey alone, `/shall:work.report` runs the write-up alone — and they are the same parts assembled or loose, which is why they share one page.
 
-**There is no phase gate in this process, and that is not an oversight.** In `/shall:specify` and `/shall:plan` a phase does not open until a person has approved the one above it, because each phase is written on top of the last. A turn of work is not: it is done in one session, written up at the end, and read afterwards. So this process never waits — it writes the record, says a card is waiting, and stops. A queue with records in it is the ordinary state of a healthy project, not a backlog.
+**There is no phase gate in this process, and that is not an oversight.** In `/shall:specify` and `/shall:plan` a phase does not open until a person has approved the one above it — unless those runs were asked for with `--auto`, which gathers the waiting into one at the end — because each phase is written on top of the last. A turn of work is not: it is done in one session, written up at the end, and read afterwards. So this process never waits — it writes the record, says a card is waiting, and stops. A queue with records in it is the ordinary state of a healthy project, not a backlog.
 
 ## Authoring is delegated
 
