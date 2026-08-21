@@ -79,6 +79,10 @@ A statement is one sentence; everything else belongs in the description. A state
 
 Say each thing once, in the node whose thing it is. Where a neighbor already carries a fact, draw the relation and let it stand: a node that reads well only because it repeats its neighbors is approved once and wrong ever after.
 
+**A finding needs a reader.** Write a `Finding` only when at least one of two things is true: what you found has to reach whoever works next — the next session included — or it recurs and the work is done twice; or it asks for a change to the specification or the plan, which is what a person writes a decision over. If neither is true it is not a finding, however unexpected it was: something you met, settled on the spot and that changes nothing belongs in the work log's narrative. What the spec or the plan already says, ordinary implementation detail and a choice that was yours to make were never findings at all. A node nobody will read is a card somebody judges for nothing.
+
+Where it belongs follows where it came from. One you made while doing the work is recorded by that work log; one you brought from outside a turn of work stands on its own and reaches the queue as its own card. Do not manufacture a work log to hold a finding, and do not hold back a finding because there is no work log to put it under.
+
 ## 7. Don't reopen what is closed
 
 A criterion a person has closed is closed over the exact list of evidence that claimed it then. Attach one more piece of evidence and the closure lapses by arithmetic: the card comes back and somebody has to judge the whole list again. The same holds for a task somebody has called done and the reports claiming it.
