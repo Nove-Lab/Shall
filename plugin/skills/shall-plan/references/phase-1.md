@@ -10,6 +10,8 @@ Decide which modules this system is made of and design each one: a set of `Modul
 
 Everything the command walked — the responsibilities in scope, the scenarios, use cases, actors and goals above them, and the requirements, criteria and constraints beside them — green in `shall status --json`. It checked that before handing over, so nothing here re-derives it.
 
+**`--auto` does not soften this one, and it is the one to be sure of.** The colours this line asks about belong to the specification — another round's judgment, made by a person who is not in this conversation. The flag defers the approval of what *this* run writes and nothing else, so a specification nobody has approved stops the command before it ever reaches this file.
+
 In revision mode, clear Fix Spec first as the spine says, and narrow the work to the modules the direction actually moves.
 
 ## Responsibility first, structure second
@@ -97,6 +99,8 @@ Anchoring edits the parent, so every responsibility you touch goes yellow again 
 
 Close with the spine's two-stage approval. Expect **one card per responsibility that gained a module**, not one card for the phase.
 
+Under `--auto` the card lines below belong to the run's one approval and not to this phase's close; the spine says when they are checked. Everything else here is checked now, as written.
+
 | The line | What proves it |
 |---|---|
 | Nothing is orphaned and no id answers to nothing | `shall check` — gaps exit 1. A module nothing anchors is red and has no card at all, so the check is the only place it is said |
@@ -108,6 +112,8 @@ Close with the spine's two-stage approval. Expect **one card per responsibility 
 | Every role is one sentence with no "and" in it | you read them |
 | Every structural design names the arrangement it follows and where it departs | you read them |
 | Every responsibility a module realizes appears in ≥1 walkthrough, and no walkthrough contradicts the assignment | you read them |
+| Each walkthrough follows its scenario through, rather than saying that it was followed | you read them — a walkthrough that names a scenario and stops has not absorbed it |
+| Each rationale says what else was weighed, not only what was chosen | you read them |
 | Every choice that is not self-evident has its rationale, with the source path where a convention decided it | you read them, and you said it out loud in the terminal explanation |
 | Every card from this phase is green | `shall status --json` after the person says they are done |
 

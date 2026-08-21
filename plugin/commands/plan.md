@@ -1,6 +1,6 @@
 ---
-description: Plan or revise the layer below an approved Shall specification — decides the modules, writes their contracts and cuts the work into tasks, handing each phase to the Review Queue for approval.
-argument-hint: <the technical direction, or what to change>
+description: Plan or revise the layer below an approved Shall specification — decides the modules, writes their contracts and cuts the work into tasks, handing each phase to the Review Queue for approval. --auto runs every phase without stopping between them and asks for approval once at the end.
+argument-hint: [--auto] <the technical direction, or what to change>
 disable-model-invocation: true
 allowed-tools: Bash(shall:*), Read, Glob, Grep, Write, Edit, AskUserQuestion, Skill
 ---
@@ -10,6 +10,16 @@ The direction, in the user's own words:
 $ARGUMENTS
 
 If that is empty, ask the user what direction they want the build to take and stop there. Do not start on a guess: every phase below spends the user's attention, and spending it on the wrong subject costs more than one question.
+
+Read it for one flag before anything else:
+
+| What you find | What it means |
+|---|---|
+| `--auto` | run the phases without stopping for the browser between them, and ask for approval once at the end. **Everything you would have asked the user is still asked** — the questions inside each phase, the explanation of what that phase means to write, and the yes before anything reaches disk. What moves is the browser judgment, and only that |
+| the flag and nothing else | still ask for the direction and stop. The flag settles how the run is judged, never what it is about |
+| anything else | the direction itself |
+
+**The flag does not reach the gate in step 2.** `--auto` moves this run's own approval to the end of this run. It moves nobody else's: the specification above the direction was another round's judgment, and the gate below reads it exactly as it reads it today. So a `/shall:specify --auto` that has just finished leaves a specification nobody has approved yet, and `/shall:plan` — with the flag or without it — will refuse to start until somebody does.
 
 ## Step 0 — the gate
 
@@ -44,6 +54,8 @@ Read the status you got in step 0. There are three questions here and they are a
 ### Unapproved plan work comes first
 
 **Yellow in the plan band, a `Decision` aside → work nobody has agreed to, and it comes first.** A new session cannot tell a phase still waiting on a person from one nobody finished, and does not need to: either way nobody has agreed to those nodes. Ask with AskUserQuestion — carry that phase to its approval `(Recommended)`, or leave it standing and enter where this direction lands — then follow the answer.
+
+**Under `--auto` there is nothing to ask here.** Carrying a phase to its approval is what the end of this run does anyway, and it does it for everything at once. So name what is yellow, enter where the direction lands, and say that the one approval at the end covers the older work as well as this run's.
 
 Two things belong to that work while sitting outside the plan band, and reading them as somebody else's is how a phase gets abandoned half-written:
 
@@ -90,4 +102,4 @@ Revision mode has three standing rules the phases assume:
 
 ## Step 3 — hand over
 
-Enter `shall-plan` at the phase you chose and follow that phase's file to the letter — its own page says which file each phase is. From here the process steers and you do not: do not compress two phases into one pass, do not answer on the user's behalf a question the phase puts to them, and do not carry on past a phase's approval gate because the next step looks obvious.
+Enter `shall-plan` at the phase you chose and follow that phase's file to the letter — its own page says which file each phase is. From here the process steers and you do not: do not compress two phases into one pass, do not answer on the user's behalf a question the phase puts to them, and do not carry on past a phase's approval gate because the next step looks obvious *(unless this is `--auto`, which moves the wait and not the order)*.

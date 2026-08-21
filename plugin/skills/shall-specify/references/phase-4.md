@@ -10,6 +10,8 @@ Derive, from each approved scenario, the behaviors and qualities **the system** 
 
 Phase 2's map and Phase 3's dictionary, both green in `shall status --json`. A responsibility derived from a scenario still under judgment is one you will rewrite when the judgment lands, and from here on the dictionary is the controlled vocabulary every statement is written in.
 
+Under `--auto` the phase above is **written and agreed in the terminal** rather than green, and that is not the hazard this line was written against: nobody is mid-judgment on a file you are about to edit, because nobody has been asked yet. The one approval covers it all at the end.
+
 In revision mode, clear Fix Spec first as the spine says, and scope the work to the scenarios the request actually moves.
 
 ## The perspective turn
@@ -74,6 +76,8 @@ Anchoring edits the parent, so every scenario you touch goes yellow again — th
 ## The gate
 
 Close with the spine's two-stage approval. Expect **one card per scenario that gained a responsibility**, not one card for the phase.
+
+Under `--auto` the card lines below belong to the run's one approval and not to this phase's close; the spine says when they are checked. Everything else here is checked now, as written.
 
 | The line | What proves it |
 |---|---|

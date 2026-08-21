@@ -1,6 +1,6 @@
 ---
-description: Elicit or revise a Shall specification — interviews the user, writes the spec node files, and hands each phase to the Review Queue for approval.
-argument-hint: <what you need, or what to change>
+description: Elicit or revise a Shall specification — interviews the user, writes the spec node files, and hands each phase to the Review Queue for approval. --auto runs every phase without stopping between them and asks for approval once at the end.
+argument-hint: [--auto] <what you need, or what to change>
 disable-model-invocation: true
 allowed-tools: Bash(shall:*), Read, Glob, Grep, Write, Edit, AskUserQuestion, Skill
 ---
@@ -10,6 +10,14 @@ The request, in the user's own words:
 $ARGUMENTS
 
 If that is empty, ask the user what they need specified and stop there. Do not start on a guess: every phase below spends the user's attention, and spending it on the wrong subject costs more than one question.
+
+Read it for one flag before anything else:
+
+| What you find | What it means |
+|---|---|
+| `--auto` | run the phases without stopping for the browser between them, and ask for approval once at the end. **Everything you would have asked the user is still asked** — the questions inside each phase, the explanation of what that phase means to write, and the yes before anything reaches disk. What moves is the browser judgment, and only that |
+| the flag and nothing else | still ask what they need and stop. The flag settles how the run is judged, never what it is about |
+| anything else | the request itself |
 
 ## Step 0 — the gate
 
@@ -43,6 +51,8 @@ Read the status you got in step 0.
 
 **Yellow in the intent or domain band → unapproved work, and it comes first.** A new session cannot tell a phase still waiting on a person from one nobody finished, and does not need to: either way nobody has agreed to those nodes, and the ids and their types name the phase they belong to. Ask with AskUserQuestion — carry that phase to its approval `(Recommended)`, or leave it standing and enter where this request lands — then follow the answer to a phase.
 
+**Under `--auto` there is nothing to ask here.** Carrying a phase to its approval is what the end of this run does anyway, and it does it for everything at once. So name what is yellow, enter where the request lands, and say that the one approval at the end covers the older work as well as this run's.
+
 One node sits in the intent band and is not this process's: **an `Assumption` a `ModuleDesign` hangs off.** The canon gives an assumption no layer of its own and files every one of them with intent, so the band does not say whose it is — what it hangs off does, and a module's belongs to `/shall:plan`. Leave it standing.
 
 **No nodes in the intent band → new mode.** The specification does not exist yet. Enter at phase 1 and run the phases in order.
@@ -67,4 +77,4 @@ Revision mode has three standing rules the phases assume:
 
 ## Step 3 — hand over
 
-Enter `shall-specify` at the phase you chose and follow that phase's file to the letter — its own page says which file each phase is. From here the process steers and you do not: do not compress two phases into one pass, do not answer on the user's behalf a question the phase puts to them, and do not carry on past a phase's approval gate because the next step looks obvious.
+Enter `shall-specify` at the phase you chose and follow that phase's file to the letter — its own page says which file each phase is. From here the process steers and you do not: do not compress two phases into one pass, do not answer on the user's behalf a question the phase puts to them, and do not carry on past a phase's approval gate because the next step looks obvious *(unless this is `--auto`, which moves the wait and not the order)*.

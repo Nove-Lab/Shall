@@ -4,7 +4,7 @@ The spine is [`../SKILL.md`](../SKILL.md), the `shall-work` skill itself: its st
 
 ## Purpose
 
-Turn what happened into a journal a person can read and accept in one sitting.
+Turn what happened into a journal a person accepts in one decision — one card, whole and in order, however much the turn produced.
 
 ## Two ways in
 
