@@ -64,7 +64,7 @@ The source, always: a relation is written in the file of the node it leaves. Dow
 
 The reason is approval: planning work, starting work, making a claim or deciding a revision must not touch the criterion's, the task's or the requirement's file, because that would turn a green node yellow and put somebody's settled judgment back in the queue.
 
-**A finding starts no relation at all.** The ids it concerns go in its own `relatedNodes` list, which is a hint and not a relation: nothing checks that those ids answer to a file, an empty list is not a fault, and no walk follows them. What answers a finding is a `Decision` that `RESOLVES` it, written afterwards in the decision's own file — so a finding is never edited to record that somebody dealt with it. That decision is held to the graph by what it revises and not by the finding it answers, so a `RESOLVES` line on its own leaves it an orphan.
+**A finding starts no relation at all, and nothing has to hold it either.** The ids it concerns go in its own `relatedNodes` list, which is a hint and not a relation: nothing checks that those ids answer to a file, an empty list is not a fault, and no walk follows them. A finding is rootless like a `Goal`, because its belonging follows its birth — one made in the middle of a turn of work is `RECORDS`ed by that work log and read as part of that report, and one brought between turns stands alone and reaches the queue as a card of its own. Write neither line into the finding: the `RECORDS` line lives in the work log's file, and the absence of one is not a hole to fill. What answers a finding is a `Decision` that `RESOLVES` it, written afterwards in the decision's own file — so a finding is never edited to record that somebody dealt with it. That decision is held to the graph by what it revises and not by the finding it answers, so a `RESOLVES` line on its own leaves it an orphan.
 
 ## What holds a node in the graph
 
@@ -73,6 +73,7 @@ An *anchor* is the one relation a node must be on the right end of to be part of
 | Type | Held by |
 |---|---|
 | `Term`, `DomainEntity`, `Goal` | nothing — the canon starts here |
+| `Journal`, `Finding` | nothing either — a journal starts the record, and a finding may be brought from outside one |
 | `Actor` | `PURSUED_BY` into it |
 | `UseCase` | `PERFORMS` into it |
 | `Scenario` | `DETAILS` into it |

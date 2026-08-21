@@ -48,8 +48,9 @@ someone on the same panel — there is no hidden "current project" state.
 ```
 
 `panelId` ∈ `review-queue | task-board | activity-feed | vitals`. A bundle id is
-`spec:<root>`, `report:<journal>`, `closure:<criterion>` or `completion:<task>` —
-the node the bundle hangs off, so the link says what it is about. `?node=` opens
+`spec:<root>`, `report:<journal>`, `finding:<finding>`, `closure:<criterion>` or
+`completion:<task>` — the node the bundle hangs off, so the link says what it is
+about. `?node=` opens
 the node's panel — the reading pane, always — and `?back=` puts a
 **Back to review** button in the toolbar, which is how a card sends you to the
 canvas and gets you back.
@@ -186,7 +187,7 @@ did not need a file of its own.
 The Control plane's Review Queue shows what is waiting on a person, cut into
 bundles. Nothing about a bundle is stored: every load recomputes them from the
 graph and the three ledgers, so a save, a hand edit or a `git checkout` moves
-the queue with nobody told. Four kinds:
+the queue with nobody told. Five kinds:
 
 - **Spec approval** — a subgraph of yellow nodes outside the execution record,
   rooted at the topmost yellow node the scan meets (Decision → Goal → Actor →
@@ -208,6 +209,12 @@ the queue with nobody told. Four kinds:
   evidence and reports, `RECORDS` findings, plus the assumptions a work log
   raised), with the journal's text in front and **Accept report** approving
   every yellow node under it in one write.
+- **Standalone finding** — a yellow `Finding` no living work log `RECORDS`:
+  something brought between turns of work rather than found inside one, so
+  there is no report for it to be read as part of. One card each, last in the
+  queue because it decides nothing — reading it is the whole of what happens,
+  and what answers it is a `Decision` somebody writes afterwards. **Accept
+  finding** makes the same approval write the other two do.
 - **Task closure** — an implementation task that completion reports claim,
   every one of them approved, about whose current list nobody has said a word.
   The card shows the task, the reports claiming it (each with the work log that
@@ -230,9 +237,9 @@ the queue with nobody told. Four kinds:
   no part of it: an unapproved claimant is on the list, shown yellow so you can
   see it, and a left-open criterion stays whatever colour its own books make it.
 
-A spec-approval or work-report card has **Approve** and **Reject…** on every
-node; a closure card lists what claims the subject and has **Close** and **Leave
-open…**. Every row has **Open in Spec plane**, and every card has one
+A spec-approval, work-report or standalone-finding card has **Approve** and
+**Reject…** on every node; a closure card lists what claims the subject and has
+**Close** and **Leave open…**. Every row has **Open in Spec plane**, and every card has one
 bundle-wide button. Approving or rejecting recomputes the queue at once: a
 bundle whose members are all green is gone, and yellow that is left regroups
 into new bundles. A rejected node stays listed, red with its rationale, while a

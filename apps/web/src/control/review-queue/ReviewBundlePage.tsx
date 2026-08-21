@@ -47,6 +47,7 @@ import {
   type EvidenceMember,
   type ReviewBundle,
   type SpecApprovalBundle,
+  type StandaloneFindingBundle,
   type WorkReportBundle,
 } from "@/spec/review";
 import { formatStamp, type SpecNode } from "@/spec/spec-node";
@@ -61,11 +62,10 @@ import { KIND_LABEL } from "./rows";
  * THE PAGE IS THE UNIT OF JUDGEMENT AND THE QUEUE IS ONLY THE WAY IN. What is
  * under the decision is here in full — the changed file, the nodes nobody
  * touched, the evidence and who submitted it — because a verdict made off a
- * summary line is a verdict made without reading. The three kinds share
- * everything above the fold: the crumb, the title, the primary button, the
- * strip of what has already been decided; below it they are three different
- * documents, and each is written out rather than abstracted into one that
- * fits none of them.
+ * summary line is a verdict made without reading. Every kind shares everything
+ * above the fold: the crumb, the title, the primary button, the strip of what
+ * has already been decided; below it they are different documents, and each is
+ * written out rather than abstracted into one that fits none of them.
  *
  * EVERY WRITE ENDS IN A REFETCH AND NOTHING IS CACHED. The queue is recomputed
  * from the graph and the three ledgers on every read, so a verdict rearranges
@@ -481,6 +481,13 @@ export function ReviewBundlePage() {
           onReject={rejectNode}
           {...rowProps}
         />
+      ) : bundle.kind === "standalone-finding" ? (
+        <FindingCard
+          bundle={bundle}
+          nodeById={nodeById}
+          onReject={rejectNode}
+          {...rowProps}
+        />
       ) : (
         <ApprovalCard
           bundle={bundle}
@@ -501,12 +508,13 @@ export function ReviewBundlePage() {
  * THE ONE BUTTON THE WHOLE CARD IS FOR — except on the closure card, where it is
  * two, because that queue has two exits.
  *
- * Two of the three kinds send the same write under two names — a bundle's yellow
- * members, approved in one turn, all or nothing — because "accept this report"
- * and "approve this subgraph" are the same act on different documents and a
- * second procedure would be a second thing to keep in step.
+ * The three walked kinds send the same write under three names — a bundle's
+ * yellow members, approved in one turn, all or nothing — because "accept this
+ * report", "accept this finding" and "approve this subgraph" are the same act
+ * on different documents and a second procedure would be a second thing to keep
+ * in step.
  *
- * THE THIRD IS A PAIR AND NEITHER HALF NAMES ANY EVIDENCE. Closing records an
+ * THE CLOSURES ARE A PAIR AND NEITHER HALF NAMES ANY EVIDENCE. Closing records an
  * acceptance over EVERY piece of evidence claiming the criterion now, whatever
  * colour each one wears, and the daemon computes that list off the graph;
  * leaving it open refuses the same list in writing. There is nothing to pick, so
@@ -577,7 +585,17 @@ function PrimaryAction({
   }
 
   const ids = bundle.members.filter(approvable).map((member) => member.id);
-  const label = bundle.kind === "work-report" ? "Accept report" : "Approve all";
+  // ONE VERB PER KIND, AND THE VERB IS WHAT THE PERSON IS DOING. "Approve all"
+  // over a piece of the specification, "Accept report" over a turn of work
+  // somebody wrote down, "Accept finding" over one thing somebody noticed —
+  // and the last two are acceptances rather than approvals because a record is
+  // not agreed with, it is taken.
+  const label =
+    bundle.kind === "work-report"
+      ? "Accept report"
+      : bundle.kind === "standalone-finding"
+        ? "Accept finding"
+        : "Approve all";
   return (
     <Button
       type="button"
@@ -591,10 +609,10 @@ function PrimaryAction({
 }
 
 /* ------------------------------------------------------------------ *
- * The pieces the four cards share
+ * The pieces the five cards share
  * ------------------------------------------------------------------ */
 
-/** What every card hands its rows, so the four are written once. */
+/** What every card hands its rows, so the five are written once. */
 interface RowWiring {
   projectId: string;
   backPath: string;
@@ -769,12 +787,17 @@ function ApprovalCard({
  * ------------------------------------------------------------------ */
 
 /**
- * A FINDING IS NOT APPROVED ONE AT A TIME. It is a thing an agent noticed, not
- * a claim about the specification that a person signs off in isolation, so it
- * rides along in the report being accepted. What it DOES get is the door to the
- * file, because reading it is the whole of what happens here: what answers a
- * finding is a `Decision` written afterwards that `RESOLVES` it, and that is
- * somebody else's card.
+ * A FINDING IS NOT APPROVED ONE AT A TIME — INSIDE A REPORT. It is a thing an
+ * agent noticed while doing something else, not a claim about the specification
+ * that a person signs off in isolation, so it rides along in the report being
+ * accepted. What it DOES get is the door to the file, because reading it is the
+ * whole of what happens here: what answers a finding is a `Decision` written
+ * afterwards that `RESOLVES` it, and that is somebody else's card.
+ *
+ * A FINDING NO WORK LOG RECORDED HAS NO REPORT TO RIDE IN, and it gets a card
+ * of its own where both doors are open — see `FindingCard`. The difference is
+ * not about the type but about what is being judged: there, the finding IS the
+ * decision in front of the person.
  *
  * TYPED AGAINST THE CANON, so a type renamed there is a compile error on this
  * line rather than a set that quietly matches nothing.
@@ -864,6 +887,47 @@ function TypeSection({
         ))}
       </CollapsibleContent>
     </Collapsible>
+  );
+}
+
+/* ------------------------------------------------------------------ *
+ * Standalone finding
+ * ------------------------------------------------------------------ */
+
+/**
+ * ONE FINDING NOBODY'S WORK LOG RECORDED, WHICH IS WHY IT IS A CARD.
+ *
+ * The report card exists because a journal gathers a turn of work into one
+ * thing a person reads at once. Here there is no turn: somebody brought this
+ * between them, so the finding is the whole of what is waiting and both doors
+ * belong on its row — approving says it has been read, rejecting says what is
+ * wrong with how it was written. Neither answers it. What answers a finding is
+ * a `Decision` somebody writes afterwards, and that arrives as its own card.
+ */
+function FindingCard({
+  bundle,
+  nodeById,
+  ...wiring
+}: {
+  bundle: StandaloneFindingBundle;
+  nodeById: ReadonlyMap<string, SpecNode>;
+} & RowWiring) {
+  return (
+    <div className="grid gap-4">
+      {bundle.members.map((member) => (
+        <MemberRow
+          key={member.id}
+          member={member}
+          node={nodeById.get(member.id) ?? null}
+          verb="Reject"
+          canApprove
+          canReject
+          defaultOpen
+          {...wiring}
+        />
+      ))}
+      <Counts counts={bundle.counts} />
+    </div>
   );
 }
 

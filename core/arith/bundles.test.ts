@@ -876,6 +876,94 @@ describe("the work report", () => {
   });
 });
 
+describe("a standalone finding", () => {
+  const journal = node("Journal", "J-0001");
+  const workLog = node("WorkLog", "WL-0001");
+
+  test("a finding nobody recorded roots a card of its own, and a recorded one still rides in the report", () => {
+    // The two births, in one graph. F-0001 was found inside a turn of work and
+    // the log that found it says so, so it is read as part of that report;
+    // F-0002 was brought between turns and no log names it, so it is nobody's
+    // report and gets a card that says as much.
+    const found = node("Finding", "F-0001");
+    const brought = node("Finding", "F-0002");
+    const nodes = [journal, workLog, found, brought];
+    const edges = [
+      edge("J-0001", "LOGS", "WL-0001"),
+      edge("WL-0001", "RECORDS", "F-0001"),
+    ];
+    const queue = assertEveryYellowIsBundled(nodes, edges);
+    assert.deepEqual(bundleIds(queue), ["report:J-0001", "finding:F-0002"]);
+    assert.deepEqual(memberIds(queue, "report:J-0001"), [
+      "J-0001",
+      "WL-0001",
+      "F-0001",
+    ]);
+    // AND ONCE, NOT TWICE. The pass that mops up report-side roots would take
+    // a loose finding as well, so the standalone pass marks it covered; the
+    // coverage check above cannot see the difference between one card and two,
+    // which is why the absence is spelled out.
+    assert.equal(bundleIds(queue).includes("report:F-0002"), false);
+    const bundle = queue.bundles.find((held) => held.id === "finding:F-0002");
+    assert.ok(bundle !== undefined && bundle.kind === "standalone-finding");
+    assert.equal(bundle.rootId, "F-0002");
+    assert.equal(bundle.title, "F-0002 Finding F-0002");
+    assert.equal(bundle.since, 1);
+    assert.deepEqual(
+      bundle.members.map((member) => [member.id, member.color, member.reason]),
+      [["F-0002", "yellow", "unapproved"]],
+    );
+    assert.deepEqual(bundle.unchanged, []);
+    assert.deepEqual(bundle.counts, [{ type: "Finding", count: 1 }]);
+  });
+
+  test("a finding a journal-less work log recorded is that log's report", () => {
+    // Recorded is recorded. Nothing logged the log, so the log roots its own
+    // report — and the finding it found belongs inside that, not on a card
+    // saying nobody's work found it.
+    const criterion = node("AcceptanceCriterion", "AC-0001");
+    const task = node("ImplementationTask", "IT-0001");
+    const finding = node("Finding", "F-0001");
+    const nodes = [...SPINE, criterion, task, workLog, finding];
+    const edges = [
+      ...SPINE_EDGES,
+      edge("R-0001", "HAS_CRITERION", "AC-0001"),
+      edge("IT-0001", "TARGETS", "AC-0001"),
+      edge("WL-0001", "ADDRESSES", "IT-0001"),
+      edge("WL-0001", "RECORDS", "F-0001"),
+    ];
+    const queue = queueOf(nodes, edges, {
+      green: [...SPINE, criterion, task],
+    });
+    assert.deepEqual(bundleIds(queue), ["report:WL-0001"]);
+    assert.deepEqual(memberIds(queue, "report:WL-0001"), ["WL-0001", "F-0001"]);
+  });
+
+  test("a finding a person has read is no card at all", () => {
+    const brought = node("Finding", "F-0001");
+    const queue = queueOf([brought], [], { green: [brought] });
+    assert.deepEqual(bundleIds(queue), []);
+  });
+
+  test("a decision that answers a loose finding does not take it onto its card", () => {
+    // The side wall, from the spec side. A decision is held by what it revises
+    // and answers a finding besides, so both are yellow at once here — and they
+    // are two cards, because dragging a record into a spec approval is exactly
+    // what the wall is for.
+    const decision = node("Decision", "D-0001");
+    const brought = node("Finding", "F-0001");
+    const nodes = [...SPINE, decision, brought];
+    const edges = [
+      ...SPINE_EDGES,
+      edge("D-0001", "AFFECTS", "R-0001"),
+      edge("D-0001", "RESOLVES", "F-0001"),
+    ];
+    const queue = assertEveryYellowIsBundled(nodes, edges, { green: SPINE });
+    assert.deepEqual(bundleIds(queue), ["spec:D-0001", "finding:F-0001"]);
+    assert.equal(memberIds(queue, "spec:D-0001").includes("F-0001"), false);
+  });
+});
+
 describe("AC closure", () => {
   const criterion = node("AcceptanceCriterion", "AC-0001");
   const task = node("ImplementationTask", "IT-0001");
@@ -1205,13 +1293,22 @@ describe("task closure", () => {
 });
 
 describe("the order of the queue", () => {
-  test("closures first, then approvals, then reports", () => {
+  test("closures first, then approvals, then reports, then a finding nobody recorded", () => {
     const criterion = node("AcceptanceCriterion", "AC-0001");
     const journal = node("Journal", "J-0001");
     const workLog = node("WorkLog", "WL-0001");
     const evidence = node("Evidence", "EV-0001");
     const term = node("Term", "T-0001");
-    const nodes = [...SPINE, criterion, journal, workLog, evidence, term];
+    const brought = node("Finding", "F-0001");
+    const nodes = [
+      ...SPINE,
+      criterion,
+      journal,
+      workLog,
+      evidence,
+      term,
+      brought,
+    ];
     const edges = [
       ...SPINE_EDGES,
       edge("R-0001", "HAS_CRITERION", "AC-0001"),
@@ -1228,6 +1325,7 @@ describe("the order of the queue", () => {
       "closure:AC-0001",
       "spec:T-0001",
       "report:J-0001",
+      "finding:F-0001",
     ]);
   });
 

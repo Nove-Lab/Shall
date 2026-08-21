@@ -39,6 +39,13 @@ describe("the rules page", () => {
     assert.match(text, /Never delete a spec file/);
     assert.match(text, /Never open `\.shall\/ledger\/`/);
     assert.match(text, /A task hangs off a module/);
+    // And the one line that is not a rule: where the processes are, all four
+    // of them. An agent that never learns the work commands exist writes the
+    // execution record by hand, which is what they were built to stop.
+    assert.match(text, /\/shall:specify/);
+    assert.match(text, /\/shall:plan/);
+    assert.match(text, /\/shall:work/);
+    assert.match(text, /\/shall:raise/);
     assert.ok(text.endsWith("\n"), JSON.stringify(text.slice(-40)));
   });
 

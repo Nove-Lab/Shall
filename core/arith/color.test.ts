@@ -438,6 +438,22 @@ describe("anchors", () => {
       status("G-0001", "yellow", "unapproved"),
     ]);
   });
+
+  test("a finding no work log recorded is rootless too, and stands", () => {
+    // The one rootless type in the execution band, and the only one whose
+    // belonging is a question of where it came from: a finding made mid-turn
+    // is recorded by that turn's work log, and one somebody brought between
+    // turns has no work log to be recorded by. Red here would mean the graph
+    // asking for a parent that does not exist, so the only way to file the
+    // finding at all would be to invent one.
+    const review = reviewGraph(
+      graphOf({ nodes: [node("Finding", "F-0001")] }),
+      unapproved,
+    );
+    assert.deepEqual(review.statuses, [
+      status("F-0001", "yellow", "unapproved"),
+    ]);
+  });
 });
 
 describe("yellow and green", () => {

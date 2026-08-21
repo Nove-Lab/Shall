@@ -39,13 +39,13 @@ import { lineDiff, wholeFile, type DiffRow } from "@/spec/view/diff";
 import { controlBase, specLink } from "../parts";
 
 /**
- * ONE NODE INSIDE A BUNDLE, AND THE SAME ROW FOR ALL THREE KINDS.
+ * ONE NODE INSIDE A BUNDLE, AND THE SAME ROW FOR EVERY KIND.
  *
  * A spec approval's requirement, a work report's log and a criterion's claimant
  * are the same object being looked at — a node with a colour, a history in two
  * books and a file somebody can read — so they are one component. What differs
- * between the three cards is WHICH DOORS ARE OPEN, and that arrives as flags
- * rather than as three near-identical rows drifting apart: a Finding is not
+ * between the cards is WHICH DOORS ARE OPEN, and that arrives as flags rather
+ * than as near-identical rows drifting apart: a Finding inside a report is not
  * approved from here, and A CLAIMANT IS NOT JUDGED AT ALL — the closure card
  * decides over the whole list of them at once, so its rows are here to be read
  * and opened and carry no verdict.

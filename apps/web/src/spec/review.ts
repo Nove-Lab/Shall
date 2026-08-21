@@ -33,12 +33,12 @@ export type GitStatus = Awaited<ReturnType<typeof api.spec.gitStatus.query>>;
 /**
  * THE QUEUE'S OWN SHAPES, DERIVED THE SAME WAY AND FOR THE SAME REASON.
  *
- * A bundle is a discriminated union on the wire, so the three arms are pulled
- * out with `Extract` rather than re-spelled: `core/arith/bundles.ts` is where
- * the union is decided, and a kind renamed there is a compile error at these
- * four lines instead of a card that silently never matches.
+ * A bundle is a discriminated union on the wire, so the arms are pulled out
+ * with `Extract` rather than re-spelled: `core/arith/bundles.ts` is where the
+ * union is decided, and a kind renamed there is a compile error at these five
+ * lines instead of a card that silently never matches.
  *
- * THE MEMBER IS TAKEN OFF ONE ARM AND IS THE SAME TYPE ON ALL THREE. The daemon
+ * THE MEMBER IS TAKEN OFF ONE ARM AND IS THE SAME TYPE ON EVERY ARM. The daemon
  * declares `AcClosureBundle.evidence` as `EvidenceMember extends BundleMember`,
  * so reading the member shape off the spec-approval arm names the common half
  * exactly, and `EvidenceMember` names the half that carries the work log.
@@ -53,6 +53,10 @@ export type SpecApprovalBundle = Extract<
   { kind: "spec-approval" }
 >;
 export type WorkReportBundle = Extract<ReviewBundle, { kind: "work-report" }>;
+export type StandaloneFindingBundle = Extract<
+  ReviewBundle,
+  { kind: "standalone-finding" }
+>;
 export type AcClosureBundle = Extract<ReviewBundle, { kind: "ac-closure" }>;
 export type TaskClosureBundle = Extract<ReviewBundle, { kind: "task-closure" }>;
 /** One row of a bundle: a node, its colour, and what the two books say about it. */

@@ -55,34 +55,42 @@ describe("ANCHOR_RULES", () => {
     }
   }
 
-  test("leaves rootless exactly the three the canon starts from, and the journal that starts the record", () => {
+  test("leaves rootless the three the canon starts from, the journal that starts the record, and the finding that may start outside it", () => {
     // Written out rather than derived, because deriving it from the same table
     // the code reads would agree with any table at all. The three are where a
     // specification begins — a word, a thing, a goal — and the journal is where
-    // the execution record begins; everything else in the record is held by
-    // the work log that logged or recorded it, or — evidence and reports — by
-    // its own claim.
+    // the execution record begins. The finding is there for a different reason:
+    // its belonging follows its birth, so one made mid-turn is recorded by that
+    // work log and one brought between turns is held by nothing. The rest of
+    // the record is held by the work log that logged it, or — evidence and
+    // reports — by its own claim.
     assert.deepEqual(
       ANCHOR_RULES.filter((rule) => isRootless(rule.type)).map(
         (rule) => rule.type,
       ),
-      ["Term", "DomainEntity", "Goal", "Journal"],
+      ["Term", "DomainEntity", "Goal", "Journal", "Finding"],
     );
   });
 
-  test("holds a Finding from above, and it points at nothing", () => {
-    // The work log's own RECORDS line is the whole of what makes a finding part
-    // of the record, and there is no second way in: the canon gives a finding
-    // no outgoing relation at all, so the ids it concerns sit in its own
+  test("holds a Finding by nothing, and it points at nothing", () => {
+    // Nothing has to reach a finding and nothing may leave one: the canon gives
+    // it no outgoing relation at all, so the ids it concerns sit in its own
     // frontmatter where nothing resolves them and a dangling one is not a
     // fault. The empty filter is the executable half of that sentence — a
     // relation drawn out of a finding would have to be invented here first.
-    assert.deepEqual(anchorsFor("Finding"), [
-      { direction: "in", edgeType: "RECORDS" },
-    ]);
+    assert.deepEqual(anchorsFor("Finding"), []);
+    assert.equal(isRootless("Finding"), true);
     assert.deepEqual(
       EDGE_GRAMMAR.filter((row) => row.fromType === "Finding"),
       [],
+    );
+    // ROOTLESS IS NOT RETIRED. A work log still records the findings its turn
+    // of work made, and that is still the only relation the canon points at a
+    // finding with — what changed is that a finding no longer has to be on the
+    // far end of one.
+    assert.deepEqual(
+      EDGE_GRAMMAR.filter((row) => row.edgeType === "RECORDS"),
+      [{ fromType: "WorkLog", toType: "Finding", edgeType: "RECORDS" }],
     );
   });
 
@@ -212,6 +220,7 @@ describe("anchorPhrase", () => {
     // A caller writes the whole sentence or none of it — an empty fragment
     // dropped into one would read as a sentence with a hole in it.
     assert.equal(anchorPhrase("Goal"), null);
+    assert.equal(anchorPhrase("Finding"), null);
     assert.equal(anchorPhrase("Widget"), null);
   });
 });

@@ -19,17 +19,21 @@ import { bandOf, type NodeTypeName } from "./canon.js";
  * direction behind plausible-looking code, and a wrong direction here turns a
  * healthy node red on somebody's screen.
  *
- * FOUR TYPES ANCHOR NOTHING AND THAT IS THE POINT. `Term`, `DomainEntity` and
+ * FIVE TYPES ANCHOR NOTHING AND THAT IS THE POINT. `Term`, `DomainEntity` and
  * `Goal` are where the canon starts — a vocabulary word and a top goal are
  * worth having before anything points at them, so requiring an anchor of them
  * would make an empty project's first node wrong the moment it was written.
  * `Journal` is the fourth: it is where the execution record starts, and
- * nothing in the canon points at a journal. The rest of the execution band is
- * anchored like everything else — a work log by the journal that logs it or
- * the task it addresses, a finding by the work log that recorded it, and
- * evidence and a completion report by their own claim alone — because a
- * record nothing reaches is as much a card left lying on the canvas as a
- * requirement nothing requires.
+ * nothing in the canon points at a journal. `Finding` is the fifth, and it is
+ * there for a reason of its own: a finding's belonging follows its birth. One
+ * made in the middle of a turn of work is recorded by that work log; one a
+ * person brought between turns has no work log to be held by, and inventing a
+ * parent for it would file a question under a turn of work that never met it.
+ * The rest of the execution band is anchored like everything else — a work log
+ * by the journal that logs it or the task it addresses, and evidence and a
+ * completion report by their own claim alone — because a record nothing
+ * reaches is as much a card left lying on the canvas as a requirement nothing
+ * requires.
  *
  * Nothing here reads a file, a database or a clock, so it is as safe in a
  * browser bundle as the rest of `core/graph`.
@@ -102,14 +106,16 @@ export const ANCHOR_RULES: readonly AnchorRule[] = [
   // nothing holds.
   { type: "Decision",             anchors: [{ direction: "out", edgeType: "AFFECTS" }] },
 
-  // Execution. The journal is the root of the record; a finding is held by the
-  // work log that recorded it, and a work log by the journal that logs it or
-  // by the task its own ADDRESSES line reaches — either of those will do.
-  // A FINDING IS HELD FROM ABOVE AND POINTS AT NOTHING. It starts no relation
-  // in the canon at all, so the `RECORDS` line in the work log's file is the
-  // whole of what makes it part of the record; the ids it concerns live in its
-  // own frontmatter, where nothing resolves them and a dangling one is not a
-  // fault.
+  // Execution. The journal is the root of the record, and a work log is held by
+  // the journal that logs it or by the task its own ADDRESSES line reaches —
+  // either of those will do.
+  // A FINDING IS HELD BY NOTHING AND POINTS AT NOTHING. It starts no relation
+  // in the canon at all, and nothing has to reach it either: the `RECORDS` line
+  // in a work log's file is what puts one inside that turn's report, and a
+  // finding no work log recorded is not broken but standing on its own, where
+  // the review queue gives it a card of its own rather than pretending a report
+  // exists. The ids it concerns live in its own frontmatter, where nothing
+  // resolves them and a dangling one is not a fault.
   // EVIDENCE AND A COMPLETION REPORT ARE HELD BY THEIR CLAIM ALONE: evidence
   // is shown AGAINST a criterion and a report is filed ABOUT a task, so the
   // `CLAIMS` line is not one way to anchor either but the thing that makes each
@@ -120,7 +126,7 @@ export const ANCHOR_RULES: readonly AnchorRule[] = [
   { type: "WorkLog",              anchors: [{ direction: "in", edgeType: "LOGS" }, { direction: "out", edgeType: "ADDRESSES" }] },
   { type: "Evidence",             anchors: [{ direction: "out", edgeType: "CLAIMS" }] },
   { type: "TaskCompletionReport", anchors: [{ direction: "out", edgeType: "CLAIMS" }] },
-  { type: "Finding",              anchors: [{ direction: "in", edgeType: "RECORDS" }] },
+  { type: "Finding",              anchors: [] },
 
   // The satellite, which hangs off the chalk node that assumed it.
   { type: "Assumption",           anchors: [{ direction: "in", edgeType: "ASSUMES" }] },

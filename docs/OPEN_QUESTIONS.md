@@ -99,6 +99,18 @@ name and a home in `core/arith` first. Left out deliberately — the completion
 criterion asked for the field and no further, and the two halves are worth
 taking together rather than the cheap one now.
 
+Asked again in the execution-plane round and answered the same way, this time
+on purpose rather than for want of time: the round's own specification asked
+for blocking findings to be surfaced first, and the answer was that `blocking`
+is the author agent's judgement and not a property any arithmetic reads. So
+nothing was hung on it — no order, no badge, no field on the wire — and what
+the round did build instead is the card: a yellow `Finding` no work log records
+is its own bundle kind, `standalone-finding`, last in the queue. An agent that
+wants to read the blocking ones first joins the answering decisions itself out
+of `shall status --json` and opens the findings' files, which is what the
+`shall-work` skill's survey does. This question stays open as written; what
+closed is the pretence that it was nearly done.
+
 **Should `AFFECTS` reach an `Assumption`, and should a `Decision` affect another
 `Decision`?** Settled by hand while the rows were being written — assumption
 yes, decision no — and recorded because the second half is a gap somebody will

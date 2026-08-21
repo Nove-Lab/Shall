@@ -53,7 +53,8 @@ daemon 하나가 돌고, 사람은 localhost 웹 화면에서 스펙을 보고 �
   버튼은 장부에 레코드 하나를 적을 뿐 노드 파일은 한 바이트도 건드리지 않는다.
   장부는 에이전트가 쓰지 않기로 한 파일이다(deny 규칙 — 관례 방어).
 - **번들도 저장하지 않는다.** 리뷰 큐가 보이는 번들(Spec approval · Work report ·
-  AC closure · Task closure)은 로드마다 그래프와 장부 세 권에서 다시 계산한 배치이지
+  Standalone finding · AC closure · Task closure)은 로드마다 그래프와 장부 세 권에서
+  다시 계산한 배치이지
   테이블의 행이 아니다 — 저장·손편집·`git checkout`이 큐를 움직이고, 아무에게도 알릴
   것이 없다.
 - **전체가 하나의 TypeScript 프로그램.** "쓰기 경로가 몇 개인가" 같은 질문에 코드
@@ -179,9 +180,12 @@ WorkLog에 한해 `commits`, Finding에 한해 `blocking`·`relatedNodes`, 그�
 - 21개 타입의 네 밴드 배치: 도메인(Domain) · 의도(Intent) · 설계(Plan) ·
   실행(Execution). 층이 없는 위성은 Assumption 하나뿐이고, 매달린 노드를 따르되
   캔버스에 자리가 있도록 Intent 밴드에 그린다
-- 앵커 테이블 — 타입마다 노드를 그래프에 붙드는 관계(방향 포함). 뿌리 넷(Term·
-  DomainEntity·Goal·Journal)만 앵커가 없고, Finding은 그것을 RECORDS한 WorkLog에
-  붙든다. 아래층이 겨냥 대상을 **자기 파일에 쓰는** 관계 셋이 있다 —
+- 앵커 테이블 — 타입마다 노드를 그래프에 붙드는 관계(방향 포함). 뿌리 다섯(Term·
+  DomainEntity·Goal·Journal·Finding)만 앵커가 없다. 앞의 넷은 시작점이라 그렇고,
+  Finding은 소속이 태생을 따르기 때문이다 — 회전 중의 발견은 그 WorkLog가 RECORDS
+  하고, 사람이 회전 사이에 가져온 물음은 붙들 WorkLog가 없다. 그 자리에 부모를
+  지어내는 것이 없는 것보다 나쁘다. 아래층이 겨냥 대상을 **자기 파일에 쓰는** 관계
+  셋이 있다 —
   ImplementationTask의 `TARGETS`(닫으려는 AcceptanceCriterion), WorkLog의
   `ADDRESSES`(다루는 과제), Evidence의 `CLAIMS`(만족시킨다는 기준) — 그래서 IT는
   ALLOCATES하는 모듈에 또는 자기 TARGETS 대상에, WorkLog는 LOGS하는 Journal에 또는
@@ -311,7 +315,10 @@ core에서 파일시스템을 만지는 유일한 모듈이고, 노드가 어느
   대기; yellow+closed도 가능). 둘이 만나는 곳은 하나뿐: 주체의 **문구 자체**가 반려
   중이면 닫힘을 묻지도, 쓰지도 않는다
 - 번들(`bundles.ts`) — 리뷰 큐. 먼저 Work report: Journal마다 실행 층(과 거기 매달린
-  위성)만 걸어 서브트리를 묶고, Journal이 닿지 않는 실행 yellow는 각자 뿌리. 다음
+  위성)만 걸어 서브트리를 묶고, 그다음 **어느 살아있는 WorkLog도 RECORDS하지 않는
+  yellow Finding은 각자 Standalone finding 번들**(`finding:<id>`, 자기 한 노드)로
+  세운다 — 여기서 세워 covered에 넣어야 다음 줄이 같은 노드를 한 줄짜리 Work report로
+  다시 세우지 않는다. 이어서 Journal이 닿지 않는 나머지 실행 yellow는 각자 뿌리. 다음
   Spec approval: 순위표(Decision → Goal → Actor → UseCase → Scenario → SR →
   Requirement → AC → Constraint → 설계 타입 → 실행 → 도메인, 위성은 가장 깊은 부착
   노드의 순위 뒤)로 훑어 아직 어느 번들에도 안 든 yellow를 만나면 뿌리로 삼고, 거기서
@@ -339,8 +346,10 @@ core에서 파일시스템을 만지는 유일한 모듈이고, 노드가 어느
   claimant(AC면 CLAIMS하는 증거, task면 CLAIMS하는 TaskCompletionReport)가 하나 이상
   **전부 green**인데 지금 목록에 대해 closed도 left open도 말해진 적 없는 주체(문구가
   반려 중이거나 non-green이면 제외; 미승인 claimant가 하나라도 있으면 그냥 open, 큐 밖).
-  정렬은 AC closure → Task closure → Spec approval → Work report, 그 안에서 멤버
-  mtime 최솟값이 오래된 것 먼저. 뿌리는 yellow만이다 — 반려된 노드와 `premature`
+  정렬은 AC closure → Task closure → Spec approval → Work report → Standalone
+  finding, 그 안에서 멤버 mtime 최솟값이 오래된 것 먼저. 단독 발견이 맨 뒤인 것은
+  그 카드가 결정하는 것이 없기 때문이다 — 읽는 것이 전부이고, 답은 나중에 누군가
+  쓰는 Decision이다. 뿌리는 yellow만이다 — 반려된 노드와 `premature`
   로그는 yellow 뿌리가 닿을 때 red 멤버로 남고(판정하는 사람이 봐야 하므로), 홀로
   남으면 큐를 떠난다(에이전트 차례)
 - reviewGraph — 상태 목록(각 상태에 approval·rejection 레코드, AC의 closure와 left-open
@@ -508,12 +517,15 @@ localhost 브라우저 화면. 사람의 관찰·편집 표면.
   먼저, rationale은 **전문**; 그다음 문법 red, 구멍, 안 읽히는 파일), 아래가
   Implement(미완료 ∧ 선행 전부 닫힘 ∧ 상향 사슬 all-green인 task만 — 조건 미달은 이유
   없이 아예 안 보인다). 두 열 다 저장 없음. **Review Queue**가 채워졌다: 목록은 `[종류 배지] 제목 — 요약
-  수치` 한 줄씩(AC closure → Task closure → Spec approval → Work report, 오래된 것 먼저), 카드는
+  수치` 한 줄씩(AC closure → Task closure → Spec approval → Work report → Standalone
+  finding, 오래된 것 먼저), 카드는
   전면에 판정 재료(뿌리의 diff/전문, Journal 본문, AC 본문)·멤버 목록(노드마다
   diff/전문, [Approve]·[Reject…]·[Open in Spec Plane])·접힌 무수정 확인 목록·번들 버튼
-  하나 또는 둘([Approve all]/[Accept report]/[Close]+[Leave open…]). 번들은 네 종류다 —
-  AC closure · Task closure(그 task를 CLAIMS하는 TaskCompletionReport 목록, 겨냥한
-  AC들의 마크를 문맥으로) · Spec approval · Work report. 반려는 인라인
+  하나 또는 둘([Approve all]/[Accept report]/[Accept finding]/[Close]+[Leave open…]).
+  번들은 다섯 종류다 — AC closure · Task closure(그 task를 CLAIMS하는
+  TaskCompletionReport 목록, 겨냥한 AC들의 마크를 문맥으로) · Spec approval ·
+  Work report · Standalone finding(어느 WorkLog도 RECORDS하지 않는 yellow Finding
+  한 장, 두 문이 다 열린 행 하나). 반려는 인라인
   팝오버 — 대상 id·이름, 필수 rationale, 확정/취소 — 이고 카드의 행 우클릭과 스펙
   플레인 카드 우클릭 어디서든 같은 팝오버다. 판정 직후 카드는 큐를 다시 계산하고,
   방금 내린 반려는 페이지의 '최근 판정' 줄에 [Undo]로 남는다. task board·activity·
