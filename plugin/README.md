@@ -23,10 +23,12 @@ The folder you run in must already be a Shall project. `shall init` makes one.
 ## Running it without installing
 
 ```bash
-claude --plugin-dir /home/yjshin/dev/Shall/plugin
+claude --plugin-dir /Users/yjshin/dev/nove/Shall/plugin
 ```
 
-After editing any file in here, `/reload-plugins` in the running session picks the change up; there is no need to restart Claude Code.
+A relative path works too, and is resolved against wherever `claude` was started — which is the project you are working in, not this repository.
+
+After editing any file in here, `/reload-plugins` in the running session picks the change up; there is no need to restart Claude Code. A change to the canon needs `bun run build:core` first, or the prose is linted against a stale copy of it.
 
 Before committing a change to the plugin:
 
