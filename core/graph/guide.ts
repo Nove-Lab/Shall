@@ -189,7 +189,15 @@ const GUIDE: Readonly<Record<NodeTypeName, readonly SectionGuide[]>> = {
     section("Description"),
     section("Rationale"),
   ],
+  // The prompt comes first because the rest of the journal is an answer to it,
+  // and it is copied rather than told because a summary is the agent's reading
+  // of what was asked and this section is the asking itself. A turn of work
+  // nobody spoke to opens on a command, and the command line is what was said.
   Journal: [
+    section(
+      "User Prompt",
+      "the words that opened this turn of work, exactly as they were said, with nothing summarised away; a turn opened by a command carries that command line instead",
+    ),
     section("Period"),
     section("Performer"),
     section("Objective"),

@@ -380,8 +380,9 @@ function isAnchorLive(
  * ONE LIVE ANCHOR IS ENOUGH. The rules list alternatives, never requirements
  * together, so an `Interface` that is only consumed is anchored.
  *
- * A rootless type is never an orphan — see `ANCHOR_RULES` for why `Term`,
- * `DomainEntity` and `Goal` are where the canon starts.
+ * A rootless type is never an orphan. `ANCHOR_RULES` says which they are and
+ * why each stands on its own; naming them here is how this sentence went stale
+ * the last two times the list grew.
  */
 export function isOrphan(
   subject: ColorSubject,

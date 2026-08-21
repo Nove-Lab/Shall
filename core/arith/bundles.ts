@@ -35,11 +35,14 @@ import { reviewGraph, type ReviewStatus } from "./review.js";
  * rearrange itself with nobody told about it, and why a `git checkout` of a
  * branch is a different queue and not a stale one.
  *
- * FOUR KINDS, BECAUSE THERE ARE FOUR THINGS A PERSON DOES.
+ * FIVE KINDS, BECAUSE THERE ARE FIVE THINGS A PERSON DOES.
  *  - *Spec approval* — a piece of the specification changed; read it and agree
  *    or say what is wrong.
  *  - *Work report* — an agent finished something and wrote it down; read the
  *    journal, the logs, the evidence and the findings as one report.
+ *  - *Standalone finding* — a finding no work log recorded: something brought
+ *    between turns of work rather than found inside one. Read it and take it,
+ *    or say what is wrong with it.
  *  - *AC closure* — a criterion is green and open and approved evidence now
  *    claims to satisfy it; decide whether it does.
  *  - *Task closure* — the same question over the other closure subject: a task
@@ -53,6 +56,13 @@ import { reviewGraph, type ReviewStatus } from "./review.js";
  * several. So the side with the honest container claims its nodes first, and
  * the spec pass then works over what is left. Cutting the other way round would
  * let a spec bundle reach sideways into a report and take a work log with it.
+ *
+ * THE STANDALONE FINDINGS ARE CUT BETWEEN THE TWO REPORT PASSES, and for the
+ * same bookkeeping reason. A finding nothing records is on the report side and
+ * is a root there, so the pass that mops up report-side roots would stand one
+ * up as a one-row work report — which is a card titled "Work report" over a
+ * thing no work reported. Cutting it first, and marking it covered, is what
+ * keeps the later pass off it.
  *
  * THE SCAN ORDER IS THE CANON READ DOWNWARDS — Decision, then Goal, down to
  * DomainEntity — and it is what picks the root when several nodes of one bundle
@@ -114,6 +124,7 @@ import { reviewGraph, type ReviewStatus } from "./review.js";
 export type BundleKind =
   | "spec-approval"
   | "work-report"
+  | "standalone-finding"
   | "ac-closure"
   | "task-closure";
 
@@ -190,6 +201,26 @@ export interface WorkReportBundle {
 }
 
 /**
+ * A finding no work log recorded, standing on its own.
+ *
+ * SAME BODY AS THE OTHER TWO, DELIBERATELY. It holds one member today and its
+ * `unchanged` is always empty, so a narrower shape would be truthful and would
+ * also be a fourth thing for the panel to special-case; keeping the three
+ * walked kinds one body on the wire is what lets one card body render all of
+ * them and one comparator sort them.
+ */
+export interface StandaloneFindingBundle {
+  kind: "standalone-finding";
+  id: string;
+  rootId: string;
+  title: string;
+  since: number;
+  members: BundleMember[];
+  unchanged: UnchangedNode[];
+  counts: TypeCount[];
+}
+
+/**
  * A claimant, with the work that submitted it. The commits are the WorkLog's
  * own `commits:` list — git is where a sha means anything, and this is the
  * thread back to it.
@@ -245,8 +276,24 @@ export interface TaskClosureBundle {
 export type ReviewBundle =
   | SpecApprovalBundle
   | WorkReportBundle
+  | StandaloneFindingBundle
   | AcClosureBundle
   | TaskClosureBundle;
+
+/**
+ * The three kinds a walk produces, and the body they share.
+ *
+ * They are named together because `subgraphBundle` builds all three and the
+ * queue's own bookkeeping treats them alike: each has `members`, each is
+ * covered once kept. The two closure kinds are the other axis and are built
+ * somewhere else entirely.
+ */
+type SubgraphKind = "spec-approval" | "work-report" | "standalone-finding";
+
+type SubgraphBundle =
+  | SpecApprovalBundle
+  | WorkReportBundle
+  | StandaloneFindingBundle;
 
 export interface ReviewQueue {
   bundles: ReviewBundle[];
@@ -519,6 +566,27 @@ function isRoot(scan: Scan, id: string): boolean {
   return scan.status.get(id)?.color === "yellow";
 }
 
+/**
+ * Whether some living work log wrote the line that puts this finding inside a
+ * turn of work.
+ *
+ * IT IS NOT AN ANCHOR QUESTION ANY MORE, WHICH IS WHY IT IS ASKED HERE. The
+ * canon stopped requiring a finding to be recorded, so `anchorsFor` has nothing
+ * to say about one; what the queue still needs to know is whether this finding
+ * belongs to somebody's report or to nobody's, and that is exactly the question
+ * the `RECORDS` line answers. Living, not merely written: a line in a file that
+ * is gone records nothing, and a finding it names is as loose as one nothing
+ * ever named.
+ */
+function isRecorded(scan: Scan, id: string): boolean {
+  for (const edge of scan.context.incoming.get(id) ?? []) {
+    if (edge.type === "RECORDS" && scan.context.living.has(edge.fromId)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function isGreen(scan: Scan, id: string): boolean {
   return scan.status.get(id)?.color === "green";
 }
@@ -601,9 +669,10 @@ function reaches(scan: Scan, side: Side, edgeType: string, id: string): boolean 
  * point OUT of the record at something the report is ABOUT rather than
  * something it contains, and a `Decision` that RESOLVES a Finding points into
  * the record from outside it — the same wall read from the other side. A
- * finding is written down, read as part of the record that found it, and
- * answered by a decision that names it; none of those three is a reason to drag
- * a work report into a spec approval or the other way round.
+ * finding is written down, read as part of the record that found it — or on its
+ * own card when no record found it — and answered by a decision that names it;
+ * none of those three is a reason to drag a work report into a spec approval or
+ * the other way round.
  */
 function childrenOf(scan: Scan, id: string, side: Side): string[] {
   const children: string[] = [];
@@ -760,15 +829,27 @@ function sinceOf(scan: Scan, ids: readonly string[]): number {
 }
 
 /**
+ * What each walked kind's id begins with — `spec:R-0001`, `report:J-0001`,
+ * `finding:F-0001`. A table rather than a chain of ternaries for the reason
+ * `CLOSURE_BUNDLE` is one: a fourth walked kind is then a compile error here
+ * instead of a bundle id that reads like some other kind's.
+ */
+const SUBGRAPH_PREFIX: Readonly<Record<SubgraphKind, string>> = {
+  "spec-approval": "spec",
+  "work-report": "report",
+  "standalone-finding": "finding",
+};
+
+/**
  * One walked subgraph as a bundle — or null when nothing in it is yellow, which
  * is a Journal whose whole record is already approved.
  */
 function subgraphBundle(
   scan: Scan,
-  kind: "spec-approval" | "work-report",
+  kind: SubgraphKind,
   rootId: string,
   reached: readonly string[],
-): SpecApprovalBundle | WorkReportBundle | null {
+): SubgraphBundle | null {
   const root = scan.context.nodes.get(rootId);
   if (root === undefined) {
     return null;
@@ -802,7 +883,7 @@ function subgraphBundle(
   }
 
   const body = {
-    id: `${kind === "work-report" ? "report" : "spec"}:${rootId}`,
+    id: `${SUBGRAPH_PREFIX[kind]}:${rootId}`,
     rootId,
     title: `${rootId} ${root.name}`,
     since: sinceOf(scan, memberIds),
@@ -810,9 +891,17 @@ function subgraphBundle(
     unchanged,
     counts: countsOf(scan, [...memberIds, ...unchangedIds]),
   };
-  return kind === "work-report"
-    ? { kind: "work-report", ...body }
-    : { kind: "spec-approval", ...body };
+  // Spelled out per kind rather than spread over a variable `kind`, so that the
+  // discriminant is a literal in every arm and a kind added to `SubgraphKind`
+  // stops here rather than shipping with whatever `kind` happened to hold.
+  switch (kind) {
+    case "work-report":
+      return { kind: "work-report", ...body };
+    case "standalone-finding":
+      return { kind: "standalone-finding", ...body };
+    case "spec-approval":
+      return { kind: "spec-approval", ...body };
+  }
 }
 
 /* ------------------------------------------------------------------ *
@@ -992,7 +1081,7 @@ function closureBundleFor(
  * The queue
  * ------------------------------------------------------------------ */
 
-/** Every member row of a bundle, whichever kind it is. */
+/** Every member row of a bundle: the three walked kinds carry `members`. */
 function seatsOf(bundle: ReviewBundle): BundleMember[] {
   switch (bundle.kind) {
     case "ac-closure":
@@ -1005,19 +1094,29 @@ function seatsOf(bundle: ReviewBundle): BundleMember[] {
 }
 
 /**
- * The two closures first, then approval, then the report.
+ * The two closures first, then approval, then the report, then a finding
+ * nobody recorded.
  *
  * The criterion comes before the task for the reason the scan order puts
  * `AcceptanceCriterion` above `ImplementationTask`: the canon reads downwards,
  * and whether the criteria a task aimed at have closed is part of what a person
- * reads before saying the task is done.
+ * reads before saying the task is done. The standalone finding is last because
+ * it is the one card that decides nothing: reading it is the whole of what
+ * happens there, and what would answer it is a decision somebody writes
+ * afterwards.
+ *
+ * A RECORD AND NOT AN ARRAY, because `indexOf` answers -1 for a kind nobody
+ * listed and -1 sorts FIRST — a kind added to the union and forgotten here
+ * would quietly take the top of everybody's queue. `Record<BundleKind, …>`
+ * refuses to compile instead.
  */
-const KIND_ORDER: readonly BundleKind[] = [
-  "ac-closure",
-  "task-closure",
-  "spec-approval",
-  "work-report",
-];
+const KIND_RANK: Readonly<Record<BundleKind, number>> = {
+  "ac-closure": 0,
+  "task-closure": 1,
+  "spec-approval": 2,
+  "work-report": 3,
+  "standalone-finding": 4,
+};
 
 export function reviewBundles(
   graph: SpecGraph,
@@ -1041,7 +1140,7 @@ export function reviewBundles(
 
   const bundles: ReviewBundle[] = [];
   const covered = new Set<string>();
-  const keep = (bundle: SpecApprovalBundle | WorkReportBundle | null): void => {
+  const keep = (bundle: SubgraphBundle | null): void => {
     if (bundle === null) {
       return;
     }
@@ -1064,8 +1163,30 @@ export function reviewBundles(
       ),
     );
   }
-  // Then whatever the journals did not reach: a work log that addresses a task
-  // with no journal logging it is still a report somebody has to read.
+  // 1a. Then the findings no work log recorded — brought between turns of work
+  //     rather than found inside one, so there is no report for them to be read
+  //     as part of. Cut here, before the pass below, and marked covered by
+  //     `keep`: that pass takes report-side roots, a loose finding is one, and
+  //     it would otherwise stand the same node up as a one-row work report.
+  //     Walked over itself alone, like a domain node — a finding draws no
+  //     relation, so there is nowhere else for the walk to go.
+  for (const node of inScanOrder) {
+    if (
+      node.type !== "Finding" ||
+      covered.has(node.id) ||
+      !isRoot(scan, node.id) ||
+      isRecorded(scan, node.id)
+    ) {
+      continue;
+    }
+    keep(subgraphBundle(scan, "standalone-finding", node.id, [node.id]));
+  }
+
+  // 1b. Then whatever the journals did not reach: a work log that addresses a
+  //     task with no journal logging it is still a report somebody has to read.
+  //     A finding a journal-less log recorded arrives here too, inside that
+  //     log's report — recorded is recorded, whether or not a journal logged
+  //     the log.
   for (const node of inScanOrder) {
     if (
       covered.has(node.id) ||
@@ -1162,7 +1283,7 @@ export function reviewBundles(
   // 5. The order of the queue: what is decidable now first, then oldest first.
   bundles.sort(
     (a, b) =>
-      KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind) ||
+      KIND_RANK[a.kind] - KIND_RANK[b.kind] ||
       a.since - b.since ||
       compare(a.id, b.id),
   );

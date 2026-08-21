@@ -88,6 +88,7 @@ export type {
   ReviewQueue,
   ScanRank,
   SpecApprovalBundle,
+  StandaloneFindingBundle,
   TaskClosureBundle,
   TypeCount,
   UnchangedNode,

@@ -1598,6 +1598,16 @@ name:                  # required · one line
     assert.equal(emitTemplate("Journal").includes("commits"), false);
   });
 
+  test("the Journal template opens on the words that opened the work", () => {
+    // ORDER IS THE POINT, so both renderings of the guide are checked: the
+    // commented list a person reads above the fence, and the headings the file
+    // actually starts with. A journal is written at the end of a turn, when the
+    // asking is the easiest thing to paraphrase and the hardest to recover.
+    const text = emitTemplate("Journal");
+    assert.ok(text.includes("\n#   ## User Prompt — "), text);
+    assert.ok(text.includes("---\n\n## User Prompt\n\n## Period\n"), text);
+  });
+
   test("all 21 types have a template, and generating twice writes the same bytes", () => {
     assert.equal(NODE_TYPES.length, 21);
     const written = new Set<string>();

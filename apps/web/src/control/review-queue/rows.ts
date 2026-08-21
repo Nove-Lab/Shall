@@ -10,8 +10,8 @@ import { countWord } from "../parts";
  */
 
 /**
- * THE FOUR KINDS IN A PERSON'S WORDS, IN ONE PLACE. `Record<BundleKind, …>`
- * and not a loose map: a fifth kind decided in `core/arith/bundles.ts` is a
+ * THE FIVE KINDS IN A PERSON'S WORDS, IN ONE PLACE. `Record<BundleKind, …>`
+ * and not a loose map: a sixth kind decided in `core/arith/bundles.ts` is a
  * compile error at this table rather than a badge that renders a wire word.
  * The card page reads the same map, so the badge on the row and the badge on
  * the page it opens cannot disagree.
@@ -19,6 +19,7 @@ import { countWord } from "../parts";
 export const KIND_LABEL: Record<BundleKind, string> = {
   "spec-approval": "Spec approval",
   "work-report": "Work report",
+  "standalone-finding": "Standalone finding",
   "ac-closure": "AC closure",
   "task-closure": "Task closure",
 };
@@ -56,6 +57,11 @@ export function bundleSummary(bundle: ReviewBundle): string {
         : bundle.counts
             .map((count) => `${count.type} ${String(count.count)}`)
             .join(", ");
+    // ONE FINDING, AND THE TITLE ALREADY SAYS WHICH. The row's job here is to
+    // say what kind of reading is waiting rather than how much of it: a card
+    // holding one node needs no arithmetic on the line above it.
+    case "standalone-finding":
+      return countWord(bundle.members.length, "finding");
     case "ac-closure":
       return `evidence ${String(bundle.evidence.length)}`;
     // A TASK IS COUNTED IN REPORTS, for the reason a criterion is counted in

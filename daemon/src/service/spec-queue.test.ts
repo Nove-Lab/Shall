@@ -1283,6 +1283,41 @@ describe("the review queue", () => {
       [],
     );
   });
+
+  test("a finding no work log recorded is a card of its own, and the approve door takes it", async () => {
+    // The whole of what `/shall:raise` leaves behind when it lands on a finding
+    // alone: one node, held by nothing, written between turns of work. The
+    // doors are checked here rather than in core because refusing it would be
+    // the daemon's doing — the approve door reads a blocker off the colour, and
+    // a finding nothing anchors used to be an orphan.
+    const project = await greenProject();
+    await node(project, "Finding", "F-0001");
+
+    const queue = await reviewQueue(project.id);
+    // The two closures this project always has, and the finding last.
+    assert.deepEqual(
+      queue.bundles.map((bundle) => [bundle.kind, bundle.id]),
+      [
+        ["ac-closure", "closure:AC-0001"],
+        ["task-closure", "completion:IT-0001"],
+        ["standalone-finding", "finding:F-0001"],
+      ],
+    );
+    const bundle = queue.bundles.at(-1);
+    assert.ok(bundle && bundle.kind === "standalone-finding");
+    assert.deepEqual(
+      bundle.members.map((member) => [member.id, member.color, member.reason]),
+      [["F-0001", "yellow", "unapproved"]],
+    );
+
+    await approveSpecNodes({ projectId: project.id, ids: ["F-0001"] });
+    assert.deepEqual(
+      (await reviewQueue(project.id)).bundles.filter(
+        (held) => held.kind === "standalone-finding",
+      ),
+      [],
+    );
+  });
 });
 
 /* ------------------------------------------------------------------ *
