@@ -113,22 +113,22 @@ file names R-0007. The relation is kept as written, so writing or restoring
 R-0007 attaches it again.
 ```
 
-## A module, its contract and one task
+## A module, its contract and one work item
 
 The plan band, and the same shape one layer down: write the child, then open the parent and add the line that holds it.
 
-**What is shown below is the frontmatter and the relations, and the bodies are left out** — not because they are small, but because this passage is about anchoring. A plan-band body is a document: the module's four parts, the task's seven sections, each given what the starting file asks of it. Do not read the elision here as the shape of the file.
+**What is shown below is the frontmatter and the relations, and the bodies are left out** — not because they are small, but because this passage is about anchoring. A plan-band body is a document: the module's six sections, the work item's three, each given what the starting file asks of it. Do not read the elision here as the shape of the file.
 
 ```
-$ shall add-spec-node --type ModuleDesign
-/home/dev/app/.shall/spec/plan/ModuleDesign/MD-0002.md
-A new ModuleDesign, MD-0002 — fill it in, then shall check reads it back.
+$ shall add-spec-node --type Module
+/home/dev/app/.shall/spec/plan/Module/M-0002.md
+A new Module, M-0002 — fill it in, then shall check reads it back.
 ```
 
 ```
-$ shall check --scope .shall/spec/plan/ModuleDesign/MD-0002.md
-11 nodes and 14 relations under /home/dev/app, in plan/ModuleDesign/MD-0002.md.
-.../ModuleDesign/MD-0002.md — MD-0002 is a ModuleDesign with no live anchor —
+$ shall check --scope .shall/spec/plan/Module/M-0002.md
+11 nodes and 14 relations under /home/dev/app, in plan/Module/M-0002.md.
+.../Module/M-0002.md — M-0002 is a Module with no live anchor —
 it is held to the graph by an IS_REALIZED_BY relation into it, and none stands.
 Draw the relation, or remove the node.        (exit 1)
 ```
@@ -139,7 +139,7 @@ The fix is upstairs again, in the responsibility this module realizes. The sorti
 # .shall/spec/intent/SystemResponsibility/SR-0004.md
 edges:
   - type: IS_REALIZED_BY
-    to: MD-0002
+    to: M-0002
   - type: REQUIRES
     to: R-0012
 ```
@@ -149,7 +149,7 @@ A module realizing two responsibilities gets one such line in **each** of them.
 Now the contract. `Interface` is anchored by `EXPOSES` into it **or** `CONSUMES` into it, so the line goes in whichever module publishes it — and a second module that calls it writes its own `CONSUMES` line, which anchors nothing new and says who the consumer is:
 
 ```yaml
-# .shall/spec/plan/ModuleDesign/MD-0002.md — the module, publishing one contract
+# .shall/spec/plan/Module/M-0002.md — the module, publishing one contract
 edges:
   - type: EXPOSES
     to: IF-0003
@@ -171,24 +171,26 @@ edges:
     to: DE-0002
 ```
 
-The task last. Two of its three lines are its own, because planning work must not touch a criterion's file and turn somebody's settled judgment yellow:
+The work item last. Three of its four lines are its own, because planning work must not touch a criterion's file and turn somebody's settled judgment yellow — and it may aim at as many criteria as its definition of done makes judgeable:
 
 ```yaml
-# .shall/spec/plan/ImplementationTask/IT-0007.md — waiting on one, aiming at one
+# .shall/spec/plan/WorkItem/WI-0007.md — waiting on one, aiming at two
 edges:
   - type: DEPENDS_ON
-    to: IT-0004
+    to: WI-0004
   - type: TARGETS
     to: AC-0031
+  - type: TARGETS
+    to: AC-0032
 ```
 
-The third is the module's, sorted with the rest of what MD-0002 says:
+The fourth is the module's, and it is the one that holds the work item to the graph — sorted with the rest of what M-0002 says:
 
 ```yaml
-# .shall/spec/plan/ModuleDesign/MD-0002.md
+# .shall/spec/plan/Module/M-0002.md
 edges:
   - type: ALLOCATES
-    to: IT-0007
+    to: WI-0007
   - type: CONSUMES
     to: IF-0005
   - type: EXPOSES
@@ -199,11 +201,11 @@ edges:
 
 ```
 $ shall check --scope .shall/spec/plan --scope .../SR-0004.md
-15 nodes and 21 relations under /home/dev/app, in intent/SystemResponsibility/SR-0004.md and plan.
+15 nodes and 22 relations under /home/dev/app, in intent/SystemResponsibility/SR-0004.md and plan.
 $ shall check
-15 nodes and 21 relations under /home/dev/app.
+15 nodes and 22 relations under /home/dev/app.
 ```
 
-Six files are yellow: the five you wrote, and SR-0004, which you edited to hold MD-0002. Say so when you hand the work over.
+Six files are yellow: the five you wrote, and SR-0004, which you edited to hold M-0002. Say so when you hand the work over.
 
-**The check would have passed without the module's `ALLOCATES` line**, and the task would still have been wrong. A task is held to the graph by that line **or** by its own `TARGETS`, so a task aiming at a criterion and belonging to no module is a whole node nothing complains about — and work with no design behind it is a backlog somebody stored rather than a plan. Two things it **will** say, though, and both exit 1: a second `TARGETS` line on IT-0007 — a task aims at one criterion at most — and a `DEPENDS_ON` chain that comes back round to IT-0007 through the tasks it waits on. Neither file is refused; both are read, and the graph they make is the thing that does not hold.
+**The check would have failed without the module's `ALLOCATES` line**, and said so: a work item is held to the graph by that line and by nothing else — its own `TARGETS` lines hold nothing — so a work item aiming at criteria and belonging to no module is an orphan, red, named under the work item's file with the module's file as the fix. Two more things it says, both exit 1: a `DEPENDS_ON` chain that comes back round to WI-0007 through the work items it waits on, and a relation the canon does not allow. Neither file is refused; both are read, and the graph they make is the thing that does not hold. The two `TARGETS` lines are not among them: a work item aims at as many criteria as it genuinely closes.

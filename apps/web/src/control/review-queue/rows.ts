@@ -5,7 +5,7 @@ import { countWord } from "../parts";
  * The queue's row vocabulary, importable without the queue's table: the glance
  * on the overview and the bundle's own page both read these, and before this
  * file they imported the whole `ReviewQueue` component — `Table`, `Card` and
- * all — to get a label. The board's `task-board/rows.ts` is the same shape next
+ * all — to get a label. The board's `work-board/rows.ts` is the same shape next
  * door.
  */
 
@@ -21,7 +21,7 @@ export const KIND_LABEL: Record<BundleKind, string> = {
   "work-report": "Work report",
   "standalone-finding": "Standalone finding",
   "ac-closure": "AC closure",
-  "task-closure": "Task closure",
+  "work-item-closure": "Work item closure",
 };
 
 /**
@@ -64,9 +64,9 @@ export function bundleSummary(bundle: ReviewBundle): string {
       return countWord(bundle.members.length, "finding");
     case "ac-closure":
       return `evidence ${String(bundle.evidence.length)}`;
-    // A TASK IS COUNTED IN REPORTS, for the reason a criterion is counted in
+    // A WORK ITEM IS COUNTED IN REPORTS, for the reason a criterion is counted in
     // evidence: closing accepts the whole list, so the list is the number.
-    case "task-closure":
+    case "work-item-closure":
       return `reports ${String(bundle.reports.length)}`;
   }
 }

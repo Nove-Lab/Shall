@@ -5,7 +5,7 @@ contains project initialization, opening and recent-project persistence, plus
 the shell the planes fill: Control plane panels, the Spec plane canvas and
 Settings. The Spec plane holds real nodes, and the Control plane's Review Queue
 is filled — bundles of what a person still has to decide, computed from the
-graph and three ledgers on every read. The Task Board is filled the same way,
+graph and three ledgers on every read. The Work Board is filled the same way,
 and the Activity Feed from a file of its own; only Vitals is still empty.
 
 ## Layout
@@ -48,10 +48,11 @@ someone on the same panel — there is no hidden "current project" state.
 /p/:projectId/settings                   Settings
 ```
 
-`panelId` ∈ `review-queue | task-board | activity-feed | vitals`. A bundle id is
+`panelId` ∈ `review-queue | work-board | activity-feed | vitals`. A bundle id is
 `spec:<root>`, `report:<journal>`, `finding:<finding>`, `closure:<criterion>` or
-`completion:<task>` — the node the bundle hangs off, so the link says what it is
-about. `?node=` opens
+`completion:<workItem>` — the node the bundle hangs off, so the link says what it is
+about (the last one keeps its prefix because the card is about completion
+reports). `?node=` opens
 the node's panel — the reading pane, always — and `?back=` puts a
 **Back to review** button in the toolbar, which is how a card sends you to the
 canvas and gets you back. `/p/:projectId/control/activity-feed?month=YYYY-MM`
@@ -102,7 +103,7 @@ Every card carries a traffic light, computed on read — the execution band
 too, because a record is written by an agent and read by a person like any
 other node: red is an error to fix (a file that will not read, a node no live anchor
 holds, an id that is referenced but gone, a claim outside its work log's
-aim, or work logged under a task that is still blocked) or a rejection that still stands,
+aim, or work logged under a work item that is still blocked) or a rejection that still stands,
 yellow is a judgement still owed (no approval yet, or changed since it was
 approved), green is both settled. The
 node panel is where a judgement happens — a full read for a new node, a line
@@ -123,13 +124,13 @@ spec and the ledgers: what the file says now against what the books remember,
 so a node file carries no claim about its own approval and green has exactly
 one manufacturer. Two types carry a second badge beside their id, independent of their colour.
 An acceptance criterion wears a red **Open** or a green **Closed** — whether a
-person has closed it over the evidence claiming it — and an implementation task
+person has closed it over the evidence claiming it — and a work item
 wears **Blocked**, **Ready** or **Done**: whether the chain above it is read and
-everything it waits on is finished, which is exactly the Task Board's Implement
+everything it waits on is finished, which is exactly the Work Board's Implement
 column, or whether a person has called the work done. The node panel has the
 toggle for both: on once at least one claimant is attached and every one of them
 is approved, it closes the subject over everything claiming it now — evidence
-for a criterion, completion reports for a task; off asks for a reason and leaves it open
+for a criterion, completion reports for a work item; off asks for a reason and leaves it open
 (see the Review Queue below). The daemon never commits on its
 own — a **Commit spec** button appears when the project is a git repository and
 the spec folder or a ledger has uncommitted changes, and makes one commit
@@ -138,26 +139,28 @@ under the toolbar's problems dialog with a **Restore** button that brings it
 back from git history — and if the ledger still holds its record, it comes back
 green.
 
-The lower node names what it aims at in its own file: a task targets the
-criterion it means to close (`TARGETS`), a work log names the task it addresses
-(`ADDRESSES`), an evidence claims the criterion it satisfies and a completion
-report claims the one task it is filed about (`CLAIMS`) — so
-planning, starting work or making a claim never touches the criterion's or the
-task's file, and never moves their approval. The claim is also what holds an
-evidence to the graph at all: an evidence that claims nothing is an orphan,
-red, whoever submitted it. One rule of grammar then ties the three files
-together: a work log's evidence may claim only what the tasks that log
-addresses target, and its completion report exactly one of the addressed
-tasks themselves — a log under no task targets nothing, so any claim under it
-breaks the rule too. Break it and both the work log and the claimant are red
-— an error to fix, before anybody is asked to approve — with one sentence
-naming the log, the task and the claims, under either node. The same rule is
-asked of the aim itself one step earlier: **a task targets one criterion at
-most**, because a task with two aims closes neither on its own and the board
-could never call it done.
+The lower node names what it aims at in its own file: a work item targets the
+criteria it means to close (`TARGETS` — none, one or several), a work log names
+the work item it addresses (`ADDRESSES`), an evidence claims the criterion it
+satisfies and a completion report claims the one work item it is filed about
+(`CLAIMS`) — so planning, starting work or making a claim never touches the
+criterion's or the work item's file, and never moves their approval. The claim
+is also what holds an evidence to the graph at all: an evidence that claims
+nothing is an orphan, red, whoever submitted it. A work item, likewise, is held
+only by the module that `ALLOCATES` it — one no module allocates is an orphan,
+red, however many criteria it targets. One rule of grammar then ties the three
+files together: a work log's evidence may claim only what the work items that
+log addresses target — the union of their `TARGETS` — and its completion report
+exactly one of the addressed work items themselves — a log under no work item
+targets nothing, so any claim under it breaks the rule too. Break it and both
+the work log and the claimant are red — an error to fix, before anybody is
+asked to approve — with one sentence naming the log, the work item and the
+claims, under either node. A work item may target several criteria; it is
+finished when a person closes it over the completion reports claiming it, not
+when a criterion closes, so the count of its aims is the plan's to choose.
 
-And **the plan may not wait on itself**. Two tasks that each wait on the other
-are both red (`cyclic`) — no task on a loop can ever be called ready, so the
+And **the plan may not wait on itself**. Two work items that each wait on the other
+are both red (`cyclic`) — no work item on a loop can ever be called ready, so the
 loop is a hole in the plan rather than a slow start — and so are two modules
 that consume each other's contracts, which is the same fact one layer up:
 neither can be built, read or replaced without the other, which is the whole of
@@ -166,10 +169,10 @@ each starting from itself, because the line to cut may be in any of their
 files. Contracts themselves stay out of it: a loop runs *through* an interface
 and there is nothing in that file to remove.
 
-One more rule reads across the axes: **work is logged only under a task whose
-turn has come**. A work log addressing a *blocked* task — its chain unread, or
-something it waits on still open — is red (`premature`), and turns yellow again
-by itself the moment the task becomes ready. Approve the chain first, then the
+One more rule reads across the axes: **work is logged only under a work item
+whose turn has come**. A work log addressing a *blocked* work item — its chain
+unread, or something it waits on still open — is red (`premature`), and turns
+yellow again by itself the moment the work item becomes ready. Approve the chain first, then the
 record.
 
 A **?** button beside the view tabs opens the canon itself: every node type the
@@ -220,13 +223,13 @@ the queue with nobody told. Five kinds:
   queue because it decides nothing — reading it is the whole of what happens,
   and what answers it is a `Decision` somebody writes afterwards. **Accept
   finding** makes the same approval write the other two do.
-- **Task closure** — an implementation task that completion reports claim,
-  every one of them approved, about whose current list nobody has said a word.
-  The card shows the task, the reports claiming it (each with the work log that
+- **Work item closure** — a work item that completion reports claim, every one
+  of them approved, about whose current list nobody has said a word. The card
+  shows the work item, the reports claiming it (each with the work log that
   submitted it and its commits), and — as context, never as buttons — the
-  criteria the task targets with their own marks. The two words are the
-  criterion's two words, written under the task's id with `taskHash` and a
-  `reports` map.
+  criteria the work item targets with their own marks. The two words are the
+  criterion's two words, written under the work item's id with `taskHash` and a
+  `reports` map — the two keys keep the names they were frozen under.
 - **AC closure** — a criterion that something claims, every claim of it
   approved, about whose current list of evidence nobody has said a word (while
   a claim is still unapproved the criterion is simply open, and waits). Two
@@ -252,9 +255,9 @@ yellow root still reaches it; a rejection on its own leaves the queue — that i
 the agent's turn — and the row you just wrote keeps an **Undo** until you leave
 the page.
 
-## Task board
+## Work board
 
-The Control plane's Task Board is the other surface computed on read: what the
+The Control plane's Work Board is the other surface computed on read: what the
 specification needs fixed, and what is ready to be worked on. Nothing about it
 is stored, and nothing that fails a condition is listed with a reason — it is
 absent, and it turns up of its own accord once the thing above it is settled.
@@ -262,11 +265,12 @@ absent, and it turns up of its own accord once the thing above it is settled.
 - **Fix Spec** — every red node, in the order somebody would take them: a
   person's rejection first, with the rationale WHOLE (it is a work order, so it
   is never summarised), then the seams the grammar found — an orphan, a work
-  log whose evidence claims a criterion its task does not target — then the ids
-  nothing answers to, then the files that would not read at all.
-- **Implement** — every implementation task that is not finished, whose
-  prerequisites are all closed, and whose whole chain upwards is green: the
-  task, its module, its responsibility and the goal above it, together with the
+  log whose evidence claims a criterion its work item does not target, a work
+  item no module allocates — then the ids nothing answers to, then the files
+  that would not read at all.
+- **Implement** — every work item that is not finished, whose prerequisites
+  are all closed, and whose whole chain upwards is green: the work item, its
+  module, its responsibility and the goal above it, together with the
   requirements, criteria and constraints hanging off that chain. The gate is
   local — a yellow node in an unrelated part of the graph hides nothing here —
   and each row names the module it belongs to, the requirement it serves, the
@@ -319,7 +323,7 @@ registry config, so `npx shadcn add <component>` works from `apps/web`.
   ledger/approvals.yaml        the approvals: node id → {approvedHash, by, at}
   ledger/rejections.yaml       the rejections: node id → {rejectedHash, by, at, rationale}
   ledger/acceptances.yaml      the closures: criterion id → {acHash, evidence: {id → hash}, by, at}
-                               and task id → {taskHash, reports: {id → hash}, by, at}
+                               and work item id → {taskHash, reports: {id → hash}, by, at} — the key names are frozen, the type was renamed
   ledger/feed/YYYY-MM.yaml     the activity feed: a month of {at, kind, refs, summary}, appended and never edited
 ```
 
@@ -349,6 +353,18 @@ project any more: they are the machine's, regenerated under
 `~/.shall/templates/`, and a set an older Shall committed into a project is
 removed on the next open.
 
+Three types were renamed on 2026-08-23 — the table is in
+`docs/Shall_Plan_Layer_Refactor_Spec.md` §1 — and nothing migrates a project
+that still has the old drawers: their files read as an unknown type and turn up
+under problems. Moving them by hand is three `git mv` of the old type folders to
+their new names under the same band folders — `plan/Module`, `plan/WorkItem`,
+`execution/CompletionReport`. Ids stay as they were — a prefix is only what
+Shall suggests for a new id, never a rule about an old one — so every relation
+still resolves; the approvals of exactly those nodes lapse, because the approval
+payload carries `<type>/<id>`, and they come back yellow to be read once more.
+Bodies are free markdown, so a module still written in the old sections reads as
+it did.
+
 Opening or creating a project also writes two deny rules into the project's
 `.claude/settings.json` — `Read(~/.shall/**)`, Shall's own home, and
 `Edit(/.shall/ledger/**)`, the books and the feed beside them that only the
@@ -363,7 +379,8 @@ deletion rather than by deleting it, that the ledgers are nobody's to open and
 the one line a run leaves there goes through `shall log`, that a colour is
 asked for rather than worked out, that a node is started with
 `shall add-spec-node` because its commented header is the only place a type's
-own keys and relations are written down, and that a task hangs off a module. It is generated output, kept
+own keys and relations are written down, and that a work item hangs off a module and
+`shall check` says so when it does not. It is generated output, kept
 current on every open the way the reference templates are, so a hand edit to it
 is lost; anything of your own belongs in another file beside it. There is one
 adapter today, which is why the page lands under `.claude`.
@@ -388,13 +405,13 @@ standing in, the way `git` does.
   non-canonical files. Problems and gaps exit 1. It still says nothing about who
   approved what: that is the review's, and `shall status` is why it can stay
   that way. One gap turns on a judgement all the same — a work log filed under a
-  task that is still blocked, and a chain nobody has agreed to yet is one of the
-  ways a task stays blocked.
+  work item that is still blocked, and a chain nobody has agreed to yet is one of
+  the ways a work item stays blocked.
 - `shall status [--scope <path>]…` counts the reds, yellows and greens and then
   gives the colour node by node — why it is that colour in one word, the
   sentence a rule of the graph wrote against it, a standing rejection's
   rationale whole, the reason a subject was left open, a criterion's open or
-  closed mark, a task's blocked, ready or done — and ends with the ids nothing
+  closed mark, a work item's blocked, ready or done — and ends with the ids nothing
   answers to and the files that would not read. A deletion an agent proposed and
   the relations a file writes ride in the `--json` answer rather than the
   printed rows. It reads the ledgers' verdict and manufactures none of it, and
@@ -402,7 +419,7 @@ standing in, the way `git` does.
   the book: `check` can report that as a row and go on counting, but every
   colour here is counted out of the books, and a screenful of yellow that is
   really an unreadable ledger is a lie with a colour.
-- `shall board` is the Task Board in a terminal: Fix Spec and Implement, the
+- `shall board` is the Work Board in a terminal: Fix Spec and Implement, the
   same two lists the panel draws, computed from the graph and the ledgers on
   every read — and refused outright, like `status`, when a book will not read.
 - `shall add-spec-node --type <Type>` starts a new node — the daemon picks the

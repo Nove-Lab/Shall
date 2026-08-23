@@ -58,7 +58,7 @@ export type StandaloneFindingBundle = Extract<
   { kind: "standalone-finding" }
 >;
 export type AcClosureBundle = Extract<ReviewBundle, { kind: "ac-closure" }>;
-export type TaskClosureBundle = Extract<ReviewBundle, { kind: "task-closure" }>;
+export type WorkItemClosureBundle = Extract<ReviewBundle, { kind: "work-item-closure" }>;
 /** One row of a bundle: a node, its colour, and what the two books say about it. */
 export type BundleMember = SpecApprovalBundle["members"][number];
 /** A claimant, which is a member with the work log that submitted it. */
@@ -67,20 +67,20 @@ export type EvidenceMember = AcClosureBundle["evidence"][number];
  * The other kind of claimant: a completion report, with the work log that
  * submitted it.
  */
-export type ReportMember = TaskClosureBundle["reports"][number];
+export type ReportMember = WorkItemClosureBundle["reports"][number];
 /**
  * THE OTHER SURFACE COMPUTED ON READ — what the specification needs fixed, and
  * what is ready to be worked on. Derived from the procedure like everything
  * else here, so a field added in `core/arith/board.ts` arrives typed.
  */
-export type TaskBoard = Awaited<ReturnType<typeof api.spec.taskBoard.query>>;
-export type FixSpecItem = TaskBoard["fixSpec"][number];
-export type ImplementItem = TaskBoard["implement"][number];
+export type WorkBoard = Awaited<ReturnType<typeof api.spec.workBoard.query>>;
+export type FixSpecItem = WorkBoard["fixSpec"][number];
+export type ImplementItem = WorkBoard["implement"][number];
 /** A node named as a reference on a board row: id, short name, name. */
 export type Ref = ImplementItem["modules"][number];
 
-/** Blocked, ready or done — the word a task wears beside its id. */
-export type TaskState = NonNullable<ReviewStatus["taskState"]>;
+/** Blocked, ready or done — the word a work item wears beside its id. */
+export type WorkItemState = NonNullable<ReviewStatus["workItemState"]>;
 
 /** What a rejection leaves in the book — the daemon hands the record straight back. */
 export type RejectionRecord = Awaited<
@@ -174,31 +174,31 @@ export function closuresOf(
 }
 
 /**
- * NO TASK WORDS YET, as one shared value — the reason `NO_SIGNALS` gives, again:
+ * NO WORK ITEM WORDS YET, as one shared value — the reason `NO_SIGNALS` gives, again:
  * this map is a dependency of the card memo.
  */
-export const NO_TASK_STATES: ReadonlyMap<string, TaskState> = new Map();
+export const NO_WORK_ITEM_STATES: ReadonlyMap<string, WorkItemState> = new Map();
 
 /**
- * THE TASK'S OWN WORD, KEYED BY ID — and only for the type it means anything
+ * THE WORK ITEM'S OWN WORD, KEYED BY ID — and only for the type it means anything
  * for, exactly as `closuresOf` above keys only the nodes that have a mark.
  *
- * It is the BOARD'S answer travelling to the canvas: `core/arith/task-state.ts`
- * decides it once, the Task Board's Implement column is the `ready` ones, and
- * the badge beside a task's id on the Spec plane reads this map. Nothing here
+ * It is the BOARD'S answer travelling to the canvas: `core/arith/work-item-state.ts`
+ * decides it once, the Work Board's Implement column is the `ready` ones, and
+ * the badge beside a work item's id on the Spec plane reads this map. Nothing here
  * works a state out for itself.
  */
-export function taskStatesOf(
+export function workItemStatesOf(
   report: ReviewReport | null,
-): ReadonlyMap<string, TaskState> {
+): ReadonlyMap<string, WorkItemState> {
   if (report === null) {
-    return NO_TASK_STATES;
+    return NO_WORK_ITEM_STATES;
   }
 
-  const states = new Map<string, TaskState>();
+  const states = new Map<string, WorkItemState>();
   for (const status of report.statuses) {
-    if (status.taskState !== null) {
-      states.set(status.id, status.taskState);
+    if (status.workItemState !== null) {
+      states.set(status.id, status.workItemState);
     }
   }
   return states;

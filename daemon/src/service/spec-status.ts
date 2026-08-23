@@ -5,7 +5,7 @@ import {
   type BrokenFile,
   type MissingNode,
   type ReviewStatus,
-  type TaskBoard,
+  type WorkBoard,
 } from "@shall/core/arith";
 import {
   bandOf,
@@ -72,7 +72,7 @@ export interface NodeStatus extends ReviewStatus {
    * says so.
    *
    * They are here so that a structural question — has every actor got a use
-   * case, does this task target anything — is one call and not fifty file
+   * case, does this work item target anything — is one call and not fifty file
    * reads.
    */
   edges: NodeFileEdge[];
@@ -120,7 +120,7 @@ function columnRankOf(type: string): number {
  * the chain — one that goes stale the day a rule moves, and one nothing tests.
  * So the whole answer is served: the colour, the one word for why, the sentence
  * a rule of the graph wrote, who approved, who refused and what they said,
- * whether a closure subject is met, and what state a task is in.
+ * whether a closure subject is met, and what state a work item is in.
  *
  * THE JOIN IS BY ID AND NEVER BY POSITION. `reviewGraph` sorts its statuses and
  * leaves out anything the colour chain has no vocabulary for, so the two lists
@@ -129,7 +129,7 @@ function columnRankOf(type: string): number {
  *
  * THE SCOPE NARROWS THE THREE LISTS AND NOTHING ELSE. The graph is loaded
  * whole, because a colour is arithmetic over all of it — the anchor holding a
- * node, the aim its work is under, the chain above a task all reach out of
+ * node, the aim its work is under, the chain above a work item all reach out of
  * whatever folder was asked about — and a narrowed load would answer a
  * different question in the same words. A missing id is kept for as long as any
  * file still pointing at it is in scope: the id's own file does not exist,
@@ -191,7 +191,7 @@ export async function statusSpec(
 }
 
 /**
- * The Task Board, from wherever the caller is standing — the same board the
+ * The Work Board, from wherever the caller is standing — the same board the
  * panel draws, for an agent in a checkout rather than a person in a browser.
  *
  * IT IS THE SAME BOARD AND NOT A SECOND ONE: `boardOver` is the whole of it,
@@ -200,7 +200,7 @@ export async function statusSpec(
  */
 export async function boardAt(
   startPath: string,
-): Promise<{ root: string } & TaskBoard> {
+): Promise<{ root: string } & WorkBoard> {
   const root = await projectRootAt(startPath);
   return { root, ...(await boardOver(specPathsOf(root))) };
 }

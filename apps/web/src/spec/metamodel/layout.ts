@@ -8,8 +8,8 @@ import { relationLabel } from "./relations";
  * picture this program chooses.
  *
  * WRITTEN AGAINST canon v5 AS THIS TREE HOLDS IT, with #22, #23 and #24 running
- * from the lower node (`ImplementationTask —TARGETS→ AcceptanceCriterion`,
- * `WorkLog —ADDRESSES→ ImplementationTask`, `Evidence —CLAIMS→
+ * from the lower node (`WorkItem —TARGETS→ AcceptanceCriterion`,
+ * `WorkLog —ADDRESSES→ WorkItem`, `Evidence —CLAIMS→
  * AcceptanceCriterion`). The types, the bands and the relations are all read out
  * of `@shall/core/graph`; only the coordinates are here, so a new type turns up
  * in its band's row automatically and a new relation is drawn without anybody
@@ -71,7 +71,7 @@ export const METAMODEL = {
    * Where each band's first column starts, so that cross-band relations have a
    * horizontal leg long enough to write their names on. Searched against the
    * real router rather than chosen by eye — Execution moved 120 → 116 when
-   * #24— (TaskCompletionReport CLAIMS ImplementationTask) joined the grammar and
+   * #24— (CompletionReport CLAIMS WorkItem) joined the grammar and
    * its label missed the old channel by a third of a pixel; Plan moved 104 → 110
    * when a Decision joined the band and `RESOLVES` missed by four. One card
    * added to a band is enough to cost a name, which is why the picture is worth

@@ -42,7 +42,7 @@ import {
   firstLine,
   nodesById,
   type AcClosureBundle,
-  type TaskClosureBundle,
+  type WorkItemClosureBundle,
   type BundleMember,
   type EvidenceMember,
   type ReviewBundle,
@@ -78,7 +78,7 @@ import { KIND_LABEL } from "./rows";
  * on the next read — and with it the only place to take it back. The strip
  * holds that door open for as long as the person is on this page, which is
  * exactly as long as they might change their mind about what they just typed.
- * When there is a task board the line becomes the link to the envelope.
+ * When there is a work board the line becomes the link to the envelope.
  */
 
 /** One thing decided on this page, kept until the person leaves it. */
@@ -467,7 +467,7 @@ export function ReviewBundlePage() {
           onReject={rejectNode}
           {...rowProps}
         />
-      ) : bundle.kind === "task-closure" ? (
+      ) : bundle.kind === "work-item-closure" ? (
         <TaskClosureCard
           bundle={bundle}
           nodeById={nodeById}
@@ -546,14 +546,14 @@ function PrimaryAction({
    */
   const [leaveOpenAsking, setLeaveOpenAsking] = useState(false);
 
-  if (bundle.kind === "ac-closure" || bundle.kind === "task-closure") {
+  if (bundle.kind === "ac-closure" || bundle.kind === "work-item-closure") {
     // THE TWO SUBJECTS SHARE THE PAIR OF DOORS. What is closed differs — a
-    // criterion on its evidence, a task on the reports that claim it — and
+    // criterion on its evidence, a work item on the reports that claim it — and
     // both are one id and one word, so the buttons are the same buttons.
     const subject =
       bundle.kind === "ac-closure"
         ? { id: bundle.acId, name: bundle.ac.name }
-        : { id: bundle.taskId, name: bundle.task.name };
+        : { id: bundle.workItemId, name: bundle.workItem.name };
     return (
       <div className="flex flex-wrap items-center gap-2">
         <Button
@@ -1067,12 +1067,12 @@ function ClosureCard({
 }
 
 /**
- * A TASK WAITING TO BE CALLED DONE — the criterion card asked about work.
+ * A WORK ITEM WAITING TO BE CALLED DONE — the criterion card asked about work.
  *
  * IT IS THE SAME DECISION IN THE SAME SHAPE, which is why this reads as a
  * mirror rather than as a second design: the subject at the top, the list it is
  * closed over beneath, the hearings under that, and the same two doors. What it
- * adds is the strip of criteria the task aimed at, because "is this done" is a
+ * adds is the strip of criteria the work item aimed at, because "is this done" is a
  * question a person answers partly by looking at whether what it was for has
  * closed — and those marks are context and never buttons: closing a criterion
  * is its own card in this queue.
@@ -1087,7 +1087,7 @@ function TaskClosureCard({
   nodeById,
   ...wiring
 }: {
-  bundle: TaskClosureBundle;
+  bundle: WorkItemClosureBundle;
   nodeById: ReadonlyMap<string, SpecNode>;
 } & RowWiring) {
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -1097,17 +1097,17 @@ function TaskClosureCard({
       <NodeDocument
         heading={
           <div className="flex flex-wrap items-center gap-2">
-            <StatusDot color={bundle.task.color} />
-            <span className="font-mono text-xs break-all">{bundle.taskId}</span>
-            <Badge variant="secondary">{bundle.task.type}</Badge>
-            <span className="text-sm">{bundle.task.name}</span>
+            <StatusDot color={bundle.workItem.color} />
+            <span className="font-mono text-xs break-all">{bundle.workItemId}</span>
+            <Badge variant="secondary">{bundle.workItem.type}</Badge>
+            <span className="text-sm">{bundle.workItem.name}</span>
           </div>
         }
-        node={nodeById.get(bundle.taskId) ?? null}
+        node={nodeById.get(bundle.workItemId) ?? null}
       />
 
       <p className={CAPTION}>
-        Every report claiming this task — closing accepts the whole list
+        Every report claiming this work item — closing accepts the whole list
       </p>
       {bundle.reports.map((member) => (
         <MemberRow
@@ -1124,11 +1124,11 @@ function TaskClosureCard({
         />
       ))}
 
-      {/* WHAT THE TASK WAS FOR, AND WHERE EACH OF THOSE STANDS. Read-only: a
+      {/* WHAT THE WORK ITEM WAS FOR, AND WHERE EACH OF THOSE STANDS. Read-only: a
           criterion is closed on its own card, over its own evidence. */}
       {bundle.targets.length === 0 ? null : (
         <div className={BOX}>
-          <p className={CAPTION}>What this task aimed to close</p>
+          <p className={CAPTION}>What this work item aimed to close</p>
           {bundle.targets.map((target) => (
             <div key={target.id} className="flex flex-wrap items-center gap-2">
               <span className="font-mono text-xs break-all">{target.id}</span>

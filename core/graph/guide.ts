@@ -26,7 +26,8 @@ import type { NodeTypeName } from "./canon.js";
  * an agent meets them in the file it is starting rather than in a skill
  * document it may never open. The plan band's hints are the same thing one
  * layer down: the conventions the /plan process asks for, seated in the file
- * an agent is starting a module, a contract or a task in.
+ * an agent is starting a module, a contract or a work item in — technology by
+ * its standard names in the module, what and never how in the work item.
  */
 
 /** One suggested section: its heading, and the hint the old roster carried for it. */
@@ -114,26 +115,34 @@ const GUIDE: Readonly<Record<NodeTypeName, readonly SectionGuide[]>> = {
     section("Applies When"),
     section("Rationale"),
   ],
-  ModuleDesign: [
+  // The plan band is where technology is decided, by its standard names — the
+  // Technology hint names real ones on purpose, because a figure of speech
+  // standing where a technology should be is a decision somebody will have to
+  // make again on the day the work starts, unrecorded.
+  Module: [
     section(
-      "Role Description",
-      "one sentence naming the one charge this module answers for",
+      "Responsibility",
+      "the one charge this module answers for, as a paragraph whose subject is the module",
     ),
     section(
-      "Hidden Decision",
-      "the one decision this module keeps to itself, so that changing it changes nothing outside",
+      "Technology",
+      "what it runs on and is built with, by the standard names — runtime, language, storage, core libraries: localStorage is localStorage, setInterval is setInterval, SQLite is SQLite; the project-wide stack is a Decision this section refers to, and only this module's own choices are written here",
     ),
     section(
-      "Structural Design Description",
-      "components and their arrangement, never classes, functions or files, naming the arrangement it follows and where it departs",
+      "Structure",
+      "its components and the lines between them, each a name and one line of responsibility — parts and their wiring, never classes, functions or files",
     ),
     section(
-      "Behavior Design Description",
-      "walk the scenarios through: who acts, who is asked, what is handed over, and the states and transitions when it holds any",
+      "Contracts",
+      "what each interface it EXPOSES promises, at signature level — name, inputs, outputs, errors — and never a function body",
     ),
     section(
-      "Rationale",
-      "what was decided, what else was weighed, and which driver settled it, with the path to the convention when a convention settled it",
+      "Behavior",
+      "how it acts in each key scenario, and its states and transitions where it holds any",
+    ),
+    section(
+      "Decisions",
+      "what else was weighed and why it was refused; a choice the whole project makes is a Decision node this section refers to, not a paragraph here",
     ),
   ],
   Interface: [
@@ -166,20 +175,22 @@ const GUIDE: Readonly<Record<NodeTypeName, readonly SectionGuide[]>> = {
       "the format, range and presence rules the requirements already state",
     ),
   ],
-  ImplementationTask: [
+  // Scope and not method: the method is the work's, found in the repository at
+  // work time and recorded in the work log's Approach, so a work item that names
+  // files or functions is wrong before the first turn of work ends.
+  WorkItem: [
     section(
-      "Description",
-      "what is finished when this is done, never how it is done and never which files it touches",
+      "Scope",
+      "what exists or is different once this is done — the resulting state, said briefly, and never the method: no files, no functions, no procedure",
     ),
-    section("Goal"),
-    section("Non-Goals"),
-    section("Scope", "one turn of work, small enough to finish without stopping"),
-    section("Deliverables"),
     section(
       "Definition of Done",
-      "what a verifier reads to agree it is done, which is the targeted criterion when there is one",
+      "the observable state this work ends in — what runs, what answers when called — built so the criterion can be judged, and never the criterion's sentence again; for instance: pause() and resume() keep the snapshot's paused spans current, and the progress screen shows the remaining time frozen while paused",
     ),
-    section("Risks"),
+    section(
+      "Notes",
+      "optional — what whoever starts this should know: context and risk, said as a hint and not a plan",
+    ),
   ],
   // Filed in the plan band and reaching every band above it: a decision is the
   // rationale a revision was made for, so the Rationale is the section the rest
@@ -204,15 +215,24 @@ const GUIDE: Readonly<Record<NodeTypeName, readonly SectionGuide[]>> = {
     section("Work Summary"),
     section("Handover"),
   ],
-  WorkLog: [section("Narrative"), section("Outcome")],
+  // Approach first: the stretch outside Shall chose one, and the record says
+  // which before it says what happened under it.
+  WorkLog: [
+    section(
+      "Approach",
+      "the approach the stretch outside Shall took — said so it could be reconstructed, and not the procedure in full",
+    ),
+    section("Narrative"),
+    section("Outcome"),
+  ],
   Evidence: [
     section("Claim"),
     section("Verdict", "Pending · Approved · Rejected"),
   ],
   // No Verdict, and that absence is the design: this type says what was done
-  // and does not conclude that it was enough (§3.19). Whether the task is
+  // and does not conclude that it was enough (§3.19). Whether the work item is
   // finished is a person's word in the ledger, not a field in this file.
-  TaskCompletionReport: [
+  CompletionReport: [
     section("Testimony"),
     section("Coverage"),
     section("Trigger"),

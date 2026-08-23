@@ -427,15 +427,15 @@ async function status(url: string, scope: readonly string[]): Promise<Said> {
     )} — ${tally.red} red, ${tally.yellow} yellow, ${tally.green} green.`,
   ];
 
-  // A criterion says open or closed and a task says blocked, ready or done; no
+  // A criterion says open or closed and a work item says blocked, ready or done; no
   // other type is asked either question, so the column is only as wide as the
   // answers actually given and disappears when none were.
   //
-  // A TASK IS ASKED BOTH AND ANSWERS IN ONE WORD. `done` IS the closed mark,
-  // said in the vocabulary of a task, so its own word is the one that shows —
+  // A WORK ITEM IS ASKED BOTH AND ANSWERS IN ONE WORD. `done` IS the closed mark,
+  // said in the vocabulary of a work item, so its own word is the one that shows —
   // printing `open ready` beside each other would be one fact told twice.
-  const state = (node: { closure: string | null; taskState: string | null }) =>
-    node.taskState ?? node.closure ?? "";
+  const state = (node: { closure: string | null; workItemState: string | null }) =>
+    node.workItemState ?? node.closure ?? "";
   const width = {
     id: widest(result.nodes.map((node) => node.id)),
     type: widest(result.nodes.map((node) => node.type)),
@@ -508,7 +508,7 @@ async function status(url: string, scope: readonly string[]): Promise<Said> {
 }
 
 /**
- * `shall board` — the Task Board in a terminal: what the specification needs
+ * `shall board` — the Work Board in a terminal: what the specification needs
  * fixed, and what is ready to be worked on.
  *
  * THE TWO SECTIONS ARE TWO AUDIENCES, which is why they are headed rather than
@@ -547,13 +547,13 @@ async function board(url: string): Promise<Said> {
       ? "Implement — nothing is ready to start."
       : `Implement — ${count(
           result.implement.length,
-          "task",
-          "tasks",
+          "work item",
+          "work items",
         )} ready to start.`,
   );
   for (const row of result.implement) {
     prose.push(`  ${row.id} ${row.name}`);
-    // What the task belongs to, what it aims at and who is already on it — each
+    // What the work item belongs to, what it aims at and who is already on it — each
     // clause left out when there is nothing to put in it, because a row of empty
     // headings says less than a shorter row.
     const clauses: string[] = [];

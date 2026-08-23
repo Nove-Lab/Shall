@@ -191,7 +191,7 @@ export function RejectionPopover({
             onChange={(event) => setText(event.target.value)}
           />
           {/* WHO READS THIS NEXT, SAID BEFORE IT IS WRITTEN. The rejection goes
-              into the book an agent picks its next task from, so the useful
+              into the book an agent picks its next work item from, so the useful
               rationale is an instruction and not a grade — and for a criterion
               left open the instruction is about the EVIDENCE, because the words
               of the criterion are not what is being refused. */}

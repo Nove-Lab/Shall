@@ -18,7 +18,7 @@ Under `--auto` the phase above is **written and agreed in the terminal** rather 
 
 - **The word is there** — `SHALL` or `MUST` appears in the statement, or, in a spec written in another language, the normative marker that language settles on. **Nothing verifies this**: not `shall check`, not the loader, not any door. The process document called it machine-verified; in Shall it is a rule of authorship, kept by you and caught by the person reviewing the node.
 - **It passes the observability test** — could a tester who has never seen the code determine whether it is satisfied? If answering needs the source, it is not a requirement yet.
-- **No implementation** — no framework, schema, algorithm or library. A stack the user named is carried to the design layer, never promoted here.
+- **No implementation** — no framework, schema, algorithm or library. A stack the user named is carried to `/shall:plan`, which decides it, never promoted here.
 - **The approved vocabulary**, spelled canonically, for every object noun — with a `MENTIONS` line in the node's own file for each term the statement leans on, drawn sparingly as [phase 3](./phase-3.md) step 6 says.
 
 A sentence joining two behaviors with "and" is two requirements. And **non-functional requirements are erected as requirements**: do not dissolve availability, latency, retention or accessibility into a success measure above, and do not leave them as adjectives inside a functional sentence. Each gets its own node, its own SHALL and its own criterion.

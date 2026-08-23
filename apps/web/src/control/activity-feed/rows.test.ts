@@ -36,7 +36,7 @@ describe("activityRows", () => {
   test("one row per entry, newest first in and newest first out", () => {
     const rows = activityRows([
       delivery("work_done", at(3), "Third turn", ["WL-0003"]),
-      delivery("plan_done", at(2), "Planned", ["MD-0001"]),
+      delivery("plan_done", at(2), "Planned", ["M-0001"]),
       delivery("work_done", at(1), "First turn", ["WL-0001"]),
     ]);
     assert.equal(rows.length, 3);
@@ -54,7 +54,7 @@ describe("activityRows", () => {
     const rows = activityRows([
       delivery("raise_landed", at(4), "Landed a decision", ["D-0001"]),
       delivery("work_done", at(3), "Done", ["WL-0003"]),
-      delivery("plan_done", at(2), "Planned", ["MD-0001"]),
+      delivery("plan_done", at(2), "Planned", ["M-0001"]),
       delivery("specify_done", at(1), "Spec drawn", ["G-0001"]),
     ]);
     assert.deepEqual(

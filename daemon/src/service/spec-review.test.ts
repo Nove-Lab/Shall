@@ -94,7 +94,7 @@ function status(
   closure: ReviewStatus["closure"] = null,
   leftOpen: ReviewStatus["leftOpen"] = null,
   problem: ReviewStatus["problem"] = null,
-  taskState: ReviewStatus["taskState"] = null,
+  workItemState: ReviewStatus["workItemState"] = null,
 ): ReviewStatus {
   return {
     id,
@@ -104,7 +104,7 @@ function status(
     rejection,
     closure,
     leftOpen,
-    taskState,
+    workItemState,
     problem,
   };
 }

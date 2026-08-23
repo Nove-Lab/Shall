@@ -6,7 +6,7 @@ import { TableCell, TableRow } from "@/components/ui/table";
 import { EmptyState } from "@/components/EmptyState";
 import { useRevision } from "@/live";
 import { useProject } from "@/project-context";
-import type { TaskBoard as Board } from "@/spec/review";
+import type { WorkBoard as Board } from "@/spec/review";
 import { formatStamp } from "@/spec/spec-node";
 import type { PanelMeta } from "../panels";
 import { PanelTable } from "../PanelTable";
@@ -30,7 +30,7 @@ import {
  * one place. What each row IS lives on the row's own page, which is where a
  * rejection's rationale is read whole.
  *
- * WHAT IS HERE IS WHAT SOMEBODY CAN ACT ON NOW. A task whose chain is unread,
+ * WHAT IS HERE IS WHAT SOMEBODY CAN ACT ON NOW. A work item whose chain is unread,
  * or whose prerequisite is unfinished, is not dimmed and not listed with a
  * reason — it is absent, and it turns up of its own accord the moment the thing
  * above it is settled.
@@ -38,7 +38,7 @@ import {
  * NOTHING IS CACHED, like every other surface here: the board is recomputed
  * from the graph and the three books on every read.
  */
-export function TaskBoard({ panel }: { panel: PanelMeta }) {
+export function WorkBoard({ panel }: { panel: PanelMeta }) {
   const project = useProject();
   const base = controlBase(project.id);
   const [board, setBoard] = useState<Board | null>(null);
@@ -53,7 +53,7 @@ export function TaskBoard({ panel }: { panel: PanelMeta }) {
     let live = true;
     setBoard(null);
     setError(null);
-    api.spec.taskBoard
+    api.spec.workBoard
       .query({ projectId: project.id })
       .then((next) => {
         if (live) {
@@ -65,7 +65,7 @@ export function TaskBoard({ panel }: { panel: PanelMeta }) {
           setError(
             loadError instanceof Error
               ? loadError.message
-              : "Could not read the task board",
+              : "Could not read the work board",
           );
         }
       });
@@ -88,7 +88,7 @@ export function TaskBoard({ panel }: { panel: PanelMeta }) {
       return;
     }
     let live = true;
-    api.spec.taskBoard
+    api.spec.workBoard
       .query({ projectId: project.id })
       .then((next) => {
         if (live) {
@@ -131,7 +131,7 @@ export function TaskBoard({ panel }: { panel: PanelMeta }) {
                   is about — a separate "Open" column would be a second
                   click target for the same row. */}
               <Link
-                to={`${base}/task-board/${encodeURIComponent(row.item.key)}`}
+                to={`${base}/work-board/${encodeURIComponent(row.item.key)}`}
                 className="text-primary underline-offset-4 hover:underline"
               >
                 {rowTitle(row)}

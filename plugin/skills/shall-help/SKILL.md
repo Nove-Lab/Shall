@@ -13,12 +13,12 @@ user-invocable: false
 
 Say this as it is written here, and do not lengthen it.
 
-Shall keeps a project's specification as a graph of markdown files — one file per node, from goals down to acceptance criteria, modules, tasks and the journals of work done — and asks a person to approve every one of them in the browser. Agents run the processes that write the files; a person judges them in the Review Queue; `shall status` and `shall board` report what the judgments add up to, and the agents ask rather than work it out. Nothing is built on a node nobody has approved.
+Shall keeps a project's specification as a graph of markdown files — one file per node, from goals down to acceptance criteria, modules, work items and the journals of work done — and asks a person to approve every one of them in the browser. Agents run the processes that write the files; a person judges them in the Review Queue; `shall status` and `shall board` report what the judgments add up to, and the agents ask rather than work it out. Nothing is built on a node nobody has approved.
 
 | Command | What it does |
 |---|---|
 | `/shall:specify <what you need>` | the staged interview that writes the intent and domain planes, one approved phase at a time; `--auto` runs every phase through and asks for approval once at the end |
-| `/shall:plan <direction>` | one plane down — modules, contracts and tasks, from an approved specification; `--auto` the same way |
+| `/shall:plan <direction>` | one plane down — modules, contracts and work items, from an approved specification, after a plan you agree to in the terminal; `--auto` skips that yes |
 | `/shall:work` | one turn of work from the board, written up as a journal for the queue; `--auto` runs it without stopping, `--dry` forecasts it and writes nothing. `/shall:work.todo` is its survey alone, `/shall:work.report` its write-up alone |
 | `/shall:raise <question>` | a doubt about the project: explores, says what it found, and lands a finding, a decision you dictated, both, or nothing |
 | `/shall:help [question]` | this guide. `shall help` on the command line is its machine-side twin: the CLI's own usage screen, for an agent rather than for you |
@@ -28,8 +28,8 @@ Shall keeps a project's specification as a graph of markdown files — one file 
 | red | something is wrong — a rejection standing, or a rule of the graph broken. It sits on the board's Fix Spec half and comes before new work |
 | yellow | written and not yet judged — waiting on a person in the Review Queue |
 | green | approved as it stands |
-| open, closed | a criterion or a task: closed once a person accepts the claims made on it |
-| blocked, ready, done | a task's standing: ready is what `/shall:work` can take today |
+| open, closed | a criterion or a work item: closed once a person accepts the claims made on it |
+| blocked, ready, done | a work item's standing: ready is what `/shall:work` can take today |
 
 ## Part 2 — where this project stands
 
@@ -40,8 +40,8 @@ Computed from the two answers the command handed you — `shall status --json` a
 | what has been written, per band — "the intent plane holds 14 nodes, the domain plane 6, the plan plane 9, nothing in execution yet" | `nodes[].band` — `Domain`, `Intent`, `Plan`, `Execution`; a band with no rows is "nothing yet". There is no phase or gate field anywhere in the answer, so progress is said per band and never as a phase number |
 | how much of it is judged — "5 are red, 3 yellow, 21 green" | `nodes[].color`; name a zero only when it is the whole story |
 | what a person refused — "2 of the red carry a rejection somebody wrote" | `nodes[].rejection` is not null |
-| criteria and tasks — "8 criteria open and 4 closed; 2 tasks ready, 3 blocked, 1 done" | `closure` on rows whose `type` is `AcceptanceCriterion`; `taskState` on rows whose `type` is `ImplementationTask` |
-| the board — "Fix Spec has 2 items; 2 tasks are ready to start" | `fixSpec.length`, `implement.length` |
+| criteria and work items — "8 criteria open and 4 closed; 2 work items ready, 3 blocked, 1 done" | `closure` on rows whose `type` is `AcceptanceCriterion`; `workItemState` on rows whose `type` is `WorkItem` |
+| the board — "Fix Spec has 2 items; 2 work items are ready to start" | `fixSpec.length`, `implement.length` |
 | what will not read — "1 file the graph refused, 1 id nothing answers to" | `broken.length`, `missing.length`; said only when not zero |
 
 Three things the two answers do not carry, and what you say instead:
@@ -62,10 +62,10 @@ Walk this table from the top; the first row that matches is the recommendation. 
 | 2 | no row in `nodes` has `band` `Intent` | nothing has been specified | "Start with `/shall:specify <what you need>` — what to build comes before everything else." |
 | 3 | any row's `color` is `red` | something needs fixing, and the board's Fix Spec half holds it | "There is something to fix — `/shall:work` takes Fix Spec before anything new." If any red row's `rejection` is not null, add: "n of them a person rejected and wrote why; the rationale is the work order." |
 | 4 | any row's `color` is `yellow` | judging is waiting on a person | "n nodes are waiting to be approved in the browser — `shall` with no arguments opens the Review Queue, and approval is what lets things move." |
-| 5 | `implement` is not empty | work can start | "n tasks are ready — `/shall:work` runs a turn of implementation. The first time, `/shall:work --dry` shows the forecast before anything is written." |
-| 6 | every row green and no row has `band` `Plan` | approved, and nothing planned against it | "The specification is approved and nothing is planned against it yet — `/shall:plan <direction>` turns it into modules and tasks." |
+| 5 | `implement` is not empty | work can start | "n work items are ready — `/shall:work` runs a turn of implementation. The first time, `/shall:work --dry` shows the forecast before anything is written." |
+| 6 | every row green and no row has `band` `Plan` | approved, and nothing planned against it | "The specification is approved and nothing is planned against it yet — `/shall:plan <direction>` turns it into modules and work items." |
 | 7 | every row green, no `AcceptanceCriterion` row has `closure` `open`, and both halves of the board are empty | this stretch is finished | "This stretch is complete — when there is a next intent, `/shall:specify <what you need>` is where it starts." |
-| 8 | anything else — green, a criterion still open, an empty board | what is left is judged in the browser | "Nothing is red, nothing is yellow and no task is ready; what remains is waiting on a person in the browser — a closure to accept, or a task whose prerequisite is not closed yet. `shall` with no arguments opens it." |
+| 8 | anything else — green, a criterion still open, an empty board | what is left is judged in the browser | "Nothing is red, nothing is yellow and no work item is ready; what remains is waiting on a person in the browser — a closure to accept, or a work item whose prerequisite is not closed yet. `shall` with no arguments opens it." |
 
 **A question focuses this part.** When the user asked something, answer it with the rows that bear on it — still from the top, still at most two. "Can I start building?" is row 5 when it matches and, when it does not, the first row that does, said as the reason not yet. A question about a word or a command ("what is Fix Spec") is answered from part 1 in a sentence or two, and part 3 is then the tree as usual, short.
 

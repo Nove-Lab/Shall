@@ -1,4 +1,4 @@
-export type PanelId = "review-queue" | "task-board" | "activity-feed" | "vitals";
+export type PanelId = "review-queue" | "work-board" | "activity-feed" | "vitals";
 
 export interface PanelMeta {
   id: PanelId;
@@ -27,10 +27,10 @@ export const PANELS: PanelMeta[] = [
     columns: ["Kind", "Title", "Summary", "Waiting since"],
   },
   {
-    id: "task-board",
-    title: "Task Board",
+    id: "work-board",
+    title: "Work Board",
     summary: "What the spec needs fixed, and what is ready to work on",
-    // "Work on" and not "start": a task somebody is already logging against is
+    // "Work on" and not "start": a work item somebody is already logging against is
     // on this board too, with the work shown beside it.
     empty: "Nothing is ready to work on — check the Review Queue",
     // ONE TABLE OVER BOTH HALVES, and the Kind column is what tells them apart

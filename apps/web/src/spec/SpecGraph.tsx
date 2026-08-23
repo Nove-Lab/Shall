@@ -40,7 +40,7 @@ import {
   furniturePieces,
   graphIdOfCard,
   type Closure,
-  type TaskState,
+  type WorkItemState,
   type Signal,
 } from "./view/furniture";
 import { highlightFor } from "./view/highlight";
@@ -120,13 +120,13 @@ interface SpecGraphProps {
    */
   closureById: ReadonlyMap<string, Closure>;
   /**
-   * The word each implementation task wears — blocked, ready or done. A node
-   * with no entry is not a task and draws no badge.
+   * The word each implementation work item wears — blocked, ready or done. A node
+   * with no entry is not a work item and draws no badge.
    *
    * IT ARRIVES MEMOISED FROM THE PLANE for the reason the two maps above do:
    * it is a dependency of the `cards` memo below.
    */
-  taskStateById: ReadonlyMap<string, TaskState>;
+  workItemStateById: ReadonlyMap<string, WorkItemState>;
   selectedId: string | null;
   onSelect: (id: string) => void;
   /**
@@ -182,7 +182,7 @@ export function SpecGraph({
   edges,
   signalById,
   closureById,
-  taskStateById,
+  workItemStateById,
   selectedId,
   onSelect,
   onBackgroundClick,
@@ -287,10 +287,10 @@ export function SpecGraph({
         byId,
         signalById,
         closureById,
-        taskStateById,
+        workItemStateById,
         highlight,
       ),
-    [layout, view, byId, signalById, closureById, taskStateById, highlight],
+    [layout, view, byId, signalById, closureById, workItemStateById, highlight],
   );
 
   const flowNodes = useMemo<CanvasNode[]>(

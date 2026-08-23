@@ -33,7 +33,7 @@ Nothing in this skill or in its phase files lists a type's fields, its body head
 
 **Everything else is settled inside the phase.** A phase never closes over an open point. If the person defers, narrow the scope until a decision is possible and ask again.
 
-**Technology is not intent.** A stack, framework, library or implementation approach the user mentions is recorded in the conversation and carried to design later — never promoted to an intent node. One exception: a norm that binds requirements is a **Constraint**, written in Phase 5.
+**Technology is not intent.** A stack, framework, library or implementation approach the user mentions is recorded in the conversation and carried to `/shall:plan`, whose first stage decides the stack — never promoted to an intent node. One exception: a norm that binds requirements is a **Constraint**, written in Phase 5.
 
 **A change to an approved node is a revision.** Edit that node's file. Do not write a second node saying the newer thing; the old one stays green and the graph then holds two answers.
 

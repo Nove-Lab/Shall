@@ -1,7 +1,7 @@
 import { TRPCError, initTRPC } from "@trpc/server";
 import { z } from "zod";
 import { isRefusal, type RefusalKind } from "../service/errors.js";
-import { taskBoard } from "../service/spec-board.js";
+import { workBoard } from "../service/spec-board.js";
 import {
   createProject,
   getProject,
@@ -280,7 +280,7 @@ export const appRouter = t.router({
     // and stores nothing. `reject` and `withdrawRejection` are the second book
     // — a person says in writing what is wrong, and takes it back.
     // `acceptClosure` and `leaveOpen` are the third — a subject (criterion or
-    // task) closed over everything that claims it, or left open with a
+    // work item) closed over everything that claims it, or left open with a
     // reason; each removes the other book's word in the same act.
     // `approveNodes` is [Approve all]: one bundle, one turn, all or nothing.
     // Every one of them is the person's, never an agent's, for the reason
@@ -311,9 +311,9 @@ export const appRouter = t.router({
     commitSpec: procedure
       .input(z.object({ projectId: z.string().min(1), message: z.string() }))
       .mutation(({ input }) => commitSpec(input)),
-    taskBoard: procedure
+    workBoard: procedure
       .input(z.object({ projectId: z.string().min(1) }))
-      .query(({ input }) => taskBoard(input.projectId)),
+      .query(({ input }) => workBoard(input.projectId)),
     reviewQueue: procedure
       .input(z.object({ projectId: z.string().min(1) }))
       .query(({ input }) => reviewQueue(input.projectId)),

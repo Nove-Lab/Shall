@@ -741,7 +741,7 @@ export async function checkSpec(
     for (const referrer of entry.referencedBy) {
       gaps.push({
         file: fileFor(referrer.fromId),
-        // Core's own sentence — the same words the Task Board's row quotes.
+        // Core's own sentence — the same words the Work Board's row quotes.
         message: missingSentence(entry.id, referrer),
       });
     }

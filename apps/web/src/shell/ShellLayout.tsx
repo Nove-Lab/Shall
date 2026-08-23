@@ -45,7 +45,7 @@ import type { Project } from "@/project-context";
 
 const PANEL_ICON: Record<PanelId, typeof ListChecks> = {
   "review-queue": ListChecks,
-  "task-board": ScrollText,
+  "work-board": ScrollText,
   "activity-feed": Activity,
   vitals: ChartLine,
 };
@@ -77,7 +77,7 @@ function useWaitingCounts(
     let live = true;
     void Promise.all([
       api.spec.reviewQueue.query({ projectId }),
-      api.spec.taskBoard.query({ projectId }),
+      api.spec.workBoard.query({ projectId }),
     ])
       .then(([queue, board]) => {
         if (live) {
@@ -130,7 +130,7 @@ function ControlSidebar({ projectId }: { projectId: string }) {
               const count =
                 panel.id === "review-queue"
                   ? waiting.queue
-                  : panel.id === "task-board"
+                  : panel.id === "work-board"
                     ? waiting.board
                     : 0;
               return (

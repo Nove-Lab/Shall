@@ -434,7 +434,7 @@ export function blockerFor(
     // approve over it any more than over a missing anchor.
     return {
       kind: "invalid",
-      message: `${status.problem ?? `${id} is outside its task's aim`} Fix that first — there is nothing yet to approve.`,
+      message: `${status.problem ?? `${id} is outside its work item's aim`} Fix that first — there is nothing yet to approve.`,
     };
   }
   if (status !== undefined && status.reason === "cyclic") {
@@ -446,11 +446,11 @@ export function blockerFor(
     };
   }
   if (status !== undefined && status.reason === "premature") {
-    // Work under a task whose turn has not come — the same family of red: a
+    // Work under a work item whose turn has not come — the same family of red: a
     // rule of the graph, named before any book is opened.
     return {
       kind: "invalid",
-      message: `${status.problem ?? `${id} addresses a blocked task`} Fix that first — there is nothing yet to approve.`,
+      message: `${status.problem ?? `${id} addresses a blocked work item`} Fix that first — there is nothing yet to approve.`,
     };
   }
   if (status !== undefined && status.reason === "rejected") {

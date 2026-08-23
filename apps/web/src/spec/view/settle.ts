@@ -5,7 +5,7 @@ import type { Incidence } from "./edges";
  * view's placement, one arithmetic step past the stack.
  *
  * `graphLayout` fills each type's column from the top at a fixed pitch in
- * byte-order id, and that order knows nothing about the relations: a Task and
+ * byte-order id, and that order knows nothing about the relations: a Work item and
  * the Requirement it implements each sit wherever their own column's ordering
  * put them. WHAT THIS STEP REDUCES IS THE VERTICAL DISTANCE BETWEEN THE TWO
  * ENDS OF A RELATION, and that is the claim worth making because it is the one

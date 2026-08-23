@@ -22,7 +22,7 @@ import { appendActivity } from "@shall/core/store";
 import { isRefusal, type Refusal } from "./errors.js";
 import { createProject } from "./projects.js";
 import { activityFeed, logActivity } from "./spec-activity.js";
-import { taskBoard } from "./spec-board.js";
+import { workBoard } from "./spec-board.js";
 import { createSpecEdge, createSpecNode } from "./spec-graph.js";
 import { approveSpecNodes, reviewQueue } from "./spec-queue.js";
 import { approveSpecNode, commitSpec, reviewSpec } from "./spec-review.js";
@@ -132,26 +132,30 @@ const CHAIN_EDGES: readonly (readonly [string, string, string])[] = [
 ];
 
 /**
- * The execution side: a journal, the work under it, and the evidence it
- * submitted — with the aim chain, because a submitted claim answers to the aim
- * rule.
+ * The plan and execution sides: the module that holds the work item, a journal,
+ * the work under it, and the evidence it submitted — with the aim chain,
+ * because a submitted claim answers to the aim rule, and with the module,
+ * because its ALLOCATES line is what holds a work item at all.
  */
 const RECORD: readonly (readonly [string, string])[] = [
-  ["ImplementationTask", "IT-0001"],
+  ["Module", "M-0001"],
+  ["WorkItem", "WI-0001"],
   ["Journal", "J-0001"],
   ["WorkLog", "WL-0001"],
   ["Evidence", "EV-0001"],
-  ["TaskCompletionReport", "TCR-0001"],
+  ["CompletionReport", "CR-0001"],
 ];
 
 const RECORD_EDGES: readonly (readonly [string, string, string])[] = [
-  ["TARGETS", "IT-0001", "AC-0001"],
+  ["IS_REALIZED_BY", "SR-0001", "M-0001"],
+  ["ALLOCATES", "M-0001", "WI-0001"],
+  ["TARGETS", "WI-0001", "AC-0001"],
   ["LOGS", "J-0001", "WL-0001"],
-  ["ADDRESSES", "WL-0001", "IT-0001"],
+  ["ADDRESSES", "WL-0001", "WI-0001"],
   ["SUBMITS", "WL-0001", "EV-0001"],
-  ["SUBMITS", "WL-0001", "TCR-0001"],
+  ["SUBMITS", "WL-0001", "CR-0001"],
   ["CLAIMS", "EV-0001", "AC-0001"],
-  ["CLAIMS", "TCR-0001", "IT-0001"],
+  ["CLAIMS", "CR-0001", "WI-0001"],
 ];
 
 const EVERY_ID = [...CHAIN, ...RECORD].map(([, id]) => id);
@@ -449,7 +453,7 @@ describe("the feed's place", () => {
     const before = {
       review: await reviewSpec(project.id),
       queue: await reviewQueue(project.id),
-      board: await taskBoard(project.id),
+      board: await workBoard(project.id),
       status: await statusSpec(project.path),
       boardAt: await boardAt(project.path),
     };
@@ -460,7 +464,7 @@ describe("the feed's place", () => {
     // was, and the panel simply has no month to show.
     assert.deepEqual(await reviewSpec(project.id), before.review);
     assert.deepEqual(await reviewQueue(project.id), before.queue);
-    assert.deepEqual(await taskBoard(project.id), before.board);
+    assert.deepEqual(await workBoard(project.id), before.board);
     assert.deepEqual(await statusSpec(project.path), before.status);
     assert.deepEqual(await boardAt(project.path), before.boardAt);
     assert.deepEqual(await activityFeed({ projectId: project.id }), {

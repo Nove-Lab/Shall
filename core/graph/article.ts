@@ -5,7 +5,7 @@
  * refusal, hint and template line that names a type or a relation is built by
  * interpolation, so the article in front of it is written once, at authoring
  * time, against whichever name the author happened to be thinking of — and it
- * shipped as `a Actor`, `a Interface` and `a ImplementationTask` in the
+ * shipped as `a Actor`, `a Interface` and `a Evidence` in the
  * reference templates a person reads before writing their first node. One rule
  * in one place is the only arrangement in which that cannot happen again.
  *

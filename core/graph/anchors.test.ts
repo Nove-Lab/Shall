@@ -145,10 +145,10 @@ describe("EDGE_GRAMMAR", () => {
         "AcceptanceCriterion",
         "Constraint",
         "Assumption",
-        "ModuleDesign",
+        "Module",
         "Interface",
         "DataSchema",
-        "ImplementationTask",
+        "WorkItem",
       ],
     );
     // One source, so the fifteen above are the whole of the edge.
@@ -216,6 +216,17 @@ describe("anchorPhrase", () => {
     assert.equal(anchorPhrase("Evidence"), "a CLAIMS relation out of it");
   });
 
+  test("holds a work item by the module that allocates it, and by nothing else", () => {
+    // Its own TARGETS line aims and does not hold: a work item belongs to a
+    // module by definition, so a work item no module allocates is an orphan
+    // however many criteria it targets — and the phrase says only the one
+    // relation that would have held it.
+    assert.deepEqual(anchorsFor("WorkItem"), [
+      { direction: "in", edgeType: "ALLOCATES" },
+    ]);
+    assert.equal(anchorPhrase("WorkItem"), "an ALLOCATES relation into it");
+  });
+
   test("has nothing to say about a type that anchors nothing", () => {
     // A caller writes the whole sentence or none of it — an empty fragment
     // dropped into one would read as a sentence with a hole in it.
@@ -238,7 +249,6 @@ describe("a or an, in front of the canon's own names", () => {
       "Assumption",
       "Evidence",
       "Interface",
-      "ImplementationTask",
     ]);
     for (const entry of NODE_TYPES) {
       assert.equal(
@@ -294,7 +304,7 @@ describe("CLOSURE_KINDS", () => {
   test("names two subjects, and each of them once", () => {
     assert.deepEqual(
       CLOSURE_KINDS.map((entry) => entry.kind),
-      ["criterion", "task"],
+      ["criterion", "workItem"],
     );
   });
 
@@ -325,13 +335,13 @@ describe("CLOSURE_KINDS", () => {
 
   test("answers for the two subject types and for nothing else", () => {
     assert.equal(closureKindOf("AcceptanceCriterion")?.kind, "criterion");
-    assert.equal(closureKindOf("ImplementationTask")?.kind, "task");
+    assert.equal(closureKindOf("WorkItem")?.kind, "workItem");
     assert.equal(closureKindOf("Evidence"), null);
     assert.equal(closureKindOf("Widget"), null);
   });
 
   test("finds a row back from the tag a record carries", () => {
-    assert.equal(closureKindNamed("task").subjectType, "ImplementationTask");
+    assert.equal(closureKindNamed("workItem").subjectType, "WorkItem");
     assert.equal(closureKindNamed("criterion").claim, "CLAIMS");
   });
 });

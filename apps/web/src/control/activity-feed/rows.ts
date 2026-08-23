@@ -3,7 +3,7 @@ import type { api } from "../../api";
 /**
  * THE FEED'S ROW VOCABULARY, importable without the feed's table: the glance on
  * the overview and the panel both read these. The queue's
- * `review-queue/rows.ts` and the board's `task-board/rows.ts` are the same
+ * `review-queue/rows.ts` and the board's `work-board/rows.ts` are the same
  * shape next door.
  *
  * WHY A MODULE AT ALL, when a row is a record with its refs trimmed. Two

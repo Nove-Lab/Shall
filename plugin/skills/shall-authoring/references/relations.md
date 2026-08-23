@@ -39,11 +39,12 @@ Requirement ──HAS_CONSTRAINT──▶ Constraint
 ## The plan chain, in canon names
 
 ```
-SystemResponsibility ──IS_REALIZED_BY──▶ ModuleDesign
-ModuleDesign ──EXPOSES──▶ Interface ──CARRIES──▶ DataSchema ──REPRESENTS──▶ DomainEntity
-ModuleDesign ──CONSUMES──▶ Interface        (the contract this module calls)
-ModuleDesign ──ALLOCATES──▶ ImplementationTask ──DEPENDS_ON──▶ ImplementationTask
-ImplementationTask ──TARGETS──▶ AcceptanceCriterion   (written in the task)
+SystemResponsibility ──IS_REALIZED_BY──▶ Module
+Module ──EXPOSES──▶ Interface ──CARRIES──▶ DataSchema ──REPRESENTS──▶ DomainEntity
+Module ──CONSUMES──▶ Interface        (the contract this module calls)
+Module ──ALLOCATES──▶ WorkItem ──DEPENDS_ON──▶ WorkItem
+WorkItem ──TARGETS──▶ AcceptanceCriterion   (written in the work item; none, one or several)
+Decision ──AFFECTS──▶ Module               (the technology decision /shall:plan writes)
 ```
 
 **No relation joins two modules.** A module depends on another by consuming what that one exposes, so the dependency is two lines about one contract and never a line between the two files — which is also why a dependency you cannot name a contract for is a dependency reaching past a boundary into somebody's internals.
@@ -56,13 +57,13 @@ The source, always: a relation is written in the file of the node it leaves. Dow
 
 | Relation | Written in |
 |---|---|
-| `ImplementationTask —TARGETS→ AcceptanceCriterion` | the task |
-| `WorkLog —ADDRESSES→ ImplementationTask` | the work log |
+| `WorkItem —TARGETS→ AcceptanceCriterion` | the work item |
+| `WorkLog —ADDRESSES→ WorkItem` | the work log |
 | `Evidence —CLAIMS→ AcceptanceCriterion` | the evidence |
-| `TaskCompletionReport —CLAIMS→ ImplementationTask` | the report |
+| `CompletionReport —CLAIMS→ WorkItem` | the report |
 | `Decision —RESOLVES→ Finding`, and `Decision —AFFECTS→` anything in domain, intent or plan except another decision | the decision |
 
-The reason is approval: planning work, starting work, making a claim or deciding a revision must not touch the criterion's, the task's or the requirement's file, because that would turn a green node yellow and put somebody's settled judgment back in the queue.
+The reason is approval: planning work, starting work, making a claim or deciding a revision must not touch the criterion's, the work item's or the requirement's file, because that would turn a green node yellow and put somebody's settled judgment back in the queue.
 
 **A finding starts no relation at all, and nothing has to hold it either.** The ids it concerns go in its own `relatedNodes` list, which is a hint and not a relation: nothing checks that those ids answer to a file, an empty list is not a fault, and no walk follows them. A finding is rootless like a `Goal`, because its belonging follows its birth — one made in the middle of a turn of work is `RECORDS`ed by that work log and read as part of that report, and one brought between turns stands alone and reaches the queue as a card of its own. Write neither line into the finding: the `RECORDS` line lives in the work log's file, and the absence of one is not a hole to fill. What answers a finding is a `Decision` that `RESOLVES` it, written afterwards in the decision's own file — so a finding is never edited to record that somebody dealt with it. That decision is held to the graph by what it revises and not by the finding it answers, so a `RESOLVES` line on its own leaves it an orphan.
 
@@ -81,16 +82,16 @@ An *anchor* is the one relation a node must be on the right end of to be part of
 | `Requirement` | `REQUIRES` into it |
 | `AcceptanceCriterion` | `HAS_CRITERION` into it |
 | `Constraint` | `HAS_CONSTRAINT` into it |
-| `ModuleDesign` | `IS_REALIZED_BY` into it |
+| `Module` | `IS_REALIZED_BY` into it |
 | `Interface` | `EXPOSES` into it **or** `CONSUMES` into it |
 | `DataSchema` | `CARRIES` into it |
-| `ImplementationTask` | `ALLOCATES` into it **or** its own `TARGETS` |
+| `WorkItem` | `ALLOCATES` into it |
 | `Assumption` | `ASSUMES` into it |
 | `Decision` | its own `AFFECTS` |
 
-Several anchors are an OR, never an AND: a task is held by `ALLOCATES` into it **or** by its own `TARGETS`, a work log by `LOGS` into it **or** by its own `ADDRESSES`; an evidence and a completion report are held by their own `CLAIMS` alone. Read `anchors.ts` before relying on an Execution row.
+Several anchors are an OR, never an AND: an interface is held by `EXPOSES` into it **or** `CONSUMES` into it, a work log by `LOGS` into it **or** by its own `ADDRESSES`; an evidence and a completion report are held by their own `CLAIMS` alone. Read `anchors.ts` before relying on an Execution row.
 
-The task's OR is the one to watch, because it lets through a mistake nothing downstream will report. A task that targets a criterion and belongs to no module is a whole node: no check files it, no door refuses it, and the board will offer it to somebody the moment its chain goes green. It is still wrong — work with no design behind it is a backlog somebody stored, not a plan — so the module's `ALLOCATES` line is yours to remember.
+**A work item is not an OR.** `ALLOCATES` into it is the one relation that holds it — its own `TARGETS` lines hold nothing — so a work item no module allocates is red, `shall check` names it under the work item's file, and the file to edit is the module's. Work with no design behind it is not a plan, and now the graph says so.
 
 ## Two worked anchors
 

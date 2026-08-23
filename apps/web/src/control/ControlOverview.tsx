@@ -21,7 +21,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { ACTIVITY_KIND_LABEL, activityRows, rowNote } from "./activity-feed/rows";
 import { PANELS, type PanelMeta } from "./panels";
 import { controlBase } from "./parts";
-import { BOARD_KIND_LABEL, boardRows, rowSummary, rowTitle } from "./task-board/rows";
+import { BOARD_KIND_LABEL, boardRows, rowSummary, rowTitle } from "./work-board/rows";
 import { KIND_LABEL, bundleSummary } from "./review-queue/rows";
 import { useRevision } from "@/live";
 import { useProject } from "@/project-context";
@@ -57,7 +57,7 @@ interface GlanceRow {
  * "and N more" ladders are the component, written once.
  */
 const GLANCE_ROWS: Record<
-  "review-queue" | "task-board" | "activity-feed",
+  "review-queue" | "work-board" | "activity-feed",
   {
     failed: string;
     rows: (projectId: string, base: string) => Promise<GlanceRow[]>;
@@ -76,16 +76,16 @@ const GLANCE_ROWS: Record<
       }));
     },
   },
-  "task-board": {
-    failed: "Could not read the task board",
+  "work-board": {
+    failed: "Could not read the work board",
     rows: async (projectId, base) => {
-      const board = await api.spec.taskBoard.query({ projectId });
+      const board = await api.spec.workBoard.query({ projectId });
       return boardRows(board).map((row) => ({
         key: row.item.key,
         label: BOARD_KIND_LABEL[row.kind],
         title: rowTitle(row),
         summary: rowSummary(row),
-        href: `${base}/task-board/${encodeURIComponent(row.item.key)}`,
+        href: `${base}/work-board/${encodeURIComponent(row.item.key)}`,
       }));
     },
   },
@@ -280,7 +280,7 @@ export function ControlOverview() {
             </CardHeader>
             <CardContent className="flex-1">
               {panel.id === "review-queue" ||
-              panel.id === "task-board" ||
+              panel.id === "work-board" ||
               panel.id === "activity-feed" ? (
                 <PanelGlance panel={panel} source={panel.id} />
               ) : (

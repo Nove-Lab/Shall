@@ -33,7 +33,7 @@ export interface EdgeTriple {
  * against the source document line by line.
  *
  * The triple is the key, never the bare name. v5 numbers `DEPENDS_ON` twice —
- * #9 Requirement→Requirement and #15 ImplementationTask→ImplementationTask — so
+ * #9 Requirement→Requirement and #15 WorkItem→WorkItem — so
  * the 29 edge types live under 28 distinct names, and anything that indexes this
  * table by name alone silently drops one of the two. HAS_CRITERION, SUBMITS, CLAIMS and
  * the fan-out families (ASSUMES, AFFECTS, MENTIONS) repeat
@@ -54,45 +54,45 @@ export const EDGE_GRAMMAR: readonly EdgeTriple[] = [
   { fromType: "Requirement",          toType: "Requirement",          edgeType: "DEPENDS_ON" },             // #9  self-loop by design
   { fromType: "Requirement",          toType: "Requirement",          edgeType: "CONFLICTS_WITH" },         // #10 self-loop by design
 
-  // §3-2 Plan view. EXPOSES and CONSUMES share ModuleDesign→Interface: a module
+  // §3-2 Plan view. EXPOSES and CONSUMES share Module→Interface: a module
   // both publishes and calls contracts, and the two are different facts.
-  { fromType: "ModuleDesign",         toType: "Interface",            edgeType: "EXPOSES" },                // #11
-  { fromType: "ModuleDesign",         toType: "Interface",            edgeType: "CONSUMES" },               // #12
+  { fromType: "Module",         toType: "Interface",            edgeType: "EXPOSES" },                // #11
+  { fromType: "Module",         toType: "Interface",            edgeType: "CONSUMES" },               // #12
   { fromType: "Interface",            toType: "DataSchema",           edgeType: "CARRIES" },                // #13
-  { fromType: "ModuleDesign",         toType: "ImplementationTask",   edgeType: "ALLOCATES" },              // #14
-  { fromType: "ImplementationTask",   toType: "ImplementationTask",   edgeType: "DEPENDS_ON" },             // #15 the second DEPENDS_ON
+  { fromType: "Module",         toType: "WorkItem",   edgeType: "ALLOCATES" },              // #14
+  { fromType: "WorkItem",   toType: "WorkItem",   edgeType: "DEPENDS_ON" },             // #15 the second DEPENDS_ON
 
   // §3-3 Execution view. #19 PRODUCED and #20 CITES are gone with the Commit
   // node: a WorkLog names its commits in its own frontmatter now.
   { fromType: "Journal",              toType: "WorkLog",              edgeType: "LOGS" },                   // #16
   { fromType: "WorkLog",              toType: "Evidence",             edgeType: "SUBMITS" },                // #17
-  { fromType: "WorkLog",              toType: "TaskCompletionReport", edgeType: "SUBMITS" },                // #17—
+  { fromType: "WorkLog",              toType: "CompletionReport", edgeType: "SUBMITS" },                // #17—
   { fromType: "WorkLog",              toType: "Finding",              edgeType: "RECORDS" },                // #18
 
   // §3-4 The four gateways between views: Intent → Plan → Execution.
-  { fromType: "SystemResponsibility", toType: "ModuleDesign",         edgeType: "IS_REALIZED_BY" },         // #21
-  // #22 runs FROM the task, like #23 and #24: a task names the criterion it
-  // aims to close in its own file, so planning work never touches the
-  // criterion's file or moves its approval.
-  { fromType: "ImplementationTask",   toType: "AcceptanceCriterion",  edgeType: "TARGETS" },                // #22
-  // #23 runs FROM the work log, like #24: the work names the task it addresses
-  // in its own file, so starting work never touches the task's file or moves
-  // its approval.
-  { fromType: "WorkLog",              toType: "ImplementationTask",   edgeType: "ADDRESSES" },              // #23
+  { fromType: "SystemResponsibility", toType: "Module",         edgeType: "IS_REALIZED_BY" },         // #21
+  // #22 runs FROM the work item, like #23 and #24: a work item names the
+  // criteria it aims to close in its own file, so planning work never touches
+  // a criterion's file or moves its approval.
+  { fromType: "WorkItem",   toType: "AcceptanceCriterion",  edgeType: "TARGETS" },                // #22
+  // #23 runs FROM the work log, like #24: the work names the work item it
+  // addresses in its own file, so starting work never touches the work item's
+  // file or moves its approval.
+  { fromType: "WorkLog",              toType: "WorkItem",   edgeType: "ADDRESSES" },              // #23
   // #24 runs FROM the evidence: a claim is the evidence's own line, so writing
   // one never touches the criterion's file or moves its approval.
   { fromType: "Evidence",             toType: "AcceptanceCriterion",  edgeType: "CLAIMS" },                 // #24
-  // #24— a completion report claims the ONE task it is filed about, from its own
-  // file, for the reason #24 runs from the evidence — and it is what a task's
-  // closure is judged over, as #24 is a criterion's.
-  { fromType: "TaskCompletionReport", toType: "ImplementationTask",   edgeType: "CLAIMS" },                 // #24—
+  // #24— a completion report claims the ONE work item it is filed about, from
+  // its own file, for the reason #24 runs from the evidence — and it is what a
+  // work item's closure is judged over, as #24 is a criterion's.
+  { fromType: "CompletionReport", toType: "WorkItem",   edgeType: "CLAIMS" },                 // #24—
 
   // §3-5 The assumption. ASSUMES attaches to the five chalk nodes of §0.5 and to
   // nothing else, so the five sources are written out rather than implied.
   { fromType: "Goal",                 toType: "Assumption",           edgeType: "ASSUMES" },                // #25
   { fromType: "SystemResponsibility", toType: "Assumption",           edgeType: "ASSUMES" },                // #25
   { fromType: "Requirement",          toType: "Assumption",           edgeType: "ASSUMES" },                // #25
-  { fromType: "ModuleDesign",         toType: "Assumption",           edgeType: "ASSUMES" },                // #25
+  { fromType: "Module",         toType: "Assumption",           edgeType: "ASSUMES" },                // #25
   { fromType: "WorkLog",              toType: "Assumption",           edgeType: "ASSUMES" },                // #25
 
   // §3-5b The revision edges, both out of a Decision and nothing else.
@@ -118,17 +118,17 @@ export const EDGE_GRAMMAR: readonly EdgeTriple[] = [
   { fromType: "Decision",             toType: "AcceptanceCriterion",  edgeType: "AFFECTS" },                // #28—
   { fromType: "Decision",             toType: "Constraint",           edgeType: "AFFECTS" },                // #28—
   { fromType: "Decision",             toType: "Assumption",           edgeType: "AFFECTS" },                // #28—
-  { fromType: "Decision",             toType: "ModuleDesign",         edgeType: "AFFECTS" },                // #28—
+  { fromType: "Decision",             toType: "Module",         edgeType: "AFFECTS" },                // #28—
   { fromType: "Decision",             toType: "Interface",            edgeType: "AFFECTS" },                // #28—
   { fromType: "Decision",             toType: "DataSchema",           edgeType: "AFFECTS" },                // #28—
-  { fromType: "Decision",             toType: "ImplementationTask",   edgeType: "AFFECTS" },                // #28—
+  { fromType: "Decision",             toType: "WorkItem",   edgeType: "AFFECTS" },                // #28—
   // RESOLVES answers a finding, and answering none is allowed: a revision
   // somebody simply wanted is as good a reason as one an agent reported.
   { fromType: "Decision",             toType: "Finding",              edgeType: "RESOLVES" },               // #27
 
   // §3-6 Domain, the global sink. MENTIONS #30 has exactly fifteen sources —
   // the rows that carry it in §4's Term column. Term, DomainEntity, Journal,
-  // Evidence, TaskCompletionReport and Finding are not among them, and no
+  // Evidence, CompletionReport and Finding are not among them, and no
   // stated rule predicts that: it is read off the table, so it is written out.
   // A Decision names a term here and revises one above; the two are different
   // facts and a decision may need both.
@@ -140,10 +140,10 @@ export const EDGE_GRAMMAR: readonly EdgeTriple[] = [
   { fromType: "Requirement",          toType: "Term",                 edgeType: "MENTIONS" },
   { fromType: "AcceptanceCriterion",  toType: "Term",                 edgeType: "MENTIONS" },
   { fromType: "Constraint",           toType: "Term",                 edgeType: "MENTIONS" },
-  { fromType: "ModuleDesign",         toType: "Term",                 edgeType: "MENTIONS" },
+  { fromType: "Module",         toType: "Term",                 edgeType: "MENTIONS" },
   { fromType: "Interface",            toType: "Term",                 edgeType: "MENTIONS" },
   { fromType: "DataSchema",           toType: "Term",                 edgeType: "MENTIONS" },
-  { fromType: "ImplementationTask",   toType: "Term",                 edgeType: "MENTIONS" },
+  { fromType: "WorkItem",   toType: "Term",                 edgeType: "MENTIONS" },
   { fromType: "WorkLog",              toType: "Term",                 edgeType: "MENTIONS" },
   { fromType: "Assumption",           toType: "Term",                 edgeType: "MENTIONS" },
   { fromType: "Decision",             toType: "Term",                 edgeType: "MENTIONS" },
@@ -171,7 +171,7 @@ export const EDGE_TYPE_NAMES: readonly string[] = distinctEdgeTypes(EDGE_GRAMMAR
 
 /**
  * The edge types allowed from one node type to another, in canon order.
- * Usually zero or one; ModuleDesign→Interface legitimately answers two.
+ * Usually zero or one; Module→Interface legitimately answers two.
  */
 export function permittedEdgeTypes(fromType: string, toType: string): string[] {
   return distinctEdgeTypes(

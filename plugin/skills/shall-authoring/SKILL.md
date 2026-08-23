@@ -77,7 +77,7 @@ Relations pointing at the node stay written on purpose. If the file does go, the
 
 A statement is one sentence; everything else belongs in the description. A statement that keeps growing — "and", "as well as", a second subject — is two nodes: split it and relate the halves. That rule is about the statement and not about the file.
 
-**How long a node is follows what the node is for.** The things a specification would have put in one row of a table — a goal, a requirement, a term, a criterion — are one claim and what makes it judgeable, and padding them buries the claim a reviewer came to read. The things that are documents in their own right are documents here too: a module design carries a walkthrough, a structure and the reasoning that settled them; an implementation task carries enough that somebody who was not in the conversation can pick it up; a record of work carries what happened. Writing one of those thin does not make it easier to approve — it makes it something nobody can build from, which is the harder failure to see and the more expensive one to fix.
+**How long a node is follows what the node is for.** The things a specification would have put in one row of a table — a goal, a requirement, a term, a criterion — are one claim and what makes it judgeable, and padding them buries the claim a reviewer came to read. The things that are documents in their own right are documents here too: a module carries its technology, its structure, its contracts at signature level and the reasoning that settled them; a work item carries its scope and its definition of done — enough that somebody who was not in the conversation can pick it up, and no method; a record of work carries what happened. Writing one of those thin does not make it easier to approve — it makes it something nobody can build from, which is the harder failure to see and the more expensive one to fix.
 
 **Where the job is written down is the starting file, and that is what to read.** `shall add-spec-node --type <Type>` names the sections that type carries and says what each one is for, and those hints are the measure: a section that says to walk the scenarios through is asking for the walkthrough, not for a sentence about one; a section that asks for a single sentence is asking for a single sentence. Give each what it asks for, and let the length be whatever that comes to.
 
@@ -91,9 +91,9 @@ Where it belongs follows where it came from. One you made while doing the work i
 
 ## 7. Don't reopen what is closed
 
-A criterion a person has closed is closed over the exact list of evidence that claimed it then. Attach one more piece of evidence and the closure lapses by arithmetic: the card comes back and somebody has to judge the whole list again. The same holds for a task somebody has called done and the reports claiming it.
+A criterion a person has closed is closed over the exact list of evidence that claimed it then. Attach one more piece of evidence and the closure lapses by arithmetic: the card comes back and somebody has to judge the whole list again. The same holds for a work item somebody has called done and the reports claiming it.
 
-So before you add evidence against a closed criterion, or a report against a finished task, ask the user whether reopening it is what they want — and if the answer is yes, say plainly that the closure will have to be made again.
+So before you add evidence against a closed criterion, or a report against a finished work item, ask the user whether reopening it is what they want — and if the answer is yes, say plainly that the closure will have to be made again.
 
 ## 8. Say what you did not touch
 
@@ -112,17 +112,17 @@ When you deliberately leave a neighboring node alone that a reader would expect 
 
 In the plan band, four more:
 
-- **A module says, in its own words, which decision it keeps to itself.** The decision is the boundary's justification, whatever arrangement the design chose: a module that can name what it hides stands, and one that cannot will be cut again the first time the unnamed decision changes.
-- **A task says what is finished when it is done**, never how to do it and never which files it touches. Paths, classes and functions are what the work turns up while it is being done; written into the plan they are wrong before the first turn of work ends. The one exception is a person asking for them in so many words.
-- **A task aims at one criterion, or at none.** The canon lets you write two `TARGETS` lines and `shall check` now reports it as a hole to fix, because a task with two aims closes neither on its own.
-- **A task no `ModuleDesign` `ALLOCATES` is a task the plan dropped.** It is neither an orphan nor a gap nor red — its own `TARGETS` line holds it to the graph — so nothing anywhere will tell you. Draw the module's line yourself.
+- **A module names its technology by its standard names, and its contracts at signature level.** The runtime, the language, the storage and the core libraries are written as the world calls them — localStorage is localStorage — and what the module exposes is written as name, inputs, outputs and errors. A function body, pseudocode or a list of files is the repository's and is not written here; a figure of speech where a technology should stand is a decision withheld.
+- **A work item says what exists when it is done and how that is observed** — its scope and its definition of done — and never the method: no files, no functions, no procedure. The method is the work's, decided after the code has been read. The one exception is a person asking for paths in so many words.
+- **A work item targets none, one or several criteria.** A structural item targets none and is done when a person closes the completion report claiming it; a functional item targets the criteria its definition of done makes judgeable. A definition of done is never the criterion's sentence again.
+- **A work item no `Module` `ALLOCATES` is an orphan.** `ALLOCATES` into it is the one relation that holds it — its own `TARGETS` holds nothing — so `shall check` reports it, and the fix is the module's line, never the work item's.
 
 ## 10. The CLI contract
 
 | Command | What it answers |
 |---|---|
-| `shall status [--scope <path>]… [--json]` | every node with its color and the reason, the problem sentence a rule wrote against it, a standing rejection's rationale in full, a criterion's open/closed mark, a task's blocked/ready/done, a deletion proposal, and the relations written in its file |
-| `shall board [--json]` | two lists: **Fix Spec** (every red node — a person's rejection first, rationale whole, then the seams the grammar found) and **Implement** (tasks ready to start) |
+| `shall status [--scope <path>]… [--json]` | every node with its color and the reason, the problem sentence a rule wrote against it, a standing rejection's rationale in full, a criterion's open/closed mark, a work item's blocked/ready/done (`workItemState`), a deletion proposal, and the relations written in its file |
+| `shall board [--json]` | two lists: **Fix Spec** (every red node — a person's rejection first, rationale whole, then the seams the grammar found) and **Implement** (work items ready to start) |
 | `shall check [--scope <path>]… [--json]` | the compiler: a count line first — `N nodes and M relations under <root>[, in <scope>]`, counted over the whole project even under a scope, and never a finding — then `file — sentence` per finding: problems (files the graph refused), gaps (an id nothing answers to, a node no live anchor holds, a rule of the graph broken), notes (valid but not canonical) |
 | `shall add-spec-node --type <Type> [--json]` | a starting file at the node's own path, with the next free id; the path is the first line of output, alone |
 | `shall log <kind> <summary> [--refs <id,id>] [--json]` | yes or no, and nothing else: the daemon appends one line to the project's Activity Feed. `kind` is one of `specify_done`, `plan_done`, `work_done`, `raise_landed`, and any other word is refused with that list. `--refs` takes node ids, as ids separated by commas. A process calls it once at its end, where its spine says, and the feed is never read back — there is no command that prints it |

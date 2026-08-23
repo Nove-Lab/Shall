@@ -8,12 +8,12 @@ import type { RefusedFile, SpecGraph } from "../store/file-store.js";
 import { closureVerdictOf } from "./closure.js";
 import { cyclicOf, cyclicSentence } from "./plan-seams.js";
 import {
-  isClosableTask,
+  isClosableWorkItem,
   prematureAddressOf,
   prematureSentence,
-  taskStateOf,
+  workItemStateOf,
   type ColorAt,
-} from "./task-state.js";
+} from "./work-item-state.js";
 import {
   type ColorContext,
   colorContextOf,
@@ -52,7 +52,7 @@ import {
 
 /**
  * One node that has a colour, the one word for why, what the two judgement
- * books say about it, and — for a closure subject, the criterion or the task —
+ * books say about it, and — for a closure subject, the criterion or the work item —
  * whether it is met.
  */
 export interface ReviewStatus {
@@ -88,7 +88,7 @@ export interface ReviewStatus {
    * A SUBJECT LEFT OPEN IS NOT A REJECTION OF THAT SUBJECT, and it does not
    * arrive here: a rejection-ledger record that carries a claimant map is a
    * judgement about the list — the evidence claiming a criterion, the work
-   * addressing a task — and lives in `leftOpen` below, so this field is null
+   * addressing a work item — and lives in `leftOpen` below, so this field is null
    * for it and the node's colour is untouched by it.
    *
    * REQUIRED AND NULLABLE, NEVER OPTIONAL, for the reason written above.
@@ -96,7 +96,7 @@ export interface ReviewStatus {
   rejection: { by: string; at: string; rationale: string } | null;
   /**
    * Whether a closure subject is satisfied — a criterion met on its evidence, a
-   * task done on the reports claiming it — and null for every other type,
+   * work item done on the reports claiming it — and null for every other type,
    * because no other type is a thing that can be met. `CLOSURE_KINDS` in
    * `core/graph` is the table of which two those are.
    *
@@ -112,7 +112,7 @@ export interface ReviewStatus {
   closure: "open" | "closed" | null;
   /**
    * The person's STANDING word that this subject is not met by what claims it
-   * now — the evidence over a criterion, the work over a task — with the
+   * now — the evidence over a criterion, the work over a work item — with the
    * reason: the other exit from the review queue, beside closing. Null when
    * nobody has said so about this list, when the word lapsed (the subject or
    * the list moved), or when the node is no closure subject at all. A closed
@@ -123,24 +123,24 @@ export interface ReviewStatus {
    */
   leftOpen: { by: string; at: string; rationale: string } | null;
   /**
-   * WHETHER THIS IMPLEMENTATION TASK CAN BE PICKED UP — blocked, ready or done
+   * WHETHER THIS IMPLEMENTATION WORK ITEM CAN BE PICKED UP — blocked, ready or done
    * — and null for every type that is not one, because the question does not
    * apply to them.
    *
-   * IT IS THE BOARD'S OWN ANSWER AND NOT A SECOND OPINION. `task-state.ts` says
-   * which word a task wears, the Task Board's Implement column is exactly the
+   * IT IS THE BOARD'S OWN ANSWER AND NOT A SECOND OPINION. `work-item-state.ts` says
+   * which word a work item wears, the Work Board's Implement column is exactly the
    * `ready` ones, and this field is what lets the Spec plane draw the same
-   * answer beside the task's id without asking a different question.
+   * answer beside the work item's id without asking a different question.
    *
    * REQUIRED AND NULLABLE, NEVER OPTIONAL, for the reason written above.
    */
-  taskState: "blocked" | "ready" | "done" | null;
+  workItemState: "blocked" | "ready" | "done" | null;
   /**
    * THE SENTENCE A RULE OF THE GRAPH WROTE AGAINST THIS NODE, when its red came
    * from one that names other nodes — the aim rule (`off-target`), which needs
-   * the log, the task and the claims spelled out to be acted on, the loop rule
+   * the log, the work item and the claims spelled out to be acted on, the loop rule
    * (`cyclic`), which has to recite the way round, and the blocked-address rule
-   * (`premature`), which names the task whose turn has not come. The panel
+   * (`premature`), which names the work item whose turn has not come. The panel
    * could not compose any of them from the one node it holds.
    * Null for every other reason: an orphan's sentence is the anchor phrase the
    * panel already composes from the type, and the books' reasons carry their
@@ -195,7 +195,7 @@ function problemFor(
 
 /**
  * ONE REFERRER'S LINE ABOUT AN ID NO FILE NAMES — the sentence `shall check`
- * files under that referrer, said once here so the Task Board can say the same
+ * files under that referrer, said once here so the Work Board can say the same
  * words. It is per referrer and not per id: the subject of the sentence is the
  * file that still points at the hole, which is the file somebody opens.
  */
@@ -215,8 +215,8 @@ export function reviewGraph(
   // once for themselves and once again in here.
   context: ColorContext = colorContextOf(graph, ledgers),
 ): GraphReview {
-  // The colour of any node, computed once per id — the chain above a task is
-  // walked per task and the same requirement sits above many of them.
+  // The colour of any node, computed once per id — the chain above a work item is
+  // walked per work item and the same requirement sits above many of them.
   const settled = new Map<string, "red" | "yellow" | "green" | null>();
   const colorAt: ColorAt = (id) => {
     const held = settled.get(id);
@@ -235,22 +235,22 @@ export function reviewGraph(
 
   for (const node of graph.nodes) {
     let verdict = colorOf(livingSubject(node), context);
-    // THE NINTH QUESTION — work logged under a task whose turn has not come —
+    // THE NINTH QUESTION — work logged under a work item whose turn has not come —
     // is asked here and not inside `colorOf`, because it reads the addressed
-    // task's STATE, which reads other nodes' colours; the base chain answers
+    // work item's STATE, which reads other nodes' colours; the base chain answers
     // one node from its own file and the books. Only a node the chain left
     // unred is asked, so every deeper red keeps its own sentence.
-    const blockedTaskId =
+    const blockedWorkItemId =
       verdict !== null && verdict.color !== "red"
         ? prematureAddressOf(node, context, colorAt)
         : null;
-    if (blockedTaskId !== null) {
+    if (blockedWorkItemId !== null) {
       verdict = { color: "red", reason: "premature" };
     }
     // The memo is seeded by the loop that just did the work: `colorAt` asked
     // about a node this pass has already coloured would otherwise run the whole
-    // chain a second time, and every task's chain runs through nodes of this
-    // very list. (The chain above a task holds no work logs, so the eighth
+    // chain a second time, and every work item's chain runs through nodes of this
+    // very list. (The chain above a work item holds no work logs, so the eighth
     // question can never be part of an answer it is itself waiting on.)
     settled.set(node.id, verdict?.color ?? null);
     if (verdict === null) {
@@ -291,12 +291,12 @@ export function reviewGraph(
         word !== null && word.kind === "left-open"
           ? { by: word.by, at: word.at, rationale: word.rationale }
           : null,
-      taskState: isClosableTask(node.type)
-        ? taskStateOf(node, context, colorAt)
+      workItemState: isClosableWorkItem(node.type)
+        ? workItemStateOf(node, context, colorAt)
         : null,
       problem:
-        blockedTaskId !== null
-          ? prematureSentence(node.id, blockedTaskId)
+        blockedWorkItemId !== null
+          ? prematureSentence(node.id, blockedWorkItemId)
           : problemFor(node, verdict.reason, context),
     });
   }

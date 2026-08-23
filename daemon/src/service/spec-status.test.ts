@@ -97,7 +97,7 @@ async function books(
   );
 }
 
-/** Goal down to a task, with a log that submits evidence for the criterion and a report for the task. */
+/** Goal down to a work item, with a log that submits evidence for the criterion and a report for the work item. */
 const NODES: readonly (readonly [string, string])[] = [
   ["Goal", "G-0001"],
   ["Actor", "A-0001"],
@@ -106,12 +106,12 @@ const NODES: readonly (readonly [string, string])[] = [
   ["SystemResponsibility", "SR-0001"],
   ["Requirement", "R-0001"],
   ["AcceptanceCriterion", "AC-0001"],
-  ["ModuleDesign", "MD-0001"],
-  ["ImplementationTask", "IT-0001"],
+  ["Module", "M-0001"],
+  ["WorkItem", "WI-0001"],
   ["Journal", "J-0001"],
   ["WorkLog", "WL-0001"],
   ["Evidence", "EV-0001"],
-  ["TaskCompletionReport", "TCR-0001"],
+  ["CompletionReport", "CR-0001"],
 ];
 
 const EDGES: readonly (readonly [string, string, string])[] = [
@@ -121,20 +121,20 @@ const EDGES: readonly (readonly [string, string, string])[] = [
   ["DERIVES_RESPONSIBILITY", "SC-0001", "SR-0001"],
   ["REQUIRES", "SR-0001", "R-0001"],
   ["HAS_CRITERION", "R-0001", "AC-0001"],
-  ["IS_REALIZED_BY", "SR-0001", "MD-0001"],
-  ["ALLOCATES", "MD-0001", "IT-0001"],
-  ["TARGETS", "IT-0001", "AC-0001"],
+  ["IS_REALIZED_BY", "SR-0001", "M-0001"],
+  ["ALLOCATES", "M-0001", "WI-0001"],
+  ["TARGETS", "WI-0001", "AC-0001"],
   ["LOGS", "J-0001", "WL-0001"],
-  ["ADDRESSES", "WL-0001", "IT-0001"],
+  ["ADDRESSES", "WL-0001", "WI-0001"],
   ["SUBMITS", "WL-0001", "EV-0001"],
   ["CLAIMS", "EV-0001", "AC-0001"],
-  ["SUBMITS", "WL-0001", "TCR-0001"],
-  ["CLAIMS", "TCR-0001", "IT-0001"],
+  ["SUBMITS", "WL-0001", "CR-0001"],
+  ["CLAIMS", "CR-0001", "WI-0001"],
 ];
 
 const EVERY_ID = NODES.map(([, id]) => id);
 
-/** The whole graph, every node approved: one task ready, one criterion claimed. */
+/** The whole graph, every node approved: one work item ready, one criterion claimed. */
 async function greenProject(): Promise<RegistryProject> {
   const project = await newProject();
   for (const [type, id] of NODES) {
@@ -143,8 +143,8 @@ async function greenProject(): Promise<RegistryProject> {
   for (const [type, fromId, toId] of EDGES) {
     await edge(project, type, fromId, toId);
   }
-  // The chain first, the log second: until the chain is green the task is
-  // blocked, and a log under a blocked task is red (`premature`).
+  // The chain first, the log second: until the chain is green the work item is
+  // blocked, and a log under a blocked work item is red (`premature`).
   await approveSpecNodes({
     projectId: project.id,
     ids: EVERY_ID.filter((id) => id !== "WL-0001"),
@@ -224,7 +224,7 @@ describe("the folder it answers for", () => {
         rejection: null,
         closure: null,
         leftOpen: null,
-        taskState: null,
+        workItemState: null,
         problem: null,
         type: "Requirement",
         band: "Intent",
@@ -311,39 +311,39 @@ describe("what one node's row carries", () => {
       rationale: "It says nothing about the empty case.",
     });
 
-    // The refusal cascades: with the criterion refused the chain over IT-0001
-    // is no longer green, the task is blocked, and the work logged under it is
+    // The refusal cascades: with the criterion refused the chain over WI-0001
+    // is no longer green, the work item is blocked, and the work logged under it is
     // early — which is a sentence the panel could not compose from one node.
     const log = await statusOf(project, "WL-0001");
     assert.equal(log.color, "red");
     assert.equal(log.reason, "premature");
     assert.equal(
       log.problem,
-      "WL-0001 addresses IT-0001, and IT-0001 is blocked — work is logged only under a task whose turn has come: its chain read and agreed, and everything it waits on finished.",
+      "WL-0001 addresses WI-0001, and WI-0001 is blocked — work is logged only under a work item whose turn has come: its chain read and agreed, and everything it waits on finished.",
     );
   });
 
-  test("a criterion's closure and a task's state are the second axis, not a fourth colour", async () => {
+  test("a criterion's closure and a work item's state are the second axis, not a fourth colour", async () => {
     const project = await greenProject();
     const open = await statusOf(project, "AC-0001");
     assert.equal(open.closure, "open");
-    assert.equal(open.taskState, null);
-    const ready = await statusOf(project, "IT-0001");
+    assert.equal(open.workItemState, null);
+    const ready = await statusOf(project, "WI-0001");
     assert.equal(ready.closure, "open");
-    assert.equal(ready.taskState, "ready");
+    assert.equal(ready.workItemState, "ready");
     // A type that is no closure subject says so with its own nulls.
     assert.equal((await statusOf(project, "G-0001")).closure, null);
 
     await acceptSpecClosure({ projectId: project.id, id: "AC-0001" });
-    await acceptSpecClosure({ projectId: project.id, id: "IT-0001" });
+    await acceptSpecClosure({ projectId: project.id, id: "WI-0001" });
     const closed = await statusOf(project, "AC-0001");
     assert.equal(closed.closure, "closed");
     // Still green: a subject can be agreed with and met, and the two answers
     // are counted out of two different books.
     assert.equal(closed.color, "green");
-    const done = await statusOf(project, "IT-0001");
+    const done = await statusOf(project, "WI-0001");
     assert.equal(done.closure, "closed");
-    assert.equal(done.taskState, "done");
+    assert.equal(done.workItemState, "done");
   });
 
   test("a deletion an agent proposed is carried, and turns the node yellow", async () => {
@@ -405,7 +405,7 @@ describe("the order the rows arrive in", () => {
       ["Journal", "J-0001"],
       ["Term", "T-0002"],
       ["Actor", "A-0001"],
-      ["ModuleDesign", "MD-0001"],
+      ["Module", "M-0001"],
       ["Goal", "G-0001"],
       ["Term", "T-0001"],
     ] as const) {
@@ -414,7 +414,7 @@ describe("the order the rows arrive in", () => {
     const status = await statusSpec(project.path);
     assert.deepEqual(
       status.nodes.map((row) => row.id),
-      ["T-0001", "T-0002", "G-0001", "A-0001", "MD-0001", "J-0001"],
+      ["T-0001", "T-0002", "G-0001", "A-0001", "M-0001", "J-0001"],
     );
     assert.deepEqual(
       status.nodes.map((row) => row.band),
@@ -454,16 +454,16 @@ describe("a scope", () => {
       (await statusSpec(project.path, ["execution"])).nodes.map(
         (row) => row.id,
       ),
-      ["J-0001", "WL-0001", "EV-0001", "TCR-0001"],
+      ["J-0001", "WL-0001", "EV-0001", "CR-0001"],
     );
     assert.deepEqual(
       (
         await statusSpec(project.path, [
           "intent/Goal/G-0001.md",
-          "plan/ImplementationTask",
+          "plan/WorkItem",
         ])
       ).nodes.map((row) => row.id),
-      ["G-0001", "IT-0001"],
+      ["G-0001", "WI-0001"],
     );
   });
 
@@ -628,7 +628,7 @@ describe("the board, reached by path", () => {
     assert.equal(board.root, project.path);
     assert.deepEqual(
       board.implement.map((row) => row.id),
-      ["IT-0001"],
+      ["WI-0001"],
     );
     assert.deepEqual(board.fixSpec, []);
   });

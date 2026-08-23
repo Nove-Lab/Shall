@@ -26,11 +26,12 @@
  *
  * A NODE HELD BY A LINE IT DRAWS ITSELF READS THAT SENTENCE THE OTHER WAY
  * ROUND. A Decision is anchored by its own AFFECTS, an Evidence and a
- * TaskCompletionReport by their own CLAIMS, so there is no parent to wait for
- * and the line the check is asking for belongs in the file just written. An
- * ImplementationTask and a WorkLog are held either way — by the module's
- * ALLOCATES or the journal's LOGS above them, or by their own TARGETS or
- * ADDRESSES — so for those two the sentence names a choice rather than a wait.
+ * CompletionReport by their own CLAIMS, so there is no parent to wait for
+ * and the line the check is asking for belongs in the file just written. A
+ * WorkLog is held either way — by the journal's LOGS above it, or by its own
+ * ADDRESSES — so for it the sentence names a choice rather than a wait; a
+ * WorkItem is held by a module's ALLOCATES alone, so for it the sentence names
+ * the module's file.
  */
 
 import { spawnSync } from "node:child_process";

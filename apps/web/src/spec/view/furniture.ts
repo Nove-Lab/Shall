@@ -69,15 +69,15 @@ export type Signal = "red" | "yellow" | "green";
 export type Closure = "open" | "closed";
 
 /**
- * WHETHER A TASK IS SOMEBODY'S TO START, AS A WORD — the third thing a card can
+ * WHETHER A WORK ITEM IS SOMEBODY'S TO START, AS A WORD — the third thing a card can
  * carry, and the same bargain the two above make: the card holds the word and
  * the shape that draws it lives beside the components in `review-parts.tsx`.
  *
- * IT IS NOT A FOURTH SIGNAL EITHER. The square says whether the task was read
+ * IT IS NOT A FOURTH SIGNAL EITHER. The square says whether the work item was read
  * and agreed to; this says whether the work it names can be picked up now. Only
- * `ImplementationTask` has one at all.
+ * `WorkItem` has one at all.
  */
-export type TaskState = "blocked" | "ready" | "done";
+export type WorkItemState = "blocked" | "ready" | "done";
 
 /**
  * What one card is drawn from.
@@ -122,13 +122,13 @@ export type CardNodeData = {
    */
   readonly closure: Closure | null;
   /**
-   * The word this task wears — and `null` for every card that is not a task.
+   * The word this work item wears — and `null` for every card that is not a work item.
    *
    * REQUIRED AND NULLABLE for the reason the two above are, and here the null
-   * carries the same kind of fact: nothing but an `ImplementationTask` is a
+   * carries the same kind of fact: nothing but an `WorkItem` is a
    * thing that can be blocked, ready or done.
    */
-  readonly taskState: TaskState | null;
+  readonly workItemState: WorkItemState | null;
   /** The node that was clicked — one card on the board, or none. */
   readonly picked: boolean;
   /** One hop from the picked card, whichever way the relation points. */
@@ -608,7 +608,7 @@ export function cardPieces(
   byId: ReadonlyMap<string, SpecNode>,
   signalById: ReadonlyMap<string, Signal>,
   closureById: ReadonlyMap<string, Closure>,
-  taskStateById: ReadonlyMap<string, TaskState>,
+  workItemStateById: ReadonlyMap<string, WorkItemState>,
   highlight: Highlight,
 ): CardPiece[] {
   const geometry = view === "grid" ? GEOMETRY.grid : GEOMETRY.graph;
@@ -637,11 +637,11 @@ export function cardPieces(
         // criterion it colours, so the map's silence is a fact about the type
         // and not a fact the canvas had to work out.
         closure: closureById.get(node.id) ?? null,
-        // A NODE WITH NO ENTRY IS NOT A TASK, the same bargain the mark above
-        // makes. A task carries BOTH answers on the wire — its closure and its
+        // A NODE WITH NO ENTRY IS NOT A WORK ITEM, the same bargain the mark above
+        // makes. A work item carries BOTH answers on the wire — its closure and its
         // word — and the card draws the word, because "Done" says the closure
         // and says what it means for work.
-        taskState: taskStateById.get(node.id) ?? null,
+        workItemState: workItemStateById.get(node.id) ?? null,
         // The three questions the highlight answers, asked once per card here so
         // that no component has to know how membership is decided. `dimmed` is
         // the complement of the neighbourhood and not of the two flags above it:

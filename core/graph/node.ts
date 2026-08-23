@@ -51,7 +51,7 @@ export interface SpecNode {
   /**
    * Whether this finding is stopping the work that found it — a Finding's key
    * and no other type's. It is the author's judgement and not a lock: nothing
-   * computed reads it, no gate consults it, and a task is neither blocked nor
+   * computed reads it, no gate consults it, and a work item is neither blocked nor
    * freed by one. Absent and `false` are one state, so only `true` is ever
    * written; a finding that is not blocking says nothing about it.
    */

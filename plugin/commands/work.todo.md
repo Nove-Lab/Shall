@@ -1,5 +1,5 @@
 ---
-description: Survey what a Shall project needs done — the findings nobody has answered, what the specification needs fixed, the tasks ready to start and how much is waiting on a person — and write nothing at all.
+description: Survey what a Shall project needs done — the findings nobody has answered, what the specification needs fixed, the work items ready to start and how much is waiting on a person — and write nothing at all.
 argument-hint: (takes no argument)
 disable-model-invocation: true
 allowed-tools: Bash(shall:*), Read, Skill

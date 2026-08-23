@@ -50,7 +50,7 @@ import {
  *
  * THREE BOOKS AND ONE PERSON. Approve says the wording is right, reject says
  * it is not and what should be there instead, accept says a subject is met on
- * what claims it — a criterion on named evidence, a task on named work. All
+ * what claims it — a criterion on named evidence, a work item on named work. All
  * three are the person's own act — no procedure here is reachable from an
  * agent, whose contract is file-only by architecture,
  * and every one of them refuses outright rather than half-writing when a book
@@ -148,7 +148,7 @@ export async function rejectSpecNode(input: {
   }
   if (status !== undefined && status.reason === "off-target") {
     throw invalid(
-      `${status.problem ?? `${input.id} is outside its task's aim`} Fix that first; a rejection is a judgement on a node the graph holds together.`,
+      `${status.problem ?? `${input.id} is outside its work item's aim`} Fix that first; a rejection is a judgement on a node the graph holds together.`,
     );
   }
   if (status !== undefined && status.reason === "cyclic") {
@@ -158,7 +158,7 @@ export async function rejectSpecNode(input: {
   }
   if (status !== undefined && status.reason === "premature") {
     throw invalid(
-      `${status.problem ?? `${input.id} addresses a blocked task`} Fix that first; a rejection is a judgement on a node the graph holds together.`,
+      `${status.problem ?? `${input.id} addresses a blocked work item`} Fix that first; a rejection is a judgement on a node the graph holds together.`,
     );
   }
 
@@ -319,7 +319,7 @@ export interface AcceptedClosure {
  * A refusal is a sentence a person reads at the moment they are stopped, and
  * the two subjects are stopped for the same reasons in different words: one is
  * about evidence shown against a criterion, the other about work done against a
- * task. Two whole sentences side by side are a thing a reader can check against
+ * work item. Two whole sentences side by side are a thing a reader can check against
  * the screen; a sentence built out of nouns picked from a table is not — which
  * is why one unread claimant and several are two whole sentences each, not one
  * with its verbs picked inline.
@@ -351,17 +351,17 @@ const WORDS: Readonly<
     rationaleRequired:
       "A rationale is required — what the evidence does not show, and what would.",
   },
-  task: {
+  workItem: {
     nothingClaims: (id) =>
-      `Nothing claims ${id} yet — a task is closed, or left open, over the completion reports attached to it, and there is none. A TaskCompletionReport draws a CLAIMS relation at the task in its own file.`,
+      `Nothing claims ${id} yet — a work item is closed, or left open, over the completion reports attached to it, and there is none. A CompletionReport draws a CLAIMS relation at the work item in its own file.`,
     unreadOne: (id, claimant) =>
-      `${claimant} claims ${id} and is not approved yet — a task is closed, or left open, only over reports a person has read. Approve it first (or reject it and have it fixed), and the task comes back to the queue.`,
+      `${claimant} claims ${id} and is not approved yet — a work item is closed, or left open, only over reports a person has read. Approve it first (or reject it and have it fixed), and the work item comes back to the queue.`,
     unreadMany: (id, claimants) =>
-      `${claimants} claim ${id} and are not approved yet — a task is closed, or left open, only over reports a person has read. Approve them first (or reject them and have them fixed), and the task comes back to the queue.`,
+      `${claimants} claim ${id} and are not approved yet — a work item is closed, or left open, only over reports a person has read. Approve them first (or reject them and have them fixed), and the work item comes back to the queue.`,
     wordingRefused: (id) =>
-      `${id} carries a standing rejection of its own wording, and a task is closed or left open only once its wording stands — withdraw that rejection first, or leave it to lapse when the task is fixed.`,
+      `${id} carries a standing rejection of its own wording, and a work item is closed or left open only once its wording stands — withdraw that rejection first, or leave it to lapse when the work item is fixed.`,
     unapproved: (id) =>
-      `${id} is not approved yet — a task is closed, or left open, only once a person has agreed to what it asks for, and until then there is nothing settled for the work to be done against. Approve it, and the question comes back with it.`,
+      `${id} is not approved yet — a work item is closed, or left open, only once a person has agreed to what it asks for, and until then there is nothing settled for the work to be done against. Approve it, and the question comes back with it.`,
     rationaleRequired:
       "A rationale is required — what the report does not show, and what would.",
   },
@@ -390,7 +390,7 @@ function subjectFor(
   const kind = closureKindOf(subject.type);
   if (kind === null) {
     throw invalid(
-      `${id} is ${articleFor(subject.type)} ${subject.type}, and only an AcceptanceCriterion or an ImplementationTask is a thing that can be closed or left open — evidence is shown against a criterion, work against a task, and against nothing else.`,
+      `${id} is ${articleFor(subject.type)} ${subject.type}, and only an AcceptanceCriterion or a WorkItem is a thing that can be closed or left open — evidence is shown against a criterion, work against a work item, and against nothing else.`,
     );
   }
   const words = WORDS[kind.kind];
@@ -400,7 +400,7 @@ function subjectFor(
   // same thing in one word — approve it first.
   //
   // IT USED NOT TO BE ASKED AT ALL, and the gap showed up on a screen: a green,
-  // closed task was edited, went yellow, and could still be closed — leaving a
+  // closed work item was edited, went yellow, and could still be closed — leaving a
   // yellow node wearing a green Done. "Met" is a statement about words somebody
   // has agreed to, so there has to be an agreement before there can be one.
   const status = loadedProject.statuses.get(id);
@@ -457,7 +457,7 @@ function projected(record: {
 
 /**
  * A person closes a subject — a criterion over the evidence attached to it, a
- * task over the work — the third book, and the only judgement in Shall that is
+ * work item over the work — the third book, and the only judgement in Shall that is
  * about a list of nodes at once.
  *
  * IT RECORDS VERSIONS AND NOT NAMES. The subject's hash and every claimant's

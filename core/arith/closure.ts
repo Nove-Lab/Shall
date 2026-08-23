@@ -15,12 +15,12 @@ import {
 
 /**
  * Whether a thing a person can CLOSE is closed — a criterion satisfied by the
- * evidence claiming it, a task done by the reports that claim to verify it —
+ * evidence claiming it, a work item done by the reports that claim to verify it —
  * or still open, and whether anybody has yet said which.
  *
  * TWO SUBJECTS, ONE ARITHMETIC. `core/graph/closure-kinds.ts` says which types
  * are closed and by which relation; everything below reads that table off the
- * subject in hand, so the criterion and the task are not two code paths that
+ * subject in hand, so the criterion and the work item are not two code paths that
  * could drift but one that is asked a different question about its list.
  *
  * COLOUR AND CLOSURE ARE TWO AXES AND NEITHER IMPLIES THE OTHER. A colour says
@@ -62,7 +62,7 @@ import {
  *  · EVERY CLAIMANT, because a claim nobody has read is not yet a claim a
  *    person can judge the subject on; and
  *  · THE SUBJECT ITSELF, because "met" is a statement about words somebody has
- *    agreed to. A task whose scope nobody has read yet cannot be called done —
+ *    agreed to. A work item whose scope nobody has read yet cannot be called done —
  *    done against WHAT? — and a criterion whose demand is still being edited
  *    cannot be shown to be satisfied. Closing over an unapproved subject
  *    produced exactly the state that made this clause necessary: a yellow node
@@ -92,8 +92,8 @@ import {
  *
  * The relation that makes the list is read here rather than named as a
  * constant, because the pairing lives in `core/graph/closure-kinds.ts` —
- * `CLAIMS` into a criterion from Evidence, `CLAIMS` into a task from a
- * TaskCompletionReport.
+ * `CLAIMS` into a criterion from Evidence, `CLAIMS` into a work item from a
+ * CompletionReport.
  */
 function kindAt(id: string, context: ColorContext): ClosureKind | null {
   const node = context.nodes.get(id);
@@ -102,8 +102,8 @@ function kindAt(id: string, context: ColorContext): ClosureKind | null {
 
 /**
  * Every living node whose own file draws the claiming line at this subject, in
- * id order — the Evidence that CLAIMS a criterion, the TaskCompletionReport that
- * CLAIMS a task.
+ * id order — the Evidence that CLAIMS a criterion, the CompletionReport that
+ * CLAIMS a work item.
  *
  * READ OFF THE INCOMING EDGES, because both claims are the CLAIMANT's line and
  * never the subject's — a claimant announces itself, and the subject's file
@@ -113,7 +113,7 @@ function kindAt(id: string, context: ColorContext): ClosureKind | null {
  *
  * NOTHING FILTERS THE CLAIMANT'S TYPE, and that is not an omission: the loader
  * refuses a file whose relation the canon does not allow, so only an Evidence
- * can draw `CLAIMS` at a criterion and only a TaskCompletionReport at a task. A
+ * can draw `CLAIMS` at a criterion and only a CompletionReport at a work item. A
  * filter here would be a second copy of the grammar.
  */
 export function claimantsOf(
@@ -203,7 +203,7 @@ function subjectNowOf(subject: SpecNode, context: ColorContext): SubjectNow {
 }
 
 // THREE CLAUSES, AND THE FIRST IS THE KIND. A record says which thing it
-// closed; a task's record filed under a criterion's id closes nothing, so a
+// closed; a work item's record filed under a criterion's id closes nothing, so a
 // hand-edit that moves a record cannot close the wrong thing by matching a
 // hash it was never taken over.
 function acceptanceStands(record: AcceptanceRecord, now: SubjectNow): boolean {
@@ -308,7 +308,7 @@ export function closureVerdictOf(
 
 /**
  * The subject's mark: closed when an acceptance stands for it, open otherwise —
- * a criterion met on its evidence, a task done on the reports that claim it.
+ * a criterion met on its evidence, a work item done on the reports that claim it.
  *
  * OPEN IS THE ANSWER FOR EVERYTHING ELSE — no record at all, a lapsed one, a
  * subject left open with a reason, a subject nobody has looked at. There is no

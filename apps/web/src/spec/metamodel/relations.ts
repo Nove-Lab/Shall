@@ -6,7 +6,7 @@ import type { Incidence } from "../view/edges";
  *
  * THE PAIR IS THE UNIT AND NOT THE NAME. `EDGE_GRAMMAR` has 64 rows over 29
  * numbered edge types, and three of its pairs carry two names each —
- * `ModuleDesign → Interface` is EXPOSES and CONSUMES, `Requirement →
+ * `Module → Interface` is EXPOSES and CONSUMES, `Requirement →
  * Requirement` is DEPENDS_ON and CONFLICTS_WITH, `Decision → Term` is AFFECTS
  * and MENTIONS. Drawn per row those would be two lines on one route, one
  * printed over the other; drawn per pair they are one line whose label names

@@ -33,8 +33,8 @@ import { writeByRename } from "./atomic-write.js";
  * WHAT EARNS A PARAGRAPH HERE is a rule NOTHING WILL CATCH. Every other line on
  * this page guards something the doors or the check would otherwise let past —
  * a colour worked out by hand, a file removed instead of proposed for removal —
- * and the task rule is the newest of them: a task held by its own TARGETS line
- * is anchored, so no check, no door and no board will ever say a word about it.
+ * and the work-item rule is the one the check catches only half of: the anchor
+ * it now reports, the concreteness it cannot read.
  *
  * Only the Claude adapter exists today, which is why this lands under
  * `.claude`. An agent that reads AGENTS.md is not covered yet.
@@ -79,17 +79,18 @@ that says which relations that type may draw, which keys its own type carries
 and what its body might hold. A relation is written in the file it LEAVES, so
 anchoring a new child means editing the child's parent.
 
-**A task hangs off a module.** Never write an \`ImplementationTask\` that no
-\`ModuleDesign\` \`ALLOCATES\` — a task its criterion alone holds is anchored, so
-nothing will flag it, and a task with no design behind it is a stored backlog
-rather than a plan.
+**A work item hangs off a module, and says what, not how.** A \`WorkItem\` is
+held to the graph by the \`Module\` that \`ALLOCATES\` it and by nothing else —
+\`shall check\` reports one no module holds as an orphan. Its body says what
+exists when it is done and never which files or functions; technology is
+named in the module, by its standard names, and never in intent.
 
 Approving, rejecting and closing are a person's, made in the browser: \`shall\`
 with no arguments opens it. There is no \`shall approve\`, and \`shall log\` cannot
 write a judgment.
 
 Working on the specification itself? \`/shall:specify\` runs the elicitation and
-\`/shall:plan\` turns an approved intent into modules, contracts and tasks. Doing
+\`/shall:plan\` turns an approved intent into modules, contracts and work items. Doing
 the work? \`/shall:work\` takes a turn of it from the board and reports it as a
 journal, and \`/shall:raise\` is where a doubt about the specification goes — it
 explores, says what it found, and records a finding or a decision you dictated.

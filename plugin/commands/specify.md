@@ -53,7 +53,7 @@ Read the status you got in step 0.
 
 **Under `--auto` there is nothing to ask here.** Carrying a phase to its approval is what the end of this run does anyway, and it does it for everything at once. So name what is yellow, enter where the request lands, and say that the one approval at the end covers the older work as well as this run's.
 
-One node sits in the intent band and is not this process's: **an `Assumption` a `ModuleDesign` hangs off.** The canon gives an assumption no layer of its own and files every one of them with intent, so the band does not say whose it is — what it hangs off does, and a module's belongs to `/shall:plan`. Leave it standing.
+One node sits in the intent band and is not this process's: **an `Assumption` a `Module` hangs off.** The canon gives an assumption no layer of its own and files every one of them with intent, so the band does not say whose it is — what it hangs off does, and a module's belongs to `/shall:plan`. Leave it standing.
 
 **No nodes in the intent band → new mode.** The specification does not exist yet. Enter at phase 1 and run the phases in order.
 

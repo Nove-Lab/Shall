@@ -45,7 +45,7 @@ import { reviewGraph, type ReviewStatus } from "./review.js";
  *    or say what is wrong with it.
  *  - *AC closure* — a criterion is green and open and approved evidence now
  *    claims to satisfy it; decide whether it does.
- *  - *Task closure* — the same question over the other closure subject: a task
+ *  - *Work item closure* — the same question over the other closure subject: a work item
  *    is green and open and approved completion reports claim it; decide
  *    whether the work they report satisfies it.
  *
@@ -83,13 +83,14 @@ import { reviewGraph, type ReviewStatus } from "./review.js";
  * AN EDGE IS WALKED FORWARD DOWN THE ORDER AND BACKWARD UP IT, and that rule
  * replaces the anchor table's. Almost every relation in the canon points from
  * the container to the contained, so "outgoing" and "downward" are usually the
- * same direction — except where the canon anchors a node by an edge it draws
- * ITSELF: an `Evidence` is held by the `CLAIMS` it points at, a task by the
- * `TARGETS` it aims. Those arrows point at the PARENT and are read backwards.
- * The anchor table used to answer which ones they were, and it was exact for as
- * long as no type outranked what it pointed at; a `Decision` is the first that
- * does, so the question moved to the order, which is where the intent was all
- * along. See `runsDownward`.
+ * same direction — except where a node draws the edge at its parent ITSELF: an
+ * `Evidence` is held by the `CLAIMS` it points at, and a work item aims its
+ * `TARGETS` at the criterion above it (an aim, not a hold, since 2026-08-23 —
+ * the module's `ALLOCATES` holds it). Those arrows point at the PARENT and are
+ * read backwards. The anchor table used to answer which ones they were, and it
+ * was exact for as long as no type outranked what it pointed at; a `Decision`
+ * is the first that does, so the question moved to the order, which is where
+ * the intent was all along. See `runsDownward`.
  *
  * ROOTS ARE YELLOW AND ONLY YELLOW. A rejected node is not the reviewer's turn
  * any more — somebody read it, said what is wrong, and handed it back — so it
@@ -126,7 +127,7 @@ export type BundleKind =
   | "work-report"
   | "standalone-finding"
   | "ac-closure"
-  | "task-closure";
+  | "work-item-closure";
 
 /**
  * One node on a bundle's list, with everything a row needs and nothing a card
@@ -247,27 +248,27 @@ export interface AcClosureBundle {
 }
 
 /**
- * A TASK WAITING TO BE CALLED DONE, on the completion reports that claim it.
+ * A WORK ITEM WAITING TO BE CALLED DONE, on the completion reports that claim it.
  *
  * IT IS THE CRITERION'S BUNDLE WITH THE OTHER SUBJECT IN IT: the same question
  * — is this list enough — asked about reports instead of about evidence, so
  * the shape is the same shape and only the nouns move. What it adds is
- * `targets`: the criteria this task aimed to close, with their own marks,
- * because "is the task done" is a question a person answers partly by looking
+ * `targets`: the criteria this work item aimed to close, with their own marks,
+ * because "is the work item done" is a question a person answers partly by looking
  * at whether what it was for has closed. Each report row carries `submittedBy`
  * the way an evidence row does — the same thread back to the work and its
  * commits.
  */
-export interface TaskClosureBundle {
-  kind: "task-closure";
+export interface WorkItemClosureBundle {
+  kind: "work-item-closure";
   id: string;
-  taskId: string;
+  workItemId: string;
   title: string;
   since: number;
-  task: BundleMember;
-  /** Every living completion report claiming the task, id order. */
+  workItem: BundleMember;
+  /** Every living completion report claiming the work item, id order. */
   reports: EvidenceMember[];
-  /** Context only: the living criteria the task TARGETS, and where each stands. */
+  /** Context only: the living criteria the work item TARGETS, and where each stands. */
   targets: { id: string; name: string; closure: "open" | "closed" | null }[];
   /** The latest hearing per report, oldest first — the criterion bundle's rule. */
   history: { reportId: string; by: string; at: string; rationale: string }[];
@@ -278,7 +279,7 @@ export type ReviewBundle =
   | WorkReportBundle
   | StandaloneFindingBundle
   | AcClosureBundle
-  | TaskClosureBundle;
+  | WorkItemClosureBundle;
 
 /**
  * The three kinds a walk produces, and the body they share.
@@ -328,14 +329,14 @@ const SCAN_ORDER = [
   "Requirement",
   "AcceptanceCriterion",
   "Constraint",
-  "ModuleDesign",
+  "Module",
   "Interface",
   "DataSchema",
-  "ImplementationTask",
+  "WorkItem",
   "Journal",
   "WorkLog",
   "Evidence",
-  "TaskCompletionReport",
+  "CompletionReport",
   "Finding",
   "Term",
   "DomainEntity",
@@ -612,14 +613,15 @@ function byScan(scan: Scan): (a: string, b: string) => number {
  *
  * THE SCAN ORDER ANSWERS THIS AND THE ANCHOR TABLE NO LONGER DOES. For as long
  * as the canon had no type that outranked what it pointed at, `ANCHOR_RULES`
- * was an exact stand-in: every out-anchor — a task's `TARGETS`, a work log's
- * `ADDRESSES`, an evidence's and a report's `CLAIMS` — runs up the order, and
- * nothing else does. A `Decision` broke the tie. It is held by the `AFFECTS` it
- * draws, so the anchor table calls that edge parent-pointing; and it ranks above
- * everything it affects, so the order calls it containing. The order is the one
- * that carries the intent, so the two questions are separated here: the anchor
- * table says what HOLDS a node to the graph, and the scan order says what
- * CONTAINS it.
+ * was an exact stand-in: every out-anchor — a work log's `ADDRESSES`, an
+ * evidence's and a report's `CLAIMS`, and a work item's `TARGETS` while it was
+ * one — runs up the order, and nothing else does. A `Decision` broke the tie.
+ * It is held by the `AFFECTS` it draws, so the anchor table calls that edge
+ * parent-pointing; and it ranks above everything it affects, so the order calls
+ * it containing. The order is the one that carries the intent, so the two
+ * questions are separated here: the anchor table says what HOLDS a node to the
+ * graph, and the scan order says what CONTAINS it — which is also why a work
+ * item's `TARGETS` can stop holding anything and still be read backwards.
  *
  * LEVEL COUNTS AS DOWNWARD, and that is not a rounding choice. `DEPENDS_ON`,
  * `CONFLICTS_WITH`, `REFINES` and `RELATES_TO` join two nodes of one rank, and
@@ -936,7 +938,7 @@ const CLOSURE_BUNDLE: Readonly<
   Record<ClosureSubject, { readonly kind: BundleKind; readonly prefix: string }>
 > = {
   criterion: { kind: "ac-closure", prefix: "closure" },
-  task: { kind: "task-closure", prefix: "completion" },
+  workItem: { kind: "work-item-closure", prefix: "completion" },
 };
 
 /**
@@ -969,14 +971,14 @@ function hearingsOf(
   return hearings;
 }
 
-/** The living criteria a task aims to close, with where each of them stands. */
+/** The living criteria a work item aims to close, with where each of them stands. */
 function targetsOf(
   scan: Scan,
-  taskId: string,
+  workItemId: string,
 ): { id: string; name: string; closure: "open" | "closed" | null }[] {
   const targets: { id: string; name: string; closure: "open" | "closed" | null }[] =
     [];
-  for (const edge of scan.context.outgoing.get(taskId) ?? []) {
+  for (const edge of scan.context.outgoing.get(workItemId) ?? []) {
     if (edge.type !== "TARGETS" || !scan.context.living.has(edge.toId)) {
       continue;
     }
@@ -999,7 +1001,7 @@ function targetsOf(
  * EVERY CLAIMANT IS APPROVED, AND NOBODY HAS SAID A WORD ABOUT THIS LIST —
  * `closureAsks` is the whole condition, and it is the same condition for both
  * subjects. A claim nobody has read yet is not a claim a person can judge on,
- * so a criterion with a yellow piece of evidence, or a task with an unread work
+ * so a criterion with a yellow piece of evidence, or a work item with an unread work
  * log, is open and off the queue until that claimant is approved (which is what
  * brings it here); the list itself is still everything attached, so the closing
  * that follows is over all of it. The two exits are the two words, and either
@@ -1012,13 +1014,13 @@ function targetsOf(
 function closureBundleFor(
   scan: Scan,
   subject: SpecNode,
-): AcClosureBundle | TaskClosureBundle | null {
+): AcClosureBundle | WorkItemClosureBundle | null {
   const kind = closureKindOf(subject.type);
   // WHERE THE TWO AXES TOUCH IS INSIDE `closureAsks` AND NOT HERE. A subject
   // whose own words are not agreed — unapproved, edited since, refused — is not
   // asked whether it is met: there is nothing settled to be met AGAINST. This
   // used to be a rejected-only guard at this line, and the gap it left showed
-  // up on a screen as a yellow task wearing a green Done.
+  // up on a screen as a yellow work item wearing a green Done.
   if (kind === null || !closureAsks(subject, scan.context)) {
     return null;
   }
@@ -1040,14 +1042,14 @@ function closureBundleFor(
   const title = `${subject.id} ${subject.name}`;
   const since = sinceOf(scan, [subject.id, ...shown]);
 
-  if (kind.kind === "task") {
+  if (kind.kind === "workItem") {
     return {
-      kind: "task-closure",
+      kind: "work-item-closure",
       id,
-      taskId: subject.id,
+      workItemId: subject.id,
       title,
       since,
-      task: seat,
+      workItem: seat,
       reports: rows.map((row) => ({
         ...row,
         submittedBy: submittersOf(scan, row.id),
@@ -1086,8 +1088,8 @@ function seatsOf(bundle: ReviewBundle): BundleMember[] {
   switch (bundle.kind) {
     case "ac-closure":
       return [bundle.ac, ...bundle.evidence];
-    case "task-closure":
-      return [bundle.task, ...bundle.reports];
+    case "work-item-closure":
+      return [bundle.workItem, ...bundle.reports];
     default:
       return bundle.members;
   }
@@ -1097,10 +1099,10 @@ function seatsOf(bundle: ReviewBundle): BundleMember[] {
  * The two closures first, then approval, then the report, then a finding
  * nobody recorded.
  *
- * The criterion comes before the task for the reason the scan order puts
- * `AcceptanceCriterion` above `ImplementationTask`: the canon reads downwards,
- * and whether the criteria a task aimed at have closed is part of what a person
- * reads before saying the task is done. The standalone finding is last because
+ * The criterion comes before the work item for the reason the scan order puts
+ * `AcceptanceCriterion` above `WorkItem`: the canon reads downwards,
+ * and whether the criteria a work item aimed at have closed is part of what a person
+ * reads before saying the work item is done. The standalone finding is last because
  * it is the one card that decides nothing: reading it is the whole of what
  * happens there, and what would answer it is a decision somebody writes
  * afterwards.
@@ -1112,7 +1114,7 @@ function seatsOf(bundle: ReviewBundle): BundleMember[] {
  */
 const KIND_RANK: Readonly<Record<BundleKind, number>> = {
   "ac-closure": 0,
-  "task-closure": 1,
+  "work-item-closure": 1,
   "spec-approval": 2,
   "work-report": 3,
   "standalone-finding": 4,
@@ -1183,7 +1185,7 @@ export function reviewBundles(
   }
 
   // 1b. Then whatever the journals did not reach: a work log that addresses a
-  //     task with no journal logging it is still a report somebody has to read.
+  //     work item with no journal logging it is still a report somebody has to read.
   //     A finding a journal-less log recorded arrives here too, inside that
   //     log's report — recorded is recorded, whether or not a journal logged
   //     the log.
@@ -1240,7 +1242,7 @@ export function reviewBundles(
 
   // 3. Closure, on its own axis: a subject here is out of the approval queue,
   //    and what is waiting is the question of whether it is met — a criterion on
-  //    its evidence, a task on the reports that claim it. Nothing is marked
+  //    its evidence, a work item on the reports that claim it. Nothing is marked
   //    covered: closure is not approval.
   for (const node of nodes) {
     if (closureKindOf(node.type) === null) {

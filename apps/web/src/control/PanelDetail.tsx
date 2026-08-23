@@ -20,7 +20,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { ActivityFeed } from "./activity-feed/ActivityFeed";
 import { panelById } from "./panels";
 import { ReviewQueue } from "./review-queue/ReviewQueue";
-import { TaskBoard } from "./task-board/TaskBoard";
+import { WorkBoard } from "./work-board/WorkBoard";
 import { useProject } from "@/project-context";
 
 export function PanelDetail() {
@@ -64,8 +64,8 @@ export function PanelDetail() {
           nothing is written twice. */}
       {panel.id === "review-queue" ? (
         <ReviewQueue panel={panel} />
-      ) : panel.id === "task-board" ? (
-        <TaskBoard panel={panel} />
+      ) : panel.id === "work-board" ? (
+        <WorkBoard panel={panel} />
       ) : panel.id === "activity-feed" ? (
         <ActivityFeed panel={panel} />
       ) : (

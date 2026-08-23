@@ -254,8 +254,8 @@ describe("the activity feed door", () => {
       {
         at: "2026-08-21T10:00:00.000Z",
         kind: "plan_done",
-        refs: ["MD-0001", "MD-0002"],
-        summary: "Modules designed — MD 2, task 6",
+        refs: ["M-0001", "M-0002"],
+        summary: "Modules designed — MD 2, work item 6",
       },
       {
         at: "2026-08-21T11:00:00.000Z",

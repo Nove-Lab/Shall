@@ -9,7 +9,7 @@
   spec/<band>/<Type>/<id>.md   the graph: one file per node
   ledger/approvals.yaml        node id → approved hash, who, when
   ledger/rejections.yaml       node id → rejected hash, who, when, rationale
-  ledger/acceptances.yaml      criterion or task id → the hash and the list closed over
+  ledger/acceptances.yaml      criterion or work item id → the hash and the list closed over
   ledger/feed/YYYY-MM.yaml     the Activity Feed: one line per finished run, a file per month
 ```
 
@@ -17,7 +17,7 @@ Both `spec/` and `ledger/` belong in the repository: the specification and its j
 
 ## The four band folders
 
-`domain`, `intent`, `plan`, `execution`. The band is **derived from the type**, never chosen: Term and DomainEntity are domain; Goal, Actor, UseCase, Scenario, SystemResponsibility, Requirement, AcceptanceCriterion and Constraint are intent, and Assumption — the one type the canon gives no layer of its own — is filed there too; ModuleDesign, Interface, DataSchema, ImplementationTask and Decision are plan; Journal, WorkLog, Evidence, TaskCompletionReport and Finding are execution.
+`domain`, `intent`, `plan`, `execution`. The band is **derived from the type**, never chosen: Term and DomainEntity are domain; Goal, Actor, UseCase, Scenario, SystemResponsibility, Requirement, AcceptanceCriterion and Constraint are intent, and Assumption — the one type the canon gives no layer of its own — is filed there too; Module, Interface, DataSchema, WorkItem and Decision are plan; Journal, WorkLog, Evidence, CompletionReport and Finding are execution.
 
 You never have to work this out. `shall add-spec-node --type <Type>` prints the path it wrote, and that path is already the right folder.
 

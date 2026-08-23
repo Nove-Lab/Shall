@@ -218,7 +218,7 @@ describe("the acceptance ledger door", () => {
     assert.deepEqual(answer, {
       kind: "invalid",
       message:
-        "Shall emitted an acceptance ledger it could not read back — Every record in the acceptance ledger is a map of exactly by, at and one closed thing — acHash with an evidence map for a criterion, or taskHash with a reports map for a task — the map holding at least one entry, and never both — the record under AC-0001 is not.",
+        "Shall emitted an acceptance ledger it could not read back — Every record in the acceptance ledger is a map of exactly by, at and one closed thing — acHash with an evidence map for a criterion, or taskHash with a reports map for a work item — the map holding at least one entry, and never both — the record under AC-0001 is not.",
     });
     await assert.rejects(() => readFile(file, "utf8"));
   });
@@ -231,7 +231,7 @@ describe("the acceptance ledger door", () => {
       ],
       [
         "AC-0001: 3\n",
-        "Every record in the acceptance ledger is a map of exactly by, at and one closed thing — acHash with an evidence map for a criterion, or taskHash with a reports map for a task — the map holding at least one entry, and never both — the record under AC-0001 is not.",
+        "Every record in the acceptance ledger is a map of exactly by, at and one closed thing — acHash with an evidence map for a criterion, or taskHash with a reports map for a work item — the map holding at least one entry, and never both — the record under AC-0001 is not.",
       ],
     ] as const) {
       const file = await makeLedgerPath();

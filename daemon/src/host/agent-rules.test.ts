@@ -38,7 +38,7 @@ describe("the rules page", () => {
     assert.match(text, /Writing a spec file is a proposal/);
     assert.match(text, /Never delete a spec file/);
     assert.match(text, /Never open `\.shall\/ledger\/`/);
-    assert.match(text, /A task hangs off a module/);
+    assert.match(text, /A work item hangs off a module/);
     // And the one line that is not a rule: where the processes are, all four
     // of them, and the guide for when the thread is lost. An agent that never
     // learns the work commands exist writes the execution record by hand,

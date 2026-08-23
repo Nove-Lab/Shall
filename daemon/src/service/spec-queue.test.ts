@@ -122,27 +122,32 @@ const CHAIN_EDGES: readonly (readonly [string, string, string])[] = [
 ];
 
 /**
- * The execution side: a journal, the work under it, and the evidence it
- * submitted — WITH THE AIM CHAIN, because a submitted claim answers to the aim
- * rule: the log addresses a task, and that task targets the criterion the
- * evidence claims. The task is anchored by its own TARGETS line.
+ * The plan and execution sides: the module that holds the work item, a journal,
+ * the work under it, and the evidence it submitted — WITH THE AIM CHAIN,
+ * because a submitted claim answers to the aim rule: the log addresses a work
+ * item, and that work item targets the criterion the evidence claims. The work
+ * item is anchored by the module's ALLOCATES line and by nothing else — its own
+ * TARGETS line aims and does not hold — so the module is part of the fixture.
  */
 const RECORD: readonly (readonly [string, string])[] = [
-  ["ImplementationTask", "IT-0001"],
+  ["Module", "M-0001"],
+  ["WorkItem", "WI-0001"],
   ["Journal", "J-0001"],
   ["WorkLog", "WL-0001"],
   ["Evidence", "EV-0001"],
-  ["TaskCompletionReport", "TCR-0001"],
+  ["CompletionReport", "CR-0001"],
 ];
 
 const RECORD_EDGES: readonly (readonly [string, string, string])[] = [
-  ["TARGETS", "IT-0001", "AC-0001"],
+  ["IS_REALIZED_BY", "SR-0001", "M-0001"],
+  ["ALLOCATES", "M-0001", "WI-0001"],
+  ["TARGETS", "WI-0001", "AC-0001"],
   ["LOGS", "J-0001", "WL-0001"],
-  ["ADDRESSES", "WL-0001", "IT-0001"],
+  ["ADDRESSES", "WL-0001", "WI-0001"],
   ["SUBMITS", "WL-0001", "EV-0001"],
-  ["SUBMITS", "WL-0001", "TCR-0001"],
+  ["SUBMITS", "WL-0001", "CR-0001"],
   ["CLAIMS", "EV-0001", "AC-0001"],
-  ["CLAIMS", "TCR-0001", "IT-0001"],
+  ["CLAIMS", "CR-0001", "WI-0001"],
 ];
 
 const EVERY_ID = [...CHAIN, ...RECORD].map(([, id]) => id);
@@ -492,9 +497,9 @@ describe("the withdraw door", () => {
  * ------------------------------------------------------------------ */
 
 describe("the aim rule at the doors", () => {
-  test("a log or evidence outside its task's aim can be neither approved nor rejected — fix the seam first", async () => {
-    // project7 wires the whole aim chain — WL-0001 addresses IT-0001, which
-    // targets AC-0001, which EV-0001 claims. Retarget the task at some OTHER
+  test("a log or evidence outside its work item's aim can be neither approved nor rejected — fix the seam first", async () => {
+    // project7 wires the whole aim chain — WL-0001 addresses WI-0001, which
+    // targets AC-0001, which EV-0001 claims. Retarget the work item at some OTHER
     // criterion: the log and the evidence are red by grammar, and both doors
     // say the sentence.
     const project = await project7();
@@ -502,13 +507,13 @@ describe("the aim rule at the doors", () => {
     await edge(project, "HAS_CRITERION", "R-0001", "AC-0002");
     await removeSpecEdge({
       projectId: project.id,
-      id: formatEdgeId("IT-0001", "TARGETS", "AC-0001"),
+      id: formatEdgeId("WI-0001", "TARGETS", "AC-0001"),
     });
-    await edge(project, "TARGETS", "IT-0001", "AC-0002");
+    await edge(project, "TARGETS", "WI-0001", "AC-0002");
     const status = await statusFor(project, "WL-0001");
     assert.equal(status.reason, "off-target");
     const sentence =
-      "WL-0001 addresses IT-0001, which targets AC-0002, but submits EV-0001, which claims AC-0001 — a work log's evidence claims only the criteria its task targets.";
+      "WL-0001 addresses WI-0001, which target AC-0002, but submits EV-0001, which claims AC-0001 — a work log's evidence claims only the criteria its work items target.";
     assert.equal(status.problem, sentence);
     await says(
       approveSpecNode({ projectId: project.id, id: "WL-0001" }),
@@ -518,30 +523,30 @@ describe("the aim rule at the doors", () => {
     await says(
       rejectSpecNode({ projectId: project.id, id: "EV-0001", rationale: "No." }),
       "invalid",
-      "EV-0001 claims AC-0001, but the work log that submitted it, WL-0001, addresses IT-0001, which targets AC-0002 — a work log's evidence claims only the criteria its task targets. Fix that first; a rejection is a judgement on a node the graph holds together.",
+      "EV-0001 claims AC-0001, but the work log that submitted it, WL-0001, addresses WI-0001, which target AC-0002 — a work log's evidence claims only the criteria its work items target. Fix that first; a rejection is a judgement on a node the graph holds together.",
     );
-    // Retarget the task at the criterion the evidence claims, and both are
+    // Retarget the work item at the criterion the evidence claims, and both are
     // ordinary yellow again — nothing was stored, nothing to clear.
     await removeSpecEdge({
       projectId: project.id,
-      id: formatEdgeId("IT-0001", "TARGETS", "AC-0002"),
+      id: formatEdgeId("WI-0001", "TARGETS", "AC-0002"),
     });
-    await edge(project, "TARGETS", "IT-0001", "AC-0001");
+    await edge(project, "TARGETS", "WI-0001", "AC-0001");
     // The seam is gone. What is left on the log is the OTHER rule — nothing in
-    // this project is approved, so the task is blocked and work under it is
+    // this project is approved, so the work item is blocked and work under it is
     // early — and the evidence is ordinary yellow.
     assert.equal((await statusFor(project, "WL-0001")).reason, "premature");
     assert.equal((await statusFor(project, "EV-0001")).reason, "unapproved");
   });
 
-  test("a premature log can be neither approved nor rejected — settle the task's turn first", async () => {
-    // project7 leaves everything unapproved, so IT-0001 is blocked and the log
+  test("a premature log can be neither approved nor rejected — settle the work item's turn first", async () => {
+    // project7 leaves everything unapproved, so WI-0001 is blocked and the log
     // under it is red by the blocked-address rule. Both doors refuse with the
     // rule's own sentence and their own tails — the aim rule's twin arms,
     // asserted the same way.
     const project = await project7();
     const sentence =
-      "WL-0001 addresses IT-0001, and IT-0001 is blocked — work is logged only under a task whose turn has come: its chain read and agreed, and everything it waits on finished.";
+      "WL-0001 addresses WI-0001, and WI-0001 is blocked — work is logged only under a work item whose turn has come: its chain read and agreed, and everything it waits on finished.";
     assert.equal((await statusFor(project, "WL-0001")).problem, sentence);
     await says(
       approveSpecNode({ projectId: project.id, id: "WL-0001" }),
@@ -563,37 +568,37 @@ describe("the aim rule at the doors", () => {
 
 describe("a loop at the doors", () => {
   test("neither end of a loop can be approved, approved in bulk or rejected", async () => {
-    // Two tasks waiting on each other. The loop is grammar like the aim rule:
+    // Two work items waiting on each other. The loop is grammar like the aim rule:
     // agreeing to one node of it would be agreeing to an order with no
     // beginning, so all three doors refuse and each keeps its own tail.
     const project = await newProject();
     await chain(project);
-    await node(project, "ModuleDesign", "MD-0001");
-    await node(project, "ImplementationTask", "IT-0001");
-    await node(project, "ImplementationTask", "IT-0002");
-    await edge(project, "IS_REALIZED_BY", "SR-0001", "MD-0001");
-    await edge(project, "ALLOCATES", "MD-0001", "IT-0001");
-    await edge(project, "ALLOCATES", "MD-0001", "IT-0002");
-    await edge(project, "DEPENDS_ON", "IT-0001", "IT-0002");
-    await edge(project, "DEPENDS_ON", "IT-0002", "IT-0001");
+    await node(project, "Module", "M-0001");
+    await node(project, "WorkItem", "WI-0001");
+    await node(project, "WorkItem", "WI-0002");
+    await edge(project, "IS_REALIZED_BY", "SR-0001", "M-0001");
+    await edge(project, "ALLOCATES", "M-0001", "WI-0001");
+    await edge(project, "ALLOCATES", "M-0001", "WI-0002");
+    await edge(project, "DEPENDS_ON", "WI-0001", "WI-0002");
+    await edge(project, "DEPENDS_ON", "WI-0002", "WI-0001");
 
-    const status = await statusFor(project, "IT-0001");
+    const status = await statusFor(project, "WI-0001");
     assert.equal(status.reason, "cyclic");
     const sentence =
-      "IT-0001 waits on IT-0002, which waits on IT-0001 — a task cannot wait on itself through others, and no task on this loop can ever be called ready. Remove one DEPENDS_ON line, or split the task both halves need.";
+      "WI-0001 waits on WI-0002, which waits on WI-0001 — a work item cannot wait on itself through others, and no work item on this loop can ever be called ready. Remove one DEPENDS_ON line, or split the work item both halves need.";
     assert.equal(status.problem, sentence);
     await says(
-      approveSpecNode({ projectId: project.id, id: "IT-0001" }),
+      approveSpecNode({ projectId: project.id, id: "WI-0001" }),
       "invalid",
       `${sentence} Fix that first — there is nothing yet to approve.`,
     );
     await says(
-      approveSpecNodes({ projectId: project.id, ids: ["IT-0001"] }),
+      approveSpecNodes({ projectId: project.id, ids: ["WI-0001"] }),
       "invalid",
       `${sentence} Fix that first — there is nothing yet to approve. Nothing was approved.`,
     );
     await says(
-      rejectSpecNode({ projectId: project.id, id: "IT-0001", rationale: "No." }),
+      rejectSpecNode({ projectId: project.id, id: "WI-0001", rationale: "No." }),
       "invalid",
       `${sentence} Fix that first; a rejection is a judgement on a node the graph holds together.`,
     );
@@ -602,10 +607,10 @@ describe("a loop at the doors", () => {
     // nothing had to be cleared.
     await removeSpecEdge({
       projectId: project.id,
-      id: formatEdgeId("IT-0002", "DEPENDS_ON", "IT-0001"),
+      id: formatEdgeId("WI-0002", "DEPENDS_ON", "WI-0001"),
     });
-    assert.equal((await statusFor(project, "IT-0001")).reason, "unapproved");
-    assert.equal((await statusFor(project, "IT-0002")).reason, "unapproved");
+    assert.equal((await statusFor(project, "WI-0001")).reason, "unapproved");
+    assert.equal((await statusFor(project, "WI-0002")).reason, "unapproved");
   });
 });
 
@@ -670,7 +675,7 @@ describe("the approve-all door", () => {
       emitApprovalLedger(union),
     );
 
-    // The log's own wave, now that its task's turn has come — and then the
+    // The log's own wave, now that its work item's turn has come — and then the
     // whole project reads green.
     await approveSpecNodes({ projectId: project.id, ids: ["WL-0001"] });
     const review = await reviewSpec(project.id);
@@ -761,9 +766,9 @@ describe("the approve-all door", () => {
  * The whole fixture, approved — the state every closure test starts from.
  *
  * IN TWO WAVES, AND THE ORDER IS THE RULE'S: a work log is logged under a
- * task, and until the chain above that task is green the task is blocked and
+ * work item, and until the chain above that work item is green the work item is blocked and
  * the log is red (`premature`) — so the chain is approved first, and the log
- * only once its task's turn has come.
+ * only once its work item's turn has come.
  */
 async function greenProject(): Promise<RegistryProject> {
   const project = await project7();
@@ -867,7 +872,7 @@ describe("the accept door", () => {
     // EVERY CLAIMANT READ IS NOT ENOUGH. "Met" is a statement about words
     // somebody agreed to, and a criterion still being edited has nothing
     // settled for the evidence to be met against. Reported from a screen as
-    // the other subject: a green, closed task was edited, went yellow, and
+    // the other subject: a green, closed work item was edited, went yellow, and
     // could still be closed — leaving a yellow node wearing a green Done.
     const project = await project7();
     await approveSpecNodes({ projectId: project.id, ids: ["EV-0001"] });
@@ -892,54 +897,51 @@ describe("the accept door", () => {
     assert.equal((await statusFor(project, "AC-0001")).closure, "closed");
   });
 
-  test("refuses a task whose own words moved after it was closed", async () => {
+  test("refuses a work item whose own words moved after it was closed", async () => {
     // The reported sequence, walked end to end: close it green, edit it, and
     // the closing lapses by arithmetic — the mark is open again — while the
     // door refuses to write a new one until it is read.
     const project = await project7();
-    await node(project, "ModuleDesign", "MD-0001");
-    await edge(project, "IS_REALIZED_BY", "SR-0001", "MD-0001");
-    await edge(project, "ALLOCATES", "MD-0001", "IT-0001");
     await approveSpecNodes({
       projectId: project.id,
-      ids: [...EVERY_ID.filter((id) => id !== "WL-0001"), "MD-0001"],
+      ids: EVERY_ID.filter((id) => id !== "WL-0001"),
     });
     await approveSpecNodes({ projectId: project.id, ids: ["WL-0001"] });
-    await acceptSpecClosure({ projectId: project.id, id: "IT-0001" });
-    assert.equal((await statusFor(project, "IT-0001")).closure, "closed");
+    await acceptSpecClosure({ projectId: project.id, id: "WI-0001" });
+    assert.equal((await statusFor(project, "WI-0001")).closure, "closed");
 
     await updateSpecNode({
       projectId: project.id,
-      id: "IT-0001",
+      id: "WI-0001",
       shortName: "it-0001",
-      name: "The node called IT-0001",
+      name: "The node called WI-0001",
       body: "A wider scope than the one that was signed off.",
     });
-    const moved = await statusFor(project, "IT-0001");
+    const moved = await statusFor(project, "WI-0001");
     assert.equal(moved.color, "yellow");
     assert.equal(moved.closure, "open");
-    assert.equal(moved.taskState, "blocked");
+    assert.equal(moved.workItemState, "blocked");
 
     await says(
-      acceptSpecClosure({ projectId: project.id, id: "IT-0001" }),
+      acceptSpecClosure({ projectId: project.id, id: "WI-0001" }),
       "invalid",
-      "IT-0001 is not approved yet — a task is closed, or left open, only once a person has agreed to what it asks for, and until then there is nothing settled for the work to be done against. Approve it, and the question comes back with it.",
+      "WI-0001 is not approved yet — a work item is closed, or left open, only once a person has agreed to what it asks for, and until then there is nothing settled for the work to be done against. Approve it, and the question comes back with it.",
     );
     // And the queue asks the approval question alone until it is answered.
     assert.deepEqual(
       (await reviewQueue(project.id)).bundles
         .map((bundle) => bundle.id)
-        .filter((id) => id.endsWith("IT-0001")),
-      ["spec:IT-0001"],
+        .filter((id) => id.endsWith("WI-0001")),
+      ["spec:WI-0001"],
     );
   });
 
-  test("a node that is neither a criterion nor a task is refused by type", async () => {
+  test("a node that is neither a criterion nor a work item is refused by type", async () => {
     const project = await greenProject();
     await says(
       acceptSpecClosure({ projectId: project.id, id: "R-0001" }),
       "invalid",
-      "R-0001 is a Requirement, and only an AcceptanceCriterion or an ImplementationTask is a thing that can be closed or left open — evidence is shown against a criterion, work against a task, and against nothing else.",
+      "R-0001 is a Requirement, and only an AcceptanceCriterion or a WorkItem is a thing that can be closed or left open — evidence is shown against a criterion, work against a work item, and against nothing else.",
     );
     await says(
       acceptSpecClosure({ projectId: project.id, id: "AC-9999" }),
@@ -1151,13 +1153,13 @@ describe("the review queue", () => {
     // whether the criterion is met on the evidence claiming it.
     let queue = await reviewQueue(project.id);
     // Two closure questions, not one: the criterion over its evidence, and the
-    // task over the work addressing it — the whole fixture is read, so both
+    // work item over the work addressing it — the whole fixture is read, so both
     // lists are ready to be judged.
     assert.deepEqual(
       queue.bundles.map((bundle) => [bundle.kind, bundle.id]),
       [
         ["ac-closure", "closure:AC-0001"],
-        ["task-closure", "completion:IT-0001"],
+        ["work-item-closure", "completion:WI-0001"],
       ],
     );
 
@@ -1179,16 +1181,16 @@ describe("the review queue", () => {
     }
     queue = await reviewQueue(project.id);
     // THE EDITED REQUIREMENT PULLS THE RECORD OFF THE QUEUE'S REPORT SIDE:
-    // with R-0001 yellow the chain over IT-0001 is unread, the task is
+    // with R-0001 yellow the chain over WI-0001 is unread, the work item is
     // blocked, and the edited log under it is `premature` red — a red roots
     // nothing, so there is no work report until the spec is settled again.
-    // The task's own closure keeps asking: its claimant is the report, which
+    // The work item's own closure keeps asking: its claimant is the report, which
     // nobody touched.
     assert.deepEqual(
       queue.bundles.map((bundle) => [bundle.kind, bundle.id]),
       [
         ["ac-closure", "closure:AC-0001"],
-        ["task-closure", "completion:IT-0001"],
+        ["work-item-closure", "completion:WI-0001"],
         ["spec-approval", "spec:R-0001"],
       ],
     );
@@ -1203,19 +1205,19 @@ describe("the review queue", () => {
     );
     // The criterion under it is green and listed anyway: approving the parent
     // is also a statement that the child still says the right thing — and the
-    // task hangs under the criterion its own TARGETS line aims at.
+    // work item hangs under the criterion its own TARGETS line aims at.
     assert.deepEqual(
       spec.unchanged.map((entry) => entry.id),
-      ["AC-0001", "IT-0001"],
+      ["AC-0001", "WI-0001"],
     );
     assert.deepEqual(spec.counts, [
       { type: "Requirement", count: 1 },
       { type: "AcceptanceCriterion", count: 1 },
-      { type: "ImplementationTask", count: 1 },
+      { type: "WorkItem", count: 1 },
     ]);
 
     // Settling the spec brings the report back: R-0001 green again means the
-    // task's turn has come, so the edited log is ordinary yellow and roots its
+    // work item's turn has come, so the edited log is ordinary yellow and roots its
     // journal's report.
     await approveSpecNodes({ projectId: project.id, ids: ["R-0001"] });
     queue = await reviewQueue(project.id);
@@ -1230,14 +1232,14 @@ describe("the review queue", () => {
     // and the report hang below the log inside it.
     assert.deepEqual(
       report.unchanged.map((entry) => entry.id),
-      ["J-0001", "EV-0001", "TCR-0001"],
+      ["J-0001", "EV-0001", "CR-0001"],
     );
 
     // Judged, the bundles leave the queue — nothing was stored, so nothing has
     // to be cleared.
     await approveSpecNodes({ projectId: project.id, ids: ["WL-0001"] });
     await acceptSpecClosure({ projectId: project.id, id: "AC-0001" });
-    await acceptSpecClosure({ projectId: project.id, id: "IT-0001" });
+    await acceptSpecClosure({ projectId: project.id, id: "WI-0001" });
     assert.deepEqual((await reviewQueue(project.id)).bundles, []);
   });
 
@@ -1299,7 +1301,7 @@ describe("the review queue", () => {
       queue.bundles.map((bundle) => [bundle.kind, bundle.id]),
       [
         ["ac-closure", "closure:AC-0001"],
-        ["task-closure", "completion:IT-0001"],
+        ["work-item-closure", "completion:WI-0001"],
         ["standalone-finding", "finding:F-0001"],
       ],
     );
@@ -1429,45 +1431,42 @@ describe("the commit button", () => {
 /**
  * THE OTHER CLOSURE SUBJECT, over the same folders and the same doors.
  *
- * A task is closed on the WORK that addressed it, exactly as a criterion is
+ * A work item is closed on the WORK that addressed it, exactly as a criterion is
  * closed on the evidence claiming it, and everything below is the criterion's
- * own block asked about a task: one book written, the other emptied, the
+ * own block asked about a work item: one book written, the other emptied, the
  * unread claimant named, the wording refusal respected.
  */
-describe("closing a task", () => {
-  /** The plan side: a module, the task under it, and the record read in the
-   * rule's own order — chain first, the log once its task's turn has come. */
+describe("closing a work item", () => {
+  /** The plan side: a module, the work item under it, and the record read in the
+   * rule's own order — chain first, the log once its work item's turn has come. */
   async function planned(): Promise<RegistryProject> {
     const project = await project7();
-    await node(project, "ModuleDesign", "MD-0001");
-    await edge(project, "IS_REALIZED_BY", "SR-0001", "MD-0001");
-    await edge(project, "ALLOCATES", "MD-0001", "IT-0001");
     await approveSpecNodes({
       projectId: project.id,
-      ids: [...EVERY_ID.filter((id) => id !== "WL-0001"), "MD-0001"],
+      ids: EVERY_ID.filter((id) => id !== "WL-0001"),
     });
     await approveSpecNodes({ projectId: project.id, ids: ["WL-0001"] });
     return project;
   }
 
-  test("writes the task's own two key names, and nothing else moves", async () => {
+  test("writes the work item's own two key names, and nothing else moves", async () => {
     const project = await planned();
-    const taskFile = specFile(project, "ImplementationTask", "IT-0001");
+    const taskFile = specFile(project, "WorkItem", "WI-0001");
     const before = await fileState(taskFile);
 
-    const closed = await acceptSpecClosure({ projectId: project.id, id: "IT-0001" });
-    assert.equal(closed.kind, "task");
+    const closed = await acceptSpecClosure({ projectId: project.id, id: "WI-0001" });
+    assert.equal(closed.kind, "workItem");
     assert.deepEqual(
       closed.claimants.map((entry) => entry.id),
-      ["TCR-0001"],
+      ["CR-0001"],
     );
     assert.deepEqual(await fileState(taskFile), before);
     const book = await readFile(acceptancesAt(project), "utf8");
-    assert.ok(book.includes("IT-0001:\n  taskHash: "), book);
-    assert.ok(book.includes("  reports:\n    TCR-0001: "), book);
-    assert.equal(await statusFor(project, "IT-0001").then((s) => s.closure), "closed");
+    assert.ok(book.includes("WI-0001:\n  taskHash: "), book);
+    assert.ok(book.includes("  reports:\n    CR-0001: "), book);
+    assert.equal(await statusFor(project, "WI-0001").then((s) => s.closure), "closed");
     assert.equal(
-      await statusFor(project, "IT-0001").then((s) => s.taskState),
+      await statusFor(project, "WI-0001").then((s) => s.workItemState),
       "done",
     );
   });
@@ -1479,9 +1478,9 @@ describe("closing a task", () => {
     const before = await reviewQueue(project.id);
     assert.deepEqual(
       before.bundles.map((bundle) => bundle.id),
-      ["closure:AC-0001", "completion:IT-0001"],
+      ["closure:AC-0001", "completion:WI-0001"],
     );
-    await acceptSpecClosure({ projectId: project.id, id: "IT-0001" });
+    await acceptSpecClosure({ projectId: project.id, id: "WI-0001" });
     assert.deepEqual(
       (await reviewQueue(project.id)).bundles.map((bundle) => bundle.id),
       ["closure:AC-0001"],
@@ -1490,77 +1489,77 @@ describe("closing a task", () => {
 
   test("leaving it open writes the other book and empties this one", async () => {
     const project = await planned();
-    await acceptSpecClosure({ projectId: project.id, id: "IT-0001" });
+    await acceptSpecClosure({ projectId: project.id, id: "WI-0001" });
     const word = await leaveSpecOpen({
       projectId: project.id,
-      id: "IT-0001",
+      id: "WI-0001",
       rationale: "WL-0001 stops at the happy path; the retry is not shown.",
     });
-    assert.equal(word.kind, "task");
+    assert.equal(word.kind, "workItem");
     assert.equal(await readFile(acceptancesAt(project), "utf8"), "");
     const book = await readFile(rejectionsAt(project), "utf8");
-    assert.ok(book.includes("IT-0001:\n  rejectedHash: "), book);
-    assert.ok(book.includes("  reports:\n    TCR-0001: "), book);
-    // The left-open word is not a rejection of the task's own wording: the
+    assert.ok(book.includes("WI-0001:\n  rejectedHash: "), book);
+    assert.ok(book.includes("  reports:\n    CR-0001: "), book);
+    // The left-open word is not a rejection of the work item's own wording: the
     // colour is untouched and only the closure axis heard it.
-    const status = await statusFor(project, "IT-0001");
+    const status = await statusFor(project, "WI-0001");
     assert.equal(status.color, "green");
     assert.equal(status.closure, "open");
     assert.equal(status.leftOpen?.rationale, word.rationale);
     assert.equal(status.rejection, null);
-    assert.equal(status.taskState, "ready");
+    assert.equal(status.workItemState, "ready");
   });
 
   test("refuses while a report claiming it is unread", async () => {
     const project = await planned();
-    await node(project, "TaskCompletionReport", "TCR-0002");
-    await edge(project, "SUBMITS", "WL-0001", "TCR-0002");
-    await edge(project, "CLAIMS", "TCR-0002", "IT-0001");
+    await node(project, "CompletionReport", "CR-0002");
+    await edge(project, "SUBMITS", "WL-0001", "CR-0002");
+    await edge(project, "CLAIMS", "CR-0002", "WI-0001");
     await says(
-      acceptSpecClosure({ projectId: project.id, id: "IT-0001" }),
+      acceptSpecClosure({ projectId: project.id, id: "WI-0001" }),
       "invalid",
-      "TCR-0002 claims IT-0001 and is not approved yet — a task is closed, or left open, only over reports a person has read. Approve it first (or reject it and have it fixed), and the task comes back to the queue.",
+      "CR-0002 claims WI-0001 and is not approved yet — a work item is closed, or left open, only over reports a person has read. Approve it first (or reject it and have it fixed), and the work item comes back to the queue.",
     );
   });
 
-  test("refuses a task nothing claims, and one whose wording is refused", async () => {
+  test("refuses a work item nothing claims, and one whose wording is refused", async () => {
     const project = await planned();
     await removeSpecEdge({
       projectId: project.id,
-      id: formatEdgeId("TCR-0001", "CLAIMS", "IT-0001"),
+      id: formatEdgeId("CR-0001", "CLAIMS", "WI-0001"),
     });
     await says(
-      acceptSpecClosure({ projectId: project.id, id: "IT-0001" }),
+      acceptSpecClosure({ projectId: project.id, id: "WI-0001" }),
       "invalid",
-      "Nothing claims IT-0001 yet — a task is closed, or left open, over the completion reports attached to it, and there is none. A TaskCompletionReport draws a CLAIMS relation at the task in its own file.",
+      "Nothing claims WI-0001 yet — a work item is closed, or left open, over the completion reports attached to it, and there is none. A CompletionReport draws a CLAIMS relation at the work item in its own file.",
     );
 
     const second = await planned();
     await rejectSpecNode({
       projectId: second.id,
-      id: "IT-0001",
-      rationale: "The scope is two tasks in one.",
+      id: "WI-0001",
+      rationale: "The scope is two work items in one.",
     });
     await says(
-      acceptSpecClosure({ projectId: second.id, id: "IT-0001" }),
+      acceptSpecClosure({ projectId: second.id, id: "WI-0001" }),
       "invalid",
-      "IT-0001 carries a standing rejection of its own wording, and a task is closed or left open only once its wording stands — withdraw that rejection first, or leave it to lapse when the task is fixed.",
+      "WI-0001 carries a standing rejection of its own wording, and a work item is closed or left open only once its wording stands — withdraw that rejection first, or leave it to lapse when the work item is fixed.",
     );
   });
 
   test("asks again when another report claims it", async () => {
     const project = await planned();
-    await acceptSpecClosure({ projectId: project.id, id: "IT-0001" });
-    await node(project, "TaskCompletionReport", "TCR-0002");
-    await edge(project, "SUBMITS", "WL-0001", "TCR-0002");
-    await edge(project, "CLAIMS", "TCR-0002", "IT-0001");
+    await acceptSpecClosure({ projectId: project.id, id: "WI-0001" });
+    await node(project, "CompletionReport", "CR-0002");
+    await edge(project, "SUBMITS", "WL-0001", "CR-0002");
+    await edge(project, "CLAIMS", "CR-0002", "WI-0001");
     // A different list, so the record lapses: open again, and off the queue
     // only until the new report is read.
-    assert.equal(await statusFor(project, "IT-0001").then((s) => s.closure), "open");
-    await approveSpecNodes({ projectId: project.id, ids: ["TCR-0002"] });
+    assert.equal(await statusFor(project, "WI-0001").then((s) => s.closure), "open");
+    await approveSpecNodes({ projectId: project.id, ids: ["CR-0002"] });
     assert.equal(
       (await reviewQueue(project.id)).bundles.some(
-        (bundle) => bundle.id === "completion:IT-0001",
+        (bundle) => bundle.id === "completion:WI-0001",
       ),
       true,
     );

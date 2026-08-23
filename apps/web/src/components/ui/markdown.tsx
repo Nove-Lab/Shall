@@ -27,7 +27,7 @@ import { cn } from "@/lib/utils";
  * branches, and a spec file is a document to read, never markup this app runs.
  *
  * EVERY RULE BELOW MERGES THE CLASS IT WAS HANDED RATHER THAN REPLACING IT.
- * `remark-gfm` labels some of what it builds — `contains-task-list` on a list,
+ * `remark-gfm` labels some of what it builds — `contains-work item-list` on a list,
  * `language-ts` on a fence — and a rule that spread those props over its own
  * `className` would hand the styling of exactly those elements back to nobody.
  */
@@ -165,7 +165,7 @@ export function Markdown({
         // their margins are for their neighbours inside the value, not for the
         // gap the form already spaces with.
         "[&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
-        // A task list carries its state in the checkbox, so the bullet beside
+        // A work item list carries its state in the checkbox, so the bullet beside
         // it would be a second marker for one item.
         "[&_li:has(>input)]:list-none [&_li:has(>input)]:pl-0",
         "[&_input[type=checkbox]]:mr-1.5 [&_input[type=checkbox]]:align-middle",

@@ -65,19 +65,19 @@ export type {
   MissingNode,
   ReviewStatus,
 } from "./review.js";
-export { taskBoardOf } from "./board.js";
-export type { FixSpecItem, ImplementItem, Ref, TaskBoard } from "./board.js";
+export { workBoardOf } from "./board.js";
+export type { FixSpecItem, ImplementItem, Ref, WorkBoard } from "./board.js";
 export {
   chainGreen,
   depthOf,
-  isClosableTask,
+  isClosableWorkItem,
   isCompleted,
   prerequisitesMet,
   prerequisitesOf,
-  taskStateOf,
+  workItemStateOf,
   upwardChainOf,
-} from "./task-state.js";
-export type { ColorAt } from "./task-state.js";
+} from "./work-item-state.js";
+export type { ColorAt } from "./work-item-state.js";
 export { reviewBundles, scanRankOf } from "./bundles.js";
 export type {
   AcClosureBundle,
@@ -89,7 +89,7 @@ export type {
   ScanRank,
   SpecApprovalBundle,
   StandaloneFindingBundle,
-  TaskClosureBundle,
+  WorkItemClosureBundle,
   TypeCount,
   UnchangedNode,
   WorkReportBundle,

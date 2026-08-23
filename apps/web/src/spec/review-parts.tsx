@@ -1,6 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import type { Closure, TaskState } from "./review";
+import type { Closure, WorkItemState } from "./review";
 import type { DiffKind, DiffRow } from "./view/diff";
 import type { Signal } from "./view/furniture";
 
@@ -59,12 +59,12 @@ export function StatusDot({ color }: { color: Signal }) {
  * THE TWO SECOND-AXIS MARKS SHARE ONE VOCABULARY, and it is two words wide:
  * NOT YET, and DONE.
  *
- * A criterion is open or closed; a task is blocked, ready or done. Five words,
+ * A criterion is open or closed; a work item is blocked, ready or done. Five words,
  * but only two STATES a person scans for — the thing has been shown to be met,
  * or it has not — so there are two paints and not five, and both marks use
  * them. Before this they disagreed: an open criterion wore red while a blocked
- * task wore grey, which said that a criterion nobody has closed yet is a defect
- * and a task nobody can start yet is merely news. Neither is a defect. Red is
+ * work item wore grey, which said that a criterion nobody has closed yet is a defect
+ * and a work item nobody can start yet is merely news. Neither is a defect. Red is
  * the traffic light's word for "this is wrong", and it is now only ever that.
  *
  * DONE IS THE FILLED EMERALD, the same one `SIGNAL_CLASS.green` uses, because
@@ -93,7 +93,7 @@ const MET_CLASS = "bg-emerald-500 text-white border-transparent";
  * light on a board that already has one.
  */
 const MARK: Record<
-  Closure | TaskState,
+  Closure | WorkItemState,
   {
     readonly variant: "secondary" | "default";
     readonly className: string;
@@ -111,7 +111,7 @@ function Mark({
   state,
   className,
 }: {
-  state: Closure | TaskState;
+  state: Closure | WorkItemState;
   // `| undefined` because the two named marks forward their own optional prop
   // here under `exactOptionalPropertyTypes`.
   className?: string | undefined;
@@ -147,18 +147,18 @@ export function ClosureMark({
 }
 
 /**
- * THE BADGE BESIDE A TASK'S ID, drawn for reading only — no hover, no click,
+ * THE BADGE BESIDE A WORK ITEM'S ID, drawn for reading only — no hover, no click,
  * no tooltip. It answers a question a person asks of the board with their eyes:
  * is this mine to start.
  *
  * `className` IS FOR THE ONE CALLER WITH A HEIGHT BUDGET — the canvas card,
  * exactly as `ClosureMark` above documents.
  */
-export function TaskStateMark({
+export function WorkItemStateMark({
   state,
   className,
 }: {
-  state: TaskState;
+  state: WorkItemState;
   className?: string | undefined;
 }) {
   return <Mark state={state} className={className} />;
@@ -167,22 +167,22 @@ export function TaskStateMark({
 /**
  * ONE MARK PER SECOND AXIS, AND THE TYPE DECIDES WHICH — the precedence said
  * once for the three places a node's id wears it (the canvas card, and the
- * panel's ID field in both modes). A task's word wins because it already says
- * whether the task is closed and what that means for work; a criterion wears
- * its closure mark; everything else wears nothing. Drawing both on a task
+ * panel's ID field in both modes). A work item's word wins because it already says
+ * whether the work item is closed and what that means for work; a criterion wears
+ * its closure mark; everything else wears nothing. Drawing both on a work item
  * would be two answers to one question in one row.
  */
 export function SecondAxisMark({
   closure,
-  taskState,
+  workItemState,
   className,
 }: {
   closure: Closure | null;
-  taskState: TaskState | null;
+  workItemState: WorkItemState | null;
   className?: string | undefined;
 }) {
-  if (taskState !== null) {
-    return <TaskStateMark state={taskState} className={className} />;
+  if (workItemState !== null) {
+    return <WorkItemStateMark state={workItemState} className={className} />;
   }
   if (closure !== null) {
     return <ClosureMark state={closure} className={className} />;

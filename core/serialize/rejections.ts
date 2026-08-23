@@ -43,7 +43,7 @@ import { isMap, judgeIdentity } from "./yaml.js";
  * TWO KINDS OF "NO" LIVE IN THIS BOOK, told apart by one key. A record without
  * a claimant map is the refusal of a NODE — its content, at that hash — and it
  * is what turns the node red. A record WITH one (`evidence:` for a criterion,
- * `reports:` for a task) is a subject LEFT OPEN: somebody looked at every
+ * `reports:` for a work item) is a subject LEFT OPEN: somebody looked at every
  * claimant, decided the subject is not met by them, and said why. That is a
  * judgement about the list and not about the subject's wording, so it colours
  * nothing; it names the subject's hash and every claimant's hash so that a
@@ -78,7 +78,7 @@ export interface RejectionRecord {
    * rejection of a node's own words.
    *
    * ON DISK IT IS ONE MAP UNDER ONE NAME — `evidence:` for a criterion,
-   * `reports:` for a task, the same two names the acceptance ledger uses for
+   * `reports:` for a work item, the same two names the acceptance ledger uses for
    * the same two lists — and a record carrying both is refused. The tag is read
    * back off whichever name is there.
    */
@@ -108,7 +108,7 @@ const RECORD_KEYS = ["rejectedHash", "by", "at", "rationale"] as const;
 
 /** Refused wholesale rather than per-key: it is one rule about one shape. */
 const RECORD_SHAPE =
-  "Every record in the rejection ledger is a map of rejectedHash, by, at and rationale, each of them text — with one map of what was left open over it, evidence for a criterion or reports for a task, holding at least one entry and never both";
+  "Every record in the rejection ledger is a map of rejectedHash, by, at and rationale, each of them text — with one map of what was left open over it, evidence for a criterion or reports for a work item, holding at least one entry and never both";
 
 /** The three words the shared root reader makes this book's sentences out of. */
 const GRAMMAR: LedgerGrammar = {
@@ -173,7 +173,7 @@ function refused(problem: string): RejectionLedgerReading {
  * it. Written out rather than reached for from `readStringMap`, because that
  * helper asks for a tuple of strings and the fifth key here is a map.
  *
- * BOTH LISTS AT ONCE IS REFUSED. A record that says a criterion and a task were
+ * BOTH LISTS AT ONCE IS REFUSED. A record that says a criterion and a work item were
  * both left open over one id is not a record anything can act on, and picking
  * one would be inventing the verdict.
  */
@@ -274,7 +274,7 @@ export function parseRejectionLedger(text: string): RejectionLedgerReading {
         id,
         GRAMMAR,
         words,
-        `a ${held.leftOpen.kind} left open names one hash for ${words.each}`,
+        `a ${words.subject} left open names one hash for ${words.each}`,
         held.leftOpen.claimants.keys(),
       );
       if (listProblem !== null) {

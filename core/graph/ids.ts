@@ -24,7 +24,7 @@ const SEPARATOR = "-";
 
 const DIGITS = /^\d+$/;
 
-/** The prefix a type's ids carry, or null when the type is not one of the 22. */
+/** The prefix a type's ids carry, or null when the type is not one of the 21. */
 export function idPrefixFor(type: string): string | null {
   return nodeTypeEntry(type)?.prefix ?? null;
 }

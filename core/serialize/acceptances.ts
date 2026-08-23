@@ -43,13 +43,13 @@ import { isMap, judgeIdentity } from "./yaml.js";
 export const ACCEPTANCES_FILE = "ledger/acceptances.yaml";
 
 /**
- * One person's closing of one criterion — or of one task, which is the same act
+ * One person's closing of one criterion — or of one work item, which is the same act
  * over a different list.
  *
  * ONE SHAPE WITH A TAG, AND TWO SPELLINGS ON DISK. In memory a record is the
  * subject's hash and the map of what closed it, whatever the subject was; on
  * disk the two keys are named for what they hold — `acHash`/`evidence` for a
- * criterion, `taskHash`/`reports` for a task — because a person reading the
+ * criterion, `taskHash`/`reports` for a work item — because a person reading the
  * file should see which of the two they are looking at without decoding an id
  * prefix. `KEYS` below is the only place those four names live, and a record
  * carrying both pairs is refused rather than guessed at.
@@ -93,7 +93,10 @@ export interface AcceptanceLedgerReading {
  */
 const SUBJECT_KEY: Readonly<Record<ClosureSubject, string>> = {
   criterion: "acHash",
-  task: "taskHash",
+  // `taskHash` is the key the book has carried since 2026-08-17 and is frozen
+  // bytes (ARCHITECTURE, 얼어붙은 것): the tag renamed to `workItem` on
+  // 2026-08-23, the key did not, and no book on disk moved.
+  workItem: "taskHash",
 };
 
 /** How many keys a record has, whichever kind it is. */
@@ -104,7 +107,7 @@ const RECORD_KEY_COUNT = 4;
  * the nested map is part of the shape rather than a second rule about it.
  */
 const RECORD_SHAPE =
-  "Every record in the acceptance ledger is a map of exactly by, at and one closed thing — acHash with an evidence map for a criterion, or taskHash with a reports map for a task — the map holding at least one entry, and never both";
+  "Every record in the acceptance ledger is a map of exactly by, at and one closed thing — acHash with an evidence map for a criterion, or taskHash with a reports map for a work item — the map holding at least one entry, and never both";
 
 /** The three words the shared root reader makes this book's sentences out of. */
 const GRAMMAR: LedgerGrammar = {
@@ -163,7 +166,7 @@ function refused(problem: string): AcceptanceLedgerReading {
  *
  * THE KIND IS READ OFF THE KEYS AND NEVER OFF THE ID. An id's prefix is a
  * suggestion (`ids.ts` says so in as many words), so a record that says
- * `taskHash` is a task's record wherever it is filed, and whether that record
+ * `taskHash` is a work item's record wherever it is filed, and whether that record
  * then STANDS over the node at that id is `core/arith/closure.ts`'s question,
  * asked with the subject in hand.
  *

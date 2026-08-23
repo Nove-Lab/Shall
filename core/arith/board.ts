@@ -6,14 +6,14 @@ import {
   type Ledgers,
 } from "./color.js";
 import { missingSentence, reviewGraph, type ReviewStatus } from "./review.js";
-import { depthOf } from "./task-state.js";
+import { depthOf } from "./work-item-state.js";
 
 /**
  * THE BOARD: what the specification needs fixed, and what is ready to be worked
  * on. Two lists, computed from the graph and the books on every read, stored
  * nowhere.
  *
- * WHAT IS ON IT IS WHAT SOMEBODY CAN ACT ON NOW. A task whose chain is unread,
+ * WHAT IS ON IT IS WHAT SOMEBODY CAN ACT ON NOW. A work item whose chain is unread,
  * or whose prerequisite is unfinished, is not dimmed here and not listed with a
  * reason — it is absent, and it appears of its own accord the moment the thing
  * above it is settled. A board that showed everything with a note about why
@@ -55,7 +55,7 @@ export interface FixSpecItem {
    *
    * IT IS NOT THE NODE ID, and it is not a React key either: it is the row's
    * name in a URL, the way a bundle's `id` is. The two halves of the board can
-   * both hold `IT-0001` — a task can be red AND, once fixed, ready — so the
+   * both hold `WI-0001` — a work item can be red AND, once fixed, ready — so the
    * prefix is what keeps one page from opening the other's row.
    */
   key: string;
@@ -81,18 +81,18 @@ export interface FixSpecItem {
   updatedAt: number | null;
 }
 
-/** One task that can be started now, with what it belongs to and aims at. */
+/** One work item that can be started now, with what it belongs to and aims at. */
 export interface ImplementItem {
-  /** `task:<id>` — the row's name in a URL; see `FixSpecItem.key`. */
+  /** `work-item:<id>` — the row's name in a URL; see `FixSpecItem.key`. */
   key: string;
   id: string;
   shortName: string;
   name: string;
   updatedAt: number;
-  /** The modules that allocated it. Empty for a task anchored by TARGETS alone. */
+  /** The modules that allocated it — never empty on this list, since the module's ALLOCATES is what holds a work item at all. */
   modules: Ref[];
   /**
-   * What carries the criteria this task targets — a Requirement, or a Scenario
+   * What carries the criteria this work item targets — a Requirement, or a Scenario
    * for an integration criterion, which is why the field is not called
    * `requirementsOnly`.
    */
@@ -104,7 +104,7 @@ export interface ImplementItem {
   depth: number;
 }
 
-export interface TaskBoard {
+export interface WorkBoard {
   fixSpec: FixSpecItem[];
   implement: ImplementItem[];
 }
@@ -237,12 +237,12 @@ function fixOf(
  * The board, whole.
  *
  * THE REVIEW IS RUN ONCE AND EVERYTHING READS IT. Colours, rejections, closure
- * marks, the aim rule's sentence AND the task's own word all come out of that
- * one pass — the Implement list below is the review's `taskState === "ready"`
+ * marks, the aim rule's sentence AND the work item's own word all come out of that
+ * one pass — the Implement list below is the review's `workItemState === "ready"`
  * read back rather than recomputed, so the badge on the Spec plane and the
  * Implement column here cannot disagree: they are one field.
  */
-export function taskBoardOf(graph: SpecGraph, ledgers: Ledgers): TaskBoard {
+export function workBoardOf(graph: SpecGraph, ledgers: Ledgers): WorkBoard {
   const context = colorContextOf(graph, ledgers);
   const review = reviewGraph(graph, ledgers, context);
   const status = new Map<string, ReviewStatus>();
@@ -325,10 +325,10 @@ export function taskBoardOf(graph: SpecGraph, ledgers: Ledgers): TaskBoard {
 
   const implement: ImplementItem[] = [];
   for (const held of review.statuses) {
-    // THE GATE IS THE REVIEW'S OWN WORD. `task-state.ts` decided it once, per
-    // task, inside the pass above; a second computation here is exactly the
+    // THE GATE IS THE REVIEW'S OWN WORD. `work-item-state.ts` decided it once, per
+    // work item, inside the pass above; a second computation here is exactly the
     // drift the shared module exists to prevent.
-    if (held.taskState !== "ready") {
+    if (held.workItemState !== "ready") {
       continue;
     }
     const node = context.nodes.get(held.id);
@@ -344,7 +344,7 @@ export function taskBoardOf(graph: SpecGraph, ledgers: Ledgers): TaskBoard {
       }
     }
     implement.push({
-      key: `task:${node.id}`,
+      key: `work-item:${node.id}`,
       id: node.id,
       shortName: node.shortName,
       name: node.name,
@@ -355,7 +355,7 @@ export function taskBoardOf(graph: SpecGraph, ledgers: Ledgers): TaskBoard {
         id: criterion.id,
         name: criterion.name,
         // Null when the far end is no criterion — the same answer the queue's
-        // task card gives for this field, so one wire word for one fact.
+        // work item card gives for this field, so one wire word for one fact.
         closure: status.get(criterion.id)?.closure ?? null,
       })),
       addressedBy: reach(node.id, "ADDRESSES", "in", context).map((log) => ({

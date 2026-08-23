@@ -12,7 +12,7 @@ The gate passed, which means `shall status --json` already answered. Nothing els
 
 ## Steps
 
-1. **`shall board --json`** — the two halves, Fix Spec and the tasks ready to start.
+1. **`shall board --json`** — the two halves, Fix Spec and the work items ready to start.
 2. **Reuse the status from the gate.** It carries every node with its colour and the relations each file draws, which is everything the next step needs.
 3. **Work out which findings nobody has answered, yourself.** A finding is answered when some decision's own relations reach it — `shall-authoring/references/relations.md` names the line and says whose file it lives in — and unanswered when none does. Join the two lists out of the status you already have; nothing computes this for you and nothing needs to.
 4. **Open the unanswered findings' files, and only those.** The body says what was found, and the frontmatter may carry the mark that says it was stopping the work that found it — a key written only when true, documented in the starting file `shall add-spec-node --type Finding` writes. This is a survey: read those files and no others.
@@ -22,7 +22,7 @@ The gate passed, which means `shall status --json` already answered. Nothing els
 |---|---|---|
 | 1 | findings nobody has answered | the ones marked as stopping work first, then the rest, one line each: the id, what it says, and the ids it names. Say plainly that the mark is the author's judgment and locks nothing — it is a reason to look first, not a gate |
 | 2 | Fix Spec | a person's rejection first, with one line of its rationale and a note that the whole of it is the work order when the item is picked; then what the grammar found, each with its own word for what is wrong |
-| 3 | ready to start | the board's own order, each with the module it belongs to, the criteria it aims at and whether those are open or closed, and any work already logged against it |
+| 3 | ready to start | the board's own order, each with the module it belongs to, the criteria it targets and whether those are open or closed, and any work already logged against it |
 | 4 | what is waiting | one line: how many nodes are in the Review Queue |
 
 6. **Stop.** Nothing ran and nothing was written. A suggestion about what to do next is one line at most.

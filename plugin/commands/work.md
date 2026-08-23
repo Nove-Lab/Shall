@@ -1,5 +1,5 @@
 ---
-description: Run one turn of Shall's work cycle — surveys the board, proposes a small bundle, leaves the development to you, and writes the turn up as one journal for the Review Queue. --auto runs it without stopping; --dry forecasts it and writes nothing.
+description: Run one turn of Shall's work cycle — surveys the board, proposes a small bundle, leaves the development to you, holds each item to its definition of done, and writes the turn up as one journal for the Review Queue. --auto runs it without stopping; --dry forecasts it and writes nothing.
 argument-hint: [--auto | --dry] [what to pick, in your own words]
 disable-model-invocation: true
 allowed-tools: Bash(shall:*), Bash(git:*), Read, Glob, Grep, Write, Edit, AskUserQuestion, Skill
@@ -15,7 +15,7 @@ Read them for two flags before anything else:
 
 | What you find | What it means |
 |---|---|
-| `--auto` | run the whole cycle without stopping — the two stops below are removed and nothing is asked |
+| `--auto` | run the whole cycle without stopping — the two stops below are removed and nothing is asked; the approach goes into the journal instead of stop 1 |
 | `--dry` | forecast the turn and write nothing at all: no node, no commit, no file anywhere |
 | both | say that a forecast and a run without stops contradict each other — one predicts a turn and the other finishes one — and stop. Do not pick one for the user |
 | anything else | the user's steer on what to pick this turn. It narrows the candidates and never removes a stop, and never overrules taking Fix Spec first unless the words say so outright |

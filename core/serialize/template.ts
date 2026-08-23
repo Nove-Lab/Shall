@@ -49,7 +49,7 @@ import {
 
 /**
  * The column the key hints start in — wide enough that the two keys' hints line
- * up, and the same column in all 22 files so a person reading two of them side
+ * up, and the same column in all 21 files so a person reading two of them side
  * by side reads one shape.
  */
 const HINT_COLUMN = 23;

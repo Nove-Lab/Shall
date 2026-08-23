@@ -26,7 +26,7 @@ If the call fails, read **both** stdout and stderr, then match what you find:
 
 Match the daemon row on the substring, never on the whole sentence: the router writes the kind of procedure it wanted into the message the CLI hands on unchanged (`No "query"-procedure on path "spec.status"` today), and that verb can change without the fault changing.
 
-Stop in every case. Do not work around any of them by reading the spec folder yourself: a record of work is written against the tasks and criteria it names, and those have to be read back.
+Stop in every case. Do not work around any of them by reading the spec folder yourself: a record of work is written against the work items and criteria it names, and those have to be read back.
 
 ## Step 1 — load the skills
 

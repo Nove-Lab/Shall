@@ -63,7 +63,7 @@ import { MetamodelDialog } from "./metamodel/MetamodelDialog";
 import { RejectionPopover } from "./RejectionPopover";
 import {
   closuresOf,
-  taskStatesOf,
+  workItemStatesOf,
   deletionSentence,
   impactSentence,
   judgeable,
@@ -441,11 +441,11 @@ export function SpecPlane() {
    */
   const closureById = useMemo(() => closuresOf(review), [review]);
   /**
-   * Blocked, ready or done, per task — the board's own answer, memoised beside
+   * Blocked, ready or done, per work item — the board's own answer, memoised beside
    * the other two for the reason they are: it is a dependency of the card memo
    * inside the canvas, and a fresh map per render rebuilds every card.
    */
-  const taskStateById = useMemo(() => taskStatesOf(review), [review]);
+  const workItemStateById = useMemo(() => workItemStatesOf(review), [review]);
   /** The same answers keyed for the panel, which wants the reason rather than the colour. */
   const statusById = useMemo(() => statusesById(review), [review]);
   /** Missing nodes and unreadable files together — the button and the dialog count once. */
@@ -469,7 +469,7 @@ export function SpecPlane() {
    */
   const unapprovedClaimants = useMemo(() => {
     // WHICH RELATION CLAIMS THIS NODE IS THE CANON'S ANSWER AND NOT THIS
-    // FILE'S: `CLAIMS` into a criterion, `ADDRESSES` into a task. A node that
+    // FILE'S: `CLAIMS` into a criterion, `ADDRESSES` into a work item. A node that
     // is neither has no claimants and no switch.
     const claim = closureKindOf(selected?.type ?? "")?.claim;
     if (claim === undefined) {
@@ -1166,7 +1166,7 @@ export function SpecPlane() {
                     edges={edges}
                     signalById={signalById}
                     closureById={closureById}
-                    taskStateById={taskStateById}
+                    workItemStateById={workItemStateById}
                     selectedId={selected?.id ?? null}
                     onSelect={openNode}
                     onBackgroundClick={closeReadPanel}

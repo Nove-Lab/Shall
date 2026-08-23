@@ -93,7 +93,7 @@ function accept(
   subject: SpecNode,
   claimants: readonly SpecNode[],
   edges: readonly SpecEdge[],
-  kind: "criterion" | "task" = "criterion",
+  kind: "criterion" | "workItem" = "criterion",
 ): [string, AcceptanceRecord] {
   return [
     subject.id,
@@ -141,7 +141,7 @@ const SPINE: SpecEdge[] = [
 /**
  * The fixture with these claimants wired in, claiming the AC — and SUBMITTED BY
  * NOBODY, deliberately: a submitted claim answers to the aim rule (it may claim
- * only what its log's addressed tasks target), and this file is about closure,
+ * only what its log's addressed work items target), and this file is about closure,
  * not aim. The claim alone anchors an Evidence.
  */
 function world(...claimants: SpecNode[]): {
@@ -246,7 +246,7 @@ function leaveOpen(
   subject: SpecNode,
   claimants: readonly SpecNode[],
   edges: readonly SpecEdge[],
-  kind: "criterion" | "task" = "criterion",
+  kind: "criterion" | "workItem" = "criterion",
 ): [string, RejectionRecord] {
   return [
     subject.id,

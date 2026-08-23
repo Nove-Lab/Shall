@@ -1,4 +1,4 @@
-import type { FixSpecItem, ImplementItem, TaskBoard } from "@/spec/review";
+import type { FixSpecItem, ImplementItem, WorkBoard } from "@/spec/review";
 import { firstLine } from "@/spec/review";
 import { countWord } from "../parts";
 
@@ -6,7 +6,7 @@ import { countWord } from "../parts";
  * THE BOARD AS ONE LIST, because the page that shows it is one table.
  *
  * THE WIRE KEEPS TWO ARRAYS AND THE SCREEN KEEPS ONE ORDER. Fix Spec is above
- * Implement — a red node is somebody's turn right now, a ready task is merely
+ * Implement — a red node is somebody's turn right now, a ready work item is merely
  * available — and inside each half the arithmetic has already sorted the rows.
  * Flattening here rather than in `core/arith/board.ts` keeps the two halves
  * separately countable, which the glance and the empty states both want.
@@ -26,7 +26,7 @@ export const BOARD_KIND_LABEL: Record<BoardRow["kind"], string> = {
 };
 
 /** Fix Spec first, then Implement; each half in the order core put it in. */
-export function boardRows(board: TaskBoard): BoardRow[] {
+export function boardRows(board: WorkBoard): BoardRow[] {
   return [
     ...board.fixSpec.map((item) => ({ kind: "fix" as const, item })),
     ...board.implement.map((item) => ({ kind: "implement" as const, item })),
@@ -49,7 +49,7 @@ export function rowTitle(row: BoardRow): string {
  * of what was said. The whole of a rejection's rationale is the row's page:
  * it is a work order, and a table cell is not where a person reads one.
  *
- * A task is measured by what it is for and what is already on it: the module
+ * A work item is measured by what it is for and what is already on it: the module
  * it belongs to, the criteria it aims to close, and any work already logged
  * against it.
  */

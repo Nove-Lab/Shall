@@ -4,6 +4,44 @@ Decisions that came up while building and were deliberately not taken. Each one
 names where it would land, so taking it later is an edit and not an
 investigation.
 
+## From the plan-layer refactor round (2026-08-23)
+
+**Does the `Interface` node survive as a type of its own?** A `Module` now
+carries its contracts at signature level in its own body — name, inputs,
+outputs, errors — and the `Interface` node carries the obligations:
+preconditions, postconditions, invariants, protocol. Two homes for one boundary
+is the shape this round chose deliberately (the spec was silent on Interface and
+DataSchema, so both were left as they were), and whether agents keep the two in
+step is unmeasured. If they drift, the candidate moves are the obligations into
+the module's Contracts section with `Interface` retired, or the signatures out of
+the module and into the interface. Where it lands: `core/graph/canon.ts`,
+`grammar.ts`, `anchors.ts`, `guide.ts`, and the plan skill's stage files.
+
+**Should the technology decision be mandatory?** Stage 1 of `/shall:plan` lands
+a project-level `Decision` only when the stack is a project-wide choice; a
+single-module project, or one whose stack the intent already pinned as a
+Constraint, writes none. A plan with no decision and thin Technology sections is
+then legal and hollow, and nothing computed says so. Where it lands: the plan
+skill's end gate, as a prose line — or a check rule over `Module` bodies, which
+`shall check` does not read today by design.
+
+**Should the linter ban "task" as a type word?** Rule (f) in
+`scripts/lint-plugin.mjs` bans the three retired names; the bare word "task" is
+not banned because it is ordinary English. A skill that drifts back to "the
+task" for a work item would pass. Where it lands: the same file, as a rule that
+fails "task" only inside a code span or beside a type name.
+
+**Delete `docs/plans/*`?** The two files are self-marked temporary and still
+carry the old vocabulary; they were left untouched this round and excluded from
+the completion grep. Deleting them is one `git rm`, and the user's call.
+
+**A module's hidden decision has no home.** The old "Hidden Decision" section
+was abolished because it sheltered vagueness; the hiding question survives in
+stage 1 as a boundary test only, and what a module keeps to itself is meant to
+show in its Technology and its Decisions. Whether a module body that never says
+what it hides still makes a good boundary is the thing to watch in the next
+dogfood.
+
 ## From the help-and-feed round (2026-08-23)
 
 **The linter still hand-keeps the subcommand list, and this round paid for it
@@ -25,12 +63,14 @@ in `daemon/src/http/router.ts`, a `SHAPES` entry, and a lint entry.
 
 **What does a person actually see when the board is blank?** `--auto` writes a
 whole run before anybody judges it, and between the writing and the one approval
-`shall board` is empty on both halves — nothing red to fix, and every task
+`shall board` is empty on both halves — nothing red to fix, and every work item
 blocked because its chain is this run's own unjudged work. That is the correct
 computed answer and the skills now say so, but nobody has watched a person meet
-it. The phase-gated run gives a different experience: green accumulates band by
-band and the board fills as it goes. Whether the blank board reads as "wait" or
-as "broken" is unmeasured.
+it. Partly moot since 2026-08-23: `/shall:plan` writes the whole plan in one pass
+in both modes, so the board is blank until the one approval either way, and the
+phase-gated experience — green accumulating band by band — no longer exists for
+the plan. Whether the blank board reads as "wait" or as "broken" is still
+unmeasured.
 
 **How many cards does a whole run actually produce?** Both dogfood logs already
 name that measurement as the thing Round 2 exists to take — one card per top-level
@@ -107,7 +147,7 @@ built, which the root `test` script does not do today. Paid a second time on
 ## From the `/plan` round (2026-08-19)
 
 **Should a loop of `REFINES` between goals be red too?** The loop rule catches
-what the plan writes down — `DEPENDS_ON` between tasks or between requirements,
+what the plan writes down — `DEPENDS_ON` between work items or between requirements,
 and the module graph derived from `EXPOSES`/`CONSUMES` pairs. A goal that
 refines itself through others is the same defect wearing intent's clothes, and
 `upwardChainOf` already has a comment about terminating on one. It was left out
@@ -173,11 +213,11 @@ would need a cycle rule or a cardinality that does not exist today.
 
 ## Older, still open
 
-**Closing a task whose prerequisites are unfinished.** A completion report can
-close an ImplementationTask that is green but blocked — nothing consults the
-task's state at the closure door. `closureAsks` in `core/arith/closure.ts` is
-where the clause would go. Left open deliberately: a person closing a task with
-an open prerequisite may know something the graph does not.
+**Closing a work item whose prerequisites are unfinished.** A completion report
+can close a WorkItem that is green but blocked — nothing consults the work
+item's state at the closure door. `closureAsks` in `core/arith/closure.ts` is
+where the clause would go. Left open deliberately: a person closing a work item
+with an open prerequisite may know something the graph does not.
 
 **A lapsed rejection overwritten by a leave-open.** The rejection ledger is
 keyed by node id and carries both a node's refused wording and a criterion's

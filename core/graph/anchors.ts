@@ -30,7 +30,7 @@ import { bandOf, type NodeTypeName } from "./canon.js";
  * person brought between turns has no work log to be held by, and inventing a
  * parent for it would file a question under a turn of work that never met it.
  * The rest of the execution band is anchored like everything else — a work log
- * by the journal that logs it or the task it addresses, and evidence and a
+ * by the journal that logs it or the work item it addresses, and evidence and a
  * completion report by their own claim alone — because a record nothing
  * reaches is as much a card left lying on the canvas as a requirement nothing
  * requires.
@@ -46,10 +46,12 @@ import { bandOf, type NodeTypeName } from "./canon.js";
  *
  * `out` IS THE NODE THAT NAMES ITS OWN SUBJECT. A `Decision` is held by what it
  * revises, because nothing in the canon points at a decision at all; and, since
- * the aim, the addressing and the claim became the lower node's own lines, an
- * `ImplementationTask` is held by the criterion it targets, a `WorkLog` by the
- * task it addresses, an `Evidence` by the criterion it claims to satisfy and a
- * `TaskCompletionReport` by the task it says is finished.
+ * the addressing and the claim became the lower node's own lines, a `WorkLog`
+ * is held by the work item it addresses, an `Evidence` by the criterion it
+ * claims to satisfy and a `CompletionReport` by the work item it says is
+ * finished. A work item's own `TARGETS` line is NOT among these: it aims, it
+ * does not hold — a work item belongs to a module by definition, so the module's
+ * `ALLOCATES` line is the one thing that holds it.
  */
 export type AnchorDirection = "in" | "out";
 
@@ -87,13 +89,14 @@ export const ANCHOR_RULES: readonly AnchorRule[] = [
   { type: "AcceptanceCriterion",  anchors: [{ direction: "in", edgeType: "HAS_CRITERION" }] },
   { type: "Constraint",           anchors: [{ direction: "in", edgeType: "HAS_CONSTRAINT" }] },
 
-  // Plan. The two-anchor rows are here: a contract may be exposed or consumed,
-  // and a task by the module that allocates it or by the criterion its own
-  // TARGETS line aims at.
-  { type: "ModuleDesign",         anchors: [{ direction: "in", edgeType: "IS_REALIZED_BY" }] },
+  // Plan. The one two-anchor row is the contract's: exposed or consumed. A work
+  // item is held by the module that allocates it and by nothing else — its own
+  // TARGETS line aims and does not hold, so a work item no module allocates is
+  // an orphan the check names, however many criteria it targets.
+  { type: "Module",               anchors: [{ direction: "in", edgeType: "IS_REALIZED_BY" }] },
   { type: "Interface",            anchors: [{ direction: "in", edgeType: "EXPOSES" }, { direction: "in", edgeType: "CONSUMES" }] },
   { type: "DataSchema",           anchors: [{ direction: "in", edgeType: "CARRIES" }] },
-  { type: "ImplementationTask",   anchors: [{ direction: "in", edgeType: "ALLOCATES" }, { direction: "out", edgeType: "TARGETS" }] },
+  { type: "WorkItem",             anchors: [{ direction: "in", edgeType: "ALLOCATES" }] },
 
   // A DECISION IS HELD BY WHAT IT REVISES, and this row is where the canon's
   // "at least one" lives. Nothing in the canon points at a decision, so the
@@ -107,7 +110,7 @@ export const ANCHOR_RULES: readonly AnchorRule[] = [
   { type: "Decision",             anchors: [{ direction: "out", edgeType: "AFFECTS" }] },
 
   // Execution. The journal is the root of the record, and a work log is held by
-  // the journal that logs it or by the task its own ADDRESSES line reaches —
+  // the journal that logs it or by the work item its own ADDRESSES line reaches —
   // either of those will do.
   // A FINDING IS HELD BY NOTHING AND POINTS AT NOTHING. It starts no relation
   // in the canon at all, and nothing has to reach it either: the `RECORDS` line
@@ -117,7 +120,7 @@ export const ANCHOR_RULES: readonly AnchorRule[] = [
   // exists. The ids it concerns live in its own frontmatter, where nothing
   // resolves them and a dangling one is not a fault.
   // EVIDENCE AND A COMPLETION REPORT ARE HELD BY THEIR CLAIM ALONE: evidence
-  // is shown AGAINST a criterion and a report is filed ABOUT a task, so the
+  // is shown AGAINST a criterion and a report is filed ABOUT a work item, so the
   // `CLAIMS` line is not one way to anchor either but the thing that makes each
   // what it is. The SUBMITS line says who brought them, never what they are
   // about, and holding a claimless one to the graph by its submitter is exactly
@@ -125,7 +128,7 @@ export const ANCHOR_RULES: readonly AnchorRule[] = [
   { type: "Journal",              anchors: [] },
   { type: "WorkLog",              anchors: [{ direction: "in", edgeType: "LOGS" }, { direction: "out", edgeType: "ADDRESSES" }] },
   { type: "Evidence",             anchors: [{ direction: "out", edgeType: "CLAIMS" }] },
-  { type: "TaskCompletionReport", anchors: [{ direction: "out", edgeType: "CLAIMS" }] },
+  { type: "CompletionReport",     anchors: [{ direction: "out", edgeType: "CLAIMS" }] },
   { type: "Finding",              anchors: [] },
 
   // The satellite, which hangs off the chalk node that assumed it.
@@ -250,7 +253,7 @@ export function orphanStem(id: string, type: string): string {
 
 /**
  * THE STEM WITH THE CHECK'S OWN TAIL — the whole sentence `shall check` files
- * against an orphan, and the Task Board's Fix Spec row quotes rather than
+ * against an orphan, and the Work Board's Fix Spec row quotes rather than
  * recomposes. Two speakers say this one identically, so it has one home; the
  * approve and reject doors keep tails of their own and quote only the stem.
  */

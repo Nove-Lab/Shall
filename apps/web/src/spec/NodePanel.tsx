@@ -185,16 +185,16 @@ function statusCopy(
             : `${opening} ${openingArticleFor(node.type)} ${node.type} is anchored by ${phrase}.`,
       };
     }
-    // THE AIM RULE: a work log under a task submits evidence only for what the
-    // task targets. The daemon composed the sentence — it names the log, the
-    // task, the criteria and the evidence, which is more than this panel holds
+    // THE AIM RULE: a work log under a work item submits evidence only for what the
+    // work item targets. The daemon composed the sentence — it names the log, the
+    // work item, the criteria and the evidence, which is more than this panel holds
     // — so it is quoted whole, from whichever end the person is standing on.
     case "off-target":
       return {
-        title: "Outside its task's aim",
+        title: "Outside its work item's aim",
         body:
           status.problem ??
-          "This node sits on a seam between a work log, its task and its claims — the evidence or report claims what the task does not cover. Fix the ADDRESSES, TARGETS or CLAIMS line first.",
+          "This node sits on a seam between a work log, its work item and its claims — the evidence or report claims what the work item does not cover. Fix the ADDRESSES, TARGETS or CLAIMS line first.",
       };
     // A LOOP IN THE PLAN: work waiting on itself through others, or two
     // modules that consume each other's contracts. The sentence recites the
@@ -209,14 +209,14 @@ function statusCopy(
           "This node stands on a loop: following what it waits on comes back here. Nothing on a loop can be first, so remove one of the lines that closes it.",
       };
     // WORK BEFORE ITS TURN. The daemon composed the sentence — it names the
-    // blocked task, which is more than this panel holds — so it is quoted
+    // blocked work item, which is more than this panel holds — so it is quoted
     // whole, like the aim rule's.
     case "premature":
       return {
         title: "Work before its turn",
         body:
           status.problem ??
-          "This work log addresses a task that is still blocked — its chain is unread, or something it waits on is open. Settle that first.",
+          "This work log addresses a work item that is still blocked — its chain is unread, or something it waits on is open. Settle that first.",
       };
     case "missing":
     case "malformed":
@@ -227,12 +227,12 @@ function statusCopy(
 
 /**
  * THE NOUNS EACH SUBJECT'S CLOSURE CAPTION IS SAID IN. A criterion is closed on
- * evidence claiming it and a task on reports claiming it, so the sentence is
+ * evidence claiming it and a work item on reports claiming it, so the sentence is
  * one sentence with two vocabularies rather than two sentences. Module scope,
  * because the panel re-renders per keystroke and this table never moves.
  */
 const CLOSURE_WORDS: Record<
-  "criterion" | "task",
+  "criterion" | "workItem",
   { none: string; unread: string; one: string; many: (count: number) => string }
 > = {
   criterion: {
@@ -242,12 +242,12 @@ const CLOSURE_WORDS: Record<
     one: "One piece of evidence claims this criterion.",
     many: (count) => `${String(count)} pieces of evidence claim this criterion.`,
   },
-  task: {
-    none: "No completion report claims this task yet — nothing to close over.",
+  workItem: {
+    none: "No completion report claims this work item yet — nothing to close over.",
     unread:
-      "Approve this task first — until what it asks for is agreed there is nothing for the work to be done against.",
-    one: "One completion report claims this task.",
-    many: (count) => `${String(count)} completion reports claim this task.`,
+      "Approve this work item first — until what it asks for is agreed there is nothing for the work to be done against.",
+    one: "One completion report claims this work item.",
+    many: (count) => `${String(count)} completion reports claim this work item.`,
   },
 };
 
@@ -711,7 +711,7 @@ export function NodePanel({
    * caption's next question, not this count's.
    */
   // WHICH RELATION CLAIMS THIS NODE IS THE CANON'S ANSWER: `CLAIMS` into a
-  // criterion, `ADDRESSES` into a task, and nothing into anything else.
+  // criterion, `ADDRESSES` into a work item, and nothing into anything else.
   const closureKind = closureKindOf(node?.type ?? "");
   const claimants =
     closureKind === null
@@ -1495,7 +1495,7 @@ export function NodePanel({
                 <span className="font-mono text-xs break-all">{node.id}</span>
                 <SecondAxisMark
                   closure={status?.closure ?? null}
-                  taskState={status?.taskState ?? null}
+                  workItemState={status?.workItemState ?? null}
                 />
               </div>
             </Field>
@@ -1598,7 +1598,7 @@ export function NodePanel({
                     </span>
                     <SecondAxisMark
                       closure={status?.closure ?? null}
-                      taskState={status?.taskState ?? null}
+                      workItemState={status?.workItemState ?? null}
                     />
                   </div>
                 </Field>

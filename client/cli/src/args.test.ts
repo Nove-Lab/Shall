@@ -128,14 +128,14 @@ describe("--scope", () => {
         "check",
         "--scope",
         "intent",
-        "--scope=plan/Task",
+        "--scope=plan/Work item",
         "--scope",
         "../ac",
       ),
       {
         command: "check",
         json: false,
-        scope: ["intent", "plan/Task", "../ac"],
+        scope: ["intent", "plan/Work item", "../ac"],
       },
     );
   });

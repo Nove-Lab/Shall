@@ -325,7 +325,7 @@ export function SpecNodeCard({ data }: NodeProps<CardNode>) {
             Both are stock utilities — no new style, only a smaller one. */}
         <SecondAxisMark
           closure={data.closure}
-          taskState={data.taskState}
+          workItemState={data.workItemState}
           className="h-4 px-1.5"
         />
       </div>

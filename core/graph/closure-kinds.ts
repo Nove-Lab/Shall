@@ -4,7 +4,7 @@ import type { NodeTypeName } from "./canon.js";
  * The two things a person CLOSES, and the relation that claims each of them.
  *
  * CLOSURE IS A SECOND AXIS AND IT NOW HAS TWO SUBJECTS. A criterion is met when
- * evidence shows it is; a task is done when a completion report shows it is —
+ * evidence shows it is; a work item is done when a completion report shows it is —
  * the work logs that addressed it are how it was worked on, not what proves it
  * finished. Both judgements are the same act — a person reads a LIST of lower
  * nodes and says "yes, on these" or "not yet, and here is why" — so both are
@@ -21,12 +21,17 @@ import type { NodeTypeName } from "./canon.js";
  * THE CLAIM RUNS FROM THE CLAIMANT, both times — the lower node names what it
  * claims in its own file, so a new claim never touches the subject's file and
  * never moves its approval. Both rows are the CLAIMS edge on purpose: closing
- * is judged over claims, and ADDRESSES stays what it always was — which task
- * this work was done under — without being a closure list too.
+ * is judged over claims, and ADDRESSES stays what it always was — which work
+ * item this work was done under — without being a closure list too.
+ *
+ * THE TAG IS A NAME INSIDE THE PROCESS AND NEVER A BYTE ON DISK. The acceptance
+ * and rejection ledgers write `taskHash` and `reports` for the work-item kind —
+ * keys frozen on 2026-08-17, which the codecs map to — so renaming the tag from
+ * `work item` to `workItem` on 2026-08-23 moved nothing in any book.
  */
 
 /** Which of the two things is being closed. */
-export type ClosureSubject = "criterion" | "task";
+export type ClosureSubject = "criterion" | "workItem";
 
 /** One row: the subject, the relation that claims it, and what draws that relation. */
 export interface ClosureKind {
@@ -44,12 +49,12 @@ export const CLOSURE_KINDS: readonly ClosureKind[] = [
     claim: "CLAIMS",
     claimantType: "Evidence",
   },
-  // #24— TaskCompletionReport —CLAIMS→ ImplementationTask
+  // #24— CompletionReport —CLAIMS→ WorkItem
   {
-    kind: "task",
-    subjectType: "ImplementationTask",
+    kind: "workItem",
+    subjectType: "WorkItem",
     claim: "CLAIMS",
-    claimantType: "TaskCompletionReport",
+    claimantType: "CompletionReport",
   },
 ];
 

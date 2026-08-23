@@ -842,7 +842,7 @@ describe("the scaffold door", () => {
     await says(
       scaffoldSpecNode({ path: project.path, type: "Widget" }),
       "invalid",
-      "Unknown node type: Widget. The canon's types are Term, DomainEntity, Goal, Actor, UseCase, Scenario, SystemResponsibility, Requirement, AcceptanceCriterion, Constraint, ModuleDesign, Interface, DataSchema, ImplementationTask, Decision, Journal, WorkLog, Evidence, TaskCompletionReport, Finding, Assumption.",
+      "Unknown node type: Widget. The canon's types are Term, DomainEntity, Goal, Actor, UseCase, Scenario, SystemResponsibility, Requirement, AcceptanceCriterion, Constraint, Module, Interface, DataSchema, WorkItem, Decision, Journal, WorkLog, Evidence, CompletionReport, Finding, Assumption.",
     );
   });
 
@@ -1042,7 +1042,7 @@ describe("checkSpec", () => {
     ]);
   });
 
-  test("a work log whose evidence claims outside its task's aim is a gap at both ends", async () => {
+  test("a work log whose evidence claims outside its work item's aim is a gap at both ends", async () => {
     // The aim rule is grammar: it names the seam under the log and under the
     // evidence, in words a person can act on from either file.
     const project = await newProject();
@@ -1055,7 +1055,8 @@ describe("checkSpec", () => {
       ["Requirement", "R-0001"],
       ["AcceptanceCriterion", "AC-0001"],
       ["AcceptanceCriterion", "AC-0002"],
-      ["ImplementationTask", "IT-0001"],
+      ["Module", "M-0001"],
+      ["WorkItem", "WI-0001"],
       ["Journal", "J-0001"],
       ["WorkLog", "WL-0001"],
       ["Evidence", "EV-0001"],
@@ -1070,9 +1071,11 @@ describe("checkSpec", () => {
       ["REQUIRES", "SR-0001", "R-0001"],
       ["HAS_CRITERION", "R-0001", "AC-0001"],
       ["HAS_CRITERION", "R-0001", "AC-0002"],
-      ["TARGETS", "IT-0001", "AC-0001"],
+      ["IS_REALIZED_BY", "SR-0001", "M-0001"],
+      ["ALLOCATES", "M-0001", "WI-0001"],
+      ["TARGETS", "WI-0001", "AC-0001"],
       ["LOGS", "J-0001", "WL-0001"],
-      ["ADDRESSES", "WL-0001", "IT-0001"],
+      ["ADDRESSES", "WL-0001", "WI-0001"],
       ["SUBMITS", "WL-0001", "EV-0001"],
       ["CLAIMS", "EV-0001", "AC-0002"],
     ] as const) {
@@ -1084,19 +1087,23 @@ describe("checkSpec", () => {
       {
         file: "execution/Evidence/EV-0001.md",
         message:
-          "EV-0001 claims AC-0002, but the work log that submitted it, WL-0001, addresses IT-0001, which targets AC-0001 — a work log's evidence claims only the criteria its task targets.",
+          "EV-0001 claims AC-0002, but the work log that submitted it, WL-0001, addresses WI-0001, which target AC-0001 — a work log's evidence claims only the criteria its work items target.",
       },
       {
         file: "execution/WorkLog/WL-0001.md",
         message:
-          "WL-0001 addresses IT-0001, which targets AC-0001, but submits EV-0001, which claims AC-0002 — a work log's evidence claims only the criteria its task targets.",
+          "WL-0001 addresses WI-0001, which target AC-0001, but submits EV-0001, which claims AC-0002 — a work log's evidence claims only the criteria its work items target.",
       },
     ]);
   });
 
-  test("a task aiming at two criteria is one gap, under the task's own file", async () => {
-    // The aim rule's third clause reads one file, so it files one row — and
-    // it files it under the task, which is where both TARGETS lines are.
+  test("a work item aiming at two criteria is not a gap — the check is silent and both aims stand", async () => {
+    // Until 2026-08-23 the aim rule had a third clause that filed a work item
+    // with two TARGETS lines under its own file. A work item now targets as
+    // many criteria as it genuinely closes, so the check says nothing about
+    // it, and a work item no module allocates — the orphan the same graph
+    // would show without the ALLOCATES line — is the one row this graph is
+    // not allowed to produce.
     const project = await newProject();
     for (const [type, id] of [
       ["Goal", "G-0001"],
@@ -1107,8 +1114,8 @@ describe("checkSpec", () => {
       ["Requirement", "R-0001"],
       ["AcceptanceCriterion", "AC-0001"],
       ["AcceptanceCriterion", "AC-0002"],
-      ["ModuleDesign", "MD-0001"],
-      ["ImplementationTask", "IT-0001"],
+      ["Module", "M-0001"],
+      ["WorkItem", "WI-0001"],
     ] as const) {
       await node(project, type, id, GOAL_BODY);
     }
@@ -1120,25 +1127,27 @@ describe("checkSpec", () => {
       ["REQUIRES", "SR-0001", "R-0001"],
       ["HAS_CRITERION", "R-0001", "AC-0001"],
       ["HAS_CRITERION", "R-0001", "AC-0002"],
-      ["IS_REALIZED_BY", "SR-0001", "MD-0001"],
-      ["ALLOCATES", "MD-0001", "IT-0001"],
-      ["TARGETS", "IT-0001", "AC-0001"],
-      ["TARGETS", "IT-0001", "AC-0002"],
+      ["IS_REALIZED_BY", "SR-0001", "M-0001"],
+      ["ALLOCATES", "M-0001", "WI-0001"],
+      ["TARGETS", "WI-0001", "AC-0001"],
+      ["TARGETS", "WI-0001", "AC-0002"],
     ] as const) {
       await createSpecEdge({ projectId: project.id, type, fromId, toId });
     }
     const check = await checkSpec(project.path);
     assert.deepEqual(check.problems, []);
-    assert.deepEqual(check.gaps, [
-      {
-        file: "plan/ImplementationTask/IT-0001.md",
-        message:
-          "IT-0001 targets AC-0001 and AC-0002 — a task aims at one criterion at most, because a task with two aims closes neither on its own. Split the task, or remove the TARGETS line this work is not for.",
-      },
-    ]);
+    assert.deepEqual(check.gaps, []);
+    // And both aims stand in the graph, as written.
+    assert.deepEqual(
+      (await listSpecEdges(project.id))
+        .filter((edge) => edge.type === "TARGETS" && edge.fromId === "WI-0001")
+        .map((edge) => edge.toId)
+        .sort(),
+      ["AC-0001", "AC-0002"],
+    );
   });
 
-  test("two tasks waiting on each other are a gap under each of their files", async () => {
+  test("two work items waiting on each other are a gap under each of their files", async () => {
     // A loop is filed under every node standing on it: either DEPENDS_ON line
     // closes it, and the person is standing on whichever file they opened.
     const project = await newProject();
@@ -1148,9 +1157,9 @@ describe("checkSpec", () => {
       ["UseCase", "UC-0001"],
       ["Scenario", "SC-0001"],
       ["SystemResponsibility", "SR-0001"],
-      ["ModuleDesign", "MD-0001"],
-      ["ImplementationTask", "IT-0001"],
-      ["ImplementationTask", "IT-0002"],
+      ["Module", "M-0001"],
+      ["WorkItem", "WI-0001"],
+      ["WorkItem", "WI-0002"],
     ] as const) {
       await node(project, type, id, GOAL_BODY);
     }
@@ -1159,11 +1168,11 @@ describe("checkSpec", () => {
       ["PERFORMS", "A-0001", "UC-0001"],
       ["DETAILS", "UC-0001", "SC-0001"],
       ["DERIVES_RESPONSIBILITY", "SC-0001", "SR-0001"],
-      ["IS_REALIZED_BY", "SR-0001", "MD-0001"],
-      ["ALLOCATES", "MD-0001", "IT-0001"],
-      ["ALLOCATES", "MD-0001", "IT-0002"],
-      ["DEPENDS_ON", "IT-0001", "IT-0002"],
-      ["DEPENDS_ON", "IT-0002", "IT-0001"],
+      ["IS_REALIZED_BY", "SR-0001", "M-0001"],
+      ["ALLOCATES", "M-0001", "WI-0001"],
+      ["ALLOCATES", "M-0001", "WI-0002"],
+      ["DEPENDS_ON", "WI-0001", "WI-0002"],
+      ["DEPENDS_ON", "WI-0002", "WI-0001"],
     ] as const) {
       await createSpecEdge({ projectId: project.id, type, fromId, toId });
     }
@@ -1171,14 +1180,14 @@ describe("checkSpec", () => {
     assert.deepEqual(check.problems, []);
     assert.deepEqual(check.gaps, [
       {
-        file: "plan/ImplementationTask/IT-0001.md",
+        file: "plan/WorkItem/WI-0001.md",
         message:
-          "IT-0001 waits on IT-0002, which waits on IT-0001 — a task cannot wait on itself through others, and no task on this loop can ever be called ready. Remove one DEPENDS_ON line, or split the task both halves need.",
+          "WI-0001 waits on WI-0002, which waits on WI-0001 — a work item cannot wait on itself through others, and no work item on this loop can ever be called ready. Remove one DEPENDS_ON line, or split the work item both halves need.",
       },
       {
-        file: "plan/ImplementationTask/IT-0002.md",
+        file: "plan/WorkItem/WI-0002.md",
         message:
-          "IT-0002 waits on IT-0001, which waits on IT-0002 — a task cannot wait on itself through others, and no task on this loop can ever be called ready. Remove one DEPENDS_ON line, or split the task both halves need.",
+          "WI-0002 waits on WI-0001, which waits on WI-0002 — a work item cannot wait on itself through others, and no work item on this loop can ever be called ready. Remove one DEPENDS_ON line, or split the work item both halves need.",
       },
     ]);
   });

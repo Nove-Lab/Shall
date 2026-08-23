@@ -174,7 +174,7 @@ export function openingViewport(layout: Layout): Viewport | null {
  *
  * Both layouts place a node by its TYPE, so a node authored from anywhere can
  * land columns away from wherever you happen to be looking — measured on the
- * board this ports from: an `ImplementationTask` at x = 2435 in a 1200px canvas,
+ * board this ports from: an `WorkItem` at x = 2435 in a 1200px canvas,
  * with the detail panel opening on it and the viewport never moving.
  *
  * FULLY ON SCREEN MEANS THE WHOLE CARD, not its top-left corner: a card cut in

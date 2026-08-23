@@ -188,7 +188,7 @@ describe("the rejection ledger door", () => {
       ["- a\n", "The rejection ledger is a list, not a map from node id to rejection record."],
       [
         "R-0001: 3\n",
-        "Every record in the rejection ledger is a map of rejectedHash, by, at and rationale, each of them text — with one map of what was left open over it, evidence for a criterion or reports for a task, holding at least one entry and never both — the record under R-0001 is not.",
+        "Every record in the rejection ledger is a map of rejectedHash, by, at and rationale, each of them text — with one map of what was left open over it, evidence for a criterion or reports for a work item, holding at least one entry and never both — the record under R-0001 is not.",
       ],
     ] as const) {
       const file = await makeLedgerPath();

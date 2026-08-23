@@ -1498,18 +1498,18 @@ name:                  # required · one line
 
   test("the completion report template shows the one line it may write: its claim", () => {
     // #24— turned the report round the way #24 turned the evidence: the
-    // report names the ONE task it is filed about in its own file, so an agent
-    // starting one sees where to aim it, and the task's file is never touched
+    // report names the ONE work item it is filed about in its own file, so an agent
+    // starting one sees where to aim it, and the work item's file is never touched
     // by the claim being made.
-    const text = emitTemplate("TaskCompletionReport");
+    const text = emitTemplate("CompletionReport");
     assert.ok(
       text.includes(
-        "# From a TaskCompletionReport the canon allows:\n#   CLAIMS -> ImplementationTask\n",
+        "# From a CompletionReport the canon allows:\n#   CLAIMS -> WorkItem\n",
       ),
       text,
     );
     assert.ok(
-      text.includes("# edges:\n#   - type: CLAIMS\n#     to: IT-0001\n"),
+      text.includes("# edges:\n#   - type: CLAIMS\n#     to: WI-0001\n"),
       text,
     );
   });
@@ -1585,7 +1585,7 @@ name:                  # required · one line
     );
     assert.ok(
       text.includes(
-        "#   AFFECTS  -> ImplementationTask\n#   RESOLVES -> Finding\n",
+        "#   AFFECTS  -> WorkItem\n#   RESOLVES -> Finding\n",
       ),
       text,
     );
@@ -1601,6 +1601,86 @@ name:                  # required · one line
     const text = emitTemplate("WorkLog");
     assert.ok(text.includes("# commits:\n#   - 0123abc\n"), text);
     assert.equal(emitTemplate("Journal").includes("commits"), false);
+  });
+
+  test("the WorkLog template opens on the approach the stretch outside Shall took", () => {
+    // The record says which approach before it says what happened under it —
+    // reconstructible, and not the procedure in full — so Approach is the
+    // first heading in both renderings of the guide.
+    const text = emitTemplate("WorkLog");
+    assert.ok(text.includes("\n#   ## Approach — "), text);
+    assert.ok(text.includes("\n#   ## Narrative\n#   ## Outcome\n"), text);
+    assert.ok(text.endsWith("\n## Approach\n\n## Narrative\n\n## Outcome\n"), text);
+  });
+
+  test("the Module template suggests six sections, and names a technology by its standard name", () => {
+    // THE PLAN BAND IS WHERE TECHNOLOGY IS DECIDED. A module says what it runs
+    // on and is built with, by the names the world uses, and its contracts at
+    // signature level — so the hints carry real names on purpose: a figure of
+    // speech where a technology should stand is a decision somebody makes
+    // again on the day the work starts. Both renderings are checked: the
+    // commented list above the fence, and the headings the file starts with.
+    const text = emitTemplate("Module");
+    assert.ok(text.includes("# Module — the starting shape of a Module node."), text);
+    assert.ok(
+      text.includes(
+        "# .shall/spec/plan/Module/<id>.md with the next free id as its name.",
+      ),
+      text,
+    );
+    assert.ok(text.includes("M-0001 is the shape"), text);
+    for (const label of [
+      "Responsibility",
+      "Technology",
+      "Structure",
+      "Contracts",
+      "Behavior",
+      "Decisions",
+    ]) {
+      assert.ok(text.includes(`\n#   ## ${label} — `), `${label}: ${text}`);
+    }
+    assert.ok(
+      text.endsWith(
+        "\n## Responsibility\n\n## Technology\n\n## Structure\n\n## Contracts\n\n## Behavior\n\n## Decisions\n",
+      ),
+      text,
+    );
+    assert.ok(text.includes("localStorage is localStorage"), text);
+    assert.ok(text.includes("signature level"), text);
+    // The old shape is gone with its hiding place.
+    assert.equal(text.includes("Hidden Decision"), false);
+    assert.equal(text.includes("Role Description"), false);
+  });
+
+  test("the WorkItem template suggests three sections — scope and its definition of done, never the method", () => {
+    const text = emitTemplate("WorkItem");
+    assert.ok(
+      text.includes(
+        "# .shall/spec/plan/WorkItem/<id>.md with the next free id as its name.",
+      ),
+      text,
+    );
+    assert.ok(text.includes("WI-0001 is the shape"), text);
+    assert.ok(text.includes("\n#   ## Scope — "), text);
+    assert.ok(text.includes("\n#   ## Definition of Done — "), text);
+    assert.ok(text.includes("\n#   ## Notes — optional"), text);
+    assert.ok(
+      text.endsWith("\n## Scope\n\n## Definition of Done\n\n## Notes\n"),
+      text,
+    );
+    // The definition of done is illustrated with a real call and a real
+    // screen, and the scope says what it never carries.
+    assert.ok(text.includes("pause() and resume()"), text);
+    assert.ok(text.includes("no files, no functions, no procedure"), text);
+    assert.equal(text.includes("Deliverables"), false);
+    assert.equal(text.includes("Non-Goals"), false);
+    // Its relations: it waits, it aims, it mentions — and none of them holds it.
+    assert.ok(
+      text.includes(
+        "# From a WorkItem the canon allows:\n#   DEPENDS_ON -> WorkItem\n#   TARGETS    -> AcceptanceCriterion\n#   MENTIONS   -> Term\n",
+      ),
+      text,
+    );
   });
 
   test("the Journal template opens on the words that opened the work", () => {
@@ -2726,7 +2806,7 @@ describe("the rejection ledger", () => {
 
   test("a record of anything but the four fields is one sentence about that id", () => {
     const shape =
-      "Every record in the rejection ledger is a map of rejectedHash, by, at and rationale, each of them text — with one map of what was left open over it, evidence for a criterion or reports for a task, holding at least one entry and never both — the record under R-0001 is not.";
+      "Every record in the rejection ledger is a map of rejectedHash, by, at and rationale, each of them text — with one map of what was left open over it, evidence for a criterion or reports for a work item, holding at least one entry and never both — the record under R-0001 is not.";
     for (const text of [
       "R-0001:\n  rejectedHash: sha256:aa\n  by: yjshin\n  at: x\n",
       "R-0001:\n  rejectedHash: sha256:aa\n  by: yjshin\n  at: x\n  rationale: why\n  note: looks fine\n",
@@ -2750,13 +2830,13 @@ describe("the rejection ledger", () => {
   test("the retired workLogs key on a left-open record is a shape refusal too", () => {
     assert.equal(
       parseRejectionLedger(
-        "IT-0007:\n  rejectedHash: sha256:it\n  workLogs:\n    WL-0003: sha256:22\n  by: yjshin\n  at: x\n  rationale: why\n",
+        "WI-0007:\n  rejectedHash: sha256:it\n  workLogs:\n    WL-0003: sha256:22\n  by: yjshin\n  at: x\n  rationale: why\n",
       ).problem,
-      "Every record in the rejection ledger is a map of rejectedHash, by, at and rationale, each of them text — with one map of what was left open over it, evidence for a criterion or reports for a task, holding at least one entry and never both — the record under IT-0007 is not.",
+      "Every record in the rejection ledger is a map of rejectedHash, by, at and rationale, each of them text — with one map of what was left open over it, evidence for a criterion or reports for a work item, holding at least one entry and never both — the record under WI-0007 is not.",
     );
   });
 
-  test("a task left open carries the reports it was judged on, under their own key", () => {
+  test("a work item left open carries the reports it was judged on, under their own key", () => {
     // The other book's other arm: the same map, named for what it holds, and a
     // record carrying both names refused rather than guessed at.
     const record: RejectionRecord = {
@@ -2765,15 +2845,15 @@ describe("the rejection ledger", () => {
       at: "2026-08-17T10:02:11.913Z",
       rationale: "WL-0003 stops at the happy path; the retry is not shown.",
       leftOpen: {
-        kind: "task",
+        kind: "workItem",
         claimants: new Map([["WL-0003", "sha256:22"]]),
       },
     };
-    const written = emitRejectionLedger(new Map([["IT-0007", record]]));
+    const written = emitRejectionLedger(new Map([["WI-0007", record]]));
     assert.equal(
       written,
       [
-        "IT-0007:",
+        "WI-0007:",
         "  rejectedHash: sha256:it",
         "  reports:",
         "    WL-0003: sha256:22",
@@ -2785,19 +2865,19 @@ describe("the rejection ledger", () => {
     );
     const reading = parseRejectionLedger(written);
     assert.equal(reading.problem, null);
-    assert.deepEqual(reading.records.get("IT-0007"), record);
+    assert.deepEqual(reading.records.get("WI-0007"), record);
     assert.equal(emitRejectionLedger(reading.records), written);
     assert.equal(
       parseRejectionLedger(
-        "IT-0007:\n  rejectedHash: sha256:it\n  evidence:\n    EV-0001: sha256:aa\n  reports:\n    WL-0003: sha256:22\n  by: yjshin\n  at: x\n  rationale: why\n",
+        "WI-0007:\n  rejectedHash: sha256:it\n  evidence:\n    EV-0001: sha256:aa\n  reports:\n    WL-0003: sha256:22\n  by: yjshin\n  at: x\n  rationale: why\n",
       ).problem,
-      "Every record in the rejection ledger is a map of rejectedHash, by, at and rationale, each of them text — with one map of what was left open over it, evidence for a criterion or reports for a task, holding at least one entry and never both — the record under IT-0007 is not.",
+      "Every record in the rejection ledger is a map of rejectedHash, by, at and rationale, each of them text — with one map of what was left open over it, evidence for a criterion or reports for a work item, holding at least one entry and never both — the record under WI-0007 is not.",
     );
     assert.equal(
       parseRejectionLedger(
-        "IT-0007:\n  rejectedHash: sha256:it\n  reports:\n    1234: sha256:aa\n    \"1234\": sha256:bb\n  by: yjshin\n  at: x\n  rationale: why\n",
+        "WI-0007:\n  rejectedHash: sha256:it\n  reports:\n    1234: sha256:aa\n    \"1234\": sha256:bb\n  by: yjshin\n  at: x\n  rationale: why\n",
       ).problem,
-      "1234 is written twice under IT-0007 in the rejection ledger, once bare and once quoted — YAML reads two keys and Shall one id, and a task left open names one hash for each report.",
+      "1234 is written twice under WI-0007 in the rejection ledger, once bare and once quoted — YAML reads two keys and Shall one id, and a work item left open names one hash for each report.",
     );
   });
 
@@ -3106,13 +3186,13 @@ describe("the acceptance ledger", () => {
     );
   });
 
-  test("a task closes under its own two key names, beside a criterion in one book", () => {
+  test("a work item closes under its own two key names, beside a criterion in one book", () => {
     // THE SAME RECORD SHAPE, WRITTEN FOR WHAT IT HOLDS. A criterion is closed on
-    // evidence and a task on the work that addressed it, so the keys say which —
-    // and the criterion's bytes are exactly what they were before tasks existed,
+    // evidence and a work item on the work that addressed it, so the keys say which —
+    // and the criterion's bytes are exactly what they were before work items existed,
     // which is what keeps every acceptances.yaml already on disk readable.
-    const task: AcceptanceRecord = {
-      kind: "task",
+    const workItem: AcceptanceRecord = {
+      kind: "workItem",
       subjectHash: "sha256:11",
       claimants: new Map([
         ["WL-0009", "sha256:33"],
@@ -3123,7 +3203,7 @@ describe("the acceptance ledger", () => {
     };
     const written = emitAcceptanceLedger(
       new Map([
-        ["IT-0007", task],
+        ["WI-0007", workItem],
         ["AC-0001", RECORD],
       ]),
     );
@@ -3137,7 +3217,7 @@ describe("the acceptance ledger", () => {
         "    EV-0002: sha256:bb",
         "  by: yjshin",
         '  at: "2026-08-16T09:12:33.412Z"',
-        "IT-0007:",
+        "WI-0007:",
         "  taskHash: sha256:11",
         "  reports:",
         "    WL-0003: sha256:22",
@@ -3149,23 +3229,32 @@ describe("the acceptance ledger", () => {
     );
     const reading = parseAcceptanceLedger(written);
     assert.equal(reading.problem, null);
-    assert.deepEqual([...reading.records.keys()], ["AC-0001", "IT-0007"]);
-    assert.deepEqual(reading.records.get("IT-0007"), task);
+    assert.deepEqual([...reading.records.keys()], ["AC-0001", "WI-0007"]);
+    assert.deepEqual(reading.records.get("WI-0007"), workItem);
     assert.deepEqual(reading.records.get("AC-0001"), RECORD);
     assert.equal(emitAcceptanceLedger(reading.records), written);
+    // THE TAG RENAMED AND THE KEYS DID NOT. `taskHash` and `reports` are the
+    // bytes the book has carried since 2026-08-17 and are frozen; the kind a
+    // record carries inside the process became `workItem` on 2026-08-23 and
+    // never reaches the file — so the bytes above are what they always were,
+    // and what is read back says the new word.
+    assert.ok(written.includes("\n  taskHash: "), written);
+    assert.ok(written.includes("\n  reports:\n"), written);
+    assert.equal(written.includes("workItem"), false);
+    assert.equal(reading.records.get("WI-0007")?.kind, "workItem");
   });
 
   test("a record naming both closed things, or one of each, is refused", () => {
     // Guessing which half a hand-edit meant would close something on a list
     // nobody chose, so the whole record is refused and the sentence says why.
     const shape =
-      "Every record in the acceptance ledger is a map of exactly by, at and one closed thing — acHash with an evidence map for a criterion, or taskHash with a reports map for a task — the map holding at least one entry, and never both — the record under AC-0001 is not.";
+      "Every record in the acceptance ledger is a map of exactly by, at and one closed thing — acHash with an evidence map for a criterion, or taskHash with a reports map for a work item — the map holding at least one entry, and never both — the record under AC-0001 is not.";
     for (const text of [
       // both hashes
       "AC-0001:\n  acHash: sha256:aa\n  taskHash: sha256:bb\n  evidence:\n    EV-0001: sha256:cc\n  by: yjshin\n  at: x\n",
       // both maps
       "AC-0001:\n  acHash: sha256:aa\n  evidence:\n    EV-0001: sha256:cc\n  reports:\n    WL-0001: sha256:dd\n  by: yjshin\n  at: x\n",
-      // crossed: a criterion's hash with a task's map
+      // crossed: a criterion's hash with a work item's map
       "AC-0001:\n  acHash: sha256:aa\n  reports:\n    WL-0001: sha256:dd\n  by: yjshin\n  at: x\n",
       // crossed the other way
       "AC-0001:\n  taskHash: sha256:aa\n  evidence:\n    EV-0001: sha256:cc\n  by: yjshin\n  at: x\n",
@@ -3175,42 +3264,42 @@ describe("the acceptance ledger", () => {
   });
 
   test("the retired workLogs key is a shape refusal, not a half-read record", () => {
-    // The task's claimants were work logs for one round, and a ledger from
+    // The work item's claimants were work logs for one round, and a ledger from
     // that round still says `workLogs:`. It is refused whole with the shape
     // sentence — never read as an empty list — so an old book is a loud
-    // migration and not a quietly reopened task.
+    // migration and not a quietly reopened work item.
     assert.equal(
       parseAcceptanceLedger(
-        "IT-0007:\n  taskHash: sha256:aa\n  workLogs:\n    WL-0003: sha256:bb\n  by: yjshin\n  at: x\n",
+        "WI-0007:\n  taskHash: sha256:aa\n  workLogs:\n    WL-0003: sha256:bb\n  by: yjshin\n  at: x\n",
       ).problem,
-      "Every record in the acceptance ledger is a map of exactly by, at and one closed thing — acHash with an evidence map for a criterion, or taskHash with a reports map for a task — the map holding at least one entry, and never both — the record under IT-0007 is not.",
+      "Every record in the acceptance ledger is a map of exactly by, at and one closed thing — acHash with an evidence map for a criterion, or taskHash with a reports map for a work item — the map holding at least one entry, and never both — the record under WI-0007 is not.",
     );
   });
 
-  test("a task's reports are defended and named as reports", () => {
+  test("a work item's reports are defended and named as reports", () => {
     assert.equal(
       parseAcceptanceLedger(
-        "IT-0007:\n  taskHash: sha256:aa\n  reports:\n    1234: sha256:bb\n    \"1234\": sha256:cc\n  by: yjshin\n  at: x\n",
+        "WI-0007:\n  taskHash: sha256:aa\n  reports:\n    1234: sha256:bb\n    \"1234\": sha256:cc\n  by: yjshin\n  at: x\n",
       ).problem,
-      "1234 is written twice under IT-0007 in the acceptance ledger, once bare and once quoted — YAML reads two keys and Shall one id, and an acceptance names one hash for each report.",
+      "1234 is written twice under WI-0007 in the acceptance ledger, once bare and once quoted — YAML reads two keys and Shall one id, and an acceptance names one hash for each report.",
     );
     assert.equal(
       parseAcceptanceLedger(
-        "IT-0007:\n  taskHash: sha256:aa\n  reports:\n    ~: sha256:bb\n  by: yjshin\n  at: x\n",
+        "WI-0007:\n  taskHash: sha256:aa\n  reports:\n    ~: sha256:bb\n  by: yjshin\n  at: x\n",
       ).problem,
-      "Under IT-0007, a report entry names no node id.",
+      "Under WI-0007, a report entry names no node id.",
     );
     assert.equal(
       parseAcceptanceLedger(
-        "IT-0007:\n  taskHash: sha256:aa\n  reports:\n    WL-0003: '  '\n  by: yjshin\n  at: x\n",
+        "WI-0007:\n  taskHash: sha256:aa\n  reports:\n    WL-0003: '  '\n  by: yjshin\n  at: x\n",
       ).problem,
-      "Under IT-0007, a report hash is required.",
+      "Under WI-0007, a report hash is required.",
     );
   });
 
   test("a record of anything but the four fields is one sentence about that id", () => {
     const shape =
-      "Every record in the acceptance ledger is a map of exactly by, at and one closed thing — acHash with an evidence map for a criterion, or taskHash with a reports map for a task — the map holding at least one entry, and never both — the record under AC-0001 is not.";
+      "Every record in the acceptance ledger is a map of exactly by, at and one closed thing — acHash with an evidence map for a criterion, or taskHash with a reports map for a work item — the map holding at least one entry, and never both — the record under AC-0001 is not.";
     for (const text of [
       "AC-0001:\n  acHash: sha256:aa\n  by: yjshin\n  at: x\n",
       "AC-0001:\n  acHash: sha256:aa\n  evidence:\n    EV-0001: sha256:bb\n  by: yjshin\n  at: x\n  note: fine\n",
@@ -3224,7 +3313,7 @@ describe("the acceptance ledger", () => {
 
   test("an acceptance that names no evidence is refused, however the emptiness is spelled", () => {
     const shape =
-      "Every record in the acceptance ledger is a map of exactly by, at and one closed thing — acHash with an evidence map for a criterion, or taskHash with a reports map for a task — the map holding at least one entry, and never both — the record under AC-0001 is not.";
+      "Every record in the acceptance ledger is a map of exactly by, at and one closed thing — acHash with an evidence map for a criterion, or taskHash with a reports map for a work item — the map holding at least one entry, and never both — the record under AC-0001 is not.";
     for (const evidence of [
       // Nothing under the key, which is null and not a map.
       "  evidence:\n",
@@ -3411,8 +3500,8 @@ describe("the activity feed", () => {
     {
       at: "2026-08-21T10:00:00.000Z",
       kind: "plan_done",
-      refs: ["MD-0001", "MD-0002"],
-      summary: "Modules designed — MD 2, task 6",
+      refs: ["M-0001", "M-0002"],
+      summary: "Modules designed — MD 2, work item 6",
     },
     {
       at: "2026-08-21T11:00:00.000Z",
@@ -3434,8 +3523,8 @@ describe("the activity feed", () => {
     "  summary: Specification drawn out — Goal 2, UC 3, REQ 8, AC 12",
     '- at: "2026-08-21T10:00:00.000Z"',
     "  kind: plan_done",
-    "  refs: [MD-0001, MD-0002]",
-    "  summary: Modules designed — MD 2, task 6",
+    "  refs: [M-0001, M-0002]",
+    "  summary: Modules designed — MD 2, work item 6",
     '- at: "2026-08-21T11:00:00.000Z"',
     "  kind: work_done",
     "  refs: [J-0001]",
@@ -3500,7 +3589,7 @@ describe("the activity feed", () => {
       "- at: 2026-08-21T09:00:00.000Z",
       "  kind: 'specify_done'",
       "  summary: 'Specification drawn out — Goal 2, UC 3, REQ 8, AC 12'",
-      "- {at: '2026-08-21T10:00:00.000Z', kind: plan_done, refs: [MD-0001, MD-0002], summary: 'Modules designed — MD 2, task 6'}",
+      "- {at: '2026-08-21T10:00:00.000Z', kind: plan_done, refs: [M-0001, M-0002], summary: 'Modules designed — MD 2, work item 6'}",
       "- kind: work_done",
       "  refs:",
       "    - J-0001",
@@ -3527,8 +3616,8 @@ describe("the activity feed", () => {
         "  summary: Specification drawn out — Goal 2, UC 3, REQ 8, AC 12",
         '- at: "2026-08-21T10:00:00.000Z"',
         "  kind: plan_done",
-        "  refs: [MD-0001, MD-0002]",
-        "  summary: Modules designed — MD 2, task 6",
+        "  refs: [M-0001, M-0002]",
+        "  summary: Modules designed — MD 2, work item 6",
         '- at: "2026-08-21T11:00:00.000Z"',
         "  kind: work_done",
         "  refs: [J-0001]",

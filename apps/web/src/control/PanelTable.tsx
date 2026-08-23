@@ -16,7 +16,7 @@ import {
  * skeleton of the table it is about to be, the panel's own empty sentence, and
  * the rows.
  *
- * IT HOLDS NO ROWS OF ITS OWN. The Review Queue and the Task Board are the
+ * IT HOLDS NO ROWS OF ITS OWN. The Review Queue and the Work Board are the
  * same table over different questions — that likeness is the design, so a
  * person reads both without relearning either — and this shell is where the
  * likeness lives. What a row IS stays in each panel's file, which is the half

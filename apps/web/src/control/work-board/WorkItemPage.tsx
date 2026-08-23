@@ -17,7 +17,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { cn } from "@/lib/utils";
 import { useProject } from "@/project-context";
 import { useRevision } from "@/live";
-import { ClosureMark, StatusDot, TaskStateMark } from "@/spec/review-parts";
+import { ClosureMark, StatusDot, WorkItemStateMark } from "@/spec/review-parts";
 import { nodesById, type FixSpecItem, type ImplementItem, type Ref } from "@/spec/review";
 import { formatStamp, type SpecNode } from "@/spec/spec-node";
 import { BOX, CAPTION, controlBase, specLink } from "../parts";
@@ -39,12 +39,12 @@ import { BOARD_KIND_LABEL, boardRows, rowTitle, type BoardRow } from "./rows";
  * whole, with its line breaks, above everything else the row knows.
  */
 
-export function TaskItemPage() {
+export function WorkItemPage() {
   const params = useParams();
   const project = useProject();
   const itemKey = params.itemId ?? "";
   const base = controlBase(project.id);
-  const boardPath = `${base}/task-board`;
+  const boardPath = `${base}/work-board`;
   const backPath = `${boardPath}/${encodeURIComponent(itemKey)}`;
 
   const [rows, setRows] = useState<BoardRow[] | null>(null);
@@ -60,7 +60,7 @@ export function TaskItemPage() {
     // path sits under the latch with the failure path, so a slow answer for a
     // project somebody left is never drawn as this one's.
     Promise.all([
-      api.spec.taskBoard.query({ projectId: project.id }),
+      api.spec.workBoard.query({ projectId: project.id }),
       api.spec.nodes.query({ projectId: project.id }),
     ])
       .then(([board, nextNodes]) => {
@@ -74,7 +74,7 @@ export function TaskItemPage() {
           setError(
             loadError instanceof Error
               ? loadError.message
-              : "Could not read the task board",
+              : "Could not read the work board",
           );
         }
       });
@@ -98,7 +98,7 @@ export function TaskItemPage() {
     }
     let live = true;
     void Promise.all([
-      api.spec.taskBoard.query({ projectId: project.id }),
+      api.spec.workBoard.query({ projectId: project.id }),
       api.spec.nodes.query({ projectId: project.id }),
     ])
       .then(([board, nextNodes]) => {
@@ -132,7 +132,7 @@ export function TaskItemPage() {
             <BreadcrumbSeparator />
             <BreadcrumbItem>
               <BreadcrumbLink render={<Link to={boardPath} />}>
-                Task Board
+                Work Board
               </BreadcrumbLink>
             </BreadcrumbItem>
             <BreadcrumbSeparator />
@@ -173,7 +173,7 @@ export function TaskItemPage() {
               "justify-self-center",
             )}
           >
-            Back to the task board
+            Back to the work board
           </Link>
         </div>
       ) : row.kind === "fix" ? (
@@ -310,7 +310,7 @@ function RefList({
 }
 
 /**
- * A TASK SOMEBODY CAN PICK UP, AND EVERYTHING IT IS FOR.
+ * A WORK ITEM SOMEBODY CAN PICK UP, AND EVERYTHING IT IS FOR.
  *
  * Everything here has already passed the gate — the chain above it is read and
  * agreed, and everything it waited on is finished — so the page carries no
@@ -334,15 +334,15 @@ function ImplementDetail({
         <div className="flex flex-wrap items-center gap-2">
           <StatusDot color="green" />
           <span className="font-mono text-xs break-all">{item.id}</span>
-          <Badge variant="secondary">ImplementationTask</Badge>
+          <Badge variant="secondary">WorkItem</Badge>
           {/* The same badge the Spec plane draws beside this id, out of the
               same answer — this list IS the ready ones. */}
-          <TaskStateMark state="ready" />
+          <WorkItemStateMark state="ready" />
           <span className={CAPTION}>{`depth ${String(item.depth)}`}</span>
         </div>
         {node === null ? (
           <p className={CAPTION}>
-            This task is no longer in the graph — the board will catch up on the
+            This work item is no longer in the graph — the board will catch up on the
             next read.
           </p>
         ) : (
@@ -366,7 +366,7 @@ function ImplementDetail({
 
       {item.targets.length === 0 ? (
         <div className={BOX}>
-          <p className={CAPTION}>What this task aims to close</p>
+          <p className={CAPTION}>What this work item aims to close</p>
           <p className="text-sm">
             Nothing — this is foundation work, and it is finished when somebody
             says the reports claiming it show enough.
@@ -374,7 +374,7 @@ function ImplementDetail({
         </div>
       ) : (
         <div className={BOX}>
-          <p className={CAPTION}>What this task aims to close</p>
+          <p className={CAPTION}>What this work item aims to close</p>
           {item.targets.map((target) => (
             <div key={target.id} className="flex flex-wrap items-center gap-2">
               <Link

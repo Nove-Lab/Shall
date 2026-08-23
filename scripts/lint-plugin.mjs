@@ -22,7 +22,11 @@ import {
  * gets checked against the same tables the code is checked against.
  *
  * Every rule here is a rule about a name, because a name is the one thing in
- * documentation that can be wrong in a way a reader cannot see.
+ * documentation that can be wrong in a way a reader cannot see. Six rules:
+ * (a) shouts are relation names, (b) `--type` names a canon type, (c) `shall`
+ * calls name a real subcommand, (d) a command interpolates its arguments,
+ * (e) no document carries a template's vocabulary, (f) no document carries a
+ * type name the canon retired.
  */
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
@@ -132,6 +136,20 @@ const DENIED_RELATIONS = new Set([
 
 /** What makes a line a denial rather than an instruction. */
 const DENIAL = /no such|not exist|never|nothing|wrong|older process/i;
+
+/**
+ * The type names the plan-layer refactor retired on 2026-08-23, each with the
+ * name that replaced it. They are allowed only on a line that denies them, the
+ * way DENIED_RELATIONS are: a skill that still says the old name sends an
+ * agent to a `--type` the daemon refuses and a folder the loader does not
+ * read. The phrase is the old word for a WorkItem said in English.
+ */
+const RETIRED_TYPES = new Map([
+  ["ModuleDesign", "Module"],
+  ["ImplementationTask", "WorkItem"],
+  ["TaskCompletionReport", "CompletionReport"],
+]);
+const RETIRED_PHRASE = /implementation tasks?/i;
 
 /** `--type <Type>` is how the CLI's shape is written down, not a real type. */
 const TYPE_PLACEHOLDERS = new Set(["Type", "NodeType"]);
@@ -377,6 +395,33 @@ function checkTemplateVocabulary(file, lines) {
   });
 }
 
+/**
+ * (f) No plugin document names a type the canon retired. The old name is the
+ * one thing a reader cannot tell from a current one — both are CamelCase and
+ * both once worked — so the retired three are refused by name, bare or in a
+ * code span, unless the line is denying them.
+ */
+function checkRetiredTypes(file, lines) {
+  lines.forEach((text, index) => {
+    for (const [retired, current] of RETIRED_TYPES) {
+      if (text.includes(retired) && !DENIAL.test(text)) {
+        report(
+          file,
+          index + 1,
+          `${retired} is a type the canon retired — it is ${current} now, and an agent told to write a ${retired} will ask for a type the daemon refuses. Write ${current}, or deny the old name on the same line.`,
+        );
+      }
+    }
+    if (RETIRED_PHRASE.test(text) && !DENIAL.test(text)) {
+      report(
+        file,
+        index + 1,
+        `"implementation task" is the retired word for a WorkItem — say work item, or WorkItem.`,
+      );
+    }
+  });
+}
+
 // A guide that hands back nothing is a guide that moved, and rule (e) would
 // then pass every document in silence. Say so instead.
 if (TEMPLATE_HINTS.size === 0) {
@@ -396,6 +441,7 @@ for (const file of markdownFilesUnder(pluginRoot)) {
   checkTypeFlags(file, lines);
   checkShallCalls(file, lines);
   checkTemplateVocabulary(file, lines);
+  checkRetiredTypes(file, lines);
   if (path.dirname(relative) === "commands") {
     checkCommandArguments(file, relative.split(path.sep).join("/"), source);
   }

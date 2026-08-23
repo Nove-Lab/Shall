@@ -45,7 +45,7 @@ function column(layout: Layout, type: string): Placement[] {
 /**
  * A board with tension in it: four of the canon's columns populated, at four
  * different heights, and relations that reach across the whole width of it —
- * Requirement is column 7 and ImplementationTask column 14, so a settled Task
+ * Requirement is column 7 and WorkItem column 14, so a settled Work item
  * has been pulled past five empty columns to get level with its Requirement.
  *
  * Requirement is the fullest at five, which is what makes it the column every
@@ -60,14 +60,14 @@ const NODES: SpecNode[] = [
   node("R-0004", "Requirement"),
   node("R-0005", "Requirement"),
   node("AC-0001", "AcceptanceCriterion"),
-  node("IT-0001", "ImplementationTask"),
-  node("IT-0002", "ImplementationTask"),
-  node("IT-0003", "ImplementationTask"),
+  node("WI-0001", "WorkItem"),
+  node("WI-0002", "WorkItem"),
+  node("WI-0003", "WorkItem"),
 ];
 
 const EDGES: SpecEdge[] = [
-  edge("IT-0001", "IMPLEMENTS", "R-0004"),
-  edge("IT-0003", "IMPLEMENTS", "R-0005"),
+  edge("WI-0001", "IMPLEMENTS", "R-0004"),
+  edge("WI-0003", "IMPLEMENTS", "R-0005"),
   edge("AC-0001", "VERIFIES", "R-0002"),
   edge("R-0005", "MENTIONS", "T-0001"),
 ];
@@ -84,7 +84,7 @@ const POPULATED = [
   "Term",
   "Requirement",
   "AcceptanceCriterion",
-  "ImplementationTask",
+  "WorkItem",
 ];
 
 test("a graph with no relations centres every column", () => {
@@ -115,22 +115,22 @@ test("a graph with no relations centres every column", () => {
       y: 170,
     },
     {
-      id: "IT-0001",
-      type: "ImplementationTask",
+      id: "WI-0001",
+      type: "WorkItem",
       band: "Plan",
       x: 2632,
       y: 108,
     },
     {
-      id: "IT-0002",
-      type: "ImplementationTask",
+      id: "WI-0002",
+      type: "WorkItem",
       band: "Plan",
       x: 2632,
       y: 170,
     },
     {
-      id: "IT-0003",
-      type: "ImplementationTask",
+      id: "WI-0003",
+      type: "WorkItem",
       band: "Plan",
       x: 2632,
       y: 232,

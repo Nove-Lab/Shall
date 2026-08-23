@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import {
   formatEdgeId,
+  orphanFixSentence,
   type SpecEdge,
   type SpecNode,
 } from "../graph/index.js";
@@ -160,7 +161,7 @@ function status(
   closure: ReviewStatus["closure"] = null,
   leftOpen: ReviewStatus["leftOpen"] = null,
   problem: ReviewStatus["problem"] = null,
-  taskState: ReviewStatus["taskState"] = null,
+  workItemState: ReviewStatus["workItemState"] = null,
 ): ReviewStatus {
   return {
     id,
@@ -170,7 +171,7 @@ function status(
     rejection,
     closure,
     leftOpen,
-    taskState,
+    workItemState,
     problem,
   };
 }
@@ -367,8 +368,8 @@ describe("anchors", () => {
       // module that publishes it.
       const review = reviewGraph(
         graphOf({
-          nodes: [node("ModuleDesign", "MD-0001"), node("Interface", "IF-0001")],
-          edges: [edge("MD-0001", relation, "IF-0001")],
+          nodes: [node("Module", "M-0001"), node("Interface", "IF-0001")],
+          edges: [edge("M-0001", relation, "IF-0001")],
         }),
         unapproved,
       );
@@ -666,7 +667,7 @@ describe("the execution band", () => {
     // The record is written by an agent and read by a person, so the same
     // three questions apply: does it read, does anything reach it, has a person
     // signed off. A journal is the root of the record and stands on its own; a
-    // work log nothing logs and no task addresses is an orphan.
+    // work log nothing logs and no work item addresses is an orphan.
     const journal = node("Journal", "J-0001");
     const logged = node("WorkLog", "WL-0001");
     const stray = node("WorkLog", "WL-0002");
@@ -707,19 +708,23 @@ describe("the execution band", () => {
 });
 
 describe("the aim rule", () => {
-  // A criterion, a task that targets it, a work log that addresses the task,
-  // and the evidence the log submits — the four files the rule reads.
-  // The whole intent chain, Goal down — so every node above the task is
-  // anchored and the chain can actually be green when it is read.
+  // A criterion, a work item that targets it, a work log that addresses the
+  // work item, and the evidence the log submits — the four files the rule
+  // reads. The whole intent chain, Goal down, and the module that allocates
+  // the work item — so every node above the work item is anchored (a work item
+  // is held by its module and by nothing else) and the chain can actually be
+  // green when it is read.
   const goal = node("Goal", "G-0001");
   const actor = node("Actor", "A-0001");
   const useCase = node("UseCase", "UC-0001");
   const scenario = node("Scenario", "SC-0001");
   const criterion = node("AcceptanceCriterion", "AC-0001");
   const other = node("AcceptanceCriterion", "AC-0002");
+  const third = node("AcceptanceCriterion", "AC-0003");
   const requirement = node("Requirement", "R-0001");
   const responsibility = node("SystemResponsibility", "SR-0001");
-  const task = node("ImplementationTask", "IT-0001");
+  const module_ = node("Module", "M-0001");
+  const workItem = node("WorkItem", "WI-0001");
   const journal = node("Journal", "J-0001");
   const log = node("WorkLog", "WL-0001");
   const evidence = node("Evidence", "EV-0001");
@@ -729,11 +734,14 @@ describe("the aim rule", () => {
     edge("UC-0001", "DETAILS", "SC-0001"),
     edge("SC-0001", "DERIVES_RESPONSIBILITY", "SR-0001"),
     edge("SR-0001", "REQUIRES", "R-0001"),
+    edge("SR-0001", "IS_REALIZED_BY", "M-0001"),
     edge("R-0001", "HAS_CRITERION", "AC-0001"),
     edge("R-0001", "HAS_CRITERION", "AC-0002"),
-    edge("IT-0001", "TARGETS", "AC-0001"),
+    edge("R-0001", "HAS_CRITERION", "AC-0003"),
+    edge("M-0001", "ALLOCATES", "WI-0001"),
+    edge("WI-0001", "TARGETS", "AC-0001"),
     edge("J-0001", "LOGS", "WL-0001"),
-    edge("WL-0001", "ADDRESSES", "IT-0001"),
+    edge("WL-0001", "ADDRESSES", "WI-0001"),
     edge("WL-0001", "SUBMITS", "EV-0001"),
   ];
   const NODES = [
@@ -742,16 +750,18 @@ describe("the aim rule", () => {
     useCase,
     scenario,
     responsibility,
+    module_,
     requirement,
     criterion,
     other,
-    task,
+    third,
+    workItem,
     journal,
     log,
     evidence,
   ];
   /**
-   * The chain above the task, read — so IT-0001 is `ready`, and the
+   * The chain above the work item, read — so WI-0001 is `ready`, and the
    * blocked-address rule (a different red, tested in its own describe) never
    * fires on the log while the aim is what is under test.
    */
@@ -761,10 +771,12 @@ describe("the aim rule", () => {
     approve(useCase, SPINE),
     approve(scenario, SPINE),
     approve(responsibility, SPINE),
+    approve(module_, SPINE),
     approve(requirement, SPINE),
     approve(criterion, SPINE),
     approve(other, SPINE),
-    approve(task, SPINE),
+    approve(third, SPINE),
+    approve(workItem, SPINE),
   );
 
   function reviewWith(...claims: SpecEdge[]): GraphReview {
@@ -774,7 +786,7 @@ describe("the aim rule", () => {
     );
   }
 
-  test("evidence that claims what the task targets is inside the aim, and nothing is red", () => {
+  test("evidence that claims what the work item targets is inside the aim, and nothing is red", () => {
     const review = reviewWith(edge("EV-0001", "CLAIMS", "AC-0001"));
     assert.deepEqual(statusOf(review, "WL-0001"), status("WL-0001", "yellow", "unapproved"));
     assert.deepEqual(statusOf(review, "EV-0001"), status("EV-0001", "yellow", "unapproved"));
@@ -792,7 +804,7 @@ describe("the aim rule", () => {
         null,
         null,
         null,
-        "WL-0001 addresses IT-0001, which targets AC-0001, but submits EV-0001, which claims AC-0002 — a work log's evidence claims only the criteria its task targets.",
+        "WL-0001 addresses WI-0001, which target AC-0001, but submits EV-0001, which claims AC-0002 — a work log's evidence claims only the criteria its work items target.",
       ),
     );
     assert.deepEqual(
@@ -805,12 +817,12 @@ describe("the aim rule", () => {
         null,
         null,
         null,
-        "EV-0001 claims AC-0002, but the work log that submitted it, WL-0001, addresses IT-0001, which targets AC-0001 — a work log's evidence claims only the criteria its task targets.",
+        "EV-0001 claims AC-0002, but the work log that submitted it, WL-0001, addresses WI-0001, which target AC-0001 — a work log's evidence claims only the criteria its work items target.",
       ),
     );
-    // The criteria and the task themselves are not touched by it.
+    // The criteria and the work item themselves are not touched by it.
     assert.equal(statusOf(review, "AC-0002")?.color, "green");
-    assert.equal(statusOf(review, "IT-0001")?.color, "green");
+    assert.equal(statusOf(review, "WI-0001")?.color, "green");
   });
 
   test("evidence that claims nothing is red at both ends — the log for the aim, the evidence for its anchor", () => {
@@ -818,7 +830,7 @@ describe("the aim rule", () => {
     assert.equal(statusOf(review, "WL-0001")?.reason, "off-target");
     assert.equal(
       statusOf(review, "WL-0001")?.problem,
-      "WL-0001 addresses IT-0001, which targets AC-0001, but submits EV-0001, which claims no criterion — a work log's evidence claims only the criteria its task targets.",
+      "WL-0001 addresses WI-0001, which target AC-0001, but submits EV-0001, which claims no criterion — a work log's evidence claims only the criteria its work items target.",
     );
     // The evidence's own diagnosis is the anchor rule's: a claimless evidence
     // is an orphan — the claim is what makes it evidence at all — and the
@@ -835,7 +847,72 @@ describe("the aim rule", () => {
     assert.ok(statusOf(review, "EV-0001")?.problem?.includes("claims AC-0001 and AC-0002"));
   });
 
-  test("a work log under no task has an empty aim — a claim under it is a breach at both ends", () => {
+  test("a work item that targets two criteria is not red, and its log's evidence may claim either — a third is still outside the union", () => {
+    // THE AIM IS THE UNION. A work item targets as many criteria as it
+    // genuinely closes, and the work done under it may show evidence for any of
+    // them; what it may not do is claim a criterion none of its work items
+    // target. Until 2026-08-23 two TARGETS lines were a breach by themselves;
+    // they are the plan's to write now.
+    // The spine with the second aim written in, and the chain read over it —
+    // so WI-0001 is green and ready, and the log is never `premature` here.
+    const TWO = [...SPINE, edge("WI-0001", "TARGETS", "AC-0002")];
+    const TWO_READ = ledgerOf(
+      approve(goal, TWO),
+      approve(actor, TWO),
+      approve(useCase, TWO),
+      approve(scenario, TWO),
+      approve(responsibility, TWO),
+      approve(module_, TWO),
+      approve(requirement, TWO),
+      approve(criterion, TWO),
+      approve(other, TWO),
+      approve(third, TWO),
+      approve(workItem, TWO),
+    );
+    const reviewTwo = (...claims: SpecEdge[]): GraphReview =>
+      reviewGraph(
+        graphOf({ nodes: NODES, edges: [...TWO, ...claims] }),
+        TWO_READ,
+      );
+
+    const first = reviewTwo(edge("EV-0001", "CLAIMS", "AC-0001"));
+    assert.equal(statusOf(first, "WI-0001")?.color, "green");
+    assert.equal(statusOf(first, "WI-0001")?.problem, null);
+    assert.equal(statusOf(first, "WI-0001")?.workItemState, "ready");
+    assert.equal(statusOf(first, "WL-0001")?.reason, "unapproved");
+    assert.equal(statusOf(first, "EV-0001")?.reason, "unapproved");
+
+    const second = reviewTwo(edge("EV-0001", "CLAIMS", "AC-0002"));
+    assert.equal(statusOf(second, "WL-0001")?.reason, "unapproved");
+    assert.equal(statusOf(second, "EV-0001")?.reason, "unapproved");
+
+    const both = reviewTwo(
+      edge("EV-0001", "CLAIMS", "AC-0001"),
+      edge("EV-0001", "CLAIMS", "AC-0002"),
+    );
+    assert.equal(statusOf(both, "EV-0001")?.reason, "unapproved");
+
+    const outside = reviewTwo(edge("EV-0001", "CLAIMS", "AC-0003"));
+    assert.deepEqual(
+      statusOf(outside, "WL-0001"),
+      status(
+        "WL-0001",
+        "red",
+        "off-target",
+        null,
+        null,
+        null,
+        null,
+        "WL-0001 addresses WI-0001, which target AC-0001 and AC-0002, but submits EV-0001, which claims AC-0003 — a work log's evidence claims only the criteria its work items target.",
+      ),
+    );
+    assert.equal(
+      statusOf(outside, "EV-0001")?.problem,
+      "EV-0001 claims AC-0003, but the work log that submitted it, WL-0001, addresses WI-0001, which target AC-0001 and AC-0002 — a work log's evidence claims only the criteria its work items target.",
+    );
+  });
+
+  test("a work log under no work item has an empty aim — a claim under it is a breach at both ends", () => {
     // IT USED TO BE AN EXEMPTION ("under no aim, never red"), and the gap
     // showed on a screen: evidence under an aimless log could claim any
     // criterion in the project. An empty aim is an empty allowance.
@@ -852,25 +929,25 @@ describe("the aim rule", () => {
     assert.equal(statusOf(review, "WL-0001")?.reason, "off-target");
     assert.equal(
       statusOf(review, "WL-0001")?.problem,
-      "WL-0001 addresses no task the graph holds, but submits EV-0001, which claims AC-0002 — a work log's evidence claims only the criteria its task targets, and this log addresses no task the graph holds.",
+      "WL-0001 addresses no work item the graph holds, but submits EV-0001, which claims AC-0002 — a work log's evidence claims only the criteria its work items target, and this log addresses no work item the graph holds.",
     );
     assert.equal(
       statusOf(review, "EV-0001")?.problem,
-      "EV-0001 claims AC-0002, but the work log that submitted it, WL-0001, addresses no task the graph holds — a work log's evidence claims only the criteria its task targets, and this log addresses no task the graph holds.",
+      "EV-0001 claims AC-0002, but the work log that submitted it, WL-0001, addresses no work item the graph holds — a work log's evidence claims only the criteria its work items target, and this log addresses no work item the graph holds.",
     );
   });
 
-  test("a work log whose only ADDRESSES line reaches a task no file names is in the empty-aim arm, said truthfully", () => {
-    // The colour is the same as addressing nothing — an unverifiable task
+  test("a work log whose only ADDRESSES line reaches a work item no file names is in the empty-aim arm, said truthfully", () => {
+    // The colour is the same as addressing nothing — an unverifiable work item
     // justifies no claim — but the sentence must not deny the line the file
-    // visibly writes, so it says "no task the graph holds". The hole itself is
+    // visibly writes, so it says "no work item the graph holds". The hole itself is
     // the missing rule's row, filed under this same log.
     const review = reviewGraph(
       graphOf({
         nodes: NODES,
         edges: [
           ...SPINE.filter((line) => line.type !== "ADDRESSES"),
-          edge("WL-0001", "ADDRESSES", "IT-9999"),
+          edge("WL-0001", "ADDRESSES", "WI-9999"),
           edge("EV-0001", "CLAIMS", "AC-0002"),
         ],
       }),
@@ -879,7 +956,7 @@ describe("the aim rule", () => {
     assert.equal(statusOf(review, "WL-0001")?.reason, "off-target");
     assert.ok(
       statusOf(review, "WL-0001")?.problem?.startsWith(
-        "WL-0001 addresses no task the graph holds,",
+        "WL-0001 addresses no work item the graph holds,",
       ),
     );
     // Claimless under the same dead address: the log is clean — the hole is
@@ -890,7 +967,7 @@ describe("the aim rule", () => {
         nodes: NODES,
         edges: [
           ...SPINE.filter((line) => line.type !== "ADDRESSES"),
-          edge("WL-0001", "ADDRESSES", "IT-9999"),
+          edge("WL-0001", "ADDRESSES", "WI-9999"),
         ],
       }),
       CHAIN_READ,
@@ -899,7 +976,7 @@ describe("the aim rule", () => {
     assert.equal(statusOf(clean, "EV-0001")?.reason, "orphan");
   });
 
-  test("a work log under no task whose evidence claims nothing is clean — the missing claim is the evidence's own orphanhood", () => {
+  test("a work log under no work item whose evidence claims nothing is clean — the missing claim is the evidence's own orphanhood", () => {
     const review = reviewGraph(
       graphOf({
         nodes: NODES,
@@ -933,24 +1010,23 @@ describe("the aim rule", () => {
   });
 });
 
-describe("a task's aim", () => {
-  // The rule's third clause, one hop earlier than the other two: it reads the
-  // task's own file and needs no work log at all. The module is here so the
-  // task is anchored by ALLOCATES and the TARGETS lines are what is on trial,
-  // rather than the thing holding the task to the graph.
+describe("a work item's aims and its anchor", () => {
+  // The work item's own file, read with no work log at all: the module is here
+  // because the ALLOCATES line is the one thing that holds a work item, and
+  // the TARGETS lines are what the plan may write as many of as it closes.
   const responsibility = node("SystemResponsibility", "SR-0001");
-  const module_ = node("ModuleDesign", "MD-0001");
-  const task = node("ImplementationTask", "IT-0001");
+  const module_ = node("Module", "M-0001");
+  const workItem = node("WorkItem", "WI-0001");
   const requirement = node("Requirement", "R-0001");
   const first = node("AcceptanceCriterion", "AC-0001");
   const second = node("AcceptanceCriterion", "AC-0002");
-  const NODES = [responsibility, module_, task, requirement, first, second];
+  const NODES = [responsibility, module_, workItem, requirement, first, second];
   const HELD = [
-    edge("SR-0001", "IS_REALIZED_BY", "MD-0001"),
+    edge("SR-0001", "IS_REALIZED_BY", "M-0001"),
     edge("SR-0001", "REQUIRES", "R-0001"),
     edge("R-0001", "HAS_CRITERION", "AC-0001"),
     edge("R-0001", "HAS_CRITERION", "AC-0002"),
-    edge("MD-0001", "ALLOCATES", "IT-0001"),
+    edge("M-0001", "ALLOCATES", "WI-0001"),
   ];
 
   function reviewWith(
@@ -963,94 +1039,113 @@ describe("a task's aim", () => {
     );
   }
 
-  test("a task that targets two criteria is red, and the sentence names both", () => {
+  test("a work item that targets two criteria is not red — the plan writes as many aims as the work closes", () => {
     const review = reviewWith([
-      edge("IT-0001", "TARGETS", "AC-0001"),
-      edge("IT-0001", "TARGETS", "AC-0002"),
+      edge("WI-0001", "TARGETS", "AC-0001"),
+      edge("WI-0001", "TARGETS", "AC-0002"),
     ]);
     assert.deepEqual(
-      statusOf(review, "IT-0001"),
+      statusOf(review, "WI-0001"),
       status(
-        "IT-0001",
-        "red",
-        "off-target",
+        "WI-0001",
+        "yellow",
+        "unapproved",
         null,
         null,
         "open",
         null,
-        "IT-0001 targets AC-0001 and AC-0002 — a task aims at one criterion at most, because a task with two aims closes neither on its own. Split the task, or remove the TARGETS line this work is not for.",
+        null,
         "blocked",
       ),
     );
   });
 
-  test("one aim is the rule kept, and no aim at all is a task the rule says nothing about", () => {
+  test("one aim, or no aim at all, is a work item the rule says nothing about either", () => {
     assert.equal(
-      statusOf(reviewWith([edge("IT-0001", "TARGETS", "AC-0001")]), "IT-0001")
+      statusOf(reviewWith([edge("WI-0001", "TARGETS", "AC-0001")]), "WI-0001")
         ?.reason,
       "unapproved",
     );
-    assert.equal(statusOf(reviewWith([]), "IT-0001")?.reason, "unapproved");
+    // A work item a module allocates and that targets nothing is anchored all
+    // the same — structure and maintenance are work items too.
+    assert.equal(statusOf(reviewWith([]), "WI-0001")?.reason, "unapproved");
   });
 
-  test("a second aim at an id no file names counts, and the hole is still reported", () => {
-    // Read off the written lines, like the rest of the rule: an aim at a
-    // criterion nobody has written is still an aim the plan wrote down, and
-    // the missing rule says its own sentence about the id underneath.
+  test("a second aim at an id no file names is not a breach of the aim, and the hole is still reported", () => {
+    // The missing rule says its own sentence about the id underneath, filed
+    // under the work item as the referrer; the work item's own row is what the
+    // books say, because a dangling aim is a hole and not a seam.
     const review = reviewWith([
-      edge("IT-0001", "TARGETS", "AC-0001"),
-      edge("IT-0001", "TARGETS", "AC-9999"),
+      edge("WI-0001", "TARGETS", "AC-0001"),
+      edge("WI-0001", "TARGETS", "AC-9999"),
     ]);
-    assert.equal(statusOf(review, "IT-0001")?.reason, "off-target");
-    assert.ok(statusOf(review, "IT-0001")?.problem?.includes("AC-9999"));
+    assert.equal(statusOf(review, "WI-0001")?.reason, "unapproved");
     assert.deepEqual(
-      review.missing.map((entry) => entry.id),
-      ["AC-9999"],
+      review.missing.map((entry) => [
+        entry.id,
+        entry.referencedBy.map((referrer) => referrer.fromId),
+      ]),
+      [["AC-9999", ["WI-0001"]]],
     );
   });
 
-  test("a task with two aims stays red after somebody approves it", () => {
+  test("a work item with two aims is green once somebody approves it", () => {
     const aims = [
-      edge("IT-0001", "TARGETS", "AC-0001"),
-      edge("IT-0001", "TARGETS", "AC-0002"),
+      edge("WI-0001", "TARGETS", "AC-0001"),
+      edge("WI-0001", "TARGETS", "AC-0002"),
     ];
-    const review = reviewWith(aims, ledgerOf(approve(task, [...HELD, ...aims])));
-    assert.equal(statusOf(review, "IT-0001")?.reason, "off-target");
-    // The approval is carried on the row, as it is for an orphan: the book
-    // still says somebody agreed, and the seam is what is on the screen.
-    assert.deepEqual(statusOf(review, "IT-0001")?.approval, APPROVER);
+    const review = reviewWith(aims, ledgerOf(approve(workItem, [...HELD, ...aims])));
+    assert.equal(statusOf(review, "WI-0001")?.color, "green");
+    assert.deepEqual(statusOf(review, "WI-0001")?.approval, APPROVER);
   });
 
-  test("a task nothing anchors is told about the anchor before its aims", () => {
-    // The order is the product: the chain answers the first thing that is
-    // wrong. Here the ALLOCATES line is gone, so both TARGETS lines are the
-    // only anchor the task has — and an orphan it is not, because TARGETS
-    // anchors a task too. So this is the aim rule again, from a task the
-    // module dropped.
+  test("a work item no module allocates is an orphan, however many criteria it targets", () => {
+    // TARGETS aims and does not hold. With the ALLOCATES line gone the work
+    // item is held by nothing; the orphan row carries no sentence of its own
+    // (`shall check` and the board quote `orphanFixSentence`, which names the
+    // module's line and never the work item's), and the work item stays
+    // blocked — an orphan is not work anybody can start.
     const review = reviewGraph(
       graphOf({
         nodes: NODES,
         edges: [
           ...HELD.filter((held) => held.type !== "ALLOCATES"),
-          edge("IT-0001", "TARGETS", "AC-0001"),
-          edge("IT-0001", "TARGETS", "AC-0002"),
+          edge("WI-0001", "TARGETS", "AC-0001"),
+          edge("WI-0001", "TARGETS", "AC-0002"),
         ],
       }),
       unapproved,
     );
-    assert.equal(statusOf(review, "IT-0001")?.reason, "off-target");
+    assert.deepEqual(
+      statusOf(review, "WI-0001"),
+      status(
+        "WI-0001",
+        "red",
+        "orphan",
+        null,
+        null,
+        "open",
+        null,
+        null,
+        "blocked",
+      ),
+    );
+    assert.equal(
+      orphanFixSentence("WI-0001", "WorkItem"),
+      "WI-0001 is a WorkItem with no live anchor — it is held to the graph by an ALLOCATES relation into it, and none stands. Draw the relation, or remove the node.",
+    );
   });
 });
 
 describe("a loop in the plan", () => {
-  // One responsibility, one module, and as many tasks as a test needs. The
-  // module ALLOCATES every task, so nothing here is red for want of an anchor
+  // One responsibility, one module, and as many work items as a test needs. The
+  // module ALLOCATES every work item, so nothing here is red for want of an anchor
   // and the loop is the only thing on trial.
   const responsibility = node("SystemResponsibility", "SR-0001");
-  const module_ = node("ModuleDesign", "MD-0001");
-  const HELD = [edge("SR-0001", "IS_REALIZED_BY", "MD-0001")];
+  const module_ = node("Module", "M-0001");
+  const HELD = [edge("SR-0001", "IS_REALIZED_BY", "M-0001")];
 
-  function tasksOf(...ids: string[]): {
+  function workItemsOf(...ids: string[]): {
     nodes: SpecNode[];
     edges: SpecEdge[];
   } {
@@ -1058,9 +1153,9 @@ describe("a loop in the plan", () => {
       nodes: [
         responsibility,
         module_,
-        ...ids.map((id) => node("ImplementationTask", id)),
+        ...ids.map((id) => node("WorkItem", id)),
       ],
-      edges: [...HELD, ...ids.map((id) => edge("MD-0001", "ALLOCATES", id))],
+      edges: [...HELD, ...ids.map((id) => edge("M-0001", "ALLOCATES", id))],
     };
   }
 
@@ -1074,98 +1169,98 @@ describe("a loop in the plan", () => {
     );
   }
 
-  test("two tasks waiting on each other are both red, each told from where it stands", () => {
+  test("two work items waiting on each other are both red, each told from where it stands", () => {
     const review = reviewOf(
-      tasksOf("IT-0001", "IT-0002"),
-      edge("IT-0001", "DEPENDS_ON", "IT-0002"),
-      edge("IT-0002", "DEPENDS_ON", "IT-0001"),
+      workItemsOf("WI-0001", "WI-0002"),
+      edge("WI-0001", "DEPENDS_ON", "WI-0002"),
+      edge("WI-0002", "DEPENDS_ON", "WI-0001"),
     );
-    assert.equal(statusOf(review, "IT-0001")?.reason, "cyclic");
+    assert.equal(statusOf(review, "WI-0001")?.reason, "cyclic");
     assert.equal(
-      statusOf(review, "IT-0001")?.problem,
-      "IT-0001 waits on IT-0002, which waits on IT-0001 — a task cannot wait on itself through others, and no task on this loop can ever be called ready. Remove one DEPENDS_ON line, or split the task both halves need.",
+      statusOf(review, "WI-0001")?.problem,
+      "WI-0001 waits on WI-0002, which waits on WI-0001 — a work item cannot wait on itself through others, and no work item on this loop can ever be called ready. Remove one DEPENDS_ON line, or split the work item both halves need.",
     );
     assert.equal(
-      statusOf(review, "IT-0002")?.problem,
-      "IT-0002 waits on IT-0001, which waits on IT-0002 — a task cannot wait on itself through others, and no task on this loop can ever be called ready. Remove one DEPENDS_ON line, or split the task both halves need.",
+      statusOf(review, "WI-0002")?.problem,
+      "WI-0002 waits on WI-0001, which waits on WI-0002 — a work item cannot wait on itself through others, and no work item on this loop can ever be called ready. Remove one DEPENDS_ON line, or split the work item both halves need.",
     );
   });
 
   test("a loop of three recites the way round, starting from the node it is under", () => {
     const review = reviewOf(
-      tasksOf("IT-0001", "IT-0002", "IT-0003"),
-      edge("IT-0001", "DEPENDS_ON", "IT-0002"),
-      edge("IT-0002", "DEPENDS_ON", "IT-0003"),
-      edge("IT-0003", "DEPENDS_ON", "IT-0001"),
+      workItemsOf("WI-0001", "WI-0002", "WI-0003"),
+      edge("WI-0001", "DEPENDS_ON", "WI-0002"),
+      edge("WI-0002", "DEPENDS_ON", "WI-0003"),
+      edge("WI-0003", "DEPENDS_ON", "WI-0001"),
     );
     assert.ok(
-      statusOf(review, "IT-0002")?.problem?.startsWith(
-        "IT-0002 waits on IT-0003, which waits on IT-0001, which waits on IT-0002 —",
+      statusOf(review, "WI-0002")?.problem?.startsWith(
+        "WI-0002 waits on WI-0003, which waits on WI-0001, which waits on WI-0002 —",
       ),
     );
   });
 
-  test("a task waiting on the loop from outside it is not on the loop", () => {
+  test("a work item waiting on the loop from outside it is not on the loop", () => {
     // Standing on a loop is being able to get back to yourself, not being able
-    // to reach one. IT-0003 waits on the pair and nothing waits on it.
+    // to reach one. WI-0003 waits on the pair and nothing waits on it.
     const review = reviewOf(
-      tasksOf("IT-0001", "IT-0002", "IT-0003"),
-      edge("IT-0001", "DEPENDS_ON", "IT-0002"),
-      edge("IT-0002", "DEPENDS_ON", "IT-0001"),
-      edge("IT-0003", "DEPENDS_ON", "IT-0001"),
+      workItemsOf("WI-0001", "WI-0002", "WI-0003"),
+      edge("WI-0001", "DEPENDS_ON", "WI-0002"),
+      edge("WI-0002", "DEPENDS_ON", "WI-0001"),
+      edge("WI-0003", "DEPENDS_ON", "WI-0001"),
     );
-    assert.equal(statusOf(review, "IT-0003")?.reason, "unapproved");
-    assert.equal(statusOf(review, "IT-0001")?.reason, "cyclic");
+    assert.equal(statusOf(review, "WI-0003")?.reason, "unapproved");
+    assert.equal(statusOf(review, "WI-0001")?.reason, "cyclic");
   });
 
   test("a shortcut across a loop does not hide the node the shortcut skipped", () => {
-    // The case a walk that marks its own path gets wrong. With IT-0001 also
-    // waiting on IT-0003 directly, a path-marking walk can close the short
-    // loop first and then meet IT-0002 already finished — leaving a task on a
+    // The case a walk that marks its own path gets wrong. With WI-0001 also
+    // waiting on WI-0003 directly, a path-marking walk can close the short
+    // loop first and then meet WI-0002 already finished — leaving a work item on a
     // loop with nothing said about it.
     const review = reviewOf(
-      tasksOf("IT-0001", "IT-0002", "IT-0003"),
-      edge("IT-0001", "DEPENDS_ON", "IT-0002"),
-      edge("IT-0002", "DEPENDS_ON", "IT-0003"),
-      edge("IT-0003", "DEPENDS_ON", "IT-0001"),
-      edge("IT-0001", "DEPENDS_ON", "IT-0003"),
+      workItemsOf("WI-0001", "WI-0002", "WI-0003"),
+      edge("WI-0001", "DEPENDS_ON", "WI-0002"),
+      edge("WI-0002", "DEPENDS_ON", "WI-0003"),
+      edge("WI-0003", "DEPENDS_ON", "WI-0001"),
+      edge("WI-0001", "DEPENDS_ON", "WI-0003"),
     );
-    for (const id of ["IT-0001", "IT-0002", "IT-0003"]) {
+    for (const id of ["WI-0001", "WI-0002", "WI-0003"]) {
       assert.equal(statusOf(review, id)?.reason, "cyclic");
     }
     // And the sentence takes the short way round, because a person reads it.
     assert.ok(
-      statusOf(review, "IT-0001")?.problem?.startsWith(
-        "IT-0001 waits on IT-0003, which waits on IT-0001 —",
+      statusOf(review, "WI-0001")?.problem?.startsWith(
+        "WI-0001 waits on WI-0003, which waits on WI-0001 —",
       ),
     );
   });
 
   test("an orphan is told about its anchor before it is told about the loop", () => {
-    const parts = tasksOf("IT-0001", "IT-0002");
+    const parts = workItemsOf("WI-0001", "WI-0002");
     const review = reviewGraph(
       graphOf({
         nodes: parts.nodes,
         // The module allocates only the first, so the second hangs off nothing
-        // — and a DEPENDS_ON is no anchor for a task.
+        // — and a DEPENDS_ON is no anchor for a work item.
         edges: [
           ...HELD,
-          edge("MD-0001", "ALLOCATES", "IT-0001"),
-          edge("IT-0001", "DEPENDS_ON", "IT-0002"),
-          edge("IT-0002", "DEPENDS_ON", "IT-0001"),
+          edge("M-0001", "ALLOCATES", "WI-0001"),
+          edge("WI-0001", "DEPENDS_ON", "WI-0002"),
+          edge("WI-0002", "DEPENDS_ON", "WI-0001"),
         ],
       }),
       unapproved,
     );
-    assert.equal(statusOf(review, "IT-0002")?.reason, "orphan");
-    assert.equal(statusOf(review, "IT-0001")?.reason, "cyclic");
+    assert.equal(statusOf(review, "WI-0002")?.reason, "orphan");
+    assert.equal(statusOf(review, "WI-0001")?.reason, "cyclic");
   });
 
-  test("a task with two aims is told about its aims before the loop it is on", () => {
+  test("a work item with two aims on a loop is told about the loop — two aims are not a fault", () => {
     const criterion = node("AcceptanceCriterion", "AC-0001");
     const other = node("AcceptanceCriterion", "AC-0002");
     const requirement = node("Requirement", "R-0001");
-    const parts = tasksOf("IT-0001", "IT-0002");
+    const parts = workItemsOf("WI-0001", "WI-0002");
     const review = reviewGraph(
       graphOf({
         nodes: [...parts.nodes, requirement, criterion, other],
@@ -1174,27 +1269,27 @@ describe("a loop in the plan", () => {
           edge("SR-0001", "REQUIRES", "R-0001"),
           edge("R-0001", "HAS_CRITERION", "AC-0001"),
           edge("R-0001", "HAS_CRITERION", "AC-0002"),
-          edge("IT-0001", "TARGETS", "AC-0001"),
-          edge("IT-0001", "TARGETS", "AC-0002"),
-          edge("IT-0001", "DEPENDS_ON", "IT-0002"),
-          edge("IT-0002", "DEPENDS_ON", "IT-0001"),
+          edge("WI-0001", "TARGETS", "AC-0001"),
+          edge("WI-0001", "TARGETS", "AC-0002"),
+          edge("WI-0001", "DEPENDS_ON", "WI-0002"),
+          edge("WI-0002", "DEPENDS_ON", "WI-0001"),
         ],
       }),
       unapproved,
     );
-    assert.equal(statusOf(review, "IT-0001")?.reason, "off-target");
-    assert.equal(statusOf(review, "IT-0002")?.reason, "cyclic");
+    assert.equal(statusOf(review, "WI-0001")?.reason, "cyclic");
+    assert.equal(statusOf(review, "WI-0002")?.reason, "cyclic");
   });
 
-  test("waiting on a task no file names is a hole, and not a loop", () => {
+  test("waiting on a work item no file names is a hole, and not a loop", () => {
     const review = reviewOf(
-      tasksOf("IT-0001"),
-      edge("IT-0001", "DEPENDS_ON", "IT-9999"),
+      workItemsOf("WI-0001"),
+      edge("WI-0001", "DEPENDS_ON", "WI-9999"),
     );
-    assert.equal(statusOf(review, "IT-0001")?.reason, "unapproved");
+    assert.equal(statusOf(review, "WI-0001")?.reason, "unapproved");
     assert.deepEqual(
       review.missing.map((entry) => entry.id),
-      ["IT-9999"],
+      ["WI-9999"],
     );
   });
 
@@ -1241,7 +1336,7 @@ describe("a loop in the plan", () => {
   });
 
   test("two modules that consume each other's contracts are red, and the contracts are not", () => {
-    const second = node("ModuleDesign", "MD-0002");
+    const second = node("Module", "M-0002");
     const first = node("Interface", "IF-0001");
     const other = node("Interface", "IF-0002");
     const review = reviewGraph(
@@ -1249,20 +1344,20 @@ describe("a loop in the plan", () => {
         nodes: [responsibility, module_, second, first, other],
         edges: [
           ...HELD,
-          edge("SR-0001", "IS_REALIZED_BY", "MD-0002"),
-          edge("MD-0001", "EXPOSES", "IF-0001"),
-          edge("MD-0002", "EXPOSES", "IF-0002"),
-          edge("MD-0001", "CONSUMES", "IF-0002"),
-          edge("MD-0002", "CONSUMES", "IF-0001"),
+          edge("SR-0001", "IS_REALIZED_BY", "M-0002"),
+          edge("M-0001", "EXPOSES", "IF-0001"),
+          edge("M-0002", "EXPOSES", "IF-0002"),
+          edge("M-0001", "CONSUMES", "IF-0002"),
+          edge("M-0002", "CONSUMES", "IF-0001"),
         ],
       }),
       unapproved,
     );
     assert.equal(
-      statusOf(review, "MD-0001")?.problem,
-      "MD-0001 consumes IF-0002, which MD-0002 exposes, and MD-0002 consumes IF-0001, which MD-0001 exposes — a module's dependencies run one way, and a loop means neither module can be built, read or replaced without the other. Remove one CONSUMES line, or move what both need into a module of its own.",
+      statusOf(review, "M-0001")?.problem,
+      "M-0001 consumes IF-0002, which M-0002 exposes, and M-0002 consumes IF-0001, which M-0001 exposes — a module's dependencies run one way, and a loop means neither module can be built, read or replaced without the other. Remove one CONSUMES line, or move what both need into a module of its own.",
     );
-    assert.equal(statusOf(review, "MD-0002")?.reason, "cyclic");
+    assert.equal(statusOf(review, "M-0002")?.reason, "cyclic");
     // A contract is not on the loop. It is what the loop runs through, and
     // there is nothing in either interface file to remove.
     assert.equal(statusOf(review, "IF-0001")?.reason, "unapproved");
@@ -1276,64 +1371,68 @@ describe("a loop in the plan", () => {
         nodes: [responsibility, module_, contract],
         edges: [
           ...HELD,
-          edge("MD-0001", "EXPOSES", "IF-0001"),
-          edge("MD-0001", "CONSUMES", "IF-0001"),
+          edge("M-0001", "EXPOSES", "IF-0001"),
+          edge("M-0001", "CONSUMES", "IF-0001"),
         ],
       }),
       unapproved,
     );
-    assert.equal(statusOf(review, "MD-0001")?.reason, "unapproved");
+    assert.equal(statusOf(review, "M-0001")?.reason, "unapproved");
   });
 
   test("a loop stays red after somebody approves both ends of it", () => {
-    const parts = tasksOf("IT-0001", "IT-0002");
+    const parts = workItemsOf("WI-0001", "WI-0002");
     const edges = [
       ...parts.edges,
-      edge("IT-0001", "DEPENDS_ON", "IT-0002"),
-      edge("IT-0002", "DEPENDS_ON", "IT-0001"),
+      edge("WI-0001", "DEPENDS_ON", "WI-0002"),
+      edge("WI-0002", "DEPENDS_ON", "WI-0001"),
     ];
-    const first = parts.nodes.find((held) => held.id === "IT-0001");
-    const second = parts.nodes.find((held) => held.id === "IT-0002");
+    const first = parts.nodes.find((held) => held.id === "WI-0001");
+    const second = parts.nodes.find((held) => held.id === "WI-0002");
     assert.ok(first !== undefined && second !== undefined);
     const review = reviewGraph(
       graphOf({ nodes: parts.nodes, edges }),
       ledgerOf(approve(first, edges), approve(second, edges)),
     );
-    assert.equal(statusOf(review, "IT-0001")?.reason, "cyclic");
-    assert.equal(statusOf(review, "IT-0002")?.reason, "cyclic");
+    assert.equal(statusOf(review, "WI-0001")?.reason, "cyclic");
+    assert.equal(statusOf(review, "WI-0002")?.reason, "cyclic");
   });
 });
 
 describe("the aim rule for completion reports", () => {
   // The report's own half of the rule: exactly one claim, and that one among
-  // the tasks the submitting log addresses. The chain is read so that the log
+  // the work items the submitting log addresses. The chain is read so that the log
   // is never `premature` here — what is under test is the claim.
   const goal = node("Goal", "G-0001");
   const actor = node("Actor", "A-0001");
   const useCase = node("UseCase", "UC-0001");
   const scenario = node("Scenario", "SC-0001");
   const responsibility = node("SystemResponsibility", "SR-0001");
+  const module_ = node("Module", "M-0001");
   const requirement = node("Requirement", "R-0001");
   const criterion = node("AcceptanceCriterion", "AC-0001");
   const other = node("AcceptanceCriterion", "AC-0002");
-  const task = node("ImplementationTask", "IT-0001");
-  const second = node("ImplementationTask", "IT-0002");
+  const workItem = node("WorkItem", "WI-0001");
+  const second = node("WorkItem", "WI-0002");
   const journal = node("Journal", "J-0001");
   const log = node("WorkLog", "WL-0001");
-  const report = node("TaskCompletionReport", "TCR-0001");
+  const report = node("CompletionReport", "CR-0001");
   const SPINE = [
     edge("G-0001", "PURSUED_BY", "A-0001"),
     edge("A-0001", "PERFORMS", "UC-0001"),
     edge("UC-0001", "DETAILS", "SC-0001"),
     edge("SC-0001", "DERIVES_RESPONSIBILITY", "SR-0001"),
     edge("SR-0001", "REQUIRES", "R-0001"),
+    edge("SR-0001", "IS_REALIZED_BY", "M-0001"),
     edge("R-0001", "HAS_CRITERION", "AC-0001"),
     edge("R-0001", "HAS_CRITERION", "AC-0002"),
-    edge("IT-0001", "TARGETS", "AC-0001"),
-    edge("IT-0002", "TARGETS", "AC-0002"),
+    edge("M-0001", "ALLOCATES", "WI-0001"),
+    edge("M-0001", "ALLOCATES", "WI-0002"),
+    edge("WI-0001", "TARGETS", "AC-0001"),
+    edge("WI-0002", "TARGETS", "AC-0002"),
     edge("J-0001", "LOGS", "WL-0001"),
-    edge("WL-0001", "ADDRESSES", "IT-0001"),
-    edge("WL-0001", "SUBMITS", "TCR-0001"),
+    edge("WL-0001", "ADDRESSES", "WI-0001"),
+    edge("WL-0001", "SUBMITS", "CR-0001"),
   ];
   const NODES = [
     goal,
@@ -1341,10 +1440,11 @@ describe("the aim rule for completion reports", () => {
     useCase,
     scenario,
     responsibility,
+    module_,
     requirement,
     criterion,
     other,
-    task,
+    workItem,
     second,
     journal,
     log,
@@ -1356,14 +1456,15 @@ describe("the aim rule for completion reports", () => {
     approve(useCase, SPINE),
     approve(scenario, SPINE),
     approve(responsibility, SPINE),
+    approve(module_, SPINE),
     approve(requirement, SPINE),
     approve(criterion, SPINE),
     approve(other, SPINE),
-    approve(task, SPINE),
+    approve(workItem, SPINE),
     approve(second, SPINE),
   );
   const RULE =
-    "a task completion report claims exactly one task its work log addresses.";
+    "a completion report claims exactly one work item its work log addresses.";
 
   function reviewWith(edits: {
     drop?: (line: SpecEdge) => boolean;
@@ -1376,38 +1477,38 @@ describe("the aim rule for completion reports", () => {
     return reviewGraph(graphOf({ nodes: NODES, edges }), CHAIN_READ);
   }
 
-  test("one claim at the addressed task is inside the rule, and nothing is red", () => {
-    const review = reviewWith({ add: [edge("TCR-0001", "CLAIMS", "IT-0001")] });
-    assert.equal(statusOf(review, "TCR-0001")?.reason, "unapproved");
+  test("one claim at the addressed work item is inside the rule, and nothing is red", () => {
+    const review = reviewWith({ add: [edge("CR-0001", "CLAIMS", "WI-0001")] });
+    assert.equal(statusOf(review, "CR-0001")?.reason, "unapproved");
     assert.equal(statusOf(review, "WL-0001")?.reason, "unapproved");
   });
 
-  test("a claim at a task the log does not address turns both ends red, said from each", () => {
-    const review = reviewWith({ add: [edge("TCR-0001", "CLAIMS", "IT-0002")] });
+  test("a claim at a work item the log does not address turns both ends red, said from each", () => {
+    const review = reviewWith({ add: [edge("CR-0001", "CLAIMS", "WI-0002")] });
     assert.equal(
       statusOf(review, "WL-0001")?.problem,
-      `WL-0001 addresses IT-0001, but submits TCR-0001, which claims IT-0002 — ${RULE}`,
+      `WL-0001 addresses WI-0001, but submits CR-0001, which claims WI-0002 — ${RULE}`,
     );
     assert.equal(
-      statusOf(review, "TCR-0001")?.problem,
-      `TCR-0001 claims IT-0002, but the work log that submitted it, WL-0001, addresses IT-0001 — ${RULE}`,
+      statusOf(review, "CR-0001")?.problem,
+      `CR-0001 claims WI-0002, but the work log that submitted it, WL-0001, addresses WI-0001 — ${RULE}`,
     );
   });
 
   test("two claims are a breach with a submitter — and without one", () => {
     const review = reviewWith({
       add: [
-        edge("TCR-0001", "CLAIMS", "IT-0001"),
-        edge("TCR-0001", "CLAIMS", "IT-0002"),
+        edge("CR-0001", "CLAIMS", "WI-0001"),
+        edge("CR-0001", "CLAIMS", "WI-0002"),
       ],
     });
     assert.equal(
-      statusOf(review, "TCR-0001")?.problem,
-      `TCR-0001 claims IT-0001 and IT-0002 — ${RULE}`,
+      statusOf(review, "CR-0001")?.problem,
+      `CR-0001 claims WI-0001 and WI-0002 — ${RULE}`,
     );
     assert.equal(
       statusOf(review, "WL-0001")?.problem,
-      `WL-0001 submits TCR-0001, which claims IT-0001 and IT-0002 — ${RULE}`,
+      `WL-0001 submits CR-0001, which claims WI-0001 and WI-0002 — ${RULE}`,
     );
 
     // Submitted by nobody, the cardinality still holds — it is the report's
@@ -1415,48 +1516,48 @@ describe("the aim rule for completion reports", () => {
     const free = reviewWith({
       drop: (line) => line.type === "SUBMITS",
       add: [
-        edge("TCR-0001", "CLAIMS", "IT-0001"),
-        edge("TCR-0001", "CLAIMS", "IT-0002"),
+        edge("CR-0001", "CLAIMS", "WI-0001"),
+        edge("CR-0001", "CLAIMS", "WI-0002"),
       ],
     });
     assert.equal(
-      statusOf(free, "TCR-0001")?.problem,
-      `TCR-0001 claims IT-0001 and IT-0002 — ${RULE}`,
+      statusOf(free, "CR-0001")?.problem,
+      `CR-0001 claims WI-0001 and WI-0002 — ${RULE}`,
     );
     assert.equal(statusOf(free, "WL-0001")?.reason, "unapproved");
   });
 
-  test("a log that addresses no task has none to verify — any claim under it is a breach", () => {
-    const aimless = `${RULE.slice(0, -1)}, and this log addresses no task at all.`;
+  test("a log that addresses no work item has none to verify — any claim under it is a breach", () => {
+    const aimless = `${RULE.slice(0, -1)}, and this log addresses no work item at all.`;
     const review = reviewWith({
       drop: (line) => line.type === "ADDRESSES",
-      add: [edge("TCR-0001", "CLAIMS", "IT-0001")],
+      add: [edge("CR-0001", "CLAIMS", "WI-0001")],
     });
     assert.equal(
       statusOf(review, "WL-0001")?.problem,
-      `WL-0001 addresses no task, but submits TCR-0001, which claims IT-0001 — ${aimless}`,
+      `WL-0001 addresses no work item, but submits CR-0001, which claims WI-0001 — ${aimless}`,
     );
     assert.equal(
-      statusOf(review, "TCR-0001")?.problem,
-      `TCR-0001 claims IT-0001, but the work log that submitted it, WL-0001, addresses no task — ${aimless}`,
+      statusOf(review, "CR-0001")?.problem,
+      `CR-0001 claims WI-0001, but the work log that submitted it, WL-0001, addresses no work item — ${aimless}`,
     );
   });
 
   test("a claimless report is an orphan, and a dangling claim anchors nothing and is still the log's breach", () => {
     const claimless = reviewWith({});
-    assert.equal(statusOf(claimless, "TCR-0001")?.reason, "orphan");
+    assert.equal(statusOf(claimless, "CR-0001")?.reason, "orphan");
     assert.equal(statusOf(claimless, "WL-0001")?.reason, "unapproved");
 
-    const dangling = reviewWith({ add: [edge("TCR-0001", "CLAIMS", "IT-9999")] });
-    assert.equal(statusOf(dangling, "TCR-0001")?.reason, "orphan");
+    const dangling = reviewWith({ add: [edge("CR-0001", "CLAIMS", "WI-9999")] });
+    assert.equal(statusOf(dangling, "CR-0001")?.reason, "orphan");
     assert.equal(statusOf(dangling, "WL-0001")?.reason, "off-target");
-    assert.ok(statusOf(dangling, "WL-0001")?.problem?.includes("claims IT-9999"));
+    assert.ok(statusOf(dangling, "WL-0001")?.problem?.includes("claims WI-9999"));
   });
 });
 
 describe("the blocked-address rule", () => {
-  // The same spine the aim rule uses, plus a second task that waits on the
-  // first — the two ways a task is blocked: an unread chain, and an open
+  // The same spine the aim rule uses, plus a second work item that waits on the
+  // first — the two ways a work item is blocked: an unread chain, and an open
   // prerequisite.
   const goal = node("Goal", "G-0001");
   const actor = node("Actor", "A-0001");
@@ -1465,8 +1566,9 @@ describe("the blocked-address rule", () => {
   const criterion = node("AcceptanceCriterion", "AC-0001");
   const requirement = node("Requirement", "R-0001");
   const responsibility = node("SystemResponsibility", "SR-0001");
-  const task = node("ImplementationTask", "IT-0001");
-  const waiting = node("ImplementationTask", "IT-0002");
+  const module_ = node("Module", "M-0001");
+  const workItem = node("WorkItem", "WI-0001");
+  const waiting = node("WorkItem", "WI-0002");
   const journal = node("Journal", "J-0001");
   const log = node("WorkLog", "WL-0001");
   const SPINE = [
@@ -1475,10 +1577,13 @@ describe("the blocked-address rule", () => {
     edge("UC-0001", "DETAILS", "SC-0001"),
     edge("SC-0001", "DERIVES_RESPONSIBILITY", "SR-0001"),
     edge("SR-0001", "REQUIRES", "R-0001"),
+    edge("SR-0001", "IS_REALIZED_BY", "M-0001"),
     edge("R-0001", "HAS_CRITERION", "AC-0001"),
-    edge("IT-0001", "TARGETS", "AC-0001"),
-    edge("IT-0002", "TARGETS", "AC-0001"),
-    edge("IT-0002", "DEPENDS_ON", "IT-0001"),
+    edge("M-0001", "ALLOCATES", "WI-0001"),
+    edge("M-0001", "ALLOCATES", "WI-0002"),
+    edge("WI-0001", "TARGETS", "AC-0001"),
+    edge("WI-0002", "TARGETS", "AC-0001"),
+    edge("WI-0002", "DEPENDS_ON", "WI-0001"),
     edge("J-0001", "LOGS", "WL-0001"),
   ];
   const NODES = [
@@ -1487,9 +1592,10 @@ describe("the blocked-address rule", () => {
     useCase,
     scenario,
     responsibility,
+    module_,
     requirement,
     criterion,
-    task,
+    workItem,
     waiting,
     journal,
     log,
@@ -1500,9 +1606,10 @@ describe("the blocked-address rule", () => {
     approve(useCase, SPINE),
     approve(scenario, SPINE),
     approve(responsibility, SPINE),
+    approve(module_, SPINE),
     approve(requirement, SPINE),
     approve(criterion, SPINE),
-    approve(task, SPINE),
+    approve(workItem, SPINE),
     approve(waiting, SPINE),
   );
 
@@ -1513,33 +1620,33 @@ describe("the blocked-address rule", () => {
     );
   }
 
-  test("work logged under a task whose chain is unread is red, with the sentence naming the task", () => {
-    const review = reviewWith(unapproved, edge("WL-0001", "ADDRESSES", "IT-0001"));
+  test("work logged under a work item whose chain is unread is red, with the sentence naming the work item", () => {
+    const review = reviewWith(unapproved, edge("WL-0001", "ADDRESSES", "WI-0001"));
     assert.equal(statusOf(review, "WL-0001")?.reason, "premature");
     assert.equal(
       statusOf(review, "WL-0001")?.problem,
-      "WL-0001 addresses IT-0001, and IT-0001 is blocked — work is logged only under a task whose turn has come: its chain read and agreed, and everything it waits on finished.",
+      "WL-0001 addresses WI-0001, and WI-0001 is blocked — work is logged only under a work item whose turn has come: its chain read and agreed, and everything it waits on finished.",
     );
-    // The task itself is untouched by it: blocked is its state, not a defect.
-    assert.equal(statusOf(review, "IT-0001")?.color, "yellow");
+    // The work item itself is untouched by it: blocked is its state, not a defect.
+    assert.equal(statusOf(review, "WI-0001")?.color, "yellow");
   });
 
-  test("the same log under the same task, chain read, is ordinary yellow — the red clears itself", () => {
-    const review = reviewWith(CHAIN_READ, edge("WL-0001", "ADDRESSES", "IT-0001"));
+  test("the same log under the same work item, chain read, is ordinary yellow — the red clears itself", () => {
+    const review = reviewWith(CHAIN_READ, edge("WL-0001", "ADDRESSES", "WI-0001"));
     assert.deepEqual(
       statusOf(review, "WL-0001"),
       status("WL-0001", "yellow", "unapproved"),
     );
   });
 
-  test("an open prerequisite blocks the task, so work under it is red even with the whole chain read", () => {
-    const review = reviewWith(CHAIN_READ, edge("WL-0001", "ADDRESSES", "IT-0002"));
+  test("an open prerequisite blocks the work item, so work under it is red even with the whole chain read", () => {
+    const review = reviewWith(CHAIN_READ, edge("WL-0001", "ADDRESSES", "WI-0002"));
     assert.equal(statusOf(review, "WL-0001")?.reason, "premature");
-    assert.ok(statusOf(review, "WL-0001")?.problem?.includes("IT-0002 is blocked"));
+    assert.ok(statusOf(review, "WL-0001")?.problem?.includes("WI-0002 is blocked"));
   });
 
-  test("a rule of the graph comes before the books here too: an approved log under a blocked task is red", () => {
-    const edges = [...SPINE, edge("WL-0001", "ADDRESSES", "IT-0002")];
+  test("a rule of the graph comes before the books here too: an approved log under a blocked work item is red", () => {
+    const edges = [...SPINE, edge("WL-0001", "ADDRESSES", "WI-0002")];
     const review = reviewGraph(
       graphOf({ nodes: NODES, edges }),
       ledgerOf(
@@ -1550,7 +1657,7 @@ describe("the blocked-address rule", () => {
         approve(responsibility, SPINE),
         approve(requirement, SPINE),
         approve(criterion, SPINE),
-        approve(task, SPINE),
+        approve(workItem, SPINE),
         approve(waiting, SPINE),
         approve(log, edges),
       ),
@@ -1566,7 +1673,7 @@ describe("the blocked-address rule", () => {
         nodes: [...NODES, evidence],
         edges: [
           ...SPINE,
-          edge("WL-0001", "ADDRESSES", "IT-0001"),
+          edge("WL-0001", "ADDRESSES", "WI-0001"),
           edge("WL-0001", "SUBMITS", "EV-0001"),
           edge("EV-0001", "CLAIMS", "AC-9999"),
         ],
@@ -1577,11 +1684,11 @@ describe("the blocked-address rule", () => {
   });
 
   test("a dangling ADDRESSES is not asked about — the missing rule owns the hole", () => {
-    const review = reviewWith(unapproved, edge("WL-0001", "ADDRESSES", "IT-9999"));
+    const review = reviewWith(unapproved, edge("WL-0001", "ADDRESSES", "WI-9999"));
     assert.equal(statusOf(review, "WL-0001")?.reason, "unapproved");
     assert.deepEqual(
       review.missing.map((hole) => hole.id),
-      ["IT-9999"],
+      ["WI-9999"],
     );
   });
 });

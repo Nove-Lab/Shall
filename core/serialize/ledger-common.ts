@@ -100,6 +100,13 @@ export interface ClaimantWords {
   readonly each: string;
   /** A row's value, for the bad-hash refusal: `An evidence hash`. */
   readonly hash: string;
+  /**
+   * The subject as a person says it — `criterion`, `work item` — for the one
+   * clause that names what was left open. The tag a record carries is a name
+   * inside the process and reads as code; this is the word that goes in a
+   * sentence.
+   */
+  readonly subject: string;
 }
 
 export const CLAIMANT_WORDS: Readonly<Record<ClosureSubject, ClaimantWords>> = {
@@ -108,12 +115,16 @@ export const CLAIMANT_WORDS: Readonly<Record<ClosureSubject, ClaimantWords>> = {
     entry: "an evidence entry",
     each: "each piece of evidence",
     hash: "An evidence hash",
+    subject: "criterion",
   },
-  task: {
+  // `reports` is the key the book has carried since 2026-08-17 and is frozen
+  // bytes (ARCHITECTURE, 얼어붙은 것): the tag renamed, the key did not.
+  workItem: {
     key: "reports",
     entry: "a report entry",
     each: "each report",
     hash: "A report hash",
+    subject: "work item",
   },
 };
 

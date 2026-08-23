@@ -608,7 +608,7 @@ describe("a node file has one place, and every other place is a sentence", () =>
     const graph = await loadGraph(specDir);
     assert.deepEqual(graph.nodes, []);
     assert.deepEqual(messages(graph.problems), [
-      "intent/notes is not one of the canon's node types — rename it to one of them, or move it out of the spec folder. The canon's types are Term, DomainEntity, Goal, Actor, UseCase, Scenario, SystemResponsibility, Requirement, AcceptanceCriterion, Constraint, ModuleDesign, Interface, DataSchema, ImplementationTask, Decision, Journal, WorkLog, Evidence, TaskCompletionReport, Finding, Assumption.",
+      "intent/notes is not one of the canon's node types — rename it to one of them, or move it out of the spec folder. The canon's types are Term, DomainEntity, Goal, Actor, UseCase, Scenario, SystemResponsibility, Requirement, AcceptanceCriterion, Constraint, Module, Interface, DataSchema, WorkItem, Decision, Journal, WorkLog, Evidence, CompletionReport, Finding, Assumption.",
       "intent/notes is not one of the canon's node types, so intent/notes/deep/R-0001.md is not read as a node. A node file lives at <band>/<Type>/<id>.md.",
     ]);
     assert.equal(graph.problems[0]?.file, "intent/notes");
