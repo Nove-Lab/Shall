@@ -373,7 +373,11 @@ export function SpecGraph({
   const flowEdges = useMemo<FloatingEdge[]>(
     () =>
       routed.map(({ edge, route, dashed }) =>
-        floatingEdgeOf(edge, edge.type, route, dashed, highlight),
+        // Quiet is dashed, on this board: a relation that sinks into Domain is
+        // drawn as a dashed hint and writes its name only when it touches the
+        // selection — the MENTIONS lines alone would otherwise label nearly
+        // every card twice over.
+        floatingEdgeOf(edge, edge.type, route, dashed, highlight, dashed),
       ),
     [routed, highlight],
   );

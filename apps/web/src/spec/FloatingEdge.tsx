@@ -56,6 +56,16 @@ export type FloatingEdgeData = {
    */
   readonly incident: boolean;
   readonly dimmed: boolean;
+  /**
+   * A RELATION THAT KEEPS ITS NAME TO ITSELF until somebody asks — drawn, dashed
+   * or not, but unlabelled on a board with nothing selected, and named the
+   * moment it touches the selection. The Spec plane sets it for every relation
+   * that sinks into Domain: a graph of any size writes MENTIONS at nearly every
+   * card, and forty copies of one word are not information. Which relations are
+   * quiet is the canvas's decision, not this component's — the metamodel, whose
+   * whole point is the names, sets it for none.
+   */
+  readonly quiet: boolean;
 };
 
 /**
@@ -178,9 +188,10 @@ export const ARROW_LIT = {
  *
  *   · `DOMAIN_DASH`, a long stroke with a wide gap — 8 on, 5 off. An
  *     EXPLANATORY relation: one that sinks into the Domain band from outside it,
- *     which the canvas draws quieter than the engineering ones. See
- *     `sinksIntoDomain` in `view/model.ts` for why it is a band crossing and not
- *     a list of edge types.
+ *     which the Spec plane draws quieter than the engineering ones — dashed, and
+ *     unnamed until it touches the selection (`quiet`). See `sinksIntoDomain`
+ *     in `view/model.ts` for why it is a band crossing and not a list of edge
+ *     types.
  *   · `UNROUTED_DASH`, a tight stipple — 2 on, 3 off. A route the router could
  *     NOT clear: `routeAroundCards` answers `fallback: true` with the bare line
  *     between the endpoints and says in as many words that it may cross a card,
@@ -235,13 +246,21 @@ export function FloatingEdgePath({
    * tested and still names itself in the context menu, exactly as it does for
    * every route too short to hold a label — which is most of them.
    *
+   * A QUIET RELATION LOSES ITS NAME TOO, on the resting board as well as the
+   * receded one — and gets it back the same way a dimmed one never does: by
+   * touching the selection. That is the fourth clause and the one the user asked
+   * for in as many words: the explanatory lines into Domain are a dashed hint
+   * that something is named there, and the name is read by clicking the card it
+   * leaves. `quiet` is decided by the canvas, not here — see `FloatingEdgeData`.
+   *
    * THE OTHER ORDER OF THE SAME TEST WOULD BE WRONG. `incident` and `dimmed` are
    * built as complements of one another by the canvas, so no relation is both
    * and the `||` cannot light a receded name; writing the exception as a third
    * arm of the fade would say that it could.
    */
   const named =
-    data.incident || (!data.dimmed && labelFits(label, data.edgeType));
+    data.incident ||
+    (!data.dimmed && !data.quiet && labelFits(label, data.edgeType));
 
   return (
     /* It has to be `BaseEdge` and never a bare `<path>`. BaseEdge draws two
@@ -327,6 +346,13 @@ export const EDGE_TYPES = { floating: FloatingEdgePath };
  * The dash goes on `style` because a `stroke-dasharray` has to land on the
  * `<path>`; `FloatingEdgePath` spreads it first so that `UNROUTED_DASH` — a
  * defect in the DRAWING — can outrank a statement about the graph.
+ *
+ * `quiet` IS THE CALLER'S AND NOT DERIVED FROM `dashed` HERE, although the Spec
+ * plane passes the one as the other: the dash says what KIND of relation this is
+ * and the quiet says whether THIS CANVAS writes its name unasked, and the two
+ * canvases answer that differently — the board hides the explanatory names
+ * because there are too many to read, the metamodel keeps them because the
+ * names are what it is for.
  */
 export function floatingEdgeOf(
   edge: { id: string; fromId: string; toId: string },
@@ -334,6 +360,7 @@ export function floatingEdgeOf(
   route: RoutedPath,
   dashed: boolean,
   highlight: Highlight,
+  quiet: boolean,
 ): FloatingEdge {
   const incident = highlight.edges.has(edge.id);
   return {
@@ -349,6 +376,7 @@ export function floatingEdgeOf(
       edgeType: name,
       incident,
       dimmed: highlight.selected !== null && !incident,
+      quiet,
     },
     markerEnd: incident ? ARROW_LIT : ARROW_END,
     zIndex: incident ? Z.litEdge : Z.edge,

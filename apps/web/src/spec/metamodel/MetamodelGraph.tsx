@@ -87,7 +87,9 @@ export function MetamodelGraph() {
   const flowEdges = useMemo<FloatingEdge[]>(
     () =>
       routed.map(({ edge, route, dashed }) =>
-        floatingEdgeOf(edge, edge.label, route, dashed, highlight),
+        // Nothing is quiet on the legend: its names are its content, and its
+        // columns are spaced for them.
+        floatingEdgeOf(edge, edge.label, route, dashed, highlight, false),
       ),
     [routed, highlight],
   );
