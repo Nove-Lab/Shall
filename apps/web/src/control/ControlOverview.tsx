@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/EmptyState";
+import { ACTIVITY_KIND_LABEL, activityRows, rowNote } from "./activity-feed/rows";
 import { PANELS, type PanelMeta } from "./panels";
 import { controlBase } from "./parts";
 import { BOARD_KIND_LABEL, boardRows, rowSummary, rowTitle } from "./task-board/rows";
@@ -32,26 +33,31 @@ import { useProject } from "@/project-context";
  */
 const GLANCE = 3;
 
-/** One row of a glance, whatever list it came from — a badge, a door, a note. */
+/**
+ * One row of a glance, whatever list it came from — a badge, a door, a note.
+ * The door is null where the row has no page of its own: a feed row is an
+ * event that happened, not a thing to open, and its refs are doors only on
+ * the panel, where there is room for them.
+ */
 interface GlanceRow {
   key: string;
   label: string;
   title: string;
   summary: string;
-  href: string;
+  href: string | null;
 }
 
 /**
- * THE TWO LIVE CARDS ARE ONE COMPONENT OVER TWO QUESTIONS; the other panels are
- * still their placeholder sentence. Each question here IS THE SAME FETCH ITS
- * PANEL MAKES and not a cheaper summary procedure: both lists are computed on
- * read either way, and a second endpoint counting the same rows would be a
- * second place for them to disagree. What differs between the two — the query,
- * the row's words, the row's door — is this table; the loading, error, empty
- * and "and N more" ladders are the component, written once.
+ * THE THREE LIVE CARDS ARE ONE COMPONENT OVER THREE QUESTIONS; Vitals is still
+ * its placeholder sentence. Each question here IS THE SAME FETCH ITS PANEL
+ * MAKES and not a cheaper summary procedure: the lists are computed on read
+ * either way, and a second endpoint counting the same rows would be a second
+ * place for them to disagree. What differs between the three — the query, the
+ * row's words, the row's door — is this table; the loading, error, empty and
+ * "and N more" ladders are the component, written once.
  */
 const GLANCE_ROWS: Record<
-  "review-queue" | "task-board",
+  "review-queue" | "task-board" | "activity-feed",
   {
     failed: string;
     rows: (projectId: string, base: string) => Promise<GlanceRow[]>;
@@ -80,6 +86,24 @@ const GLANCE_ROWS: Record<
         title: rowTitle(row),
         summary: rowSummary(row),
         href: `${base}/task-board/${encodeURIComponent(row.item.key)}`,
+      }));
+    },
+  },
+  // THE NEWEST MONTH, ROW FOR ROW AS THE PANEL SHOWS IT — the same query with
+  // no month named, so the three lines here are the panel's first three rows,
+  // each one a line an agent logged at the end of a run, and "and N more"
+  // counts the lines behind them. No door: a run that finished is read, not
+  // opened, and its refs are doors only on the panel.
+  "activity-feed": {
+    failed: "Could not read the activity feed",
+    rows: async (projectId) => {
+      const feed = await api.spec.activity.query({ projectId });
+      return activityRows(feed.entries).map((row) => ({
+        key: row.key,
+        label: ACTIVITY_KIND_LABEL[row.kind],
+        title: row.sentence,
+        summary: rowNote(row),
+        href: null,
       }));
     },
   },
@@ -167,17 +191,24 @@ function PanelGlance({
       {rows.slice(0, GLANCE).map((row) => (
         <li key={row.key} className="flex min-w-0 items-center gap-2">
           <Badge variant="secondary">{row.label}</Badge>
-          {/* EVERY ROW IS ITS OWN DOOR. A glance that could only be entered
-              through "View all" made a person land on the list they had just
-              read and find the row again; the title here goes where the title
-              in the panel goes. It is why the card is no longer one big link —
-              a link inside a link is not a thing a browser can honour. */}
-          <Link
-            to={row.href}
-            className="text-primary min-w-0 flex-1 truncate text-sm underline-offset-4 hover:underline"
-          >
-            {row.title}
-          </Link>
+          {/* EVERY ROW THAT HAS A PAGE IS ITS OWN DOOR. A glance that could
+              only be entered through "View all" made a person land on the list
+              they had just read and find the row again; the title here goes
+              where the title in the panel goes. It is why the card is no longer
+              one big link — a link inside a link is not a thing a browser can
+              honour. A feed row has no page — a judgment made is not a thing to
+              open — so it is the same line at the same width, said in plain
+              text. */}
+          {row.href === null ? (
+            <span className="min-w-0 flex-1 truncate text-sm">{row.title}</span>
+          ) : (
+            <Link
+              to={row.href}
+              className="text-primary min-w-0 flex-1 truncate text-sm underline-offset-4 hover:underline"
+            >
+              {row.title}
+            </Link>
+          )}
           {/* THE SUMMARY YIELDS FIRST, AND NEITHER HALF LEAVES THE CARD. A
               summary that could not shrink took the whole row and left the
               title — the door — at zero width, which is how a Fix Spec row
@@ -248,7 +279,9 @@ export function ControlOverview() {
               </CardTitle>
             </CardHeader>
             <CardContent className="flex-1">
-              {panel.id === "review-queue" || panel.id === "task-board" ? (
+              {panel.id === "review-queue" ||
+              panel.id === "task-board" ||
+              panel.id === "activity-feed" ? (
                 <PanelGlance panel={panel} source={panel.id} />
               ) : (
                 <EmptyState message={panel.empty} />

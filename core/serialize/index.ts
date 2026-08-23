@@ -9,7 +9,10 @@ import { parseNodeFile } from "./parse.js";
  * lenient about how a file was written, and the templates a person starts from.
  * The three ledgers — approvals, rejections and acceptances, the files Shall
  * writes itself, YAML and no prose — are read and written here too, under the
- * same scalar rule, the same YAML contract and one shared root grammar.
+ * same scalar rule, the same YAML contract and one shared root grammar; and so
+ * is the activity feed under `ledger/feed/` — the list of what the agents
+ * finished, a list and not a map — read and written here under the same scalar
+ * rule with a grammar of its own.
  *
  * IT IS PURE. No filesystem, no clock, no randomness — the fs lives in
  * `core/store`, the timestamps live in `stat`, and the type and id of a node
@@ -31,6 +34,20 @@ export {
   valuesOf,
 } from "./emit.js";
 export type { NodeFileBlocks, NodeFileEdge, NodeFileFields } from "./emit.js";
+export {
+  ACTIVITY_DIR,
+  ACTIVITY_KINDS,
+  activityFileFor,
+  activityMonthOf,
+  emitActivity,
+  isActivityKind,
+  parseActivity,
+} from "./activity.js";
+export type {
+  ActivityKind,
+  ActivityReading,
+  ActivityRecord,
+} from "./activity.js";
 export {
   ACCEPTANCES_FILE,
   emitAcceptanceLedger,

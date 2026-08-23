@@ -36,6 +36,9 @@ process.title = "shall";
 // `shall reject` and no `shall close`: a judgement is a person's, made in the
 // web UI over what they can see, and a command that let an agent write one into
 // a book would make the ledgers a record of what the agent decided about itself.
+// `shall log` is not one of those by another name: it writes a line of the
+// activity feed, which no colour reads, and the daemon takes the four run-end
+// kinds at that door and refuses any other word.
 
 const execFileAsync = promisify(execFile);
 
@@ -253,6 +256,38 @@ async function addSpecNode(url: string, type: string): Promise<Said> {
     ],
     failed: false,
   };
+}
+
+/**
+ * `shall log <kind> <summary> [--refs <id,id>]` — one line of the activity
+ * feed, written by the daemon at its own clock: a run finished, and what it
+ * finished.
+ *
+ * IT ANSWERS YES OR NO AND NOTHING ELSE. No command reads the feed back, and
+ * that is by design rather than a gap: the feed is a person's summary of what
+ * happened and the input to nothing, so an agent that wants the past reads
+ * `shall status` and `shall board`, which are computed from the books and the
+ * files and cannot be talked into a different answer by a line somebody logged.
+ *
+ * THE KIND IS THE DAEMON'S TO JUDGE. It takes the four run-end kinds —
+ * specify_done, plan_done, work_done, raise_landed — and refuses any other word
+ * in a sentence that lists the four; a judgment is a person's, made in the
+ * browser, and no word typed here writes one. The refusal arrives as a sentence
+ * and is printed as one.
+ */
+async function log(
+  url: string,
+  kind: string,
+  summary: string,
+  refs: string[],
+): Promise<Said> {
+  const answer = await connect(url).spec.log.mutate({
+    path: process.cwd(),
+    kind,
+    summary,
+    refs,
+  });
+  return { answer, prose: [`Logged ${kind}.`], failed: false };
 }
 
 /** English that does not say "1 nodes". */
@@ -567,6 +602,8 @@ function answerFor(url: string, asked: Answering): Promise<Said> {
       return board(url);
     case "add-spec-node":
       return addSpecNode(url, asked.type);
+    case "log":
+      return log(url, asked.kind, asked.summary, asked.refs);
   }
 }
 

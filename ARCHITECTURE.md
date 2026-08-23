@@ -51,7 +51,9 @@ daemon 하나가 돌고, 사람은 localhost 웹 화면에서 스펙을 보고 �
   끼지 않는다: 미승인 증거도 목록에 있다. 실행 밴드도 같은 물음을 받는다 —
   기록도 에이전트가 쓰고 사람이 읽는다. 판정을 만드는 길은 웹의 버튼뿐이고, 그
   버튼은 장부에 레코드 하나를 적을 뿐 노드 파일은 한 바이트도 건드리지 않는다.
-  장부는 에이전트가 쓰지 않기로 한 파일이다(deny 규칙 — 관례 방어).
+  장부는 에이전트가 쓰지 않기로 한 파일이다(deny 규칙 — 관례 방어). 그 옆의
+  feed(`ledger/feed/`)도 같은 deny 아래 있다 — 에이전트는 `shall log`로 데몬에게 한
+  줄을 부탁할 뿐, 파일을 열지 않고 되읽지도 않는다.
 - **번들도 저장하지 않는다.** 리뷰 큐가 보이는 번들(Spec approval · Work report ·
   Standalone finding · AC closure · Task closure)은 로드마다 그래프와 장부 세 권에서
   다시 계산한 배치이지
@@ -69,8 +71,11 @@ daemon 하나가 돌고, 사람은 localhost 웹 화면에서 스펙을 보고 �
 - **web** — localhost 브라우저 화면. 사람이 보고 고치는 표면.
 - **cli** — `shall` 명령. daemon을 띄우고 브라우저를 열며, 터미널에서 묻는 것
   (검사·상태·보드)도 스스로 답하지 않고 daemon에 물어 받아 적는 얇은 클라이언트.
-- **에이전트** — 프로젝트의 `.shall/spec/` 폴더를 직접 읽고 쓴다. daemon과 대화하지
-  않는다 (MCP 없음).
+  에이전트가 한 run의 끝에 남기는 feed의 한 줄(`shall log`)도 같은 길로 daemon에게
+  부탁한다.
+- **에이전트** — 프로젝트의 `.shall/spec/` 폴더를 직접 읽고 쓴다. daemon과 직접
+  대화하지 않는다 (MCP 없음) — 묻는 것도, run의 끝에 한 줄 부탁하는 것도 `shall`
+  명령을 거친다.
 
 **daemon은 스펙 파일을 쓰는 유일한 Shall 프로세스이지, 그 파일들의 유일한 writer가
 아니다.** 에이전트도, 사람의 편집기도, `git checkout`도, `git merge`도 같은 파일에
@@ -146,8 +151,8 @@ WorkLog에 한해 `commits`, Finding에 한해 `blocking`·`relatedNodes`, 그�
 4. **커밋한다.** 이력·병합·리뷰는 git이 한다. 데몬은 스스로 커밋하지 않는다 —
    사람이 터미널에서 하거나, 웹의 **Commit spec** 버튼(git 프로젝트에서 spec이나
    장부에 미커밋 변경이 있을 때 활성; `.shall/spec`과 `.shall/ledger` 범위의 부분
-   커밋 하나)으로 한다. 장부 세 권도 이렇게 커밋되어 repo와 함께 여행한다. 승인본
-   diff와 삭제 복원은 git에 커밋된 만큼만 가능하다.
+   커밋 하나)으로 한다. 장부 세 권도 — 그 옆의 feed도 — 이렇게 커밋되어 repo와
+   함께 여행한다. 승인본 diff와 삭제 복원은 git에 커밋된 만큼만 가능하다.
 
 노드를 **없애는** 길도 파일 계약이다: 에이전트는 파일을 지우지 않고, frontmatter에
 `deletionProposed:` 블록(`by`·`rationale` 두 키)을 적는다. 그 블록은 승인 hash의
@@ -243,9 +248,10 @@ WorkLog에 한해 `commits`, Finding에 한해 `blocking`·`relatedNodes`, 그�
 
 ### core/store — 저장
 
-프로젝트별 `.shall/spec/` 폴더가 정본이고, 그 옆에 장부 세 권이 있다.
-core에서 파일시스템을 만지는 유일한 모듈이고, 노드가 어느 경로에 사는지 아는 유일한
-모듈이다.
+프로젝트별 `.shall/spec/` 폴더가 정본이고, 그 옆에 장부 세 권이 있다 — 그리고
+`ledger/feed/`에 사람용 활동 feed(월별 YAML 리스트, append-only)가 있다: 장부가 아니며
+어떤 계산도 읽지 않는다. core에서 파일시스템을 만지는 유일한 모듈이고, 노드가 어느
+경로에 사는지 아는 유일한 모듈이다.
 
 - 로더 — 폴더 하나를 걸어 노드·엣지, 그리고 **거부한 파일마다 문장 하나**를 돌려준다.
   읽기가 통째로 실패하는 일은 없다
@@ -270,6 +276,16 @@ core에서 파일시스템을 만지는 유일한 모듈이고, 노드가 어느
   파일을 안 쓰는 지금 그 성질은 사라졌다 — 데몬은 방금 로드한 그래프를 해시하고
   장부만 쓰며, 사이에 저장이 끼면 결과는 yellow(changed)이지 결코 거짓 green이
   아니다(레코드는 순간이 아니라 내용을 가리킨다)
+- **feed, 문 하나 더** — `.shall/ledger/feed/YYYY-MM.yaml`은 맵이 아니라 시퀀스라
+  `ledger-door.ts`(맵 루트의 `LedgerCodec`, id로 되읽는 `readBack`)를 지나지 못하고
+  자기 문(`activity-ledger.ts`의 `readActivity`·`appendActivity`)을 가진다. 세 권의
+  예절은 그대로다 — 경로별 큐, `.tmp` + rename, 자기 바이트를 되읽는 텍스트 고정점,
+  **못 읽는 달 위에는 쓰지 않음**, 부재 = 빈 달 — 그리고 동사는 append 하나뿐이다:
+  달 파일을 읽고 레코드 하나를 뒤에 붙여 통째로 다시 앉힌다(파일 끝에 바이트를 덧대는
+  쓰기는 이 store에서 유일하게 반쯤 남을 수 있는 쓰기라 그렇게 하지 않는다). 쓴
+  레코드를 고치거나 지우는 문은 없다. 문을 일반화하지 않은 이유는 동결된 세 권의
+  문에 둘째 컬렉션을 가르치는 것이 장부 아닌 파일 하나를 위해 장부 셋을 건드리는
+  일이라서다. 형식은 `serialize/activity.ts`
 - 쓰기 직전에 자기가 낼 바이트를 로더로 되읽는다 — 되읽을 수 없는 파일은 쓰지 않고,
   그래서 같은 규칙에 대한 문장이 두 벌 있지 않다
 - 지금 파싱되지 않는 파일 위에는 쓰지 않고 거부한다. 누군가의 반쯤 된 편집이나 병합의
@@ -291,6 +307,7 @@ core에서 파일시스템을 만지는 유일한 모듈이고, 노드가 어느
   색을 받는다. 색 밖에 남는 것은 삭제뿐이다: 기록은 지운다고 없던 일이 되지 않는다
 - 장부 세 권의 레코드와 sha256 함수는 `Ledgers`(approvals·rejections·acceptances·
   hash) 한 묶음으로 주입받는다 — 해시는 daemon의 것이고 core는 브라우저에서도 돈다.
+  feed는 이 묶음에 들어가지 않는다 — 색의 입력이 아니다.
   `contentHashOf`가 승인·반려·닫힘의 문과 술어가 같은 것을 해시하게 하는 한 함수다.
   삭제 제안은 페이로드 안에 있어 전용 분기가 없다: 적으면 changed, 벗기면 도로
   green. spec에 없는 id의 레코드는 무시된다 — 삭제된 노드의 이력이고, 복원되면
@@ -381,6 +398,18 @@ core에서 파일시스템을 만지는 유일한 모듈이고, 노드가 어느
   쌍둥이 키 → id 판정)는 `ledger-common.ts` 한 곳을 지난다. 산문이 없는 순수
   레코드라 md가 아니라 YAML이다. 관대하게 읽고 정칙으로 쓰며, 안 읽히면 파일 전체에
   문장 하나
+- **feed 형식** — `.shall/ledger/feed/YYYY-MM.yaml`(`serialize/activity.ts`)은 장부가
+  아니라 **끝난 run의 목록**이라 루트가 맵이 아니라 YAML 시퀀스다: 레코드마다
+  `{at, kind, refs, summary}`(`at`은 따옴표 ISO 인스턴트, `kind`는 넷 중 하나 —
+  에이전트가 `shall log`로 남기는 specify_done·plan_done·work_done·raise_landed,
+  `refs`는 node id만의 flow 시퀀스·비면 `[]`, `summary`는 에이전트의 한 줄이고 항상
+  있다), 붙인 순서 그대로, 정렬도 중복 제거도 없고, 빈 feed는 0바이트. 사람의 판정은
+  레코드가 아니다 — 장부에 있고, feed는 그것을 되풀이하지 않는다. 달은 UTC(`at`의
+  앞 일곱 글자)다 — 어느 파일에 있는지에 아무것도 걸려 있지 않다. 세 권과 같은
+  스칼라 규칙·같은 yaml 계약이지만 `ledger-common.ts`의 맵 루트 읽기는 지나지 않는다.
+  관대하게 읽고(block·flow refs, 따옴표 유무, 키 순서, 빠진 `refs`·`summary`) 정칙으로
+  쓰며, 모르는 kind나 node id가 아닌 ref는 빈 행이 아니라 **파일 전체에 대한 문장
+  하나**로 거부한다 — store가 못 읽는 달 위에는 쓰지 않기 때문이다
 - emit — 노드 하나를 자기 파일의 바이트로. 스칼라를 맨몸으로 낼지 따옴표로 감쌀지는
   직접 판정한다(YAML 1.1∪1.2에서 불리언·숫자·타임스탬프로 읽힐 수 있는 값은 전부
   따옴표). 라이브러리의 stringify에 맡기면 파일 형식이 그 버전에 묶인다. 본문 위에서
@@ -413,10 +442,16 @@ core에서 파일시스템을 만지는 유일한 모듈이고, 노드가 어느
 - 스펙 프로시저 — 노드·엣지 읽기와 쓰기 다섯, 리뷰 표면 일곱(`review`·`approve`·
   `rejectDeletion`·`approvedVersion`·`restoreNode`·`gitStatus`·`commitSpec`), 그리고
   리뷰 큐의 여섯(`reviewQueue`·`reject`·`withdrawRejection`·`approveNodes`·
-  `acceptClosure`·`leaveOpen`), 그리고 보드의 하나(`taskBoard`). 문장과 순서가 door의 것이고, 거부 종류(`invalid`·
+  `acceptClosure`·`leaveOpen`), 그리고 보드의 하나(`taskBoard`), 그리고 활동 feed의
+  읽기 하나(`activity` — 달 목록과 한 달의 레코드, 둘 다 최신순; 기본은 달력의 이달이
+  아니라 **파일이 있는 가장 최근 달**, 목록 밖의 달은 `missing`, 철자가 틀리면
+  `invalid`, 못 읽는 달은 파일의 문장을 실은 `conflict`; 쓰는 쪽 `log`는 경로 가족이라
+  아래에). 문장과 순서가 door의 것이고, 거부 종류(`invalid`·
   `conflict`·`missing`)가 여기서 상태 코드를 얻는다. `approve`·`approveNodes`가 green의,
   `reject`가 반려 red의, `acceptClosure`가 closed의, `leaveOpen`이 left-open의 유일한
-  제조 경로다 — 각각 장부에 레코드를 쓰고 노드 파일은 건드리지 않는다.
+  제조 경로다 — 각각 장부에 레코드를 쓰고 노드 파일은 건드리지 않으며, feed에도
+  아무것도 쓰지 않는다: 사람의 판정은 장부에만 살고, feed에 줄을 붙이는 문은
+  에이전트의 `log` 하나다.
   `approveNodes`는 전부-아니면-무다: 가드를 전부 지난 뒤 한 번 쓰고, 하나라도 막히면
   막힌 것을 전부 나열하며 아무것도 안 쓴다. `acceptClosure`는 id 하나를 받아 **지금 그
   주체를 claim하는 것 전부**로 닫고(AC면 CLAIMS하는 증거, task면 CLAIMS하는 보고서
@@ -426,15 +461,17 @@ core에서 파일시스템을 만지는 유일한 모듈이고, 노드가 어느
   둘 다 상대 장부의 기록을 먼저 지우고 쓴다(사이에서 실패하면 아무 말도 없는 상태 =
   큐가 다시 묻는 안전한 쪽). 청구가 하나도 없거나, 청구 중 green이 아닌 것이 있거나(그
   id를 이름해 거부), 주체의 문구가 반려 중이면 둘 다 거부.
-  에이전트의 계약은 파일 전용이라 이 문을 두드릴 이유가 없고, 장부는 deny 규칙이
-  가린다(관례 방어 — 로컬 토큰은 daemon이 신뢰하지 않는 호출자가 생기는 날의 일).
+  에이전트의 계약은 파일 전용이라 판정의 문을 두드릴 이유가 없고 — 에이전트가
+  두드리는 유일한 쓰기 문은 `spec.log`이며, 그것은 판정이 아니라 feed 한 줄이다 —
+  장부는 deny 규칙이 가린다(관례 방어 — 로컬 토큰은 daemon이 신뢰하지 않는 호출자가
+  생기는 날의 일).
   세 권 중 하나라도 안 읽히면 리뷰·큐·판정은 어느 권인지 이름한 문장 하나로 거부한다
   — 전부-yellow는 색을 입은 거짓말이다. sha256은 host의 `payloadHash` 하나다
-- `spec.check`·`spec.status`·`spec.board`·`spec.scaffold` — 프로젝트 id가 아니라
-  **경로**를 받는 네 프로시저. 레지스트리는 이 기계에서 누군가 UI로 연 폴더의
-  목록이고, 갓 clone한 checkout은 그 목록에 없다. 한 번 열어야만 쓸 수 있는 스펙은
-  그것을 나르는 repo보다 덜 이동적이다. 넷 다 `projectRootAt` 한 문으로 위로 걸어
-  올라가 루트를 찾고, 거기서부터의 다섯 주소는 `specPathsOf` 한 곳에서 나온다 —
+- `spec.check`·`spec.status`·`spec.board`·`spec.scaffold`, 그리고 `spec.log`까지 —
+  프로젝트 id가 아니라 **경로**를 받는 다섯 프로시저. 레지스트리는 이 기계에서 누군가
+  UI로 연 폴더의 목록이고, 갓 clone한 checkout은 그 목록에 없다. 한 번 열어야만 쓸 수
+  있는 스펙은 그것을 나르는 repo보다 덜 이동적이다. 다섯 다 `projectRootAt` 한 문으로
+  위로 걸어 올라가 루트를 찾고, 거기서부터의 여섯 주소는 `specPathsOf` 한 곳에서 나온다 —
   id로 찾는 쪽(`projectSpecFor`)이 보는 것과 **같은** 주소들이라 두 갈래가 서로
   어긋날 수 없다. `status`는 `reviewGraph`가 낸 상태에 타입·밴드·이름·파일·그 파일이
   쓴 엣지를 얹을 뿐 색을 다시 계산하지 않고, `board`는 `taskBoard`와 같은
@@ -448,7 +485,14 @@ core에서 파일시스템을 만지는 유일한 모듈이고, 노드가 어느
   열지 않는 편이 옳다. `scope` 키가
   `.default([])`가 아니라 `.optional()`인 것도 이유가 있다: 그 필드를 모르던 CLI가
   새 daemon과 계속 말한다. `scaffold`는 타입을 대소문자 무시로 해석해 다음 빈 id로
-  시작 파일을 쓰고 그 경로를 답한다
+  시작 파일을 쓰고 그 경로를 답한다. `log`(`spec-activity.ts`의 `logActivity`)는
+  에이전트가 두드리는 유일한 쓰기 문이다 — kind 넷(specify_done·plan_done·work_done·
+  raise_landed) 중 하나, 한 줄짜리 summary, `--refs`의 node id들을 받아 데몬의 시계로
+  `ledger/feed/`의 달 파일에 레코드 하나를 붙이고 `{ok: true}`만 답한다. 넷 밖의
+  kind는 목록과 함께, 빈 ref와 node id 모양이 아닌 ref는 항목을 이름해 거부하며,
+  refs는 trim·순서 보존 중복 제거다. feed에 쓰는 문은 이것 하나다 — 판정의 문들은
+  feed를 모른다. feed를 에이전트에게 돌려주는 프로시저는 없다(설계): 과거가 필요한
+  에이전트는 `status`와 `board`에 묻는다
 - **폴더를 지켜본다 — daemon이 요청 사이에 쥐는 첫 자원.** `/api/projects/:id/events`
   하나가 SSE로 열리고, 그 프로젝트의 `.shall` 아래에서 무엇이든 바뀌면 `change` 한
   줄을 보낸다. 쓰기 문(`writeBytes`)에서 신호를 내지 않는 이유는 그것이 **daemon 자신의
@@ -471,8 +515,9 @@ core에서 파일시스템을 만지는 유일한 모듈이고, 노드가 어느
 - **상시 층은 `.claude/rules/shall.md` 한 장이다.** 매 세션 자동으로 읽히는 자리에
   Shall이 **통째로 소유하는** 생성 파일로 두고(템플릿처럼 바이트가 다를 때만 다시
   쓴다), 파일 스스로 말하지 못하는 것만 반 페이지로 싣는다 — 쓰기는 제안이라는
-  것, 삭제는 `deletionProposed`라는 것, 장부는 열지 않는다는 것, 색은 계산하지 말고
-  `shall status`에 묻는다는 것, 노드는 `shall add-spec-node`로 시작한다는 것(그
+  것, 삭제는 `deletionProposed`라는 것, 장부는 열지 않는다는 것(거기 남기는 한 줄은
+  `shall log`로 부탁하고 되읽지 않는다는 것), 색은 계산하지 말고 `shall status`에
+  묻는다는 것, 노드는 `shall add-spec-node`로 시작한다는 것(그
   주석 머리말이 타입의 키와 관계가 적힌 유일한 자리다), task는 모듈에 매달린다는 것. 옆집 `settings.json`과 태도가 정반대인 것이 요점:
   저쪽은 남의 문서에 두 줄을 병합하고, 이쪽은 Shall의 출력이 남의 폴더에 산다.
   사람이 손댄 것은 다음 open에 사라지고, 자기 규칙은 옆 파일에 쓴다
@@ -510,10 +555,12 @@ localhost 브라우저 화면. 사람의 관찰·편집 표면.
   0이면 없다 — 빈 큐는 조용함으로 읽히는 편이 나은 상태다. 요약 프로시저를 새로 만들지
   않고 패널이 부르는 그 프로시저 둘을 부른다(어긋날 둘째 자리를 만들지 않으려고), 컨트롤
   플레인에 있을 때만 묻고, 실패하면 이전 숫자를 지킨다 — 뱃지는 패널을 가리키는 손가락이지
-  사실이 사는 집이 아니다
+  사실이 사는 집이 아니다. Activity Feed는 뱃지 없음 — 큐가 아니고, 거기 있는 것은
+  아무도 기다리지 않는다
 
-- Control plane — review queue · task board · activity · vitals. 전부 core/arith
-  계산 결과의 표시. **Task Board**도 채워졌다: 위가 Fix Spec(모든 red — 사람의 반려가
+- Control plane — review queue · task board · activity · vitals. 활동 feed 하나만
+  빼고 전부 core/arith 계산 결과의 표시다(feed는 파일을 읽는다). **Task Board**도
+  채워졌다: 위가 Fix Spec(모든 red — 사람의 반려가
   먼저, rationale은 **전문**; 그다음 문법 red, 구멍, 안 읽히는 파일), 아래가
   Implement(미완료 ∧ 선행 전부 닫힘 ∧ 상향 사슬 all-green인 task만 — 조건 미달은 이유
   없이 아예 안 보인다). 두 열 다 저장 없음. **Review Queue**가 채워졌다: 목록은 `[종류 배지] 제목 — 요약
@@ -528,8 +575,17 @@ localhost 브라우저 화면. 사람의 관찰·편집 표면.
   한 장, 두 문이 다 열린 행 하나). 반려는 인라인
   팝오버 — 대상 id·이름, 필수 rationale, 확정/취소 — 이고 카드의 행 우클릭과 스펙
   플레인 카드 우클릭 어디서든 같은 팝오버다. 판정 직후 카드는 큐를 다시 계산하고,
-  방금 내린 반려는 페이지의 '최근 판정' 줄에 [Undo]로 남는다. task board·activity·
-  activity·vitals는 아직 예약석
+  방금 내린 반려는 페이지의 '최근 판정' 줄에 [Undo]로 남는다. **Activity Feed**도
+  채워졌다: `.shall/ledger/feed/YYYY-MM.yaml` 월별 파일 하나를 `spec.activity`로 읽어
+  같은 PanelTable 한 장(Kind·Event·Refs·When)으로 — 한 줄에 한 행, 최신순, 접는
+  것은 없다(줄마다 run 하나가 사건이라 접을 것이 없다). 행의 kind는 넷(specify_done·
+  plan_done·work_done·raise_landed)이 전부이고 문장은 에이전트의 summary 그대로다 —
+  사람이 리뷰 큐에서 한 일은 장부에 있고 feed에는 없다. 월은 URL의 `?month=`에
+  살고(숨은 상태 없음) 선택은 달 파일이 둘 이상일 때만, 기본은 파일이 있는 가장
+  최근 달, refs는 스펙 플레인으로의 링크(`?back=`이 feed와 그 달로 되돌린다),
+  Overview 카드는 최신 달의 첫 세 행. feed는 사람용 요약이지 정본이 아니다 — 어떤
+  계산도 읽지 않고, 못 읽는 달은 이 패널 하나만 비용이다. 새 채널은 없다: feed
+  쓰기도 `.shall` 아래의 변경이라 같은 SSE 틱으로 닿는다. vitals만 아직 예약석
 - Spec plane — 그래프 캔버스(React Flow)와 노드 상세, 그리고 리뷰 표면. 카드마다
   신호등이 색을 달고, AC는 id 옆에 빨간 Open/초록 Closed 배지를, ImplementationTask는
   같은 자리에 Blocked/Ready/Done 배지를(회색 둘·윤곽선 초록 하나 — Ready 집합은 Task
@@ -585,23 +641,35 @@ localhost 브라우저 화면. 사람의 관찰·편집 표면.
 - `shall add-spec-node --type <Type>` — 시작 파일 하나를 제자리에 만들고 첫 줄로
   그 절대 경로를 출력한다. 타입은 인자라서 canon이 자라도 명령은 하나이고, canon에
   없는 타입은 전체 목록과 함께 거부된다
+- `shall log <kind> <summary> [--refs <id,id>]` — 활동 feed에 한 줄: 한 run이 끝났고,
+  무엇을 끝냈는지. kind와 summary는 명령 뒤의 두 위치 낱말이다(summary는 셸에 한
+  낱말 — 따옴표로 — 데몬에는 한 줄; 셋째 낱말은 이어 붙이지 않고 usage 오류),
+  `--refs`는 쉼표로 가른 node id들이고 두 철자(`--refs a,b`·`--refs=a,b`) 다 받으며
+  누적된다. kind는 넷(specify_done·plan_done·work_done·raise_landed)뿐 — 다른 낱말은
+  데몬이 목록과 함께 거부한다. 답은 `Logged <kind>.` 또는 거절 한 문장, 그것뿐이다 —
+  feed를 되읽는 명령은 없다(설계). 쓰는 손은 데몬이고 시계도 데몬의 것이며, 쓰는
+  파일은 장부가 아니라 `ledger/feed/`의 달 파일이다
 - `shall help` — 위 모양들이 그대로 인쇄되는 화면 하나를 stdout에. `shall --help`가
   같은 명령이고, 오타 난 명령이 받는 답도 이 화면이다
-- **`--json`은 답하는 다섯이 받는다** — stdout에 객체 **하나**, 그것뿐. 실패해도
-  `{"error": 문장}` 하나라 호출자는 어느 쪽이든 stdout을 한 번 읽고 한 번 파싱한다.
+- **`--json`은 답하는 여섯이 받는다** — stdout에 객체 **하나**, 그것뿐(`log`의
+  객체는 `{"ok": true}`). 실패해도 `{"error": 문장}` 하나라 호출자는 어느 쪽이든
+  stdout을 한 번 읽고 한 번 파싱한다.
   exit 1은 호출이 실패했거나 `check`가 problem·gap을 찾았을 때뿐이고, red 노드도 선
   반려도 빈 보드도 답이지 오류가 아니다 — **호출자는 코드가 아니라 내용으로
   갈라진다**. 에이전트의 도구가 먹는 계약이 이것이다
 - **계약은 낱말이 읽힌 다음부터다.** 이 클라이언트가 읽지 못한 줄 — 그 명령에 없는
-  옵션, 값 없는 `--scope`, 아무것도 아닌 낱말 — 은 daemon이 뜨기도 폴더가 읽히기도
-  전에 stderr로 답하고 exit 1이다: 맞는 모양 한 줄, 또는 모르는 이름이면 help 화면
-  통째로. 줄에 `--json`이 있었어도 stdout에는 아무것도 없다
+  옵션, 값 없는 `--scope`나 `--refs`, `log`의 셋째 낱말, 아무것도 아닌 낱말 — 은
+  daemon이 뜨기도 폴더가 읽히기도 전에 stderr로 답하고 exit 1이다: 맞는 모양 한 줄,
+  또는 모르는 이름이면 help 화면 통째로. 줄에 `--json`이 있었어도 stdout에는
+  아무것도 없다
 - 인자 읽기는 `args.ts` 하나이고 아무것도 import하지 않는다 — daemon도 포트도 폴더도
   없이 테스트되는 유일한 부분이라 그 자리를 지킨다. 명령의 모양 표(`SHAPES`)가
-  help 화면과 오타에 답하는 한 줄의 같은 출처다
+  help 화면과 오타에 답하는 한 줄의 같은 출처다. `log`의 kind도 여기서는 검사하지
+  않는다 — 영어는 데몬이 쓴다
 - `shall approve`·`shall reject`·`shall close`는 영원히 없다: 판정의 제조자는
   브라우저의 사람뿐이고, 에이전트가 장부에 한 줄 쓰게 하는 명령은 자기가 자기를
-  어떻게 판정했는지의 기록을 만든다
+  어떻게 판정했는지의 기록을 만든다. `shall log`는 그 예외가 아니다: 판정은 쓸 수
+  없고, 쓰는 것은 장부가 아니라 feed 한 줄 — 어떤 색도 읽지 않는 파일이다
 
 ## 레거시에서 사라진 것
 
@@ -662,4 +730,9 @@ MCP 서버 · webhook 수신 · 외부 cron · 추론 클라이언트와 그 게
 아직 얼지 않은 것: CLI 서브커맨드의 이름과 출력(`--json` 객체의 필드 이름들도
 아직 여기 있다), `spec.check`·`spec.status`·`spec.board` 응답의 모양,
 리뷰 응답과 리뷰 큐 응답의 모양(장부의 by·at·rationale과 AC의 closure가 상태에
-실리는 것, 번들의 필드들 — 전부 이 자유 안에서 한 일이다).
+실리는 것, 번들의 필드들 — 전부 이 자유 안에서 한 일이다), 그리고 활동 feed의
+레코드 형식(`ledger/feed/YYYY-MM.yaml`의 시퀀스, 레코드마다 `{at, kind, refs,
+summary}`)과 kind 목록 넷, `shall log`·`spec.log`·`spec.activity`의 모양. feed는
+사용자 repo에 바이트로 남지만 위의 세 권과 함께 얼지 않았다 — 어떤 계산도 읽지
+않으므로 형식이 바뀌어도 돌아가는 색은 없고, 옛 달 파일이 안 읽히면 그 달의 패널
+하나가 비용이다.

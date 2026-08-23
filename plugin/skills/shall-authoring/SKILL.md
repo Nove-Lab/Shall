@@ -22,7 +22,7 @@ Editing a green node turns it yellow again and costs somebody a second reading. 
 
 **Never delete a spec file.** Not `rm`, not `git rm`, not a delete tool. Propose the deletion by adding a `deletionProposed` block to the file's own frontmatter and leave the file exactly where it is — section 5. Deleting takes the decision away from the person whose decision it is, and it takes the node out of the graph at once: everything anchored to it turns orphan and every file pointing at it reports a gap, before anybody has agreed the node should go.
 
-**Never write anything under `.shall/ledger/`, and do not read them either.** Those books are Shall's own and the daemon alone writes them; the project's `.claude/settings.json` denies the edit outright. Reading is merely pointless: `shall status` and `shall board` already report everything the books hold, and a color you work out from one by hand will disagree with the screen.
+**Never write anything under `.shall/ledger/`, and do not read it either.** Those books are Shall's own and the daemon alone writes them; the project's `.claude/settings.json` denies the edit outright, and the rule is a glob over the whole folder, so it covers the Activity Feed under `ledger/feed/` as well. The one line a process leaves there at its end goes through `shall log`, which asks the daemon to append it — you never open the file, and the feed is never read back: it is a person's news page, not a record anything is computed from. Reading the books is merely pointless: `shall status` and `shall board` already report everything they hold, and a color you work out from one by hand will disagree with the screen.
 
 **Never work out a color, a queue, or what is ready to start by reasoning about it.** Color is arithmetic over the files and the three ledgers, recomputed on every read. Ask the CLI, every time — `shall status` for a node, `shall board` for whose turn it is.
 
@@ -125,13 +125,14 @@ In the plan band, four more:
 | `shall board [--json]` | two lists: **Fix Spec** (every red node — a person's rejection first, rationale whole, then the seams the grammar found) and **Implement** (tasks ready to start) |
 | `shall check [--scope <path>]… [--json]` | the compiler: a count line first — `N nodes and M relations under <root>[, in <scope>]`, counted over the whole project even under a scope, and never a finding — then `file — sentence` per finding: problems (files the graph refused), gaps (an id nothing answers to, a node no live anchor holds, a rule of the graph broken), notes (valid but not canonical) |
 | `shall add-spec-node --type <Type> [--json]` | a starting file at the node's own path, with the next free id; the path is the first line of output, alone |
+| `shall log <kind> <summary> [--refs <id,id>] [--json]` | yes or no, and nothing else: the daemon appends one line to the project's Activity Feed. `kind` is one of `specify_done`, `plan_done`, `work_done`, `raise_landed`, and any other word is refused with that list. `--refs` takes node ids, as ids separated by commas. A process calls it once at its end, where its spine says, and the feed is never read back — there is no command that prints it |
 | `shall init` | makes this folder a Shall project |
 
 `--scope` is a path filter — a file, a type folder, a band folder, or a spec-relative prefix — and it is repeatable. It must name something that is there: a folder nothing has been written into yet does not exist, and naming it is refused rather than answered with an empty list, because a narrowing that quietly selects nothing turns a check into a pass. It narrows which findings and which nodes are reported; it never follows a relation, so it cannot tell you what hangs off a node. For that, read the relations `shall status` prints and walk them yourself.
 
 `--json` puts exactly one JSON object on stdout. A failure prints `{"error": "<sentence>"}` and exits 1. **`shall check` exits 1 when there are problems or gaps** — notes never fail it — and everything else exits 0 unless the call itself failed.
 
-There is no `shall approve`, no `shall reject`, no `shall close`, and there never will be. A judgment is a person's, made in the browser.
+There is no `shall approve`, no `shall reject`, no `shall close`, and there never will be. A judgment is a person's, made in the browser — and `shall log` cannot write one: it records that a process finished, never how anything was judged.
 
 ## Where the node format lives
 

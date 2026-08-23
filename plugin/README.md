@@ -2,21 +2,21 @@
 
 Shall keeps a specification as markdown files and asks a person to approve every one of them. This plugin is the other half of that loop: it gives an agent the process for producing those files, and it compiles each file the moment the agent writes it.
 
-It adds six commands — two for the specification, and four for the work done against it.
+It adds seven commands — two for the specification, four for the work done against it, and one guide.
 
 `/shall:specify` is the staged elicitation that fills a project's intent and domain planes; `/shall:plan` is the design pass one layer below, turning an approved specification into module designs, the contracts between them, and the implementation tasks the board hands out. Both run phase by phase, and both stop at each phase for a person to approve what they wrote in the Review Queue — or, with `--auto`, run every phase through and ask for that approval once at the end. The flag moves the browser judgment and nothing else: the questions inside each phase and the yes before anything is written happen either way.
 
-`/shall:work` runs one turn of the work cycle: it surveys the board, proposes a bundle of at most three items, leaves the development itself alone, and writes the turn up as one journal for the queue — with `--auto` to run it without stopping and `--dry` to forecast it without writing. Its two parts are commands of their own: `/shall:work.todo` surveys and writes nothing, `/shall:work.report` writes up work already done, reconstructing it from git when the notes are gone. `/shall:raise <question>` is the other door — for a doubt rather than a request: it explores, says what it found, and records a finding, a decision the person dictated, both, or nothing.
+`/shall:work` runs one turn of the work cycle: it surveys the board, proposes a bundle of at most three items, leaves the development itself alone, and writes the turn up as one journal for the queue — with `--auto` to run it without stopping and `--dry` to forecast it without writing. Its two parts are commands of their own: `/shall:work.todo` surveys and writes nothing, `/shall:work.report` writes up work already done, reconstructing it from git when the notes are gone. `/shall:raise <question>` is the other door — for a doubt rather than a request: it explores, says what it found, and records a finding, a decision the person dictated, both, or nothing. `/shall:help [question]` is the guide: what Shall is in a screen, where this project stands, and the one or two commands that move it — the one command that answers outside a Shall project. Every process — specify, plan, a turn of work, a landed question — ends by asking the daemon, through `shall log`, to put one line in the project's Activity Feed; a Shall that does not know the word costs the run one sentence and nothing else.
 
 **The four work commands have no phase gate to move.** They finish a turn in one session and hand the record to the queue, because a record is read after the fact rather than agreed to in advance — which is why they need no flag to say so.
 
 ## What it needs
 
-A Shall whose CLI knows `shall status` and `shall board`. Both landed in the round this plugin was written for, and neither command starts without them. The first act of each is a `shall status --json` call: an `Unknown command:` there means the CLI is behind, and the substring `-procedure on path "spec.status"` means the running daemon is — the router writes the verb it wanted into that message (`No "query"-procedure on path "spec.status"`), so the substring is what the commands match on. Either way the answer is to upgrade Shall.
+A Shall whose CLI knows `shall status` and `shall board`. Both landed in the round this plugin was written for, and neither command starts without them. The first act of each is a `shall status --json` call: an `Unknown command:` there means the CLI is behind, and the substring `-procedure on path "spec.status"` means the running daemon is — the router writes the verb it wanted into that message (`No "query"-procedure on path "spec.status"`), so the substring is what the commands match on. Either way the answer is to upgrade Shall. `shall log` is the third the plugin calls and the one whose absence is tolerated: it is asked for once at the end of a run, and if it fails the run says so in a line and finishes as it would have.
 
 The folder you run in must already be a Shall project. `shall init` makes one.
 
-`/shall:work` needs a board with something on it — a plan whose tasks are ready, or a specification with something red in it. An empty board is not an error there: the turn ends before it starts, and what unblocks it is a person judging what is waiting, or `/shall:plan` cutting more work. `/shall:raise` needs neither, only `shall status`.
+`/shall:work` needs a board with something on it — a plan whose tasks are ready, or a specification with something red in it. An empty board is not an error there: the turn ends before it starts, and what unblocks it is a person judging what is waiting, or `/shall:plan` cutting more work. `/shall:raise` needs neither, only `shall status`. `/shall:help` needs nothing at all: it is the one command that answers in a folder that is not a Shall project, and its first advice there is `shall init`.
 
 `/shall:plan` needs one thing more, and `--auto` does not relax it: a specification a person has approved above whatever it is being asked to plan. It walks the responsibilities the direction touches, up to the goals and out to the criteria and constraints, and refuses to start if any of those is not green — naming the ids and sending you to `/shall:specify`. That set is exactly what a task's readiness is computed over later, so a plan built on an unread node would produce tasks nobody could start.
 
@@ -50,15 +50,17 @@ The first checks the manifest and the file layout. The second checks the prose: 
 | `commands/work.todo.md` | the survey alone, with the writing tools refused outright |
 | `commands/work.report.md` | the write-up alone, which is always the reconstruction — and the way back after a session broke off mid-turn |
 | `commands/raise.md` | a question rather than a request. Refuses to start without one |
+| `commands/help.md` | the guide. Answers outside a project, reads two answers, recommends at most two commands and runs none of them; a question about the project is sent to `/shall:raise` unanswered |
 | `skills/shall-authoring/` | how a spec node file is written: the path, the id, the frontmatter, the relation lines, what to do when a check refuses one, and when something you noticed is worth a finding |
 | `skills/shall-specify/` | the elicitation process itself, one file per phase |
 | `skills/shall-plan/` | the design process: modules, contracts, tasks — one file per phase |
 | `skills/shall-work/` | the work cycle: the survey, the two ends of the development stretch, the record, and the forecast — one file per part |
 | `skills/shall-raise/` | the question process, and the mechanics of its four landings |
+| `skills/shall-help/` | the guide's own words: what Shall is in a screen, how the project's standing is read out of status and board, and the tree that turns it into a next step |
 | `hooks/hooks.json` | wires the hook to `Write`, `Edit` and `MultiEdit` |
 | `hooks/check-spec.mjs` | runs `shall check --scope <file>` after any write under `.shall/spec/`, and hands the findings back to the agent by exiting 2 |
 
-A command carries no process. It dispatches and delegates, so a change to how a phase runs is a change to one skill file and to nothing else.
+A command carries no process. It dispatches and delegates, so a change to how a phase runs is a change to one skill file and to nothing else — with one stated exception: `shall-help` carries its own part 1 in its body, because for a guide the words are the process.
 
 ## The hook, and the sentence it will show you
 
@@ -74,7 +76,7 @@ If the hook says the `shall` CLI is not on PATH, nothing was checked. Link the C
 
 It never approves anything. There is no `shall approve`, no `shall reject` and no `shall close`, and there never will be — a judgment is a person's, made in the browser, and the plugin's job ends at telling the user that cards are waiting. An agent that could approve its own work would make green mean nothing.
 
-It also does not write ledgers. `.shall/ledger/` belongs to the daemon; the plugin reads what those books hold through `shall status` and `shall board` and opens neither.
+It also does not write ledgers, and it does not read them. `.shall/ledger/` belongs to the daemon; the plugin reads what the three books hold through `shall status` and `shall board` and opens none of them. The one line it leaves under that folder — a record in the Activity Feed that a run finished — goes through `shall log`, so the daemon holds the pen, the kinds are the four finished-process kinds and never a judgment — the feed holds what runs logged, and nothing a person did in the Review Queue — and the feed is never read back: it is the person's news page, and nothing the plugin does depends on it.
 
 And it never decides. A `Decision` is a person's judgment, so the only place one is written is `/shall:raise`, and only as dictation of a judgment the user has settled — what they decided and what it changes to. An agent that reached its own conclusion and filed it as a decision would be putting words in somebody's mouth in a file that outlives the conversation.
 
@@ -85,3 +87,7 @@ And it never decides. A `Decision` is a person's judgment, so the only place one
 **A turn that breaks off mid-session leaves nothing behind but git.** There is no note file, no scratch state, no resume token: `/shall:work.report` reconstructs the turn from the commits and the specification, and asks about anything that left no commit. That is the whole recovery path, and it was chosen over persisting notes that would go stale the first time somebody edited the code by hand.
 
 **Neither work command has been dogfooded yet.** `/shall:specify` and `/shall:plan` were each run against a weak model on purpose before they were trusted, and `docs/specify-dogfood.md` and `docs/plan-dogfood.md` are what came back. The work cycle has had no such round.
+
+**The feed has no read path for an agent, and is not going to get one.** `shall log` is write-only and answers yes or no; an agent that needs the past reads the graph and `shall status`. If a reason for reading ever appears it is a new question, not a flag.
+
+**`/shall:help` has not been dogfooded.** Its three probes — an empty folder, a project, a project question — are listed in `docs/Shall_Help_Skill_Spec.md`; a headless pass is the check before it is trusted, and a session with a person has not happened.

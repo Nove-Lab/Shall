@@ -62,11 +62,12 @@ Ask through AskUserQuestion under the spine's rules. What is worth asking here:
 1. **Put the whole draft in the terminal** — the journal, each log with its item, and every report, evidence and finding with what it points at — and quote the opening words you are about to copy in. **This is stop 2.** Under `--auto` there is no stop, but the draft is still written out: it is what the user reads afterwards to see what you decided.
 2. **After the yes, write the files** with `shall add-spec-node --type <Type>` under `.shall/spec/execution/`. Order matters only in that a line needs both ends to exist: the journal first so its id is real, then each log written with its own task line in the same pass, then the journal's lines at the logs, then each claimant with its own claim, then the log's lines at them.
 3. **`shall check --scope .shall/spec/execution`**, and fix anything red at once, then run it again until it exits 0. If a Fix Spec item edited files elsewhere this turn, run the check over the whole project once as well.
-4. **Say what is waiting and stop.** A Work report card, and a Spec approval card for each spec file this turn edited. Tell the user that running `shall` with no arguments opens the queue — say it, do not run it. Do not wait, do not poll, do not guess that they approved.
+4. **Log the turn, once.** `shall log work_done "<summary>" --refs <ids>` — the summary is one line saying the turn is written up, its leading phrase in the conversation's language and its type names `shall status`'s, as it reports them, counted from what this turn wrote: `Turn written up — WorkLog 3, Evidence 4, TaskCompletionReport 1` is the shape in an English conversation, and `회전 완료 — WorkLog 3, Evidence 4, TaskCompletionReport 1` the same line in a Korean one. The refs are the journal's id first and then every other id this turn wrote — logs, reports, evidence, findings — as ids separated by commas, so a reader of the Activity Feed can open any of them; the journal goes first because it is the one a reader opens. Once per turn, after the check is clean and before anything is announced — not per log, not per item, not from the development stretch, and never twice because you are unsure the first landed. If the call fails for any reason — the CLI does not know `log`, the daemon refused, the command was not found — say so in one line in the next step ("the Activity Feed did not take this turn's record") and go on exactly as if it had succeeded: the feed is a person's news page, the record is the journal, and nothing in this turn depends on the feed. Never read the feed back.
+5. **Say what is waiting and stop.** A Work report card, and a Spec approval card for each spec file this turn edited. Tell the user that running `shall` with no arguments opens the queue — say it, do not run it. Do not wait, do not poll, do not guess that they approved.
 
 ## Under `--auto`
 
-Step 1 loses its stop and keeps its draft. Steps 2 to 4 are identical. End with the spine's summary: how many items finished, how many did not and why, how many nodes were written, and where it is read.
+Step 1 loses its stop and keeps its draft. Steps 2 to 5 are identical. End with the spine's summary: how many items finished, how many did not and why, how many nodes were written, and where it is read.
 
 ## The gate
 
@@ -78,6 +79,7 @@ Step 1 loses its stop and keeps its draft. Steps 2 to 4 are identical. End with 
 | every claim is inside its log's reach | the check is silent about aims |
 | no finding without a reader | each one passes the threshold in `shall-authoring` §6 |
 | nothing settled was disturbed | no approved execution node was edited, and no closure was reopened without being asked for |
+| the turn was logged, or its failure was said | the log call in step 4 returned, or the line saying it did not is in what the user was told |
 
 ## When the gate fails
 

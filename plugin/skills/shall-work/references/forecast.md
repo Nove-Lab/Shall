@@ -24,7 +24,7 @@ Two uses, and both are about looking before starting. Somebody learning the cycl
 
 | The line | What proves it |
 |---|---|
-| nothing was written | `git status` says what it said before, and nothing under `.shall/spec/` or `.shall/ledger/` moved |
+| nothing was written | `git status` says what it said before, and nothing under `.shall/spec/` or `.shall/ledger/` moved — the Activity Feed under it included: a forecast is not logged |
 | nothing was committed | `git log` is where it was |
 | nobody was stopped | no question was asked and no confirmation waited for |
 | it is unmistakably a forecast | every line carries the prefix, and the closing line says it outright |

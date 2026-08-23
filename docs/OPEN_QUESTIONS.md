@@ -4,6 +4,23 @@ Decisions that came up while building and were deliberately not taken. Each one
 names where it would land, so taking it later is an edit and not an
 investigation.
 
+## From the help-and-feed round (2026-08-23)
+
+**The linter still hand-keeps the subcommand list, and this round paid for it
+a second time.** `log` went into `SHAPES` in `client/cli/src/args.ts` and into
+`SUBCOMMANDS` in `scripts/lint-plugin.mjs` by hand — the drift the entry under
+the `/specify` round names. Not closed here: the cheapest closing is the lint
+reading `args.ts` as text and taking the `SHAPES` keys, which needs no build,
+but it is a change to the linter for its own sake and belongs to a round that
+is about the linter. Recorded so the third payment is the last.
+
+**The feed has no read path from the CLI, and the absence is deliberate.**
+`docs/Shall_Activity_Feed_Spec.md` §0 forbids any agent-facing read, and
+`spec.activity` takes a project id, which the CLI never has. Written down so
+nobody adds `shall feed` as the obvious completion: if it were ever reversed,
+the spec's §0 changes first, then a path-taking procedure beside `spec.board`
+in `daemon/src/http/router.ts`, a `SHAPES` entry, and a lint entry.
+
 ## From the batched-approval round (2026-08-22)
 
 **What does a person actually see when the board is blank?** `--auto` writes a
@@ -84,7 +101,8 @@ same string, plus a decision about what to do when the project already has an
 own?** `scripts/lint-plugin.mjs` reads the canon out of core's built `dist` but
 hand-keeps the list of `shall` subcommands, which `client/cli/src/args.ts` calls
 its own single home. Importing it would mean the lint depends on the CLI being
-built, which the root `test` script does not do today.
+built, which the root `test` script does not do today. Paid a second time on
+2026-08-23, for `log`.
 
 ## From the `/plan` round (2026-08-19)
 

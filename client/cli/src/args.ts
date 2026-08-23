@@ -8,8 +8,8 @@
  * the router's types, and so the daemon's build, into a test run that has
  * neither.
  *
- * THE PARSER IS HAND-WRITTEN AND STAYS HAND-WRITTEN. The whole surface is eight
- * shapes and three options; a library would be a dependency to keep current, a
+ * THE PARSER IS HAND-WRITTEN AND STAYS HAND-WRITTEN. The whole surface is nine
+ * shapes and four options; a library would be a dependency to keep current, a
  * second vocabulary for what a flag is, and a help screen somebody else wrote.
  */
 
@@ -21,7 +21,7 @@ interface CommandShape {
 
 /**
  * EVERY COMMAND THERE IS, in the order a person meets them — the app first, the
- * project next, then the three readings, then the one thing this client writes.
+ * project next, then the three readings, then the two things this client writes.
  *
  * IT IS THE ONE HOME OF THE SHAPES. The help screen below is built from this
  * table and so is the line a usage error ends with, which is why the shape a
@@ -55,6 +55,10 @@ const SHAPES = {
     shape: "shall add-spec-node --type <Type> [--json]",
     says: "Start a new node file of that type.",
   },
+  log: {
+    shape: "shall log <kind> <summary> [--refs <id,id>] [--json]",
+    says: "Write one line of the activity feed: a run finished, and what it finished.",
+  },
   help: { shape: "shall help", says: "This screen." },
 } as const satisfies Record<string, CommandShape>;
 
@@ -67,7 +71,9 @@ const COLUMN = Math.max(
 );
 
 /**
- * The help screen: one line per command, and the two options that cross them.
+ * The help screen: one line per command, and then the options a shape alone
+ * does not explain — the two that cross the commands, and the one `log` carries
+ * whose commas want saying.
  *
  * It is what `shall help` prints and what an unknown command is answered with,
  * so a person who cannot remember a name and a person who guessed one wrong are
@@ -82,6 +88,7 @@ export const USAGE = [
   "",
   "--scope may be given more than once, and each one names a file or a folder of .shall/spec.",
   "--json writes the answer as one JSON object on stdout and nothing else.",
+  "--refs names the nodes a log line is about, as ids separated by commas.",
 ].join("\n");
 
 /**
@@ -106,7 +113,14 @@ export type Invocation =
   | { command: "check"; json: boolean; scope: string[] }
   | { command: "status"; json: boolean; scope: string[] }
   | { command: "board"; json: boolean }
-  | { command: "add-spec-node"; json: boolean; type: string };
+  | { command: "add-spec-node"; json: boolean; type: string }
+  | {
+      command: "log";
+      json: boolean;
+      kind: string;
+      summary: string;
+      refs: string[];
+    };
 
 /**
  * The commands that answer with something — which is exactly the set `--json` is
@@ -144,13 +158,13 @@ function isOption(option: string, word: string): boolean {
  * read here — and a value nobody supplied and an empty one are the same miss,
  * because neither names anything.
  *
- * A WORD BEGINNING WITH `-` IS THAT SAME MISS AGAIN: AN OPTION IS NEVER A PATH
- * AND NEVER A TYPE. `shall check --scope --json` is a person asking for JSON,
- * and a parser that swallowed the flag would hand the daemon a nonsense scope
- * and answer in prose — a command doing something other than what was typed,
- * without ever saying so. Refused here, the answer is the usage error naming
- * the option that was left empty. The `=` spelling is how to mean it anyway,
- * for the rare path that really does start with a dash.
+ * A WORD BEGINNING WITH `-` IS THAT SAME MISS AGAIN: AN OPTION IS NEVER A PATH,
+ * NEVER A TYPE AND NEVER AN ID. `shall check --scope --json` is a person asking
+ * for JSON, and a parser that swallowed the flag would hand the daemon a
+ * nonsense scope and answer in prose — a command doing something other than
+ * what was typed, without ever saying so. Refused here, the answer is the usage
+ * error naming the option that was left empty. The `=` spelling is how to mean
+ * it anyway, for the rare path that really does start with a dash.
  */
 function valueOf(
   option: string,
@@ -171,11 +185,17 @@ function valueOf(
   return next;
 }
 
-/** Everything an option can carry; which of them a command actually has is `takes`. */
+/**
+ * Everything an option can carry, and the bare words that were no option at
+ * all; which of them a command actually has is `takes`.
+ */
 interface Options {
   json: boolean;
   scope: string[];
   type: string | null;
+  refs: string[];
+  /** The words that began with no dash, in the order they were typed. */
+  words: string[];
 }
 
 /**
@@ -188,16 +208,30 @@ interface Options {
  *
  * `--scope` ACCUMULATES. A person narrowing to two folders means both of them,
  * and a last-one-wins rule would answer about one folder in a spelling that
- * names two.
+ * names two. `--refs` ACCUMULATES FOR THE SAME REASON, and a second time within
+ * one value: `--refs WL-0001,AC-0002` is two ids and not one odd one, because a
+ * log line is about every node it names. A blank between two commas names
+ * nothing and is dropped; a `--refs` that names nothing at all is the same miss
+ * as a `--scope` with no path.
+ *
+ * A BARE WORD IS KEPT ONLY FOR A COMMAND THAT TAKES ONE. `shall log` is the one
+ * command that reads its arguments by position — a kind and then a summary —
+ * and for every other command a word with no dash is exactly as unexpected as
+ * an option it does not have, and is refused the same way. A word that begins
+ * with a dash is never a positional, even for `log`: it is an option `log` does
+ * not have, and the refusal names it, rather than a summary that happened to
+ * open with a dash and was quietly logged as one.
  */
 function optionsOf(
   command: CommandKey,
   rest: readonly string[],
-  takes: { scope: boolean; type: boolean },
+  takes: { scope: boolean; type: boolean; refs: boolean; words: boolean },
 ): Options | UsageError {
   let json = false;
   const scope: string[] = [];
   let type: string | null = null;
+  const refs: string[] = [];
+  const positional: string[] = [];
   // Shifted rather than indexed, because an option that carries a value eats the
   // word after it and a `for` over the array would have to be told it did.
   const words = [...rest];
@@ -222,9 +256,26 @@ function optionsOf(
       type = value;
       continue;
     }
+    if (takes.refs && isOption("--refs", word)) {
+      const value = valueOf("--refs", word, words);
+      const ids =
+        value
+          ?.split(",")
+          .map((id) => id.trim())
+          .filter((id) => id !== "") ?? [];
+      if (ids.length === 0) {
+        return needs(command, "ids after --refs");
+      }
+      refs.push(...ids);
+      continue;
+    }
+    if (takes.words && !word.startsWith("-")) {
+      positional.push(word);
+      continue;
+    }
     return unexpected(command, word);
   }
-  return { json, scope, type };
+  return { json, scope, type, refs, words: positional };
 }
 
 /**
@@ -265,17 +316,32 @@ export function parseArguments(
   }
 
   if (word === "init") {
-    const read = optionsOf("init", rest, { scope: false, type: false });
+    const read = optionsOf("init", rest, {
+      scope: false,
+      type: false,
+      refs: false,
+      words: false,
+    });
     return "usage" in read ? read : { command: "init", json: read.json };
   }
 
   if (word === "board") {
-    const read = optionsOf("board", rest, { scope: false, type: false });
+    const read = optionsOf("board", rest, {
+      scope: false,
+      type: false,
+      refs: false,
+      words: false,
+    });
     return "usage" in read ? read : { command: "board", json: read.json };
   }
 
   if (word === "check" || word === "status") {
-    const read = optionsOf(word, rest, { scope: true, type: false });
+    const read = optionsOf(word, rest, {
+      scope: true,
+      type: false,
+      refs: false,
+      words: false,
+    });
     if ("usage" in read) {
       return read;
     }
@@ -285,7 +351,12 @@ export function parseArguments(
   }
 
   if (word === "add-spec-node") {
-    const read = optionsOf("add-spec-node", rest, { scope: false, type: true });
+    const read = optionsOf("add-spec-node", rest, {
+      scope: false,
+      type: true,
+      refs: false,
+      words: false,
+    });
     if ("usage" in read) {
       return read;
     }
@@ -295,6 +366,47 @@ export function parseArguments(
       return needs("add-spec-node", "a type");
     }
     return { command: "add-spec-node", json: read.json, type: read.type };
+  }
+
+  if (word === "log") {
+    const read = optionsOf("log", rest, {
+      scope: false,
+      type: false,
+      refs: true,
+      words: true,
+    });
+    if ("usage" in read) {
+      return read;
+    }
+    // The kind and then the summary, by position: a line of the feed is what
+    // finished and what it finished, and a third word is a summary somebody
+    // forgot to quote — refused rather than joined, because a summary stitched
+    // back together out of shell words is not the one that was typed.
+    //
+    // THE KIND IS NOT JUDGED HERE. Which four kinds the feed takes, and that
+    // any other word is refused by name, are the daemon's sentences; this file
+    // imports nothing, and a second list of kinds in it would be the first
+    // thing to go stale.
+    const [kind, summary, extra] = read.words;
+    if (kind === undefined) {
+      return needs("log", "a kind");
+    }
+    if (summary === undefined) {
+      return needs("log", "a summary after the kind");
+    }
+    if (extra !== undefined) {
+      return wrong(
+        "log",
+        "shall log takes a kind and one summary, quoted as one word",
+      );
+    }
+    return {
+      command: "log",
+      json: read.json,
+      kind,
+      summary,
+      refs: read.refs,
+    };
   }
 
   return { command: "unknown", name: word };

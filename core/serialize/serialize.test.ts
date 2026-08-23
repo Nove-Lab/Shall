@@ -12,6 +12,11 @@ import {
   parseAcceptanceLedger,
   type AcceptanceRecord,
 } from "./acceptances.js";
+import {
+  emitActivity,
+  parseActivity,
+  type ActivityRecord,
+} from "./activity.js";
 import { approvalPayload, emitNodeFile } from "./emit.js";
 import {
   emitApprovalLedger,
@@ -3381,6 +3386,300 @@ describe("the acceptance ledger", () => {
         JSON.stringify(entry.value),
       );
       assert.equal(emitAcceptanceLedger(reading.records), written);
+    }
+  });
+});
+
+/**
+ * The activity feed — not a fourth book but the list beside the three, held as
+ * goldens for the same reason they are: these bytes go into other people's git
+ * history too. The cases are the approval ledger's cases where a list has the
+ * same thing to say — the golden, the empty file, the fixpoint, another
+ * spelling, the quoted numeric id, the shape sentence, the blank identity, the
+ * second document — and the ones a list and a kind bring with them: the order
+ * is the order given and not byte order, a record is named by its number, and
+ * a kind off the list and a ref that is no node id are refused by name.
+ */
+describe("the activity feed", () => {
+  const RECORDS: readonly ActivityRecord[] = [
+    {
+      at: "2026-08-21T09:00:00.000Z",
+      kind: "specify_done",
+      refs: [],
+      summary: "Specification drawn out — Goal 2, UC 3, REQ 8, AC 12",
+    },
+    {
+      at: "2026-08-21T10:00:00.000Z",
+      kind: "plan_done",
+      refs: ["MD-0001", "MD-0002"],
+      summary: "Modules designed — MD 2, task 6",
+    },
+    {
+      at: "2026-08-21T11:00:00.000Z",
+      kind: "work_done",
+      refs: ["J-0001"],
+      summary: "Turn finished — WorkLog 3, Evidence 4",
+    },
+    {
+      at: "2026-08-21T12:00:00.000Z",
+      kind: "raise_landed",
+      refs: ["D-0001", "F-0001"],
+      summary: "Landed: a decision and a finding",
+    },
+  ];
+  const FEED = [
+    '- at: "2026-08-21T09:00:00.000Z"',
+    "  kind: specify_done",
+    "  refs: []",
+    "  summary: Specification drawn out — Goal 2, UC 3, REQ 8, AC 12",
+    '- at: "2026-08-21T10:00:00.000Z"',
+    "  kind: plan_done",
+    "  refs: [MD-0001, MD-0002]",
+    "  summary: Modules designed — MD 2, task 6",
+    '- at: "2026-08-21T11:00:00.000Z"',
+    "  kind: work_done",
+    "  refs: [J-0001]",
+    "  summary: Turn finished — WorkLog 3, Evidence 4",
+    '- at: "2026-08-21T12:00:00.000Z"',
+    "  kind: raise_landed",
+    "  refs: [D-0001, F-0001]",
+    '  summary: "Landed: a decision and a finding"',
+    "",
+  ].join("\n");
+  const SHAPE =
+    "Every record in the activity feed is a map of at and kind as text, refs as a list, and summary as text";
+
+  test("a month reads back as one record per entry, in file order", () => {
+    const reading = parseActivity(FEED);
+    assert.equal(reading.problem, null);
+    assert.deepEqual(reading.records, RECORDS);
+    // One of each kind, and every record is exactly the four keys — nothing
+    // else rides along off the disk, which a strict deepEqual would tell apart.
+    assert.deepEqual(
+      reading.records.map((record) => record.kind),
+      ["specify_done", "plan_done", "work_done", "raise_landed"],
+    );
+    assert.deepEqual(
+      reading.records.map((record) => Object.keys(record).sort()),
+      RECORDS.map(() => ["at", "kind", "refs", "summary"]),
+    );
+  });
+
+  test("an absent feed and an empty one are the same nothing", () => {
+    for (const text of ["", "\n", "# nothing logged yet\n"]) {
+      const reading = parseActivity(text);
+      assert.equal(reading.problem, null, JSON.stringify(text));
+      assert.deepEqual(reading.records, []);
+    }
+    assert.equal(emitActivity([]), "");
+  });
+
+  test("the records are written in the order given, and the file is a fixpoint", () => {
+    const written = emitActivity(RECORDS);
+    assert.equal(written, FEED);
+    const reading = parseActivity(written);
+    assert.equal(reading.problem, null);
+    assert.equal(emitActivity(reading.records), written);
+
+    // Nothing sorts and nothing deduplicates: the same two records the other
+    // way round are another file, and twice over are two lines.
+    const [first, second] = RECORDS;
+    assert.ok(first !== undefined && second !== undefined);
+    const reversed = emitActivity([second, first]);
+    assert.notEqual(reversed, emitActivity([first, second]));
+    assert.deepEqual(parseActivity(reversed).records, [second, first]);
+    assert.deepEqual(parseActivity(emitActivity([first, first])).records, [first, first]);
+  });
+
+  test("a hand-written feed in another spelling reads, and comes back canonical", () => {
+    // A byte-order mark, CRLF, a comment, a bare instant, single quotes, a
+    // flow-map record, a block list of refs, keys in any order, and a record
+    // with no refs and no summary at all.
+    const loose = [
+      `${BOM}# the feed`,
+      "- at: 2026-08-21T09:00:00.000Z",
+      "  kind: 'specify_done'",
+      "  summary: 'Specification drawn out — Goal 2, UC 3, REQ 8, AC 12'",
+      "- {at: '2026-08-21T10:00:00.000Z', kind: plan_done, refs: [MD-0001, MD-0002], summary: 'Modules designed — MD 2, task 6'}",
+      "- kind: work_done",
+      "  refs:",
+      "    - J-0001",
+      '  at: "2026-08-21T11:00:00.000Z"',
+      "  summary: Turn finished — WorkLog 3, Evidence 4",
+      "- kind: raise_landed",
+      "  at: 2026-08-21T12:00:00.000Z",
+      "",
+    ].join("\r\n");
+    const reading = parseActivity(loose);
+    assert.equal(reading.problem, null);
+    assert.deepEqual(reading.records, [
+      RECORDS[0],
+      RECORDS[1],
+      RECORDS[2],
+      { at: "2026-08-21T12:00:00.000Z", kind: "raise_landed", refs: [], summary: "" },
+    ]);
+    assert.equal(
+      emitActivity(reading.records),
+      [
+        '- at: "2026-08-21T09:00:00.000Z"',
+        "  kind: specify_done",
+        "  refs: []",
+        "  summary: Specification drawn out — Goal 2, UC 3, REQ 8, AC 12",
+        '- at: "2026-08-21T10:00:00.000Z"',
+        "  kind: plan_done",
+        "  refs: [MD-0001, MD-0002]",
+        "  summary: Modules designed — MD 2, task 6",
+        '- at: "2026-08-21T11:00:00.000Z"',
+        "  kind: work_done",
+        "  refs: [J-0001]",
+        "  summary: Turn finished — WorkLog 3, Evidence 4",
+        '- at: "2026-08-21T12:00:00.000Z"',
+        "  kind: raise_landed",
+        "  refs: []",
+        '  summary: ""',
+        "",
+      ].join("\n"),
+    );
+  });
+
+  test("a ref that reads as a number is quoted, and comes back the string it is", () => {
+    const record: ActivityRecord = {
+      at: "2026-08-21T14:03:00.000Z",
+      kind: "work_done",
+      refs: ["1234", "R-0001"],
+      summary: "Turn finished",
+    };
+    const written = emitActivity([record]);
+    assert.ok(written.includes('\n  refs: ["1234", R-0001]\n'), written);
+    const reading = parseActivity(written);
+    assert.equal(reading.problem, null);
+    assert.deepEqual(reading.records[0]?.refs, ["1234", "R-0001"]);
+    assert.equal(emitActivity(reading.records), written);
+  });
+
+  test("a record of anything but the four keys is one sentence about that record", () => {
+    for (const text of [
+      // Not a map at all.
+      "- 3\n",
+      "- [at, kind]\n",
+      "- work_done\n",
+      // A key outside the four — including the author key the feed never had.
+      "- at: x\n  kind: work_done\n  note: looks fine\n",
+      "- at: x\n  kind: work_done\n  by: yongjun\n",
+      // `at` or `kind` missing, or not text.
+      "- kind: work_done\n",
+      "- at: x\n",
+      "- at: 12\n  kind: work_done\n",
+      "- at: true\n  kind: work_done\n",
+      "- at: x\n  kind: 3\n",
+      // `refs` there and not a list of text — a bare key is a null, not a list.
+      "- at: x\n  kind: work_done\n  refs: a\n",
+      "- at: x\n  kind: work_done\n  refs:\n",
+      "- at: x\n  kind: work_done\n  refs: [1]\n",
+      "- at: x\n  kind: work_done\n  refs: [[R-0001]]\n",
+      // `summary` there and not text.
+      "- at: x\n  kind: work_done\n  summary: [a]\n",
+      "- at: x\n  kind: work_done\n  summary:\n",
+    ]) {
+      assert.equal(parseActivity(text).problem, `${SHAPE} — record 1 is not.`, text);
+    }
+    // Named by its number, counted from one in file order.
+    assert.equal(
+      parseActivity("- at: x\n  kind: work_done\n- at: y\n  kind: work_done\n- 3\n").problem,
+      `${SHAPE} — record 3 is not.`,
+    );
+  });
+
+  test("a kind the feed does not have is refused by name", () => {
+    const none = "which is none of specify_done, plan_done, work_done and raise_landed.";
+    assert.equal(
+      parseActivity("- at: x\n  kind: approve\n").problem,
+      `Record 1 in the activity feed has the kind "approve", ${none}`,
+    );
+    // A judgment is not a kind here: what a person judged lives in the books.
+    assert.equal(
+      parseActivity("- at: x\n  kind: approved\n").problem,
+      `Record 1 in the activity feed has the kind "approved", ${none}`,
+    );
+    assert.equal(
+      parseActivity("- at: x\n  kind: work_done\n- at: y\n  kind: ''\n").problem,
+      `Record 2 in the activity feed has the kind "", ${none}`,
+    );
+    assert.equal(
+      parseActivity("- at: x\n  kind: Work_done\n").problem,
+      `Record 1 in the activity feed has the kind "Work_done", ${none}`,
+    );
+  });
+
+  test("a ref that is no node id is refused by name", () => {
+    const shape =
+      "An id uses letters, digits, dots, hyphens and underscores, starts with a letter or digit, and holds at most 64 characters.";
+    assert.equal(
+      parseActivity("- at: x\n  kind: work_done\n  refs: [R 1]\n").problem,
+      `Record 1 in the activity feed refers to "R 1", which is not a node id. ${shape}`,
+    );
+    assert.equal(
+      parseActivity("- at: x\n  kind: work_done\n  refs:\n    - R-0001\n    - ''\n").problem,
+      `Record 1 in the activity feed refers to "", which is not a node id. ${shape}`,
+    );
+    assert.equal(
+      parseActivity("- at: x\n  kind: work_done\n- at: y\n  kind: work_done\n  refs: [CON]\n").problem,
+      'Record 2 in the activity feed refers to "CON", which is not a node id. CON is a reserved device name on Windows, so no file can be named after it. Choose another id.',
+    );
+  });
+
+  test("a blank instant is named under its record", () => {
+    assert.equal(
+      parseActivity("- at: ''\n  kind: work_done\n").problem,
+      "In record 1 of the activity feed, an instant is required.",
+    );
+    assert.equal(
+      parseActivity("- at: x\n  kind: work_done\n- at: '  '\n  kind: work_done\n").problem,
+      "In record 2 of the activity feed, an instant is required.",
+    );
+    assert.equal(
+      parseActivity('- at: "a\\tb"\n  kind: work_done\n').problem,
+      "In record 1 of the activity feed, an instant cannot contain a control character.",
+    );
+  });
+
+  test("a feed that is not a list is refused as the shape it is", () => {
+    assert.equal(
+      parseActivity("G-0001: {}\n").problem,
+      "The activity feed is a map, not a list of records.",
+    );
+    assert.equal(
+      parseActivity("work_done\n").problem,
+      "The activity feed is text, not a list of records.",
+    );
+    assert.equal(
+      parseActivity("3\n").problem,
+      "The activity feed is a number, not a list of records.",
+    );
+  });
+
+  test("a second document inside the file is refused rather than silently dropped", () => {
+    assert.equal(
+      parseActivity(`${FEED}---\n- at: x\n  kind: work_done\n`).problem,
+      'The activity feed is not YAML Shall can read: a "..." or "---" line inside it ends the ledger early, so the records after that line belong to nobody.',
+    );
+  });
+
+  test("a feed that is not YAML at all is refused in the library's own words", () => {
+    const reading = parseActivity("- at: [\n");
+    assert.ok(reading.problem?.startsWith("The activity feed is not YAML Shall can read: "), reading.problem ?? "");
+    assert.deepEqual(reading.records, []);
+  });
+
+  test("every corpus value survives a whole feed as a summary", () => {
+    const [record] = RECORDS;
+    assert.ok(record !== undefined);
+    for (const entry of SCALARS) {
+      const written = emitActivity([{ ...record, summary: entry.value }]);
+      const reading = parseActivity(written);
+      assert.equal(reading.problem, null, JSON.stringify(entry.value));
+      assert.equal(reading.records[0]?.summary, entry.value, JSON.stringify(entry.value));
+      assert.equal(emitActivity(reading.records), written);
     }
   });
 });

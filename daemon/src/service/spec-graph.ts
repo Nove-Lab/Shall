@@ -44,6 +44,7 @@ import { requireRegistryProject } from "./projects.js";
 import {
   findProjectRootAbove,
   getProjectAcceptancesPath,
+  getProjectFeedDir,
   getProjectLedgerPath,
   getProjectRejectionsPath,
   getProjectShallPath,
@@ -54,14 +55,20 @@ import {
 } from "../host/project-files.js";
 
 /**
- * The project a `spec.*` procedure works in: its path on disk, its spec folder
- * and the three books beside it — exported because the review service needs
- * every one of them (git wants the project, the store wants the spec, the
- * colours want all three ledgers).
+ * The project a `spec.*` procedure works in: its path on disk, its spec folder,
+ * the three books beside it and the activity feed's folder under them —
+ * exported because the review service needs every one of them (git wants the
+ * project, the store wants the spec, the colours want all three ledgers) and
+ * the activity service needs the feed's folder.
  *
  * `ledgerFile` is the approvals, unqualified, because it was the only book when
  * the name was chosen and every caller of it still means that one. The other
  * two say which they are.
+ *
+ * `feedDir` IS AN ADDRESS AND NOT AN INPUT. Nothing that computes a colour, a
+ * mark or a board row reads it — `requireLedgers` never takes it and `checkSpec`
+ * never opens it — so a feed folder that is missing, unreadable or deleted by
+ * hand costs the panel that shows it and nothing else.
  */
 export interface SpecPaths {
   projectPath: string;
@@ -69,6 +76,7 @@ export interface SpecPaths {
   ledgerFile: string;
   rejectionsFile: string;
   acceptancesFile: string;
+  feedDir: string;
 }
 
 /**
@@ -76,7 +84,7 @@ export interface SpecPaths {
  *
  * IT IS WHAT THE TWO FAMILIES OF PROCEDURE SHARE. A door that names a project
  * id finds its root in the registry, a door that names a path walks up to one,
- * and from there both are looking at the same five addresses — so the addresses
+ * and from there both are looking at the same six addresses — so the addresses
  * are written down here once and neither family can drift from the other.
  */
 export function specPathsOf(root: string): SpecPaths {
@@ -86,6 +94,7 @@ export function specPathsOf(root: string): SpecPaths {
     ledgerFile: getProjectLedgerPath(root),
     rejectionsFile: getProjectRejectionsPath(root),
     acceptancesFile: getProjectAcceptancesPath(root),
+    feedDir: getProjectFeedDir(root),
   };
 }
 
@@ -114,7 +123,7 @@ export async function projectSpecFor(projectId: string): Promise<SpecPaths> {
  * THE REFUSAL NAMES THE PATH THE CALLER STOOD IN, not the folder that is
  * missing: the caller is a person or an agent in a terminal, and the path they
  * typed is the only address they can act on. Said once here, because `check`,
- * `status`, `board` and `add-spec-node` all say it.
+ * `status`, `board`, `add-spec-node` and `log` all say it.
  */
 export async function projectRootAt(startPath: string): Promise<string> {
   const root = await findProjectRootAbove(startPath);
@@ -166,8 +175,12 @@ export async function served<T>(work: Promise<T>): Promise<T> {
  * the reader, over the bytes the store is about to write, in these same
  * sentences — which is how a file the panel saved and a file a person
  * hand-edited meet one judgement rather than two that can drift.
+ *
+ * Exported for the one door outside this file that asks the same question of
+ * one line of text: the `shall log` door in the activity service, whose summary
+ * is one line for a person and is held to the same rule an id is.
  */
-function requireText(label: string, value: string): string {
+export function requireText(label: string, value: string): string {
   const { value: trimmed, problem } = judgeText(label, value);
   if (problem !== null) {
     throw invalid(problem);
@@ -795,6 +808,10 @@ export async function checkSpec(
   // hear that a book would not read before a list of node files. All three are
   // asked, in the order they were added to the design, so a folder with two bad
   // books names both rather than sending the person back for a second run.
+  // The activity feed under `ledger/feed/` is NOT asked: nothing computes from
+  // it, so a month file that will not read is the panel's news and not the
+  // check's — the check exits 1 over what decides a colour, and the feed never
+  // does.
   const books: FileProblem[] = [];
   for (const [file, problem] of [
     [LEDGER_FILE, ledger.problem],

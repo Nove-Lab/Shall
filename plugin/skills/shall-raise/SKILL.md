@@ -90,7 +90,7 @@ Say which cards are waiting and that running `shall` with no arguments opens the
 ## What you never do
 
 - Write anything before the landing.
-- Write in `.shall/ledger/`, or remove a spec file by any means.
+- Open `.shall/ledger/`, or remove a spec file by any means. The one line a landing leaves in the Activity Feed under that folder is asked for through the daemon at the end, as `## The end` says; you never write there and never read the feed back.
 - Approve, accept or close anything.
 - Write a decision the user has not settled, or dress your own conclusion as theirs.
 - Write a finding that has no reader.
@@ -105,6 +105,8 @@ Say which cards are waiting and that running `shall` with no arguments opens the
 - **(b)** the finding's id, that it stands on its own, and that a Standalone finding card is waiting.
 - **(c)** both sentences, and that they are two cards.
 - **(d)** the diagnosis in one line, and that nothing was recorded.
+
+**In (a), (b) and (c), log the landing, once, before you say those sentences:** `shall log raise_landed "<summary>" --refs <ids>`. The summary is one line saying what landed, its leading phrase in the conversation's language and its type names `shall status`'s, as it reports them: `Question landed — Decision 1`, `Question landed — Finding 1`, or `Question landed — Decision 1, Finding 1` is the shape in an English conversation, and `질문 착지 — Decision 1, Finding 1` the same line in a Korean one. The refs are the decision's id, the finding's id, and then the ids the decision revised, in that order, as ids separated by commas — what the person will want to open. One call for the landing whichever shape it took: (c) is two files and one call. **(d) logs nothing** — nothing was recorded, so there is nothing the feed should say happened; the reassurance stays in the terminal. If the call fails for any reason — the CLI does not know `log`, the daemon refused, anything at all — say so in one line ("the Activity Feed did not take this landing") and end exactly as you would have: the landing is the files and the cards, not the feed line. Do not run it twice because you are unsure the first landed, and never read the feed back.
 
 In every case: you are not waiting for the review.
 

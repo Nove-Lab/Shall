@@ -13,8 +13,9 @@ import {
  *
  * WHAT IS ASSERTED IS THE CONTRACT AN AGENT WRITES AGAINST: which command each
  * line means, that both spellings of an option are the same ask, that `--scope`
- * accumulates rather than overwrites, and that every refusal ends in a shape a
- * person can read straight back off the help screen.
+ * and `--refs` accumulate rather than overwrite, that `log` reads its kind and
+ * its summary by position and nothing else does, and that every refusal ends in
+ * a shape a person can read straight back off the help screen.
  */
 
 /** The invocation, with a usage error failing the test instead of the assertion after it. */
@@ -72,6 +73,25 @@ describe("the commands", () => {
       command: "add-spec-node",
       json: false,
       type: "Requirement",
+    });
+  });
+
+  test("log takes its kind and its summary as the two words after it", () => {
+    assert.deepEqual(invocation("log", "work_done", "Wrote the parser"), {
+      command: "log",
+      json: false,
+      kind: "work_done",
+      summary: "Wrote the parser",
+      refs: [],
+    });
+    // The words are taken as typed — which kinds the feed has is the daemon's
+    // sentence, and a summary is whatever one shell word holds.
+    assert.deepEqual(invocation("log", "anything", "a summary, with a comma"), {
+      command: "log",
+      json: false,
+      kind: "anything",
+      summary: "a summary, with a comma",
+      refs: [],
     });
   });
 
@@ -137,6 +157,102 @@ describe("--scope", () => {
       refusalOf("init", "--scope=intent"),
       /^shall init does not take/,
     );
+    assert.match(
+      refusalOf("log", "work_done", "done", "--scope", "intent"),
+      /^shall log does not take --scope — /,
+    );
+  });
+});
+
+describe("--refs", () => {
+  test("takes ids after commas, in either spelling", () => {
+    assert.deepEqual(
+      invocation("log", "work_done", "done", "--refs", "WL-0001,AC-0002"),
+      {
+        command: "log",
+        json: false,
+        kind: "work_done",
+        summary: "done",
+        refs: ["WL-0001", "AC-0002"],
+      },
+    );
+    assert.deepEqual(
+      invocation("log", "work_done", "done", "--refs=WL-0001,AC-0002"),
+      {
+        command: "log",
+        json: false,
+        kind: "work_done",
+        summary: "done",
+        refs: ["WL-0001", "AC-0002"],
+      },
+    );
+    assert.deepEqual(invocation("log", "work_done", "done", "--refs", "WL-0001"), {
+      command: "log",
+      json: false,
+      kind: "work_done",
+      summary: "done",
+      refs: ["WL-0001"],
+    });
+  });
+
+  test("accumulates and ignores a blank entry, because two lists means both of them", () => {
+    assert.deepEqual(
+      invocation(
+        "log",
+        "work_done",
+        "done",
+        "--refs",
+        "WL-0001,,AC-0002",
+        "--refs= R-0003 , ",
+        "--refs",
+        "D-0004",
+      ),
+      {
+        command: "log",
+        json: false,
+        kind: "work_done",
+        summary: "done",
+        refs: ["WL-0001", "AC-0002", "R-0003", "D-0004"],
+      },
+    );
+  });
+
+  test("sits anywhere among the two words of log", () => {
+    assert.deepEqual(
+      invocation("log", "--refs", "WL-0001", "work_done", "done"),
+      {
+        command: "log",
+        json: false,
+        kind: "work_done",
+        summary: "done",
+        refs: ["WL-0001"],
+      },
+    );
+    assert.deepEqual(
+      invocation("log", "work_done", "--refs=WL-0001", "done"),
+      {
+        command: "log",
+        json: false,
+        kind: "work_done",
+        summary: "done",
+        refs: ["WL-0001"],
+      },
+    );
+  });
+
+  test("is not a question the other commands have", () => {
+    assert.equal(
+      refusalOf("status", "--refs", "WL-0001"),
+      "shall status does not take --refs — shall status [--scope <path>]... [--json]",
+    );
+    assert.match(
+      refusalOf("board", "--refs=WL-0001"),
+      /^shall board does not take --refs=WL-0001 — /,
+    );
+    assert.match(
+      refusalOf("add-spec-node", "--type", "Goal", "--refs", "WL-0001"),
+      /^shall add-spec-node does not take --refs — /,
+    );
   });
 });
 
@@ -155,6 +271,13 @@ describe("--json", () => {
       json: true,
       type: "Goal",
     });
+    assert.deepEqual(invocation("log", "work_done", "done", "--json"), {
+      command: "log",
+      json: true,
+      kind: "work_done",
+      summary: "done",
+      refs: [],
+    });
   });
 
   test("sits on either side of an option that carries a value", () => {
@@ -168,6 +291,30 @@ describe("--json", () => {
       json: true,
       scope: ["plan"],
     });
+  });
+
+  test("sits on either side of the two words of log", () => {
+    const logged = {
+      command: "log",
+      json: true,
+      kind: "work_done",
+      summary: "done",
+      refs: ["WL-0001"],
+    };
+    assert.deepEqual(
+      invocation("log", "--json", "work_done", "done", "--refs", "WL-0001"),
+      logged,
+    );
+    assert.deepEqual(
+      invocation("log", "work_done", "done", "--refs", "WL-0001", "--json"),
+      logged,
+    );
+    // Between them too: a flag is a flag wherever it falls, and the two words
+    // are the two that carry no dash.
+    assert.deepEqual(
+      invocation("log", "work_done", "--json", "done", "--refs=WL-0001"),
+      logged,
+    );
   });
 
   test("twice is the same ask, the way --host twice is", () => {
@@ -238,6 +385,54 @@ describe("what a person is told when the words are wrong", () => {
     );
   });
 
+  test("log without a kind, without a summary, or with a third word", () => {
+    assert.equal(
+      refusalOf("log"),
+      "shall log needs a kind — shall log <kind> <summary> [--refs <id,id>] [--json]",
+    );
+    assert.equal(
+      refusalOf("log", "--json"),
+      "shall log needs a kind — shall log <kind> <summary> [--refs <id,id>] [--json]",
+    );
+    assert.equal(
+      refusalOf("log", "work_done"),
+      "shall log needs a summary after the kind — shall log <kind> <summary> [--refs <id,id>] [--json]",
+    );
+    assert.equal(
+      refusalOf("log", "work_done", "--refs", "WL-0001", "--json"),
+      "shall log needs a summary after the kind — shall log <kind> <summary> [--refs <id,id>] [--json]",
+    );
+    // A summary left unquoted arrives as several words, and the third of them
+    // is refused rather than stitched back on: the summary that reaches the
+    // feed is the one that was typed, or none.
+    assert.equal(
+      refusalOf("log", "work_done", "wrote", "the", "parser"),
+      "shall log takes a kind and one summary, quoted as one word — shall log <kind> <summary> [--refs <id,id>] [--json]",
+    );
+    // A word with a dash is never a positional, even for the one command that
+    // takes positionals: it is an option log does not have.
+    assert.equal(
+      refusalOf("log", "work_done", "done", "-x"),
+      "shall log does not take -x — shall log <kind> <summary> [--refs <id,id>] [--json]",
+    );
+  });
+
+  test("--refs without ids", () => {
+    for (const argv of [
+      ["log", "work_done", "done", "--refs"],
+      ["log", "work_done", "done", "--refs="],
+      ["log", "work_done", "done", "--refs", ","],
+      ["log", "work_done", "done", "--refs=, ,"],
+      ["log", "work_done", "done", "--refs", "--json"],
+    ]) {
+      assert.equal(
+        refusalOf(...argv),
+        "shall log needs ids after --refs — shall log <kind> <summary> [--refs <id,id>] [--json]",
+        `shall ${argv.join(" ")}`,
+      );
+    }
+  });
+
   test("an option that belongs to another command", () => {
     assert.equal(
       refusalOf("status", "--type", "Requirement"),
@@ -274,6 +469,11 @@ describe("what a person is told when the words are wrong", () => {
       refusalOf("init", "--json=yes"),
       refusalOf("add-spec-node"),
       refusalOf("--host", "--json"),
+      refusalOf("log"),
+      refusalOf("log", "work_done"),
+      refusalOf("log", "a", "b", "c"),
+      refusalOf("log", "a", "b", "--refs"),
+      refusalOf("status", "--refs", "WL-0001"),
     ];
     for (const refusal of refusals) {
       const shape = refusal.split(" — ").at(-1) ?? "";
@@ -300,6 +500,7 @@ describe("the help screen", () => {
       "shall status [--scope <path>]... [--json]",
       "shall board [--json]",
       "shall add-spec-node --type <Type> [--json]",
+      "shall log <kind> <summary> [--refs <id,id>] [--json]",
       "shall help",
     ]) {
       assert.ok(
@@ -309,8 +510,9 @@ describe("the help screen", () => {
     }
   });
 
-  test("says what the two options crossing the commands do", () => {
+  test("says what the options listed under the commands do", () => {
     assert.match(USAGE, /--scope may be given more than once/);
     assert.match(USAGE, /--json writes the answer as one JSON object/);
+    assert.match(USAGE, /--refs names the nodes a log line is about/);
   });
 });

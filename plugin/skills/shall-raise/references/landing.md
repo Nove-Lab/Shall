@@ -28,7 +28,7 @@ What was seen belongs in the finding; what was decided belongs in the decision. 
 
 ## (d) Nothing
 
-No file. Say what you checked and why it is fine.
+No file. Say what you checked and why it is fine. Nothing is logged either — the spine's end says so: a landing that recorded nothing leaves the Activity Feed nothing to say.
 
 ## The gate
 
@@ -39,3 +39,4 @@ No file. Say what you checked and why it is fine.
 | the finding has a reader | it passes the threshold in `shall-authoring` §6 |
 | nothing settled was disturbed | no approved execution record was edited, and no closure was reopened |
 | the finding was not rewritten to look answered | a decision answers it; the finding says what it always said |
+| the landing was logged, or its failure said | in (a), (b) and (c) the spine's one log call returned, or the line saying it did not was said; in (d) nothing was logged |

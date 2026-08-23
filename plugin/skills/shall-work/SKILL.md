@@ -108,7 +108,7 @@ Say "a card is waiting" and where — never "approve the card" when there is mor
 
 ## What you never do
 
-- Write in `.shall/ledger/`, or read it to work out a colour. It is Shall's own book.
+- Open `.shall/ledger/` — to write in it, or to read a colour out of it. It is Shall's own book, and the Activity Feed under it is too: the one line this process leaves there is asked for through `shall log`, the daemon holds the pen, and you never read it back.
 - Remove a spec file, by any means. A node goes by a deletion proposal a person judges — `shall-authoring` §5.
 - Approve, accept or close anything. There is no command for it and there never will be: a judgment is a person's, made in the browser.
 - Edit an execution record somebody has already approved.
@@ -133,9 +133,9 @@ Read a part's file when you enter that part, and not before.
 
 ## The end
 
-- **The cycle, and the write-up alone**: name the journal and its logs, say everything written is yellow, say a Work report card is waiting (and a Spec approval card for each spec file this turn edited), and say that running `shall` with no arguments opens the queue — say it, do not run it. Then stop. You are not waiting for the review.
+- **The cycle, and the write-up alone**: name the journal and its logs, say everything written is yellow, say a Work report card is waiting (and a Spec approval card for each spec file this turn edited), and say that running `shall` with no arguments opens the queue — say it, do not run it. The record's procedure has already logged the turn to the Activity Feed — once, and only there; if that log failed, the one line saying so belongs here, and nothing else changes. Then stop. You are not waiting for the review.
 - **`--auto`**: the same, with the summary above.
-- **`--dry`**: the forecast's own closing line, and nothing written.
-- **The survey**: the four readings and at most one line of suggestion.
+- **`--dry`**: the forecast's own closing line, and nothing written — and nothing logged: a forecast is not a turn, and the feed records turns.
+- **The survey**: the four readings and at most one line of suggestion. Nothing is logged here either; a reading is not a doing.
 
 A change to the specification this turn argued for comes back through `/shall:raise <question>` — not through this process.

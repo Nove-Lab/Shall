@@ -17,6 +17,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { EmptyState } from "@/components/EmptyState";
+import { ActivityFeed } from "./activity-feed/ActivityFeed";
 import { panelById } from "./panels";
 import { ReviewQueue } from "./review-queue/ReviewQueue";
 import { TaskBoard } from "./task-board/TaskBoard";
@@ -56,15 +57,17 @@ export function PanelDetail() {
         </div>
       </div>
 
-      {/* TWO PANELS ARE BUILT AND THE OTHER TWO ARE STILL THE PLACEHOLDER, and
-          the difference is exactly this branch. The header above is shared —
-          the crumb, the title and the summary are the panel's own metadata,
-          not the queue's — so the built panel takes over from the card down
-          and nothing is written twice. */}
+      {/* THREE PANELS ARE BUILT AND VITALS IS STILL THE PLACEHOLDER, and the
+          difference is exactly this branch. The header above is shared — the
+          crumb, the title and the summary are the panel's own metadata, not
+          the queue's — so the built panel takes over from the card down and
+          nothing is written twice. */}
       {panel.id === "review-queue" ? (
         <ReviewQueue panel={panel} />
       ) : panel.id === "task-board" ? (
         <TaskBoard panel={panel} />
+      ) : panel.id === "activity-feed" ? (
+        <ActivityFeed panel={panel} />
       ) : (
         <Card>
           <CardContent className="p-0">

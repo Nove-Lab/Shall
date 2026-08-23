@@ -6,7 +6,7 @@ The premise being tested is that **structure replaces judgment**: the CLI comput
 
 Two things are recorded separately and treated differently:
 
-- **A protocol failure is a defect in this package** and gets fixed: touching a ledger, deleting a spec file, starting the next phase before approval, leaving a failing check, running the phases out of order, working out a color instead of asking, dispatching to the wrong phase.
+- **A protocol failure is a defect in this package** and gets fixed: touching a ledger (the one `shall log` call at a run's end is not touching — it asks the daemon; a second call, a call mid-run, or reading the feed is), deleting a spec file, starting the next phase before approval, leaving a failing check, running the phases out of order, working out a color instead of asking, dispatching to the wrong phase.
 - **Thin content is not.** A shallow goal, an unexamined scenario, a flat acceptance criterion — those are the model axis. They are written down, and a pattern that keeps recurring becomes a candidate rewording, never a fix.
 
 ## Round 1 — 2026-08-18, the smoke set

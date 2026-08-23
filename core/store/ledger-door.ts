@@ -5,7 +5,9 @@ import { conflict, invalid, type StoreRefusal } from "./refusal.js";
 
 /**
  * The door all three ledgers are read and written through — `approvals.yaml`,
- * `rejections.yaml`, `acceptances.yaml` under `.shall/ledger`.
+ * `rejections.yaml`, `acceptances.yaml` under `.shall/ledger`. The activity
+ * feed beside them (`ledger/feed/`) is a list and not a map, so it has a door
+ * of its own, `activity-ledger.ts`, with the same manners.
  *
  * ONE DOOR AND THREE BOOKS, because the five rules below are about the FILE and
  * not about the records inside it. What a record is belongs to `core/serialize`;

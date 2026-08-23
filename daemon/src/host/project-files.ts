@@ -12,6 +12,7 @@ import path from "node:path";
 import { bandFolderOf, NODE_TYPES } from "@shall/core/graph";
 import {
   ACCEPTANCES_FILE,
+  ACTIVITY_DIR,
   emitTemplate,
   LEDGER_FILE,
   REJECTIONS_FILE,
@@ -97,6 +98,23 @@ export function getProjectRejectionsPath(projectPath: string): string {
  */
 export function getProjectAcceptancesPath(projectPath: string): string {
   return path.join(getProjectShallPath(projectPath), ACCEPTANCES_FILE);
+}
+
+/**
+ * The activity feed's folder, under the ledger folder beside the three books:
+ * one YAML list per month, `YYYY-MM.yaml`, appended to by the daemon alone, at
+ * `shall log`, when a run says it finished. Same manners as the books: nothing
+ * makes it ahead of time, the first line does, folder and all.
+ *
+ * IT IS THE ONE THING UNDER `ledger/` NOTHING COMPUTES FROM. A colour is
+ * arithmetic over the three books and the bytes of every spec file; the feed is
+ * a summary for a person skimming what the agents finished, and deleting it
+ * changes the panel that shows it and not one colour, mark or board row. It
+ * rides in the same folder because it is Shall's own and a record of what was
+ * done in the project, so the commit button carries it with the books.
+ */
+export function getProjectFeedDir(projectPath: string): string {
+  return path.join(getProjectShallPath(projectPath), ACTIVITY_DIR);
 }
 
 /**

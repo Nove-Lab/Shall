@@ -16,6 +16,7 @@ import {
   updateGlobalSettings,
   updateProjectSettings,
 } from "../service/settings.js";
+import { activityFeed, logActivity } from "../service/spec-activity.js";
 import {
   checkSpec,
   createSpecEdge,
@@ -204,13 +205,13 @@ export const appRouter = t.router({
         await removeSpecEdge(input);
         return { ok: true as const };
       }),
-    // The four procedures that name a PATH instead of a project, because they
+    // The five procedures that name a PATH instead of a project, because they
     // answer for a folder nobody has opened yet: a fresh clone is in no
-    // registry, and `shall check`, `shall status`, `shall board` and
-    // `shall add-spec-node` have to work in it the moment it lands. The
-    // schemas ask only that the strings be strings — whether anything is
-    // there, whether it is a Shall project, and whether the type is one of the
-    // canon's are the service's sentences.
+    // registry, and `shall check`, `shall status`, `shall board`,
+    // `shall add-spec-node` and `shall log` have to work in it the moment it
+    // lands. The schemas ask only that the strings be strings — whether
+    // anything is there, whether it is a Shall project, and whether the type
+    // or the kind is one of the canon's are the service's sentences.
     //
     // THE PATH IS THE CALLER'S CWD AND NOT THE DAEMON'S, which is what
     // `scope` is resolved against: one daemon serves every checkout on the
@@ -247,6 +248,25 @@ export const appRouter = t.router({
     scaffold: procedure
       .input(z.object({ path: z.string().min(1), type: z.string() }))
       .mutation(({ input }) => scaffoldSpecNode(input)),
+    // The fifth of them, and the one write an agent is meant to ask for: at
+    // the end of a run, one line of the activity feed — what finished, and
+    // what it finished. Shape only here: which four kinds this door takes and
+    // what a summary may hold are the service's sentences. It answers yes or
+    // no and hands nothing back, because no procedure hands the feed to an
+    // agent — the reader below is the web's.
+    log: procedure
+      .input(
+        z.object({
+          path: z.string().min(1),
+          kind: z.string(),
+          summary: z.string(),
+          refs: z.array(z.string()).optional(),
+        }),
+      )
+      .mutation(async ({ input }) => {
+        await logActivity(input);
+        return { ok: true as const };
+      }),
     // The review surface: colours computed on read, and the doors that
     // resolve them. `approve` is the one manufacturer of green — it writes a
     // record into the approval ledger and nothing into the node's file — and
@@ -297,6 +317,15 @@ export const appRouter = t.router({
     reviewQueue: procedure
       .input(z.object({ projectId: z.string().min(1) }))
       .query(({ input }) => reviewQueue(input.projectId)),
+    // The activity feed's one reader, and it is the web's alone — there is no
+    // CLI that prints it, by design. The months are the files that exist,
+    // newest first; a month left out is the newest of them, and a month
+    // outside the list is the service's refusal, not an empty answer.
+    activity: procedure
+      .input(
+        z.object({ projectId: z.string().min(1), month: z.string().optional() }),
+      )
+      .query(({ input }) => activityFeed(input)),
     reject: procedure
       .input(
         z.object({

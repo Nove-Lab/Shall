@@ -67,9 +67,9 @@ Under `--auto` the card lines below belong to the run's one approval and not to 
 | Every conflict between a statement and a definition is settled, the term winning unless the user said otherwise | you asked, and you read the revisions |
 | Everything this phase wrote or revised is green | `shall status --json` after the person says they are done |
 
-**If the rescan produced no additions and no revisions**, there is nothing to approve: say so in the terminal — the rescan found nothing missing, the dictionary already covers the run — run the gate above, and finish. An empty set is owed no approval rite; do not manufacture a card and do not send the person to an empty queue.
+**If the rescan produced no additions and no revisions**, there is nothing to approve: say so in the terminal — the rescan found nothing missing, the dictionary already covers the run — run the gate above, and finish, where finishing is the spine's `## The end`, declaration and all. An empty set is owed no approval rite; do not manufacture a card and do not send the person to an empty queue.
 
-Then declare loop-ready: `/specify` is finished, the intent and domain planes hold together, and the specification is ready for the plan layer. A later change to intent comes back through `/shall:specify <request>`, which enters in revision mode, finds the highest layer the request touches, and runs that phase and every phase below it, scoped to the affected subtree.
+Then declare loop-ready exactly as the spine's `## The end` says, and do there what it says to do with the declaration — the closing words and the run's one feed record are the spine's and are not repeated here. A later change to intent comes back through `/shall:specify <request>`, which enters in revision mode, finds the highest layer the request touches, and runs that phase and every phase below it, scoped to the affected subtree.
 
 ## When the gate fails
 

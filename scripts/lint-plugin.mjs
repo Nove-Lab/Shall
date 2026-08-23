@@ -101,6 +101,7 @@ const SUBCOMMANDS = new Set([
   "status",
   "board",
   "add-spec-node",
+  "log",
   "help",
 ]);
 

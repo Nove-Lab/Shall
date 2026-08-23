@@ -1,7 +1,7 @@
 {
   "name": "shall",
-  "version": "0.4.0",
-  "description": "Runs Shall's own processes against a Shall project. /shall:specify interviews for the intent and domain planes and /shall:plan turns an approved specification into module designs, contracts and implementation tasks, each phase handed to the Review Queue for a person to approve — or, with --auto, every phase run through and one approval asked for at the end. /shall:work takes one turn of work off the board and writes it up as a journal, with /shall:work.todo and /shall:work.report as its loose parts, and /shall:raise explores a question and lands a finding or a decision the person dictated. A PostToolUse hook runs shall check over every spec file the moment it is written.",
+  "version": "0.5.0",
+  "description": "Runs Shall's own processes against a Shall project. /shall:specify interviews for the intent and domain planes and /shall:plan turns an approved specification into module designs, contracts and implementation tasks, each phase handed to the Review Queue for a person to approve — or, with --auto, every phase run through and one approval asked for at the end. /shall:work takes one turn of work off the board and writes it up as a journal, with /shall:work.todo and /shall:work.report as its loose parts, and /shall:raise explores a question and lands a finding or a decision the person dictated. /shall:help says what Shall is, where the project stands and what to run next, and is the one command that answers outside a project. Each process ends by asking the daemon, through shall log, to put one line in the project's Activity Feed. A PostToolUse hook runs shall check over every spec file the moment it is written.",
   "author": {
     "name": "Nove Lab"
   },
@@ -19,6 +19,9 @@
     "journal",
     "work-log",
     "findings",
-    "decisions"
+    "decisions",
+    "help",
+    "guide",
+    "activity-feed"
   ]
 }

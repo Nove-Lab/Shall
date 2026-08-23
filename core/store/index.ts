@@ -1,6 +1,6 @@
 /**
- * core/store — the project's `.shall/spec` folder, and the three ledgers beside
- * it.
+ * core/store — the project's `.shall/spec` folder, the three ledgers beside
+ * it, and the activity feed under them.
  *
  * The only core module that touches a filesystem, and the only one that knows
  * where a node lives. What a file SAYS is `core/serialize`'s business and what
@@ -9,7 +9,10 @@
  * markdown amounts to when it is read at once. The ledgers — approvals,
  * rejections, acceptances — are the files under `.shall` that are nobody's
  * authorship, Shall writes them and Shall reads them, and they go through one
- * shared door that keeps the same manners as the spec folder's.
+ * shared door that keeps the same manners as the spec folder's. The activity
+ * feed under `ledger/feed/` is Shall's own in the same way and a list rather
+ * than a book, so it has a door of its own with the same manners and one verb,
+ * append.
  *
  * It replaces the sqlite store that stood here. The queue that serialized writes
  * survived the change; everything else went with the database.
@@ -19,6 +22,7 @@ export {
   recordAcceptance,
   withdrawAcceptance,
 } from "./acceptance-ledger.js";
+export { appendActivity, readActivity } from "./activity-ledger.js";
 export {
   readApprovalLedger,
   recordApproval,
@@ -51,9 +55,10 @@ export { describeFailure as describeFileFailure } from "./files.js";
 export { RESTORE_THE_BOOK } from "./ledger-door.js";
 export { isStoreRefusal, StoreRefusal } from "./refusal.js";
 export type { RefusalKind } from "./refusal.js";
-/** The ledgers' own shapes, named here so a caller of a door has one import. */
+/** The ledgers' and the feed's own shapes, named here so a caller of a door has one import. */
 export type {
   AcceptanceLedgerReading,
+  ActivityReading,
   ApprovalLedgerReading,
   RejectionLedgerReading,
 } from "../serialize/index.js";

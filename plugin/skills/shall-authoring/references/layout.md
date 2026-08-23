@@ -10,9 +10,10 @@
   ledger/approvals.yaml        node id → approved hash, who, when
   ledger/rejections.yaml       node id → rejected hash, who, when, rationale
   ledger/acceptances.yaml      criterion or task id → the hash and the list closed over
+  ledger/feed/YYYY-MM.yaml     the Activity Feed: one line per finished run, a file per month
 ```
 
-Both `spec/` and `ledger/` belong in the repository: the specification and its judgments travel with the code, git holds their history and their merges, and a fresh clone shows the same greens, reds and closed marks before anyone opens the browser. A ledger appears with its first record, so a project that has judged nothing has none — that is not damage.
+Both `spec/` and `ledger/` belong in the repository: the specification and its judgments travel with the code, git holds their history and their merges, and a fresh clone shows the same greens, reds and closed marks before anyone opens the browser. A ledger appears with its first record, so a project that has judged nothing has none — that is not damage. The feed appears the same way, month by month.
 
 ## The four band folders
 
@@ -30,11 +31,13 @@ You never have to work this out. `shall add-spec-node --type <Type>` prints the 
 
 ## The ledgers, and why you leave them alone
 
-`approvals.yaml`, `rejections.yaml` and `acceptances.yaml` are Shall's own books. The daemon is the only writer, and writing them is refused outright: the project's `.claude/settings.json` carries `Edit(/.shall/ledger/**)`, a deny rule Shall wrote there itself, and it covers making the file out of nothing too.
+`approvals.yaml`, `rejections.yaml` and `acceptances.yaml` are Shall's own books. The daemon is the only writer, and writing them is refused outright: the project's `.claude/settings.json` carries `Edit(/.shall/ledger/**)`, a deny rule Shall wrote there itself, and it covers making the file out of nothing too — and the Activity Feed under `ledger/feed/` sits under the same rule, because the rule is a glob over the folder.
 
 Reading them is not refused — it is pointless, and Shall's convention is that you do not. A color is arithmetic over all three books and the nodes' content hashes at once — a standing rejection outranks an approval, a rejection lapses by itself the moment the node's hash moves, a closure lapses when the list of claimants changes — so a color you work out from a book by hand disagrees with the one on the person's screen, and yours is the wrong one. `shall status` and `shall board` run the real arithmetic and report what the books hold, rationale and all.
 
-Nothing else writes there either. There is no `shall approve`, no `shall reject` and no `shall close`; a judgment is a person's, made in the browser.
+**The feed is the one narrow exception to "the daemon alone writes", and the daemon still holds the pen.** `shall log <kind> <summary> [--refs <id,id>]` asks the daemon to append one line to the current month's feed file, and the process spines say which kind and when — once, at the end of a run. You never open the file; the kinds are the four finished-process kinds and nothing else, and the feed holds only what a run logged, so it never says how anything was judged. You never read it back either: what happened to the project is in the graph and in `shall status`; the feed is what a person skims in the browser.
+
+Nothing else writes there. There is no `shall approve`, no `shall reject` and no `shall close`; a judgment is a person's, made in the browser — and `shall log` cannot write one.
 
 ## Finding out what this build has
 

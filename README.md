@@ -5,7 +5,8 @@ contains project initialization, opening and recent-project persistence, plus
 the shell the planes fill: Control plane panels, the Spec plane canvas and
 Settings. The Spec plane holds real nodes, and the Control plane's Review Queue
 is filled — bundles of what a person still has to decide, computed from the
-graph and three ledgers on every read. The other three panels are still empty.
+graph and three ledgers on every read. The Task Board is filled the same way,
+and the Activity Feed from a file of its own; only Vitals is still empty.
 
 ## Layout
 
@@ -53,7 +54,11 @@ someone on the same panel — there is no hidden "current project" state.
 about. `?node=` opens
 the node's panel — the reading pane, always — and `?back=` puts a
 **Back to review** button in the toolbar, which is how a card sends you to the
-canvas and gets you back.
+canvas and gets you back. `/p/:projectId/control/activity-feed?month=YYYY-MM`
+opens the Activity Feed on one month; without it the newest month on disk is
+shown. The month is in the URL and nowhere else, for the reason above — a link
+to a month is a link to that month — and the picker appears only when there is
+more than one month file to pick from.
 
 ## Spec plane
 
@@ -267,6 +272,36 @@ absent, and it turns up of its own accord once the thing above it is settled.
   and each row names the module it belongs to, the requirement it serves, the
   criteria it targets and any work already logged against it.
 
+## Activity feed
+
+The Control plane's Activity Feed is the third list, and the one that is read
+rather than computed: what the agents have finished, newest first — kept in a
+file of its own and an input to nothing. No colour, gate, board row or queue
+card reads it; delete the folder and every colour, mark and board row is what
+it was. One line is one finished run, and only an agent writes one, through
+`shall log` at the run's end — `specify_done`, `plan_done`, `work_done` or
+`raise_landed`, the four ends of a run — as the agent's own sentence, with the
+ids the run was about. Nothing a person does in the Review Queue is written
+here: an approval, a rejection or a closure goes into its book and nowhere
+else, and the feed never says how anything was judged. The file is
+`.shall/ledger/feed/YYYY-MM.yaml`, one per month of the daemon's UTC clock,
+appended and never edited, and the panel shows one month at a time.
+
+The table has four columns — Kind, Event, Refs, When — and one row per line,
+newest first; nothing folds, because every line is one run and a run is its
+own event. A ref is a link into the Spec plane, and **Back to review** returns
+to the feed and its month. The Overview card shows the newest month's first
+three rows. The sidebar badge stays at zero: nothing on this list is waiting
+on anyone.
+
+There is no command that reads the feed back, by design — an agent that wants
+the past asks `shall status` and `shall board` — and the web's query is its
+only reader. A month file that will not read costs this panel and nothing
+else, and is never written over: the repair is the same as a book's, restore it
+from git or move it aside. Because the folder sits under `.shall/ledger`, every
+`shall log` lights **Commit spec** like a book would, and the commit carries
+the feed with the books.
+
 Settings edits real files: the daemon port lives in `~/.shall/config.json` and
 the display name in `<project>/.shall/project.json`. Everything else on that
 screen is a read-only fact shown next to the file it comes from.
@@ -285,6 +320,7 @@ registry config, so `npx shadcn add <component>` works from `apps/web`.
   ledger/rejections.yaml       the rejections: node id → {rejectedHash, by, at, rationale}
   ledger/acceptances.yaml      the closures: criterion id → {acHash, evidence: {id → hash}, by, at}
                                and task id → {taskHash, reports: {id → hash}, by, at}
+  ledger/feed/YYYY-MM.yaml     the activity feed: a month of {at, kind, refs, summary}, appended and never edited
 ```
 
 `.shall/spec` and `.shall/ledger` both belong in the repository, and that is
@@ -294,6 +330,17 @@ code, git holds their history and their merges, and a fresh clone can be read
 it in the UI. Each ledger appears with its first record; a project that has
 judged nothing has none. A ledger that will not read is a refusal, not a
 screenful of yellow: the review says which book and why.
+
+The feed under `ledger/feed/` is the fourth file there and the odd one out: a
+YAML list rather than a map, one line per finished run (written by the daemon
+when an agent asks through `shall log`, and by nothing else) for a person
+skimming the Activity Feed panel — an input to nothing: no colour, gate, board
+row or queue card reads it, and deleting it changes only the panel. It appears
+with its first line like a book does, a month file that will not read is never
+written over — `shall log` is refused with the sentence — and it is committed
+beside the books because it is Shall's own: every `shall log` lights
+**Commit spec**, and the commit carries the feed with them.
+
 The `.gitignore` Shall writes covers one thing: the `*.tmp` a write leaves if
 it dies between writing and renaming. It also ignored a `shall.db` for as long
 as any folder still held one from before the spec moved into files; those files
@@ -304,16 +351,17 @@ removed on the next open.
 
 Opening or creating a project also writes two deny rules into the project's
 `.claude/settings.json` — `Read(~/.shall/**)`, Shall's own home, and
-`Edit(/.shall/ledger/**)`, the books only the daemon writes — and `shall init`
-runs `git init` when the folder is in no repository, because git is the spec's
-only restoration material.
+`Edit(/.shall/ledger/**)`, the books and the feed beside them that only the
+daemon writes — and `shall init` runs `git init` when the folder is in no
+repository, because git is the spec's only restoration material.
 
 It writes one more file, and this one is Shall's own: `.claude/rules/shall.md`,
 half a page an agent reads at the start of every session. What is on it is the
 handful of things the files cannot say about themselves — that writing a spec
 file is a proposal and not a decision, that a node is retired by proposing its
-deletion rather than by deleting it, that the ledgers are nobody's to open, that
-a colour is asked for rather than worked out, that a node is started with
+deletion rather than by deleting it, that the ledgers are nobody's to open and
+the one line a run leaves there goes through `shall log`, that a colour is
+asked for rather than worked out, that a node is started with
 `shall add-spec-node` because its commented header is the only place a type's
 own keys and relations are written down, and that a task hangs off a module. It is generated output, kept
 current on every open the way the reference templates are, so a hand edit to it
@@ -322,13 +370,15 @@ adapter today, which is why the page lands under `.claude`.
 
 ## The `shall` command
 
-Five subcommands go on top of `.shall/`, and between them they are what an
-agent sees of a project without opening the browser. None of them reads a spec
-file: each starts or reuses the daemon and asks it, because the daemon is the
-one process that reads spec files for Shall — and a terminal that worked out a
-colour for itself would be a second implementation of the colour chain, stale
-the day a rule moves. The four that need a project already there find it by
-walking up from the directory you are standing in, the way `git` does.
+Six subcommands go on top of `.shall/`, and between them they are what an
+agent sees of a project without opening the browser, and the one line it
+leaves. None of them reads a spec file, and only one of them — `shall log` —
+writes anything, and not a spec file either: each starts or reuses the daemon
+and asks it, because the daemon is the one process that reads spec files for
+Shall — and a terminal that worked out a colour for itself would be a second
+implementation of the colour chain, stale the day a rule moves. The five that
+need a project already there find it by walking up from the directory you are
+standing in, the way `git` does.
 
 - `shall init` writes that folder into the current directory.
 - `shall check [--scope <path>]…` reads the spec back and says how much the
@@ -361,6 +411,17 @@ walking up from the directory you are standing in, the way `git` does.
   command for every type in the canon; the type argument is resolved
   case-insensitively, and one the canon does not have is refused with the
   whole list.
+- `shall log <kind> <summary> [--refs <id,id>]` writes one line into the
+  activity feed — the daemon writes it, under `.shall/ledger/feed/`, at its own
+  clock. The kind is one of `specify_done`, `plan_done`, `work_done` and
+  `raise_landed`, the four ends of a run, and any other word is refused with
+  that list. The summary is one word to the shell — quote it — and one line to
+  the daemon; `--refs` names the nodes the line is about, as ids separated by
+  commas, in either spelling (`--refs a,b` or `--refs=a,b`), given as often as
+  you like, and every id is checked for shape before anything is written. It
+  answers `Logged <kind>.` or the refusal and nothing else — no command reads
+  the feed back, by design; an agent that wants the past asks `status` and
+  `board`.
 
 A scope is a file, a folder, or the spec-relative prefix the rows are printed in
 (`intent/Goal`), given as many times as there are places you care about, and it
@@ -378,24 +439,28 @@ project. A scope also carries the rows filed against the folders ABOVE it: a
 folder that would not list, or one whose name is no type, is the answer to why
 nothing is there, and it would be a strange narrowing that hid it.
 
-Each of the five takes `--json`, and then stdout is exactly one object and
-nothing else: the answer, or `{"error": …}` carrying the sentence the call was
-refused with. The exit code is 1 only when the call itself failed or `check`
-found problems or gaps — a red node, a standing refusal and an empty board are
-answers, not errors, so a caller branches on the content and never on the code.
-That is the machine-readable contract an agent's tooling consumes.
+Each of the six takes `--json`, and then stdout is exactly one object and
+nothing else: the answer — for `log`, `{"ok": true}` — or `{"error": …}`
+carrying the sentence the call was refused with. The exit code is 1 only when
+the call itself failed or `check` found problems or gaps — a red node, a
+standing refusal and an empty board are answers, not errors, so a caller
+branches on the content and never on the code. That is the machine-readable
+contract an agent's tooling consumes.
 
-`shall help` is the sixth command and the one that starts nothing: it prints to
-stdout the screen those five shapes are quoted from, and `shall --help` is the
-same command. The contract above begins once the words parse, and a line this
-client cannot read never gets that far — an option a command does not take, a
-`--scope` with no path after it, a word that is no command at all. Each is
+`shall help` is the seventh command and the one that starts nothing: it prints
+to stdout the screen those six shapes are quoted from, and `shall --help` is
+the same command. The contract above begins once the words parse, and a line
+this client cannot read never gets that far — an option a command does not
+take, a `--scope` with no path or a `--refs` with no ids after it, a third word
+after `shall log`'s two, a word that is no command at all. Each is
 answered on stderr with the one shape that would have worked, or with that whole
 screen for a name nothing answers to, and exits 1 before a daemon is started or
 a folder is read, whatever `--json` was in the line.
 
 There is no `shall approve`, `shall reject` or `shall close` and never will be:
-a judgement is made by a person in the browser.
+a judgement is made by a person in the browser. `shall log` is not one of those
+by another name: it cannot write a judgment, and what it writes — a line of
+the feed — is read by nothing that decides a colour.
 
 ## Development
 
