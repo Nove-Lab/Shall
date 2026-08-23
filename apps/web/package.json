@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "test": "node --import tsx --test src/spec/view/*.test.ts src/control/activity-feed/*.test.ts",
+    "test": "node --import tsx --test src/spec/view/*.test.ts src/control/activity-feed/*.test.ts src/control/vitals/*.test.ts",
     "typecheck": "tsc -b --pretty false"
   },
   "dependencies": {

@@ -326,6 +326,7 @@ export function SpecNodeCard({ data }: NodeProps<CardNode>) {
         <SecondAxisMark
           closure={data.closure}
           workItemState={data.workItemState}
+          satisfaction={data.satisfaction}
           className="h-4 px-1.5"
         />
       </div>

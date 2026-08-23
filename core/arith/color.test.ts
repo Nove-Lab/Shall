@@ -162,6 +162,7 @@ function status(
   leftOpen: ReviewStatus["leftOpen"] = null,
   problem: ReviewStatus["problem"] = null,
   workItemState: ReviewStatus["workItemState"] = null,
+  satisfaction: ReviewStatus["satisfaction"] = null,
 ): ReviewStatus {
   return {
     id,
@@ -172,6 +173,7 @@ function status(
     closure,
     leftOpen,
     workItemState,
+    satisfaction,
     problem,
   };
 }

@@ -225,6 +225,7 @@ describe("the folder it answers for", () => {
         closure: null,
         leftOpen: null,
         workItemState: null,
+        satisfaction: null,
         problem: null,
         type: "Requirement",
         band: "Intent",

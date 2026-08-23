@@ -106,7 +106,14 @@ export interface LedgerPaths {
  */
 /** What a casualty says after the book's own problem sentence. */
 const CASUALTY: Record<
-  "approve" | "review" | "reject" | "withdraw" | "accept" | "board" | "status",
+  | "approve"
+  | "review"
+  | "reject"
+  | "withdraw"
+  | "accept"
+  | "board"
+  | "status"
+  | "vitals",
   string
 > = {
   approve:
@@ -120,6 +127,7 @@ const CASUALTY: Record<
     "Nothing was accepted, because writing into a ledger nobody can read would bury what it holds; restore it from git or move it aside, and accept again.",
   board: `Nothing on the board can be trusted until it reads — what needs fixing, what is finished and what is ready to work on are all counted out of the ledgers; ${RESTORE_THE_BOOK}`,
   status: `Nothing here can be told apart until it reads — every colour, every rejection and every closure is counted out of the ledgers; ${RESTORE_THE_BOOK}`,
+  vitals: `Nothing here can be counted until it reads — every ratio, every open criterion's reason and every blocked work item's cause is counted out of the ledgers; ${RESTORE_THE_BOOK}`,
 };
 
 /** The first book that would not read, said as a refusal — or nothing at all. */

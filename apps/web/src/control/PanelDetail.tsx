@@ -7,19 +7,10 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
-import { Card, CardContent } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { EmptyState } from "@/components/EmptyState";
 import { ActivityFeed } from "./activity-feed/ActivityFeed";
 import { panelById } from "./panels";
 import { ReviewQueue } from "./review-queue/ReviewQueue";
+import { Vitals } from "./vitals/Vitals";
 import { WorkBoard } from "./work-board/WorkBoard";
 import { useProject } from "@/project-context";
 
@@ -57,11 +48,11 @@ export function PanelDetail() {
         </div>
       </div>
 
-      {/* THREE PANELS ARE BUILT AND VITALS IS STILL THE PLACEHOLDER, and the
-          difference is exactly this branch. The header above is shared — the
-          crumb, the title and the summary are the panel's own metadata, not
-          the queue's — so the built panel takes over from the card down and
-          nothing is written twice. */}
+      {/* FOUR PANELS, ONE HEADER. The crumb, the title and the summary above
+          are the panel's own metadata and are drawn once for all of them; the
+          built panel takes over from the card down, and this branch is the
+          whole of what differs between the four. Every id is matched by name,
+          so a fifth panel is a compile error here and not a blank card. */}
       {panel.id === "review-queue" ? (
         <ReviewQueue panel={panel} />
       ) : panel.id === "work-board" ? (
@@ -69,31 +60,7 @@ export function PanelDetail() {
       ) : panel.id === "activity-feed" ? (
         <ActivityFeed panel={panel} />
       ) : (
-        <Card>
-          <CardContent className="p-0">
-            {panel.columns ? (
-              // The header stays so the panel reads as the table it will be.
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    {panel.columns.map((column) => (
-                      <TableHead key={column}>{column}</TableHead>
-                    ))}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  <TableRow className="hover:bg-transparent">
-                    <TableCell colSpan={panel.columns.length} className="p-0">
-                      <EmptyState message={panel.empty} />
-                    </TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
-            ) : (
-              <EmptyState message={panel.empty} />
-            )}
-          </CardContent>
-        </Card>
+        <Vitals panel={panel} />
       )}
     </>
   );

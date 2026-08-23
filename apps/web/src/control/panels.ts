@@ -8,7 +8,8 @@ export interface PanelMeta {
   empty: string;
   /**
    * Table headers for the detail page. Omitted where the panel is not a list —
-   * Vitals is a computed metric grid, and none of it is computed yet.
+   * Vitals is two sections of computed figures, ratios and rules, and not a
+   * table of rows.
    */
   columns?: string[];
 }
@@ -58,9 +59,13 @@ export const PANELS: PanelMeta[] = [
   },
   {
     id: "vitals",
-    title: "Shall Vitals",
-    summary: "Health of the spec graph, computed on read",
-    empty: "No graph to measure yet",
+    title: "Vitals",
+    // TWO GROUPS, COMPUTED ON EVERY READ AND STORED NOWHERE: how far the
+    // specification has come, as four ratios, and what it still lacks, as
+    // seven rules. No columns: the page is bars and rows, not a list, and the
+    // card on the Overview is the same four bars with one line under them.
+    summary: "Progress and spec health, computed on read",
+    empty: "No spec to measure yet",
   },
 ];
 

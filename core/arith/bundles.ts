@@ -4,6 +4,7 @@ import {
   compare,
   layerOf,
   type Band,
+  type ClosureKind,
   type ClosureSubject,
   type NodeTypeName,
   type SpecNode,
@@ -942,6 +943,26 @@ const CLOSURE_BUNDLE: Readonly<
 };
 
 /**
+ * The id the queue gives a closure subject's card — `closure:<criterion>`,
+ * `completion:<work item>` — or null for a type that is no closure subject.
+ * ONE SPELLING: the card is built under it below, and the Vitals name the card
+ * an open criterion is waiting on with it, so a panel link and a queue row
+ * cannot drift apart by a prefix.
+ */
+export function closureBundleIdOf(
+  subjectType: string,
+  subjectId: string,
+): string | null {
+  const kind = closureKindOf(subjectType);
+  return kind === null ? null : closureBundleIdFor(kind, subjectId);
+}
+
+/** The same spelling, for a caller that already holds the kind. */
+function closureBundleIdFor(kind: ClosureKind, subjectId: string): string {
+  return `${CLOSURE_BUNDLE[kind.kind].prefix}:${subjectId}`;
+}
+
+/**
  * THE LATEST HEARING PER CLAIMANT — everything claiming the subject now, plus
  * everything the record it is closed on names, that a person has ever refused.
  * A claimant that was accepted and later refused is part of the hearing even
@@ -1038,7 +1059,7 @@ function closureBundleFor(
     }
   }
   const hearings = hearingsOf(scan, subject.id, shown);
-  const id = `${CLOSURE_BUNDLE[kind.kind].prefix}:${subject.id}`;
+  const id = closureBundleIdFor(kind, subject.id);
   const title = `${subject.id} ${subject.name}`;
   const since = sinceOf(scan, [subject.id, ...shown]);
 

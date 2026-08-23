@@ -1,6 +1,6 @@
 import type { api } from "@/api";
 import type { SpecEdge, SpecNode } from "./spec-node";
-import type { Closure, Signal } from "./view/furniture";
+import type { Closure, Satisfaction, Signal } from "./view/furniture";
 
 /**
  * WHAT THE DAEMON SAYS ABOUT THE GRAPH, IN THE SHAPES THIS SURFACE READS IT IN.
@@ -96,6 +96,12 @@ export type RejectionRecord = Awaited<
  * verdict and one for the mark beside it — and still exactly one declaration.
  */
 export type { Closure };
+
+/**
+ * WHETHER A CARRIER'S CRITERIA ARE MET, RE-EXPORTED AND NOT RE-DECLARED — the
+ * same bargain `Closure` makes, for the word a requirement or scenario wears.
+ */
+export type { Satisfaction };
 
 /**
  * NO COLOURS YET — the board before the first review lands, as one shared value
@@ -202,6 +208,41 @@ export function workItemStatesOf(
     }
   }
   return states;
+}
+
+/**
+ * NO CARRIER WORDS YET, as one shared value — the reason `NO_SIGNALS` gives,
+ * again: this map is a dependency of the card memo.
+ */
+export const NO_SATISFACTIONS: ReadonlyMap<string, Satisfaction> = new Map();
+
+/**
+ * THE CARRIER'S OWN WORD, KEYED BY ID — and only for the requirements and
+ * scenarios it means anything for, exactly as `closuresOf` keys only the
+ * nodes that have a mark. A carrier demanding no criterion has a null on the
+ * wire and no entry here: unspecified draws nothing.
+ *
+ * It is the VITALS' answer travelling to the canvas: `core/arith/satisfaction.ts`
+ * rolls the criteria up once inside the review, the Vitals' satisfaction ratios
+ * count the same words, and the badge beside a carrier's id reads this map.
+ * Nothing here works a word out for itself — the plane holds the edges it
+ * would need, and still does not, because a roll-up done twice is a roll-up
+ * that can disagree with itself.
+ */
+export function satisfactionsOf(
+  report: ReviewReport | null,
+): ReadonlyMap<string, Satisfaction> {
+  if (report === null) {
+    return NO_SATISFACTIONS;
+  }
+
+  const words = new Map<string, Satisfaction>();
+  for (const status of report.statuses) {
+    if (status.satisfaction !== null) {
+      words.set(status.id, status.satisfaction);
+    }
+  }
+  return words;
 }
 
 /** The same list keyed by id, for the panel — which wants the reason, not the colour. */

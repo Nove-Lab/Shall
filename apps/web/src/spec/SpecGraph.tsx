@@ -40,6 +40,7 @@ import {
   furniturePieces,
   graphIdOfCard,
   type Closure,
+  type Satisfaction,
   type WorkItemState,
   type Signal,
 } from "./view/furniture";
@@ -127,6 +128,15 @@ interface SpecGraphProps {
    * it is a dependency of the `cards` memo below.
    */
   workItemStateById: ReadonlyMap<string, WorkItemState>;
+  /**
+   * The word each requirement or scenario wears for its criteria — sat or
+   * unsat. A node with no entry is no carrier, or one demanding nothing, and
+   * draws no badge.
+   *
+   * IT ARRIVES MEMOISED FROM THE PLANE for the reason the three maps above do:
+   * it is a dependency of the `cards` memo below.
+   */
+  satisfactionById: ReadonlyMap<string, Satisfaction>;
   selectedId: string | null;
   onSelect: (id: string) => void;
   /**
@@ -183,6 +193,7 @@ export function SpecGraph({
   signalById,
   closureById,
   workItemStateById,
+  satisfactionById,
   selectedId,
   onSelect,
   onBackgroundClick,
@@ -288,9 +299,19 @@ export function SpecGraph({
         signalById,
         closureById,
         workItemStateById,
+        satisfactionById,
         highlight,
       ),
-    [layout, view, byId, signalById, closureById, workItemStateById, highlight],
+    [
+      layout,
+      view,
+      byId,
+      signalById,
+      closureById,
+      workItemStateById,
+      satisfactionById,
+      highlight,
+    ],
   );
 
   const flowNodes = useMemo<CanvasNode[]>(

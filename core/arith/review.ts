@@ -5,8 +5,13 @@ import {
   type SpecNode,
 } from "../graph/index.js";
 import type { RefusedFile, SpecGraph } from "../store/file-store.js";
-import { closureVerdictOf } from "./closure.js";
+import { closureVerdictOf, type ClosureVerdict } from "./closure.js";
 import { cyclicOf, cyclicSentence } from "./plan-seams.js";
+import {
+  isCriteriaCarrier,
+  satisfactionOf,
+  type ClosureAt,
+} from "./satisfaction.js";
 import {
   isClosableWorkItem,
   prematureAddressOf,
@@ -136,6 +141,22 @@ export interface ReviewStatus {
    */
   workItemState: "blocked" | "ready" | "done" | null;
   /**
+   * WHETHER EVERYTHING THIS CARRIER DEMANDS IS SHOWN MET — sat or unsat — for
+   * the two types the canon lets carry criteria, a Requirement and a Scenario,
+   * and null for every other type. Null too for a carrier that demands no
+   * criterion at all: that one is unspecified, not unmet, and the Spec plane
+   * draws nothing beside its id for it.
+   *
+   * IT IS THE VITALS' OWN ANSWER AND NOT A SECOND OPINION. `satisfaction.ts`
+   * rolls a carrier's criteria up into the word, the Vitals' satisfaction
+   * ratios count exactly the carriers wearing `sat`, and this field is what
+   * lets the Spec plane draw the same answer beside the carrier's id — the
+   * badge and the ratio are one computation read twice.
+   *
+   * REQUIRED AND NULLABLE, NEVER OPTIONAL, for the reason written above.
+   */
+  satisfaction: "sat" | "unsat" | null;
+  /**
    * THE SENTENCE A RULE OF THE GRAPH WROTE AGAINST THIS NODE, when its red came
    * from one that names other nodes — the aim rule (`off-target`), which needs
    * the log, the work item and the claims spelled out to be acted on, the loop rule
@@ -229,6 +250,35 @@ export function reviewGraph(
     settled.set(id, answer);
     return answer;
   };
+  // The closure word of any subject, computed once per id — a carrier asks
+  // about each criterion it demands, and the criterion's own row asks again,
+  // and hashing the criterion's bytes twice for one review would be the same
+  // waste the colour memo above exists to avoid. A type that is no closure
+  // subject is not asked and answers null.
+  const words = new Map<string, ClosureVerdict | null>();
+  const wordAt = (id: string): ClosureVerdict | null => {
+    const held = words.get(id);
+    if (held !== undefined) {
+      return held;
+    }
+    const node = context.nodes.get(id);
+    const answer =
+      node === undefined || closureKindOf(node.type) === null
+        ? null
+        : closureVerdictOf(node, context);
+    words.set(id, answer);
+    return answer;
+  };
+  // The mark a carrier reads per criterion: closed when the standing word is
+  // `closed`, open for any other word or none, null where nothing living is a
+  // closure subject under the id — which the roll-up reads as not closed.
+  const closureAt: ClosureAt = (id) => {
+    const node = context.nodes.get(id);
+    if (node === undefined || closureKindOf(node.type) === null) {
+      return null;
+    }
+    return wordAt(id)?.kind === "closed" ? "closed" : "open";
+  };
   const statuses: ReviewStatus[] = [];
   const missing: MissingNode[] = [];
   const broken: BrokenFile[] = [];
@@ -271,7 +321,7 @@ export function reviewGraph(
     // that is no closure subject at all is not asked, and both fields say so
     // with their own nulls.
     const closable = closureKindOf(node.type) !== null;
-    const word = closable ? closureVerdictOf(node, context) : null;
+    const word = closable ? wordAt(node.id) : null;
     statuses.push({
       id: node.id,
       color: verdict.color,
@@ -293,6 +343,9 @@ export function reviewGraph(
           : null,
       workItemState: isClosableWorkItem(node.type)
         ? workItemStateOf(node, context, colorAt)
+        : null,
+      satisfaction: isCriteriaCarrier(node.type)
+        ? satisfactionOf(node, context, closureAt)
         : null,
       problem:
         blockedWorkItemId !== null

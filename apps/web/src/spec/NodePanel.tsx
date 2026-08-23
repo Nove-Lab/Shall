@@ -1496,6 +1496,7 @@ export function NodePanel({
                 <SecondAxisMark
                   closure={status?.closure ?? null}
                   workItemState={status?.workItemState ?? null}
+                  satisfaction={status?.satisfaction ?? null}
                 />
               </div>
             </Field>
@@ -1599,6 +1600,7 @@ export function NodePanel({
                     <SecondAxisMark
                       closure={status?.closure ?? null}
                       workItemState={status?.workItemState ?? null}
+                      satisfaction={status?.satisfaction ?? null}
                     />
                   </div>
                 </Field>

@@ -2,6 +2,7 @@ import { TRPCError, initTRPC } from "@trpc/server";
 import { z } from "zod";
 import { isRefusal, type RefusalKind } from "../service/errors.js";
 import { workBoard } from "../service/spec-board.js";
+import { vitals } from "../service/spec-vitals.js";
 import {
   createProject,
   getProject,
@@ -314,6 +315,11 @@ export const appRouter = t.router({
     workBoard: procedure
       .input(z.object({ projectId: z.string().min(1) }))
       .query(({ input }) => workBoard(input.projectId)),
+    // The Vitals' one reader, and it is the web's alone — the Overview card
+    // and the page ask this same question, so they cannot disagree.
+    vitals: procedure
+      .input(z.object({ projectId: z.string().min(1) }))
+      .query(({ input }) => vitals(input.projectId)),
     reviewQueue: procedure
       .input(z.object({ projectId: z.string().min(1) }))
       .query(({ input }) => reviewQueue(input.projectId)),

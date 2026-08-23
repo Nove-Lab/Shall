@@ -5,8 +5,8 @@ contains project initialization, opening and recent-project persistence, plus
 the shell the planes fill: Control plane panels, the Spec plane canvas and
 Settings. The Spec plane holds real nodes, and the Control plane's Review Queue
 is filled — bundles of what a person still has to decide, computed from the
-graph and three ledgers on every read. The Work Board is filled the same way,
-and the Activity Feed from a file of its own; only Vitals is still empty.
+graph and three ledgers on every read. The Work Board and the Vitals are
+filled the same way, and the Activity Feed from a file of its own.
 
 ## Layout
 
@@ -122,13 +122,23 @@ rejection removes its line. Approvals and rejections never erase each other; a
 standing rejection outranks an approval. A colour is then arithmetic over the
 spec and the ledgers: what the file says now against what the books remember,
 so a node file carries no claim about its own approval and green has exactly
-one manufacturer. Two types carry a second badge beside their id, independent of their colour.
-An acceptance criterion wears a red **Open** or a green **Closed** — whether a
+one manufacturer. Four types carry a second badge beside their id, independent of their colour.
+An acceptance criterion wears **Open** or **Closed** — whether a
 person has closed it over the evidence claiming it — and a work item
 wears **Blocked**, **Ready** or **Done**: whether the chain above it is read and
 everything it waits on is finished, which is exactly the Work Board's Implement
-column, or whether a person has called the work done. The node panel has the
-toggle for both: on once at least one claimant is attached and every one of them
+column, or whether a person has called the work done. A requirement and a
+scenario — the two types that carry criteria — wear **Sat** or **Unsat**: every
+criterion the file demands is closed, or one of them is not. A carrier that
+demands no criterion wears nothing, because unspecified is not unmet; and
+since closure is a person's word over the evidence and reads no colour, a
+criterion whose wording was later refused still counts as closed, so a carrier
+can read **Sat** beside a red criterion. The finished words — **Closed**,
+**Done**, **Sat** — are the filled emerald pill, the same hue as the green
+square and a different shape; the rest are the design system's own quiet
+badge, so an unfinished thing announces itself by its word and not by a
+colour. The node panel has the
+toggle for the two closure subjects: on once at least one claimant is attached and every one of them
 is approved, it closes the subject over everything claiming it now — evidence
 for a criterion, completion reports for a work item; off asks for a reason and leaves it open
 (see the Review Queue below). The daemon never commits on its
@@ -312,6 +322,56 @@ screen is a read-only fact shown next to the file it comes from.
 
 The UI is built with shadcn/ui on Tailwind v4; `apps/web/components.json` is the
 registry config, so `npx shadcn add <component>` works from `apps/web`.
+
+## Vitals
+
+The Control plane's Vitals say how far the specification has come and what it
+still lacks — two groups, computed from the graph and the three ledgers on
+every read and stored nowhere, exactly as the board is. The Overview card
+shows four bars with their counts and one line about the checks; the page
+shows the same four rows in full with what each one is made of, then the
+checks one by one. Card and page ask the daemon the same question,
+`spec.vitals`, so they cannot disagree, and the page's "Computed" stamp is the
+moment that answer arrived — the daemon computes afresh on every ask and adds
+no clock of its own.
+
+**Progress** is four ratios, each a count of a word the review already wrote.
+Scenario satisfaction and requirement satisfaction count the carriers wearing
+**Sat** over the carriers that demand at least one criterion; a carrier that
+demands none stays out of the ratio and is said beside it, "n unspecified",
+never hidden. AC closure counts the criteria wearing **Closed** over every
+criterion. Work item completion counts the work items wearing **Done** over
+every work item, blocked ones included — a ratio over the ready ones alone
+would rise as the work above them stalled — with "n blocked" beside it. Each
+row opens: the unsat carriers with how many of their criteria are still open;
+the open criteria in three reasons — nothing claims it, something claims it and
+nobody has judged the list (with a link to its Review Queue card when that card
+exists; evidence not yet approved means no card yet), or a person left it open,
+with the rationale whole; and the blocked work items with what blocks each —
+an unfinished prerequisite, an id nothing answers to, or a node of the chain
+above it that is not green, itself included. Every node named is a link into
+the Spec plane.
+
+**Spec Health** is the residual layer: seven absences that are neither red
+nor yellow — not a grammar fault, which is the Fix Spec board's, and not a
+judgement waiting, which is the Review Queue's, but a thing that is not wrong
+and not waiting and still not done. A requirement with no criterion; a scenario
+with no criterion; an actor that performs no use case; a use case no scenario
+details; a goal that reaches no responsibility along the chain (through its
+sub-goals, if it has them); a module that allocates no work item; a criterion
+no work item targets. Every rule is always a row, the violated ones first, each
+with its nodes and the command that fills the gap; a clean one says it passed,
+so "checked and clean" can be told from "nothing to check". Every living node
+of a rule's type is examined whatever colour it wears, and the rows carry no
+colour — a specification still being drafted is yellow all over, and that is
+when "a requirement with no criterion" is worth saying. A violation is never
+painted red. What a file wrote is what it has, and what lives and is closed is
+what is met: a carrier whose criterion no file answers to is unsat rather than
+unspecified, and the hole itself is the Fix Spec board's row, said once there.
+Nodes in files that would not read are in no count at all; the Fix Spec board
+owns them. A project with nothing living and nothing refused shows the start
+here message in place of the figures. There is no score over the whole and
+there will not be one — each figure stands on its own.
 
 ## Project files
 

@@ -4,6 +4,70 @@ Decisions that came up while building and were deliberately not taken. Each one
 names where it would land, so taking it later is an edit and not an
 investigation.
 
+## From the vitals round (2026-08-24)
+
+**Should there be a `shall vitals [--json]`?** Not this round, on purpose. The
+Vitals spec names the control plane and nothing else, the help skill fixes an
+agent's material at two answers — `shall status --json` and `shall board
+--json` — and the linter still hand-keeps the subcommand list, which a third
+command would pay for a third time. The ratios an agent might want are already
+countable from `shall status --json` (`closure`, `workItemState`, and now
+`satisfaction`) and the board. If the command is wanted, the recipe is the
+feed's in reverse order of refusal: the spec's §0 first, then a path-taking
+procedure beside `spec.board` in `daemon/src/http/router.ts` wrapping the same
+`vitalsOver` the web's `spec.vitals` calls, a `SHAPES` entry in
+`client/cli/src/args.ts`, a `SUBCOMMANDS` entry in `scripts/lint-plugin.mjs`,
+and the README's subcommand count. Where it lands: those four files and
+`daemon/src/service/spec-vitals.ts`.
+
+**The "main scenario" rule cannot be checked, and was weakened rather than
+dropped.** The spec's fourth health rule asks for a use case with no *main*
+scenario, and which scenario is the main one lives in a heading inside the
+scenario's body, which the graph does not read by design. The shipped rule is
+"a use case no scenario details" — computable from the `DETAILS` lines, still
+residual, still one of seven. Making "main" a fact would mean a structured key
+on the scenario: `SpecNode` in `core/graph/node.ts`, the closed frontmatter key
+set in `core/serialize/parse.ts` and `emit.ts`, the template, and the approval
+payload hash — a canon change, not a vitals change. Where it lands: those
+files, then one row of `RULES` in `core/arith/vitals.ts`.
+
+**A work item left open shows no rationale on the Vitals page.** A person who
+refuses to call a work item done over its current reports writes a left-open
+record, and `ReviewStatus.leftOpen` carries it — but the work item then reads
+`ready`, not `blocked` (its chain may well be green), so the WorkItem row's
+drill-down, which lists the blocked ones, never shows that word. The criterion
+row does show its left-open reasons inline. Whether the work item row should
+carry the same treatment — a row of its own beside the blocked list — is
+undecided. Where it lands: `CompletionRow` in `core/arith/vitals.ts` and the
+WorkItem drill-down in `apps/web/src/control/vitals/Vitals.tsx`.
+
+**Should the help guide read `satisfaction`?** `shall status --json` rows now
+carry it, because `NodeStatus` spreads `ReviewStatus`, so the guide's material
+has a word it did not have when its table was written. `plugin/skills/shall-help/SKILL.md`
+counts criteria and work items by hand from `closure` and `workItemState` and
+says outright that neither answer carries a phase or a gate; a satisfaction
+ratio is a progress figure, and the skill currently forbids stating one. Left
+alone this round — new panels do not earn plugin prose, and the guide is about
+what an agent should do next, which a ratio does not say. Where it lands: that
+skill's "Say | Count it from" table and its "A phase or a gate" bullet.
+
+**No sidebar count for Vitals.** The Review Queue and the Work Board carry a
+count because something there waits on a person; the Activity Feed carries none
+because nothing does, and Vitals follows the feed: a violated health rule is
+not an error and not anybody's turn. If that reading changes — if a violation
+should wait on someone — the count would come from the panel's own procedure
+and not a summary one, for the reason `ShellLayout.tsx` gives. Where it lands:
+`useWaitingCounts` in `apps/web/src/shell/ShellLayout.tsx`.
+
+**One root cause can be said twice.** An actor that performs no use case is a
+row under the actor rule and leaves its goal unreached under the goal rule; a
+hole in the chain is a Fix Spec row and an unreached goal at once. The spec's
+exclusivity is against the other two layers, not between the seven rules, and
+the overlap is accepted and written down rather than deduplicated — a rule that
+hid its row because another rule had the same cause would be a second place for
+the two to disagree. Where it lands: `RULES` in `core/arith/vitals.ts`, if a
+dedupe is ever wanted.
+
 ## From the plan-layer refactor round (2026-08-23)
 
 **Does the `Interface` node survive as a type of its own?** A `Module` now

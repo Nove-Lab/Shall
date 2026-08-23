@@ -300,8 +300,8 @@ WorkLog에 한해 `commits`, Finding에 한해 `blocking`·`relatedNodes`, 그�
 
 ### core/arith — 판정 산술
 
-그래프에서 값을 계산하는 곳. AI가 닿을 수 없고, 닿을 AI도 없다. 입주자는 셋 —
-**색 사슬**, **닫힘**, **번들**.
+그래프에서 값을 계산하는 곳. AI가 닿을 수 없고, 닿을 AI도 없다. 입주자는 넷 —
+**색 사슬**, **닫힘**, **번들**, 그리고 그 셋이 이미 말한 것을 세는 **보드와 vitals**.
 
 - 색 — 위에서부터 첫 일치: missing(파일 부재∧참조 잔존) → 문법 위반 → 고아(살아있는
   앵커 0) → **겨냥 규칙 위반**(off-target) → **계획의 순환**(cyclic) → **반려 유효**
@@ -378,11 +378,37 @@ WorkLog에 한해 `commits`, Finding에 한해 `blocking`·`relatedNodes`, 그�
   로그는 yellow 뿌리가 닿을 때 red 멤버로 남고(판정하는 사람이 봐야 하므로), 홀로
   남으면 큐를 떠난다(에이전트 차례)
 - reviewGraph — 상태 목록(각 상태에 approval·rejection 레코드, AC의 closure와 left-open
-  기록, 겨냥 규칙이 쓴 문장 `problem`을 실어),
+  기록, 겨냥 규칙이 쓴 문장 `problem`, 그리고 Requirement·Scenario의 `satisfaction`을
+  실어),
   답하는 파일이 없는 id와 그것을 이름하는 참조들, 읽히지 않는 파일들을 한 번에
   조립한다. `spec.review`와 `shall check`의 gap이 같은 산술을 읽는다
-- 아직 안 온 것 — 낡음·게이트·보드·vitals. 색과 같은 방식으로, 저장 없이 계산될
-  것이다
+- satisfaction — `satisfaction.ts`의 롤업 하나, vitals가 만드는 **유일한 새 판정**.
+  기준을 가질 수 있는 두 타입(Requirement·Scenario — 문법표에서 `HAS_CRITERION`의
+  출발 타입을 읽는다)에 대해, 파일이 쓴 기준이 전부 closed면 `sat`, 하나라도 아니면
+  `unsat`, 쓴 기준이 없으면 null(미명세이지 미충족이 아니다 — 배지 없음). "있다"는
+  파일이 쓴 줄이고 "충족"은 살아있고 닫힌 것이라, 답하는 파일이 없는 기준을 쓴
+  캐리어는 unsat이다(구멍 자체는 Fix Spec의 행). 닫힘은 색을 읽지 않으므로 문구가
+  반려된 기준도 닫혀 있으면 닫힌 것이고, red 기준 옆에 Sat이 설 수 있다.
+  `reviewGraph`가 캐리어마다 이 말을 상태에 싣고 vitals가 그 말을 센다 — 배지와
+  비율이 한 필드다
+- vitals — `vitalsOf(graph, ledgers)`. 리뷰를 한 번 돌리고 전부 거기서 읽는다:
+  Progress 4율(Scenario·Requirement 충족률 = sat / 기준을 하나 이상 쓴 캐리어, 분모
+  밖의 미명세 수를 곁에 싣는다; AC 닫힘률 = closed / 모든 기준; WorkItem 완료율 =
+  done / **모든** WorkItem, blocked 포함 — ready만 분모로 잡으면 상류가 막힐수록
+  오르는 역설이 생긴다)과 그 드릴다운(unsat 캐리어와 미결 기준 수; open 기준의 사유
+  셋 — 증거 없음 / 심사 대기(큐가 지금 카드를 자를 때만 `closure:<AC>` id, 미승인
+  증거면 null) / 사람이 열어 둠(rationale 전문); blocked WorkItem과 차단 원인 —
+  미완료 선행·답하는 파일 없는 id·green 아닌 상향 사슬 노드, 자신 포함), 그리고
+  Spec Health 7규칙(기준 없는 Requirement, 기준 없는 Scenario, UseCase를 수행하지
+  않는 Actor, Scenario가 없는 UseCase, 책임에 닿지 않는 Goal — `PURSUED_BY → PERFORMS →
+  DETAILS → DERIVES_RESPONSIBILITY` 사슬을 SR에서 거꾸로 한 번 flood하고 `REFINES`는
+  내려간다, WorkItem을 할당하지 않는 Module, 어떤 WorkItem도 겨냥하지 않는 AC).
+  규칙은 잔여층이다 — red(Fix Spec)도 yellow(리뷰 큐)도 아닌 것만 — 규칙 수준에서
+  배타적이고 노드 수준에서 포함적이다: 색과 무관하게 그 타입의 살아있는 노드 전부를
+  검사하고 행은 색을 싣지 않는다. 일곱 행은 늘 일곱, 위반 먼저. 본문은 읽지 않는다
+  (시나리오의 종류는 본문 절이라, '주 시나리오 없는 UC'는 '시나리오 없는 UC'로
+  묻는다). 종합 점수 없음. `empty`는 살아있는 노드도 거부된 파일도 없을 때
+- 아직 안 온 것 — 낡음·게이트. 색과 같은 방식으로, 저장 없이 계산될 것이다
 
 ### core/serialize — 파일 형식
 
@@ -450,7 +476,9 @@ WorkLog에 한해 `commits`, Finding에 한해 `blocking`·`relatedNodes`, 그�
 - 스펙 프로시저 — 노드·엣지 읽기와 쓰기 다섯, 리뷰 표면 일곱(`review`·`approve`·
   `rejectDeletion`·`approvedVersion`·`restoreNode`·`gitStatus`·`commitSpec`), 그리고
   리뷰 큐의 여섯(`reviewQueue`·`reject`·`withdrawRejection`·`approveNodes`·
-  `acceptClosure`·`leaveOpen`), 그리고 보드의 하나(`workBoard`), 그리고 활동 feed의
+  `acceptClosure`·`leaveOpen`), 그리고 보드의 하나(`workBoard`), vitals의 하나
+  (`vitals` — 읽기, 아무것도 쓰지 않고, 장부가 안 읽히면 통째로 거부한다; 시계도
+  싣지 않아 페이지의 "Computed"는 답이 도착한 순간이다), 그리고 활동 feed의
   읽기 하나(`activity` — 달 목록과 한 달의 레코드, 둘 다 최신순; 기본은 달력의 이달이
   아니라 **파일이 있는 가장 최근 달**, 목록 밖의 달은 `missing`, 철자가 틀리면
   `invalid`, 못 읽는 달은 파일의 문장을 실은 `conflict`; 쓰는 쪽 `log`는 경로 가족이라
@@ -565,7 +593,8 @@ localhost 브라우저 화면. 사람의 관찰·편집 표면.
   않고 패널이 부르는 그 프로시저 둘을 부른다(어긋날 둘째 자리를 만들지 않으려고), 컨트롤
   플레인에 있을 때만 묻고, 실패하면 이전 숫자를 지킨다 — 뱃지는 패널을 가리키는 손가락이지
   사실이 사는 집이 아니다. Activity Feed는 뱃지 없음 — 큐가 아니고, 거기 있는 것은
-  아무도 기다리지 않는다
+  아무도 기다리지 않는다. Vitals도 같은 이유로 없음 — 위반은 오류가 아니고, 누구의
+  차례도 아니다
 
 - Control plane — review queue · work board · activity · vitals. 활동 feed 하나만
   빼고 전부 core/arith 계산 결과의 표시다(feed는 파일을 읽는다). **Work Board**도
@@ -594,11 +623,21 @@ localhost 브라우저 화면. 사람의 관찰·편집 표면.
   최근 달, refs는 스펙 플레인으로의 링크(`?back=`이 feed와 그 달로 되돌린다),
   Overview 카드는 최신 달의 첫 세 행. feed는 사람용 요약이지 정본이 아니다 — 어떤
   계산도 읽지 않고, 못 읽는 달은 이 패널 하나만 비용이다. 새 채널은 없다: feed
-  쓰기도 `.shall` 아래의 변경이라 같은 SSE 틱으로 닿는다. vitals만 아직 예약석
+  쓰기도 `.shall` 아래의 변경이라 같은 SSE 틱으로 닿는다. **Vitals**도 채워졌다:
+  `spec.vitals` 하나를 Overview 카드와 페이지가 같이 읽어(요약 프로시저 없음 — 둘이
+  어긋날 둘째 자리를 만들지 않는다) 카드는 바 넷과 n/m, Spec Health 한 줄, 페이지는
+  "Computed" 캡션 아래 Progress 카드(행마다 바·n/m·주석, 펼치면 드릴다운)와 Spec
+  Health 카드(일곱 행 전부, 위반 먼저, 펼치면 노드 명단과 채우는 커맨드 한 줄)를
+  세로 한 흐름으로. 바는 shadcn 레지스트리의 `progress` 하나를 디자인 시스템에 들인
+  것이고, 위반은 red 계열을 쓰지 않는다(조용한 secondary 배지·outline "passed").
+  사이드바 뱃지 없음 — 큐가 아니다. 빈 스펙이면 시작 안내가 두 섹션을 대신한다
 - Spec plane — 그래프 캔버스(React Flow)와 노드 상세, 그리고 리뷰 표면. 카드마다
-  신호등이 색을 달고, AC는 id 옆에 빨간 Open/초록 Closed 배지를, WorkItem은
-  같은 자리에 Blocked/Ready/Done 배지를(회색 둘·윤곽선 초록 하나 — Ready 집합은 Work
-  Board의 Implement 열과 같은 술어다) 하나 더 달며, 노드
+  신호등이 색을 달고, id 옆 같은 자리에 둘째 축의 배지를 하나 더 단다 — AC는
+  Open/Closed, WorkItem은 Blocked/Ready/Done(Ready 집합은 Work Board의 Implement
+  열과 같은 술어다), Requirement·Scenario는 Sat/Unsat(쓴 기준이 없으면 배지 없음).
+  페인트는 둘뿐이다: 끝난 말(Closed·Done·Sat)은 채운 에메랄드 pill — 등록 green인
+  네모와 같은 색조, 다른 형태 — 이고, 나머지(Open·Blocked·Ready·Unsat)는 디자인
+  시스템의 조용한 secondary 배지라 덜 된 것은 색이 아니라 단어로 말한다. 노드
   패널이 판정 재료와 버튼을 같은 화면에 둔다: 미승인은 전문이 곧 재료, 승인 후 변경은
   승인본 대비 라인 diff, 삭제 제안은 사유·영향과 승인/반려 두 버튼, 반려 중이면
   rationale과 [Withdraw rejection], 이전 반려가 있으면 그 rationale 한 줄, green은
@@ -746,8 +785,9 @@ MCP 서버 · webhook 수신 · 외부 cron · 추론 클라이언트와 그 게
 아직 여기 있다 — 2026-08-23의 `taskState → workItemState`, `spec.taskBoard →
 spec.workBoard`, 보드 행 키 `task:<id> → work-item:<id>`, 번들 종류 `task-closure →
 work-item-closure`가 그 자유 안에서 한 일이다), `spec.check`·`spec.status`·`spec.board`
-응답의 모양,
-리뷰 응답과 리뷰 큐 응답의 모양(장부의 by·at·rationale과 AC의 closure가 상태에
+응답의 모양, `spec.vitals` 응답의 모양,
+리뷰 응답과 리뷰 큐 응답의 모양(장부의 by·at·rationale과 AC의 closure, 2026-08-24의
+Requirement·Scenario `satisfaction`이 상태에
 실리는 것, 번들의 필드들 — 전부 이 자유 안에서 한 일이다), 그리고 활동 feed의
 레코드 형식(`ledger/feed/YYYY-MM.yaml`의 시퀀스, 레코드마다 `{at, kind, refs,
 summary}`)과 kind 목록 넷, `shall log`·`spec.log`·`spec.activity`의 모양. feed는

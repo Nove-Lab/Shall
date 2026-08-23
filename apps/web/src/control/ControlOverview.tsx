@@ -21,6 +21,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { ACTIVITY_KIND_LABEL, activityRows, rowNote } from "./activity-feed/rows";
 import { PANELS, type PanelMeta } from "./panels";
 import { controlBase } from "./parts";
+import { VitalsGlance } from "./vitals/VitalsGlance";
 import { BOARD_KIND_LABEL, boardRows, rowSummary, rowTitle } from "./work-board/rows";
 import { KIND_LABEL, bundleSummary } from "./review-queue/rows";
 import { useRevision } from "@/live";
@@ -48,13 +49,14 @@ interface GlanceRow {
 }
 
 /**
- * THE THREE LIVE CARDS ARE ONE COMPONENT OVER THREE QUESTIONS; Vitals is still
- * its placeholder sentence. Each question here IS THE SAME FETCH ITS PANEL
- * MAKES and not a cheaper summary procedure: the lists are computed on read
- * either way, and a second endpoint counting the same rows would be a second
- * place for them to disagree. What differs between the three — the query, the
- * row's words, the row's door — is this table; the loading, error, empty and
- * "and N more" ladders are the component, written once.
+ * THREE OF THE FOUR LIVE CARDS ARE ONE COMPONENT OVER THREE LIST QUESTIONS;
+ * the fourth, Vitals, is a figure card (`VitalsGlance`) over the same bargain.
+ * Each question here IS THE SAME FETCH ITS PANEL MAKES and not a cheaper
+ * summary procedure: the lists are computed on read either way, and a second
+ * endpoint counting the same rows would be a second place for them to
+ * disagree. What differs between the three — the query, the row's words, the
+ * row's door — is this table; the loading, error, empty and "and N more"
+ * ladders are the component, written once.
  */
 const GLANCE_ROWS: Record<
   "review-queue" | "work-board" | "activity-feed",
@@ -279,12 +281,12 @@ export function ControlOverview() {
               </CardTitle>
             </CardHeader>
             <CardContent className="flex-1">
-              {panel.id === "review-queue" ||
-              panel.id === "work-board" ||
-              panel.id === "activity-feed" ? (
-                <PanelGlance panel={panel} source={panel.id} />
+              {/* The figure card and the three list cards, told apart by id —
+                  so `source` narrows to the table's keys and nothing is cast. */}
+              {panel.id === "vitals" ? (
+                <VitalsGlance panel={panel} />
               ) : (
-                <EmptyState message={panel.empty} />
+                <PanelGlance panel={panel} source={panel.id} />
               )}
             </CardContent>
             <Link

@@ -80,6 +80,20 @@ export type Closure = "open" | "closed";
 export type WorkItemState = "blocked" | "ready" | "done";
 
 /**
+ * WHETHER WHAT A CARRIER DEMANDS IS SHOWN MET, AS A WORD — the fourth thing a
+ * card can carry, and the same bargain again: the card holds the word and the
+ * shape that draws it lives beside the components in `review-parts.tsx`.
+ *
+ * IT IS NOT A FOURTH SIGNAL EITHER. The square says whether the requirement or
+ * scenario was read and agreed to; this says whether every criterion it demands
+ * has been shown met — the criteria's own closure marks, rolled up one level by
+ * `core/arith/satisfaction.ts`. Only `Requirement` and `Scenario` have one at
+ * all, and one of those demanding no criterion has none: unspecified is not
+ * unmet, and the card draws nothing for it.
+ */
+export type Satisfaction = "sat" | "unsat";
+
+/**
  * What one card is drawn from.
  *
  * THE CARD'S WHOLE STATE IS THREE BOOLEANS, AND THEY ARE THE SELECTION'S — the
@@ -129,6 +143,15 @@ export type CardNodeData = {
    * thing that can be blocked, ready or done.
    */
   readonly workItemState: WorkItemState | null;
+  /**
+   * The word this requirement or scenario wears for its criteria — and `null`
+   * for every card that is not one, or is one that demands no criterion.
+   *
+   * REQUIRED AND NULLABLE for the reason the three above are; here the null
+   * carries two facts at once, the type's and the unspecified carrier's, and
+   * the card draws nothing for either.
+   */
+  readonly satisfaction: Satisfaction | null;
   /** The node that was clicked — one card on the board, or none. */
   readonly picked: boolean;
   /** One hop from the picked card, whichever way the relation points. */
@@ -609,6 +632,7 @@ export function cardPieces(
   signalById: ReadonlyMap<string, Signal>,
   closureById: ReadonlyMap<string, Closure>,
   workItemStateById: ReadonlyMap<string, WorkItemState>,
+  satisfactionById: ReadonlyMap<string, Satisfaction>,
   highlight: Highlight,
 ): CardPiece[] {
   const geometry = view === "grid" ? GEOMETRY.grid : GEOMETRY.graph;
@@ -642,6 +666,11 @@ export function cardPieces(
         // word — and the card draws the word, because "Done" says the closure
         // and says what it means for work.
         workItemState: workItemStateById.get(node.id) ?? null,
+        // A NODE WITH NO ENTRY IS NO CARRIER, OR ONE THAT DEMANDS NOTHING — the
+        // review sends the word for every requirement and scenario that carries
+        // a criterion and stays silent for the rest, and both silences mean
+        // "draw nothing" here.
+        satisfaction: satisfactionById.get(node.id) ?? null,
         // The three questions the highlight answers, asked once per card here so
         // that no component has to know how membership is decided. `dimmed` is
         // the complement of the neighbourhood and not of the two flags above it:

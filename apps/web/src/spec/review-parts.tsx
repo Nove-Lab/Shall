@@ -1,6 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import type { Closure, WorkItemState } from "./review";
+import type { Closure, Satisfaction, WorkItemState } from "./review";
 import type { DiffKind, DiffRow } from "./view/diff";
 import type { Signal } from "./view/furniture";
 
@@ -56,12 +56,13 @@ export function StatusDot({ color }: { color: Signal }) {
 }
 
 /**
- * THE TWO SECOND-AXIS MARKS SHARE ONE VOCABULARY, and it is two words wide:
+ * THE SECOND-AXIS MARKS SHARE ONE VOCABULARY, and it is two words wide:
  * NOT YET, and DONE.
  *
- * A criterion is open or closed; a work item is blocked, ready or done. Five words,
+ * A criterion is open or closed; a work item is blocked, ready or done; a
+ * requirement or scenario is sat or unsat. Seven words,
  * but only two STATES a person scans for — the thing has been shown to be met,
- * or it has not — so there are two paints and not five, and both marks use
+ * or it has not — so there are two paints and not seven, and every mark uses
  * them. Before this they disagreed: an open criterion wore red while a blocked
  * work item wore grey, which said that a criterion nobody has closed yet is a defect
  * and a work item nobody can start yet is merely news. Neither is a defect. Red is
@@ -81,19 +82,27 @@ export function StatusDot({ color }: { color: Signal }) {
 const MET_CLASS = "bg-emerald-500 text-white border-transparent";
 
 /**
- * THE FIVE WORDS AND THEIR TWO PAINTS, ONE TABLE. The two unions are disjoint,
- * so one `Record` over both keeps the exhaustiveness a `Record` is for — a new
- * word on either axis is a compile error here — while making the sameness
- * visible: `closed` and `done` are one row said twice, and the three unfinished
- * words are the design system's own quiet badge with nothing of ours on it.
+ * THE SEVEN WORDS AND THEIR TWO PAINTS, ONE TABLE. The three unions are
+ * disjoint, so one `Record` over all of them keeps the exhaustiveness a
+ * `Record` is for — a new word on any axis is a compile error here — while
+ * making the sameness visible: `closed`, `done` and `sat` are one row said
+ * three times, and the four unfinished words are the design system's own quiet
+ * badge with nothing of ours on it.
  *
  * BLOCKED AND READY ARE DELIBERATELY IDENTICAL PAINT: both are states of
  * unfinished work and neither is a defect; what differs is whether this is
  * somebody's turn, and the WORD says that. Colouring "ready" would put a third
- * light on a board that already has one.
+ * light on a board that already has one. UNSAT IS THE SAME QUIET BADGE for the
+ * same reason: a requirement whose criteria are still open is on its way, not
+ * wrong, and a warning colour would say otherwise.
+ *
+ * SAT IS THE FILLED EMERALD, Done's own paint, because it is the same
+ * arrival one level up — every criterion this carrier demands has been shown
+ * met — and it is told from the registration green the way Done is: by SHAPE,
+ * a pill with a word in it beside the id, never the bare square on the left.
  */
 const MARK: Record<
-  Closure | WorkItemState,
+  Closure | WorkItemState | Satisfaction,
   {
     readonly variant: "secondary" | "default";
     readonly className: string;
@@ -105,13 +114,15 @@ const MARK: Record<
   blocked: { variant: "secondary", className: "", label: "Blocked" },
   ready: { variant: "secondary", className: "", label: "Ready" },
   done: { variant: "default", className: MET_CLASS, label: "Done" },
+  sat: { variant: "default", className: MET_CLASS, label: "Sat" },
+  unsat: { variant: "secondary", className: "", label: "Unsat" },
 };
 
 function Mark({
   state,
   className,
 }: {
-  state: Closure | WorkItemState;
+  state: Closure | WorkItemState | Satisfaction;
   // `| undefined` because the two named marks forward their own optional prop
   // here under `exactOptionalPropertyTypes`.
   className?: string | undefined;
@@ -165,20 +176,41 @@ export function WorkItemStateMark({
 }
 
 /**
+ * THE BADGE BESIDE A REQUIREMENT'S OR SCENARIO'S ID, drawn for reading only —
+ * the criteria it demands, rolled up: every one of them closed, or not yet. A
+ * carrier demanding none wears nothing, and that is the caller's null.
+ *
+ * `className` IS FOR THE ONE CALLER WITH A HEIGHT BUDGET — the canvas card,
+ * exactly as `ClosureMark` above documents.
+ */
+export function SatisfactionMark({
+  state,
+  className,
+}: {
+  state: Satisfaction;
+  className?: string | undefined;
+}) {
+  return <Mark state={state} className={className} />;
+}
+
+/**
  * ONE MARK PER SECOND AXIS, AND THE TYPE DECIDES WHICH — the precedence said
  * once for the three places a node's id wears it (the canvas card, and the
  * panel's ID field in both modes). A work item's word wins because it already says
  * whether the work item is closed and what that means for work; a criterion wears
- * its closure mark; everything else wears nothing. Drawing both on a work item
- * would be two answers to one question in one row.
+ * its closure mark; a requirement or scenario wears the word for its criteria;
+ * everything else wears nothing. The three never meet on one node — no type is
+ * two of them — so the order here is for exhaustiveness and not a tie-break.
  */
 export function SecondAxisMark({
   closure,
   workItemState,
+  satisfaction,
   className,
 }: {
   closure: Closure | null;
   workItemState: WorkItemState | null;
+  satisfaction: Satisfaction | null;
   className?: string | undefined;
 }) {
   if (workItemState !== null) {
@@ -186,6 +218,9 @@ export function SecondAxisMark({
   }
   if (closure !== null) {
     return <ClosureMark state={closure} className={className} />;
+  }
+  if (satisfaction !== null) {
+    return <SatisfactionMark state={satisfaction} className={className} />;
   }
   return null;
 }

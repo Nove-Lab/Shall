@@ -3,7 +3,8 @@
  *
  * Everything here is counting and comparing over a graph somebody else loaded:
  * colour and its priority order first, then closure, then the review queue that
- * cuts what is waiting into bundles a person can decide. No AI reaches into this
+ * cuts what is waiting into bundles a person can decide, then the board and the
+ * vitals that count what those passes already said. No AI reaches into this
  * module, and none of its results are written down — they are recomputed from
  * the files and the ledgers on every read, which is what lets a hand edit or a
  * `git checkout` change an answer with nobody told about it.
@@ -78,7 +79,27 @@ export {
   upwardChainOf,
 } from "./work-item-state.js";
 export type { ColorAt } from "./work-item-state.js";
-export { reviewBundles, scanRankOf } from "./bundles.js";
+export {
+  criteriaOf,
+  isCriteriaCarrier,
+  satisfactionOf,
+} from "./satisfaction.js";
+export type { ClosureAt, Satisfaction } from "./satisfaction.js";
+export { vitalsOf } from "./vitals.js";
+export type {
+  BlockedWorkItem,
+  Blocker,
+  ClosureRow,
+  CompletionRow,
+  HealthRule,
+  HealthRuleId,
+  OpenCriterion,
+  Progress,
+  SatisfactionRow,
+  UnsatCarrier,
+  Vitals,
+} from "./vitals.js";
+export { closureBundleIdOf, reviewBundles, scanRankOf } from "./bundles.js";
 export type {
   AcClosureBundle,
   BundleKind,

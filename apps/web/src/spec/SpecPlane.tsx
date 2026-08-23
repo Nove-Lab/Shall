@@ -63,6 +63,7 @@ import { MetamodelDialog } from "./metamodel/MetamodelDialog";
 import { RejectionPopover } from "./RejectionPopover";
 import {
   closuresOf,
+  satisfactionsOf,
   workItemStatesOf,
   deletionSentence,
   impactSentence,
@@ -446,6 +447,11 @@ export function SpecPlane() {
    * inside the canvas, and a fresh map per render rebuilds every card.
    */
   const workItemStateById = useMemo(() => workItemStatesOf(review), [review]);
+  /**
+   * Sat or unsat, per requirement and scenario that carries a criterion — the
+   * vitals' own answer, memoised beside the other three for the same reason.
+   */
+  const satisfactionById = useMemo(() => satisfactionsOf(review), [review]);
   /** The same answers keyed for the panel, which wants the reason rather than the colour. */
   const statusById = useMemo(() => statusesById(review), [review]);
   /** Missing nodes and unreadable files together — the button and the dialog count once. */
@@ -1167,6 +1173,7 @@ export function SpecPlane() {
                     signalById={signalById}
                     closureById={closureById}
                     workItemStateById={workItemStateById}
+                    satisfactionById={satisfactionById}
                     selectedId={selected?.id ?? null}
                     onSelect={openNode}
                     onBackgroundClick={closeReadPanel}
