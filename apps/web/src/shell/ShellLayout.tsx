@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type CSSProperties } from "react";
 import {
   Link,
   Navigate,
@@ -157,7 +157,11 @@ function ControlSidebar({ projectId }: { projectId: string }) {
                       rail hides it, which is the component's own doing and
                       right: there is no room to read a number there. */}
                   {count > 0 ? (
-                    <SidebarMenuBadge>{count}</SidebarMenuBadge>
+                    // The count wears the highlight ink the doors wear, so a
+                    // waiting number reads as the pointer it is.
+                    <SidebarMenuBadge className="text-primary">
+                      {count}
+                    </SidebarMenuBadge>
                   ) : null}
                 </SidebarMenuItem>
               );
@@ -366,6 +370,9 @@ export function ShellLayout() {
                 open={sidebarOpen}
                 onOpenChange={setSidebarOpen}
                 className="min-h-0 flex-1"
+                // Narrower than the component's default rail: five short
+                // titles and a count need nothing like sixteen rems.
+                style={{ "--sidebar-width": "12rem" } as CSSProperties}
               >
                 <ControlSidebar projectId={projectId} />
                 {/* `min-w-0` lets the content shrink past its own min-content
