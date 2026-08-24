@@ -17,6 +17,7 @@ import {
   SidebarProvider,
   SidebarRail,
 } from "@/components/ui/sidebar";
+import { RAIL_STYLE } from "@/shell/ShellLayout";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useIsNarrow } from "@/hooks/use-narrow";
 import { useProjectContext } from "@/project-context";
@@ -187,6 +188,7 @@ export function SettingsScreen() {
       open={sidebarOpen}
       onOpenChange={setSidebarOpen}
       className="min-h-0 flex-1"
+      style={RAIL_STYLE}
     >
       {/* Same rail as the Control plane: collapses to icons when narrow. */}
       <Sidebar

@@ -1,4 +1,12 @@
 import { useCallback, useEffect, useState, type CSSProperties } from "react";
+
+/**
+ * THE ONE WIDTH EVERY SECTION RAIL WEARS — the Control plane's and the
+ * Settings screen's, so the two menus stand at the same line. Narrower than
+ * the component's sixteen-rem default, which held five short titles with
+ * room to spare, and wider than the twelve that crowded them.
+ */
+export const RAIL_STYLE = { "--sidebar-width": "14rem" } as CSSProperties;
 import {
   Link,
   Navigate,
@@ -158,8 +166,10 @@ function ControlSidebar({ projectId }: { projectId: string }) {
                       right: there is no room to read a number there. */}
                   {count > 0 ? (
                     // The count wears the highlight ink the doors wear, so a
-                    // waiting number reads as the pointer it is.
-                    <SidebarMenuBadge className="text-primary">
+                    // waiting number reads as the pointer it is — under the
+                    // hover and the active row too, where the component would
+                    // otherwise repaint it in the row's own ink.
+                    <SidebarMenuBadge className="text-primary peer-hover/menu-button:text-primary peer-data-active/menu-button:text-primary">
                       {count}
                     </SidebarMenuBadge>
                   ) : null}
@@ -370,9 +380,7 @@ export function ShellLayout() {
                 open={sidebarOpen}
                 onOpenChange={setSidebarOpen}
                 className="min-h-0 flex-1"
-                // Narrower than the component's default rail: five short
-                // titles and a count need nothing like sixteen rems.
-                style={{ "--sidebar-width": "12rem" } as CSSProperties}
+                style={RAIL_STYLE}
               >
                 <ControlSidebar projectId={projectId} />
                 {/* `min-w-0` lets the content shrink past its own min-content
