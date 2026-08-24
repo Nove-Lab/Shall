@@ -3,7 +3,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/EmptyState";
 import { useProject } from "@/project-context";
 import type { PanelMeta } from "../panels";
-import { CAPTION } from "../parts";
 import {
   healthLine,
   isEmptySpec,
@@ -15,9 +14,12 @@ import { useVitals } from "./use-vitals";
 
 /**
  * THE VITALS AT A GLANCE — the Overview card's body, the page's two sections
- * in miniature and at the same rank: Progress, four bars with their counts in
- * the order the page lists them, and Spec Health, one line saying where the
- * checks stand. The notes the page prints beside a ratio are left off here,
+ * in miniature and at the same rank: Progress, its title over the four bars
+ * with their counts in the order the page lists them, and Spec Health, its
+ * title and the one line saying where the checks stand on the same line —
+ * the summary IS that section's whole content, so it sits beside the title
+ * rather than pretending to be a list under one. Both titles wear the same
+ * weight, and more than the rows they head. The notes the page prints beside a ratio are left off here,
  * and the card's two doors (the title and "View all", which the Overview
  * draws around every card) lead to the page where they are.
  *
@@ -46,7 +48,7 @@ export function VitalsGlance({ panel }: { panel: PanelMeta }) {
   return (
     <div className="grid gap-3">
       <div className="grid gap-2">
-        <p className={CAPTION}>Progress</p>
+        <p className="text-sm font-medium">Progress</p>
         <ul className="grid gap-2">
           {progressRows(vitals).map((row) => (
             <li key={row.key} className="flex min-w-0 items-center gap-2">
@@ -65,9 +67,11 @@ export function VitalsGlance({ panel }: { panel: PanelMeta }) {
           ))}
         </ul>
       </div>
-      <div className="grid gap-2">
-        <p className={CAPTION}>Spec Health</p>
-        <p className="truncate text-sm">{healthLine(vitals)}</p>
+      <div className="flex min-w-0 items-center gap-2">
+        <span className="shrink-0 text-sm font-medium">Spec Health</span>
+        <span className="text-muted-foreground min-w-0 truncate text-sm">
+          {healthLine(vitals)}
+        </span>
       </div>
     </div>
   );
