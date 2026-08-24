@@ -1,9 +1,9 @@
-import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/EmptyState";
 import { useProject } from "@/project-context";
 import type { PanelMeta } from "../panels";
+import { CAPTION } from "../parts";
 import {
   healthLine,
   isEmptySpec,
@@ -14,11 +14,12 @@ import {
 import { useVitals } from "./use-vitals";
 
 /**
- * THE VITALS AT A GLANCE — the Overview card's body. Four bars with their
- * counts, in the order the page lists them, and one line about Spec Health;
- * the notes the page prints beside a ratio are left off here, and the card's
- * two doors (the title and "View all", which the Overview draws around every
- * card) lead to the page where they are.
+ * THE VITALS AT A GLANCE — the Overview card's body, the page's two sections
+ * in miniature and at the same rank: Progress, four bars with their counts in
+ * the order the page lists them, and Spec Health, one line saying where the
+ * checks stand. The notes the page prints beside a ratio are left off here,
+ * and the card's two doors (the title and "View all", which the Overview
+ * draws around every card) lead to the page where they are.
  *
  * IT IS THE SAME FETCH THE PAGE MAKES and not a cheaper summary procedure —
  * the same hook, even — so the card and the page cannot disagree about a
@@ -43,25 +44,28 @@ export function VitalsGlance({ panel }: { panel: PanelMeta }) {
     return <EmptyState message={panel.empty} />;
   }
   return (
-    <ul className="grid gap-2">
-      {progressRows(vitals).map((row) => (
-        <li key={row.key} className="flex min-w-0 items-center gap-2">
-          <span className="w-24 shrink-0 text-sm">{row.short}</span>
-          <Progress
-            value={percent(row.numerator, row.denominator)}
-            className="min-w-0 flex-1"
-          />
-          <span className="shrink-0 font-mono text-xs">
-            {ratioText(row.numerator, row.denominator)}
-          </span>
-        </li>
-      ))}
-      <li className="flex min-w-0 items-center gap-2">
-        <Badge variant="secondary">Spec Health</Badge>
-        <span className="min-w-0 flex-1 truncate text-sm">
-          {healthLine(vitals)}
-        </span>
-      </li>
-    </ul>
+    <div className="grid gap-3">
+      <div className="grid gap-2">
+        <p className={CAPTION}>Progress</p>
+        <ul className="grid gap-2">
+          {progressRows(vitals).map((row) => (
+            <li key={row.key} className="flex min-w-0 items-center gap-2">
+              <span className="w-24 shrink-0 text-sm">{row.short}</span>
+              <Progress
+                value={percent(row.numerator, row.denominator)}
+                className="min-w-0 flex-1"
+              />
+              <span className="shrink-0 font-mono text-xs">
+                {ratioText(row.numerator, row.denominator)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+      <div className="grid gap-2">
+        <p className={CAPTION}>Spec Health</p>
+        <p className="truncate text-sm">{healthLine(vitals)}</p>
+      </div>
+    </div>
   );
 }
