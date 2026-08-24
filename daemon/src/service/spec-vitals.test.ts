@@ -182,9 +182,10 @@ describe("what the vitals say", () => {
       [answer.progress.workItems.numerator, answer.progress.workItems.denominator],
       [0, 1],
     );
-    const [blocked] = answer.progress.workItems.blocked;
-    assert.equal(blocked?.id, "WI-0001");
-    assert.ok(blocked?.blockers.every((cause) => cause.why === "unread"));
+    assert.deepEqual(
+      answer.progress.workItems.open.map((held) => [held.id, held.workItemState]),
+      [["WI-0001", "blocked"]],
+    );
     // The scenario carries no criterion: the one violated row, and it sorts first.
     assert.deepEqual(
       answer.health.map((rule) => [rule.id, rule.nodes.length]),
@@ -208,7 +209,10 @@ describe("what the vitals say", () => {
       [["awaiting-review", "closure:AC-0001"]],
     );
     assert.equal(before.progress.requirements.numerator, 0);
-    assert.equal(before.progress.workItems.blocked.length, 0);
+    assert.deepEqual(
+      before.progress.workItems.open.map((held) => [held.id, held.workItemState]),
+      [["WI-0001", "ready"]],
+    );
 
     await acceptSpecClosure({ projectId: project.id, id: "AC-0001" });
     const after = await vitals(project.id);

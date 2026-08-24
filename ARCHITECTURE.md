@@ -397,8 +397,8 @@ WorkLog에 한해 `commits`, Finding에 한해 `blocking`·`relatedNodes`, 그�
   done / **모든** WorkItem, blocked 포함 — ready만 분모로 잡으면 상류가 막힐수록
   오르는 역설이 생긴다)과 그 드릴다운(unsat 캐리어와 미결 기준 수; open 기준의 사유
   셋 — 증거 없음 / 심사 대기(큐가 지금 카드를 자를 때만 `closure:<AC>` id, 미승인
-  증거면 null) / 사람이 열어 둠(rationale 전문); blocked WorkItem과 차단 원인 —
-  미완료 선행·답하는 파일 없는 id·green 아닌 상향 사슬 노드, 자신 포함), 그리고
+  증거면 null) / 사람이 열어 둠(rationale 전문); 미완 WorkItem의 평면 목록, 각자
+  ready·blocked 단어와 함께 — 다른 행들과 같은 폼이고 차단 원인은 싣지 않는다), 그리고
   Spec Health 7규칙(기준 없는 Requirement, 기준 없는 Scenario, UseCase를 수행하지
   않는 Actor, Scenario가 없는 UseCase, 책임에 닿지 않는 Goal — `PURSUED_BY → PERFORMS →
   DETAILS → DERIVES_RESPONSIBILITY` 사슬을 SR에서 거꾸로 한 번 flood하고 `REFINES`는

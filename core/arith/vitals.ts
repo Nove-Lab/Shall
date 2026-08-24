@@ -16,12 +16,7 @@ import {
 } from "./color.js";
 import { reviewGraph, type ReviewStatus } from "./review.js";
 import { criteriaOf } from "./satisfaction.js";
-import {
-  isClosableWorkItem,
-  prerequisitesOf,
-  upwardChainOf,
-  type ColorAt,
-} from "./work-item-state.js";
+import { isClosableWorkItem } from "./work-item-state.js";
 
 /**
  * THE VITALS: how far the specification has come, and what it still lacks. Two
@@ -126,26 +121,18 @@ export interface CompletionRow {
   kind: "work-item-completion";
   numerator: number;
   denominator: number;
-  /** The blocked ones, id order, each with what blocks it. */
-  blocked: BlockedWorkItem[];
+  /**
+   * Every work item not yet done, id order, each with the word it wears — the
+   * same flat list the other rows keep, so the four drill-downs read alike.
+   * The word is the review's own (`ready` or `blocked`, never `done` here);
+   * what blocks a blocked one is not repeated on this surface — the work
+   * item's own page and the board's ordering already answer that.
+   */
+  open: OpenWorkItem[];
 }
 
-export interface BlockedWorkItem extends Ref {
-  /** Never empty: blocked is exactly "a prerequisite unfinished or a chain node not green". */
-  blockers: Blocker[];
-}
-
-/**
- * One thing standing between a work item and ready: a prerequisite not done
- * (`unfinished`), a prerequisite or chain node no file answers to (`missing`,
- * with no name to give), or a node of the chain above it that is not green
- * (`unread` — the work item itself included, when it is the one unread).
- */
-export interface Blocker {
-  id: string;
-  shortName: string | null;
-  name: string | null;
-  why: "unfinished" | "unread" | "missing";
+export interface OpenWorkItem extends Ref {
+  workItemState: "blocked" | "ready";
 }
 
 export interface Progress {
@@ -428,54 +415,13 @@ function closureRowOf(
   return { kind: "ac-closure", numerator, denominator, open };
 }
 
-/** What stands between this work item and ready, each id once, prerequisites first then the chain. */
-function blockersOf(
-  workItem: SpecNode,
-  status: ReadonlyMap<string, ReviewStatus>,
-  colorAt: ColorAt,
-  context: ColorContext,
-): Blocker[] {
-  const blockers: Blocker[] = [];
-  const named = new Set<string>();
-  for (const id of prerequisitesOf(workItem.id, context)) {
-    const held = context.nodes.get(id);
-    if (held === undefined) {
-      blockers.push({ id, shortName: null, name: null, why: "missing" });
-      named.add(id);
-    } else if (status.get(id)?.workItemState !== "done") {
-      blockers.push({
-        id,
-        shortName: held.shortName,
-        name: held.name,
-        why: "unfinished",
-      });
-      named.add(id);
-    }
-  }
-  for (const id of upwardChainOf(workItem, context)) {
-    if (named.has(id) || colorAt(id) === "green") {
-      continue;
-    }
-    const held = context.nodes.get(id);
-    blockers.push(
-      held === undefined
-        ? { id, shortName: null, name: null, why: "missing" }
-        : { id, shortName: held.shortName, name: held.name, why: "unread" },
-    );
-    named.add(id);
-  }
-  return blockers;
-}
-
 function completionRowOf(
   nodes: readonly SpecNode[],
   status: ReadonlyMap<string, ReviewStatus>,
-  colorAt: ColorAt,
-  context: ColorContext,
 ): CompletionRow {
   let numerator = 0;
   let denominator = 0;
-  const blocked: BlockedWorkItem[] = [];
+  const open: OpenWorkItem[] = [];
   for (const node of nodes) {
     if (!isClosableWorkItem(node.type)) {
       continue;
@@ -487,14 +433,11 @@ function completionRowOf(
     denominator += 1;
     if (word === "done") {
       numerator += 1;
-    } else if (word === "blocked") {
-      blocked.push({
-        ...refOf(node),
-        blockers: blockersOf(node, status, colorAt, context),
-      });
+    } else {
+      open.push({ ...refOf(node), workItemState: word });
     }
   }
-  return { kind: "work-item-completion", numerator, denominator, blocked };
+  return { kind: "work-item-completion", numerator, denominator, open };
 }
 
 /**
@@ -503,7 +446,7 @@ function completionRowOf(
  * THE REVIEW IS RUN ONCE AND EVERYTHING READS IT — colours, closure marks,
  * the work items' words and the carriers' words all come out of that one pass,
  * the way the board reads them; what this module adds is counting, the three
- * reasons a criterion is open, what blocks a work item, and the seven rows.
+ * reasons a criterion is open, the work not yet done, and the seven rows.
  */
 export function vitalsOf(graph: SpecGraph, ledgers: Ledgers): Vitals {
   const context = colorContextOf(graph, ledgers);
@@ -512,8 +455,6 @@ export function vitalsOf(graph: SpecGraph, ledgers: Ledgers): Vitals {
   for (const held of review.statuses) {
     status.set(held.id, held);
   }
-  // Exactly the review's own memo read back: it seeded every id it coloured.
-  const colorAt: ColorAt = (id) => status.get(id)?.color ?? null;
   const nodes = [...graph.nodes].sort((a, b) => compare(a.id, b.id));
 
   const progress: Progress = {
@@ -532,7 +473,7 @@ export function vitalsOf(graph: SpecGraph, ledgers: Ledgers): Vitals {
       context,
     ),
     criteria: closureRowOf(nodes, status, context),
-    workItems: completionRowOf(nodes, status, colorAt, context),
+    workItems: completionRowOf(nodes, status),
   };
 
   const reaching = reachingResponsibilityIds(context);

@@ -570,7 +570,7 @@ describe("the work items row", () => {
   const other = node("WorkItem", "WI-0002");
   const third = node("WorkItem", "WI-0003");
 
-  test("counts every work item, blocked ones included, done over all", () => {
+  test("counts every work item, blocked ones included, and lists the rest with their words", () => {
     const nodes = [...SPINE_NODES, ...WORK_NODES, other, third];
     const edges = [
       ...SPINE,
@@ -586,7 +586,22 @@ describe("the work items row", () => {
     const vitals = vitalsFor(nodes, edges, ledgers);
     assert.equal(vitals.progress.workItems.numerator, 1);
     assert.equal(vitals.progress.workItems.denominator, 3);
-    assert.deepEqual(ids(vitals.progress.workItems.blocked), ["WI-0002"]);
+    // The done one is absent; the rest are one flat list, id order, each with
+    // the review's own word — WI-0002 waits on WI-0003, which is startable.
+    assert.deepEqual(vitals.progress.workItems.open, [
+      {
+        id: "WI-0002",
+        shortName: "WI-0002",
+        name: "WorkItem WI-0002",
+        workItemState: "blocked",
+      },
+      {
+        id: "WI-0003",
+        shortName: "WI-0003",
+        name: "WorkItem WI-0003",
+        workItemState: "ready",
+      },
+    ]);
   });
 
   test("a work item aiming at nothing counts, and can be done", () => {
@@ -624,10 +639,10 @@ describe("the work items row", () => {
     assert.equal(review.statuses.find((held) => held.id === "M-0001")?.color, "red");
     const vitals = vitalsFor(nodes, edges, ledgers);
     assert.equal(vitals.progress.workItems.numerator, 1);
-    assert.deepEqual(vitals.progress.workItems.blocked, []);
+    assert.deepEqual(vitals.progress.workItems.open, []);
   });
 
-  test("a blocked work item names its unfinished and missing prerequisites", () => {
+  test("a work item waiting on another, or under an unread chain, is open with the word blocked", () => {
     const nodes = [...SPINE_NODES, other];
     const edges = [
       ...SPINE,
@@ -636,63 +651,20 @@ describe("the work items row", () => {
       edge("WI-0002", "DEPENDS_ON", "WI-9999"),
     ];
     const vitals = vitalsFor(nodes, edges, booksOf({ approvals: settled(nodes, edges) }));
-    assert.deepEqual(vitals.progress.workItems.blocked, [
-      {
-        id: "WI-0002",
-        shortName: "WI-0002",
-        name: "WorkItem WI-0002",
-        blockers: [
-          { id: "WI-0001", shortName: "WI-0001", name: "WorkItem WI-0001", why: "unfinished" },
-          { id: "WI-9999", shortName: null, name: null, why: "missing" },
-        ],
-      },
-    ]);
-  });
-
-  test("a blocked work item names every node of its chain that is not green, itself included", () => {
+    assert.deepEqual(
+      vitals.progress.workItems.open.map((held) => [held.id, held.workItemState]),
+      [
+        ["WI-0001", "ready"],
+        ["WI-0002", "blocked"],
+      ],
+    );
     const unreadGoal = booksOf({
       approvals: settled(SPINE_NODES.filter((held) => held.id !== "G-0001")),
     });
     const byGoal = vitalsFor(SPINE_NODES, SPINE, unreadGoal);
-    assert.deepEqual(byGoal.progress.workItems.blocked, [
-      {
-        id: "WI-0001",
-        shortName: "WI-0001",
-        name: "WorkItem WI-0001",
-        blockers: [{ id: "G-0001", shortName: "G-0001", name: "Goal G-0001", why: "unread" }],
-      },
-    ]);
-    const unreadSelf = booksOf({
-      approvals: settled(SPINE_NODES.filter((held) => held.id !== "WI-0001")),
-    });
-    const bySelf = vitalsFor(SPINE_NODES, SPINE, unreadSelf);
     assert.deepEqual(
-      bySelf.progress.workItems.blocked[0]?.blockers,
-      [{ id: "WI-0001", shortName: "WI-0001", name: "WorkItem WI-0001", why: "unread" }],
-    );
-  });
-
-  test("every blocked row has something blocking it", () => {
-    const nodes = [...SPINE_NODES, other, third];
-    const edges = [
-      ...SPINE,
-      edge("M-0001", "ALLOCATES", "WI-0002"),
-      edge("M-0001", "ALLOCATES", "WI-0003"),
-      edge("WI-0002", "DEPENDS_ON", "WI-0001"),
-      edge("WI-0003", "TARGETS", "AC-8888"),
-    ];
-    const vitals = vitalsFor(
-      nodes,
-      edges,
-      booksOf({ approvals: settled(nodes.filter((held) => held.id !== "A-0001"), edges) }),
-    );
-    assert.deepEqual(ids(vitals.progress.workItems.blocked), ["WI-0001", "WI-0002", "WI-0003"]);
-    for (const row of vitals.progress.workItems.blocked) {
-      assert.ok(row.blockers.length > 0, row.id);
-    }
-    assert.deepEqual(
-      vitals.progress.workItems.blocked[2]?.blockers.map((held) => [held.id, held.why]),
-      [["A-0001", "unread"], ["AC-8888", "missing"]],
+      byGoal.progress.workItems.open.map((held) => [held.id, held.workItemState]),
+      [["WI-0001", "blocked"]],
     );
   });
 });
@@ -721,7 +693,9 @@ describe("one field, read twice", () => {
     assert.equal(vitals.progress.workItems.numerator, count((held) => held.workItemState === "done"));
     assert.equal(vitals.progress.requirements.numerator, count((held) => held.satisfaction === "sat"));
     assert.deepEqual(
-      ids(vitals.progress.workItems.blocked),
+      vitals.progress.workItems.open
+        .filter((held) => held.workItemState === "blocked")
+        .map((held) => held.id),
       review.statuses.filter((held) => held.workItemState === "blocked").map((held) => held.id),
     );
     assert.deepEqual(
@@ -895,7 +869,7 @@ describe("what the vitals are made of", () => {
         { kind: "scenario-satisfaction", type: "Scenario", numerator: 0, denominator: 0, unspecified: 0, unsat: [] },
         { kind: "requirement-satisfaction", type: "Requirement", numerator: 0, denominator: 0, unspecified: 0, unsat: [] },
         { kind: "ac-closure", numerator: 0, denominator: 0, open: [] },
-        { kind: "work-item-completion", numerator: 0, denominator: 0, blocked: [] },
+        { kind: "work-item-completion", numerator: 0, denominator: 0, open: [] },
       ],
     );
     assert.equal(vitals.health.length, 7);

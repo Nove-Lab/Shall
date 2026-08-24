@@ -87,13 +87,12 @@ export {
 export type { ClosureAt, Satisfaction } from "./satisfaction.js";
 export { vitalsOf } from "./vitals.js";
 export type {
-  BlockedWorkItem,
-  Blocker,
   ClosureRow,
   CompletionRow,
   HealthRule,
   HealthRuleId,
   OpenCriterion,
+  OpenWorkItem,
   Progress,
   SatisfactionRow,
   UnsatCarrier,

@@ -27,9 +27,7 @@ export type HealthRule = Vitals["health"][number];
 export type RuleId = HealthRule["id"];
 export type OpenCriterion = Vitals["progress"]["criteria"]["open"][number];
 export type OpenReason = OpenCriterion["reason"];
-export type BlockedWorkItem = Vitals["progress"]["workItems"]["blocked"][number];
-export type Blocker = BlockedWorkItem["blockers"][number];
-export type BlockerWhy = Blocker["why"];
+export type OpenWorkItem = Vitals["progress"]["workItems"]["open"][number];
 
 /** The four rows of Progress, in the specification's own order — the spec read downward. */
 export type ProgressKey = "scenarios" | "requirements" | "criteria" | "work-items";
@@ -97,8 +95,8 @@ export function progressRows(vitals: Vitals): ProgressRow[] {
       numerator: workItems.numerator,
       denominator: workItems.denominator,
       note:
-        workItems.blocked.length > 0
-          ? `${String(workItems.blocked.length)} blocked`
+        blockedCount(vitals) > 0
+          ? `${String(blockedCount(vitals))} blocked`
           : null,
     },
   ];
@@ -204,12 +202,12 @@ export function openByReason(
   return groups;
 }
 
-/** What a blocker is, in a word, beside its id. */
-export const BLOCKER_WORD: Record<BlockerWhy, string> = {
-  unfinished: "unfinished",
-  unread: "not yet green",
-  missing: "missing",
-};
+/** How many work items wear blocked — the ratio's note, counted off the open list. */
+export function blockedCount(vitals: Vitals): number {
+  return vitals.progress.workItems.open.filter(
+    (held) => held.workItemState === "blocked",
+  ).length;
+}
 
 /** Whether there is nothing to measure yet — core's own word for it. */
 export function isEmptySpec(vitals: Vitals): boolean {

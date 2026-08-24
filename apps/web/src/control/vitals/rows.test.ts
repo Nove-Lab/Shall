@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 import {
-  BLOCKER_WORD,
   OPEN_REASONS,
   OPEN_REASON_LABEL,
   RULE_HINT,
@@ -100,10 +99,13 @@ const VITALS: Vitals = {
       kind: "work-item-completion",
       numerator: 8,
       denominator: 14,
-      blocked: [
-        { id: "WI-0003", shortName: "WI-0003", name: "WI-0003", blockers: [] },
-        { id: "WI-0004", shortName: "WI-0004", name: "WI-0004", blockers: [] },
-        { id: "WI-0005", shortName: "WI-0005", name: "WI-0005", blockers: [] },
+      open: [
+        { id: "WI-0003", shortName: "WI-0003", name: "WI-0003", workItemState: "blocked" as const },
+        { id: "WI-0004", shortName: "WI-0004", name: "WI-0004", workItemState: "blocked" as const },
+        { id: "WI-0005", shortName: "WI-0005", name: "WI-0005", workItemState: "blocked" as const },
+        { id: "WI-0006", shortName: "WI-0006", name: "WI-0006", workItemState: "ready" as const },
+        { id: "WI-0007", shortName: "WI-0007", name: "WI-0007", workItemState: "ready" as const },
+        { id: "WI-0008", shortName: "WI-0008", name: "WI-0008", workItemState: "ready" as const },
       ],
     },
   },
@@ -214,7 +216,6 @@ describe("the words", () => {
     for (const reason of OPEN_REASONS) {
       assert.ok(OPEN_REASON_LABEL[reason].length > 0, reason);
     }
-    assert.deepEqual(Object.keys(BLOCKER_WORD).sort(), ["missing", "unfinished", "unread"]);
   });
 
   test("emptiness is core's word and not a count", () => {

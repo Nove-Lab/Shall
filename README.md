@@ -347,10 +347,9 @@ row opens: the unsat carriers with how many of their criteria are still open;
 the open criteria in three reasons — nothing claims it, something claims it and
 nobody has judged the list (with a link to its Review Queue card when that card
 exists; evidence not yet approved means no card yet), or a person left it open,
-with the rationale whole; and the blocked work items with what blocks each —
-an unfinished prerequisite, an id nothing answers to, or a node of the chain
-above it that is not green, itself included. Every node named is a link into
-the Spec plane.
+with the rationale whole; and the work items not yet done, one flat list in
+the same form as the rest, each wearing its own word — ready or blocked.
+Every node named is a link into the Spec plane.
 
 **Spec Health** is the residual layer: seven absences that are neither red
 nor yellow — not a grammar fault, which is the Fix Spec board's, and not a

@@ -79,7 +79,7 @@ Vitals
 - 행 펼침 (드릴다운):
   - Satisfaction 행 → Unsat 노드 명단 (ID·이름·미결 AC 수)
   - AC Closure → open AC 명단, **사유 3분해**: 증거 없음 / 심사 대기 (리뷰 큐 해당 카드 링크) / 반려 재개방 (rationale 인라인)
-  - WorkItem Completion → Blocked 명단 + 차단 원인 노드 링크
+  - WorkItem Completion → Blocked 명단 + 차단 원인 노드 링크 (2026-08-24 결정으로 미완 WorkItem 전체의 평면 목록 + 상태 단어로 바뀌었다 — §7 참조)
 - 모든 노드 참조는 spec plane 이동 링크.
 
 ### Spec Health 섹션
@@ -110,7 +110,7 @@ Vitals
 4. **Sat/Unsat의 집은 `ReviewStatus.satisfaction: "sat" | "unsat" | null`.** `core/arith/satisfaction.ts`의 롤업 하나를 `reviewGraph`가 캐리어마다 상태에 싣고(닫힘 verdict는 메모해 한 번만 해시), 배지(`spec.review`)와 Vitals 비율이 같은 필드를 읽는다. `NodeStatus`가 `ReviewStatus`를 펼치므로 `shall status --json` 행에도 실린다(`--json` 필드는 미동결). 캐리어 타입은 문법표에서 `HAS_CRITERION`의 출발 타입을 읽는다(철자 반복 없음).
 5. **페인트.** Sat은 Done·Closed와 같은 채운 에메랄드 pill(등록 green인 네모와 같은 색조, 다른 형태 — 단어만 다르다), Unsat은 디자인 시스템의 조용한 secondary 배지. 캔버스 카드·노드 패널의 ID 자리 셋 다 같은 슬롯 문법(`SecondAxisMark`의 셋째 arm).
 6. **open AC의 3분해.** `leftOpen !== null` → `left-open`(rationale 전문 인라인); 아니면 살아있는 claimant 0 → `no-evidence`; 아니면 `awaiting-review` — 이때 `bundleId`는 큐가 **지금** 카드를 자를 때만(`closureAsks`: AC green ∧ claimant 전부 green ∧ 판정 없음) `closure:<AC>`이고, 증거가 아직 yellow면 null이라 페이지는 링크 대신 "evidence awaiting approval"을 쓴다. 서로소·전수. 카드 id 철자는 `bundles.ts`에서 export한 `closureBundleIdOf` 하나.
-7. **Blocked 원인.** `prerequisitesOf` 중 done 아닌 것 `unfinished`, 답하는 파일 없는 id `missing`, `upwardChainOf` 중 green 아닌 것 `unread`(WI 자신 포함) — 기존 술어의 합성, 새 판정 없음. blocked 행은 늘 원인 하나 이상(ready = 선행 전부 완료 ∧ 사슬 all-green의 부정).
+7. **WorkItem 드릴다운은 미완 항목의 평면 목록.** 처음에는 §5대로 Blocked 명단 아래 차단 원인(미완료 선행 `unfinished`·답 없는 id `missing`·green 아닌 상향 사슬 `unread`)을 계층으로 실었으나, 화면을 본 뒤의 사용자 결정(2026-08-24)으로 다른 세 행과 같은 폼 — done이 아닌 WorkItem 전부를 id 순 한 목록으로, 각자 `workItemState`(`ready`/`blocked`) 단어와 함께 — 로 바꿨다. 와이어는 `CompletionRow.open: (Ref & { workItemState })[]`이고 "n blocked" 주석은 이 목록에서 센다. 차단 원인은 이 표면 어디에도 없다 — 되살리려면 `core/arith/vitals.ts`의 open 행에 원인 필드를 더하는 한 자리다(기존 술어 `prerequisitesOf`·`upwardChainOf`의 합성으로 충분하다).
 8. **빈 상태.** `empty = 살아있는 노드 0 ∧ 거부된 파일 0` — core가 계산한다. 전부 깨진 프로젝트는 빈 상태가 아니라 0/0 행을 보인다(Fix Spec 소관).
 9. **마지막 계산 시각은 클라이언트의 스탬프.** `spec.vitals` 응답에 시계를 싣지 않는다(데몬은 core의 답에 아무것도 더하지 않고, core에는 시계가 없다); 웹이 fetch가 resolve한 순간을 찍어 `Computed <locale>`로 보인다 — 매 ask마다 새로 계산하므로 그 순간이 곧 계산 순간이다.
 10. **바.** 디자인 시스템에 progress/meter가 없어 §0대로 멈춰 보고했고, 사용자 결정으로 shadcn 레지스트리(base-nova, Base UI Progress)의 `progress`를 `apps/web/src/components/ui/progress.tsx`로 설치해 썼다 — 같은 시스템의 요소를 들인 것이지 신설이 아니다. 기본 페인트(primary) 그대로, 셋째 초록 없음.

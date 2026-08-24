@@ -23,7 +23,6 @@ import { formatStamp } from "@/spec/spec-node";
 import type { PanelMeta } from "../panels";
 import { BOX, CAPTION, controlBase, countWord, specLink } from "../parts";
 import {
-  BLOCKER_WORD,
   OPEN_REASONS,
   OPEN_REASON_LABEL,
   RULE_HINT,
@@ -34,7 +33,6 @@ import {
   percent,
   progressRows,
   ratioText,
-  type BlockedWorkItem,
   type HealthRule,
   type OpenCriterion,
   type ProgressRow,
@@ -49,8 +47,8 @@ import { useVitals } from "./use-vitals";
  * PROGRESS IS FOUR RATIOS, each a bar with its two counts and, where the
  * denominator left something out, a note saying what. Under each row the
  * things behind the number fold open: the carriers not yet satisfied, the open
- * criteria with the three reasons a criterion is open, the blocked work items
- * with what blocks each. SPEC HEALTH IS SEVEN ROWS, ALWAYS SEVEN — a violated
+ * criteria with the three reasons a criterion is open, the work items not yet
+ * done, each with the word it wears. SPEC HEALTH IS SEVEN ROWS, ALWAYS SEVEN — a violated
  * rule names its nodes and the process that resolves it, a clean one says it
  * passed, so a clean page reads as checked and not as blank. Nothing here is a
  * fault and nothing here is red: a violated rule wears the design system's
@@ -286,16 +284,19 @@ function Drilldown({
     case "work-items":
       return (
         <Fold
-          label="Blocked work items"
-          count={vitals.progress.workItems.blocked.length}
+          label="Open work items"
+          count={vitals.progress.workItems.open.length}
         >
-          {vitals.progress.workItems.blocked.map((item) => (
-            <BlockedRow
+          {vitals.progress.workItems.open.map((item) => (
+            <NodeRow
               key={item.id}
-              item={item}
+              id={item.id}
+              name={item.name}
               projectId={projectId}
               backPath={backPath}
-            />
+            >
+              <WorkItemStateMark state={item.workItemState} />
+            </NodeRow>
           ))}
         </Fold>
       );
@@ -385,50 +386,6 @@ function OpenRow({
           <p className="text-sm whitespace-pre-wrap">{open.leftOpen.rationale}</p>
         </>
       )}
-    </div>
-  );
-}
-
-/**
- * A blocked work item and what blocks it — a prerequisite unfinished, a node
- * of the chain above it not yet green, or an id no file answers to, which has
- * nothing to open and is said as plain text.
- */
-function BlockedRow({
-  item,
-  projectId,
-  backPath,
-}: {
-  item: BlockedWorkItem;
-  projectId: string;
-  backPath: string;
-}) {
-  return (
-    <div className="grid gap-1">
-      <NodeRow
-        id={item.id}
-        name={item.name}
-        projectId={projectId}
-        backPath={backPath}
-      >
-        <WorkItemStateMark state="blocked" />
-      </NodeRow>
-      <div className="grid gap-1 pl-4">
-        <p className={CAPTION}>Blocked by</p>
-        {item.blockers.map((blocker) => (
-          <div key={blocker.id} className="flex flex-wrap items-center gap-2">
-            {blocker.why === "missing" || blocker.name === null ? (
-              <span className="font-mono text-xs break-all">{blocker.id}</span>
-            ) : (
-              <NodeLink id={blocker.id} projectId={projectId} backPath={backPath} />
-            )}
-            {blocker.name === null ? null : (
-              <span className="text-sm">{blocker.name}</span>
-            )}
-            <Badge variant="outline">{BLOCKER_WORD[blocker.why]}</Badge>
-          </div>
-        ))}
-      </div>
     </div>
   );
 }
