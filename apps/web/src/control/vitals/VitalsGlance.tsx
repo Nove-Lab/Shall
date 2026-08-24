@@ -68,7 +68,9 @@ export function VitalsGlance({ panel }: { panel: PanelMeta }) {
         </ul>
       </div>
       <div className="flex min-w-0 items-center gap-2">
-        <span className="shrink-0 text-sm font-medium">Spec Health</span>
+        {/* The title takes the rows' own label seat, so the summary beside it
+            starts on the same line the bars start on. */}
+        <span className="w-24 shrink-0 text-sm font-medium">Spec Health</span>
         <span className="text-muted-foreground min-w-0 truncate text-sm">
           {healthLine(vitals)}
         </span>
