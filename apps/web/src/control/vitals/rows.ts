@@ -84,8 +84,8 @@ export function progressRows(vitals: Vitals): ProgressRow[] {
     },
     {
       key: "criteria",
-      label: "AC Closure",
-      short: "AC",
+      label: "AcceptanceCriterion Closure",
+      short: "AcceptanceCriterion",
       numerator: criteria.numerator,
       denominator: criteria.denominator,
       note: null,

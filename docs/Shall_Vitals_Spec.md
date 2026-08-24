@@ -31,7 +31,7 @@ Progress의 만족률이 쓰는 롤업 판정을 spec plane 배지로도 노출�
 | AC Closure | closed AC / 전체 AC | — |
 | WorkItem Completion | Done WorkItem / **전체 WorkItem (Blocked 포함)** | "n blocked" |
 
-(WorkItem 행의 "n blocked" 주석은 2026-08-24 결정으로 뺐다 — §7 참조)
+(WorkItem 행의 "n blocked" 주석은 뺐고, "AC"는 카드·페이지 모두 풀네임 `AcceptanceCriterion`으로 쓴다 — 2026-08-24 결정, §7 참조)
 
 - 분모 규율: 만족률 분모에서 AC 0개 노드를 제외하되, 제외 수를 주석으로 반드시 표시한다 (숨기지 않는다). WorkItem 분모는 전체다 — Ready만 분모로 잡으면 상류가 막힐수록 진행률이 오르는 역설이 생긴다.
 - 행 순서 고정: Scenario → Requirement → AC → WorkItem (스펙의 하강 순서).
@@ -116,7 +116,7 @@ Vitals
 8. **빈 상태.** `empty = 살아있는 노드 0 ∧ 거부된 파일 0` — core가 계산한다. 전부 깨진 프로젝트는 빈 상태가 아니라 0/0 행을 보인다(Fix Spec 소관).
 9. **마지막 계산 시각은 클라이언트의 스탬프.** `spec.vitals` 응답에 시계를 싣지 않는다(데몬은 core의 답에 아무것도 더하지 않고, core에는 시계가 없다); 웹이 fetch가 resolve한 순간을 찍어 `Computed <locale>`로 보인다 — 매 ask마다 새로 계산하므로 그 순간이 곧 계산 순간이다.
 10. **바.** 디자인 시스템에 progress/meter가 없어 §0대로 멈춰 보고했고, 사용자 결정으로 shadcn 레지스트리(base-nova, Base UI Progress)의 `progress`를 `apps/web/src/components/ui/progress.tsx`로 설치해 썼다 — 같은 시스템의 요소를 들인 것이지 신설이 아니다. 기본 페인트(primary) 그대로, 셋째 초록 없음.
-11. **표면.** 패널 제목은 "Vitals"(`"Shall Vitals"`에서 개명); Overview 카드는 §4의 모양대로 같은 레벨의 두 그룹 — 제목 "Progress"(행보다 굵은 `font-medium`) 아래 바 넷 + n/m(주석 생략), 제목 "Spec Health"는 같은 무게의 제목 줄에 상태 요약 한 줄을 인라인으로(그 절의 내용 전부가 그 한 줄이라 제목 아래가 아니라 곁에; 처음엔 다섯째 행의 배지 → 캡션 그룹 → 이 모양, 전부 2026-08-24 결정) — 이고, 문은 형제 카드와 같은 둘(제목·View all); 페이지는 `PanelDetail`의 넷째 arm, 세로 한 흐름; 드릴다운은 하우스 `Collapsible`; 위반 표시는 secondary 배지의 노드 수·outline "passed"로 red 계열 없음; 7행 전수·위반 상단(정렬은 core); 힌트는 웹의 `Record<RuleId, string>`(실제 커맨드명 `/shall:specify`·`/shall:plan`). 사이드바 뱃지 없음(Activity Feed 선례). 카드와 페이지는 같은 훅으로 같은 프로시저 하나를 읽는다(요약 프로시저 없음).
+11. **표면.** 패널 제목은 "Vitals"(`"Shall Vitals"`에서 개명); Overview 카드는 §4의 모양대로 같은 레벨의 두 그룹 — 제목 "Progress"(행보다 굵은 `font-medium`) 아래 바 넷 + n/m(주석 생략), 제목 "Spec Health"는 같은 무게의 제목 줄에 상태 요약 한 줄을 인라인으로(그 절의 내용 전부가 그 한 줄이라 제목 아래가 아니라 곁에; 처음엔 다섯째 행의 배지 → 캡션 그룹 → 이 모양, 전부 2026-08-24 결정) — 이고, 카드의 네 행은 제목 아래로 들여 쓰며 요약은 막대의 왼쪽 선에 맞춘다; 표시명 "AC Closure"는 카드·페이지 모두 풀네임 "AcceptanceCriterion Closure"로(축약 라벨도 "AcceptanceCriterion") — 문은 형제 카드와 같은 둘(제목·View all); 페이지는 `PanelDetail`의 넷째 arm, 세로 한 흐름; 드릴다운은 하우스 `Collapsible`; 위반 표시는 secondary 배지의 노드 수·outline "passed"로 red 계열 없음; 7행 전수·위반 상단(정렬은 core); 힌트는 웹의 `Record<RuleId, string>`(실제 커맨드명 `/shall:specify`·`/shall:plan`). 사이드바 뱃지 없음(Activity Feed 선례). 카드와 페이지는 같은 훅으로 같은 프로시저 하나를 읽는다(요약 프로시저 없음).
 12. **daemon.** `service/spec-vitals.ts`의 `vitalsOver`/`vitals`, 라우터 `spec.vitals({projectId})` — projectId 가족, 읽기 전용, 장부가 안 읽히면 CASUALTY `vitals` 문장으로 통째 거부. CLI `shall vitals`는 이번 라운드에 넣지 않았다(스펙이 control plane만 말한다; 반전 레시피는 `docs/OPEN_QUESTIONS.md`).
 13. **플러그인 산문 무변경.** 새 패널은 플러그인 산문을 얻지 않는다는 선례대로. help 스킬이 `satisfaction`을 읽을지는 OPEN_QUESTIONS에.
 14. **종합 점수·등급 없음**, 수치 길이 규칙 없음, 본문 해석 없음 — 본문만 바꾼 두 그래프의 vitals가 같다는 테스트로 고정.

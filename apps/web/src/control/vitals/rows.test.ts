@@ -120,7 +120,7 @@ describe("progressRows", () => {
       [
         ["scenarios", "Scenario Satisfaction", "Scenario"],
         ["requirements", "Requirement Satisfaction", "Requirement"],
-        ["criteria", "AC Closure", "AC"],
+        ["criteria", "AcceptanceCriterion Closure", "AcceptanceCriterion"],
         ["work-items", "WorkItem Completion", "WorkItem"],
       ],
     );

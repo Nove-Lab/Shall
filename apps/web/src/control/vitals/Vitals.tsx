@@ -112,7 +112,7 @@ export function Vitals({ panel }: { panel: PanelMeta }) {
           {progressRows(vitals).map((row) => (
             <div key={row.key} className={BOX}>
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                <span className="w-48 shrink-0 text-sm font-medium">
+                <span className="w-56 shrink-0 text-sm font-medium">
                   {row.label}
                 </span>
                 <Progress

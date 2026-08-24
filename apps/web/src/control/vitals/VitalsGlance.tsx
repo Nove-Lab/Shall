@@ -49,10 +49,12 @@ export function VitalsGlance({ panel }: { panel: PanelMeta }) {
     <div className="grid gap-3">
       <div className="grid gap-2">
         <p className="text-sm font-medium">Progress</p>
-        <ul className="grid gap-2">
+        {/* The rows step in under their title, so the two titles read as the
+            levels they are and the rows as their contents. */}
+        <ul className="grid gap-2 pl-4">
           {progressRows(vitals).map((row) => (
             <li key={row.key} className="flex min-w-0 items-center gap-2">
-              <span className="w-24 shrink-0 text-sm">{row.short}</span>
+              <span className="w-36 shrink-0 text-sm">{row.short}</span>
               <Progress
                 value={percent(row.numerator, row.denominator)}
                 className="min-w-0 flex-1"
@@ -68,9 +70,9 @@ export function VitalsGlance({ panel }: { panel: PanelMeta }) {
         </ul>
       </div>
       <div className="flex min-w-0 items-center gap-2">
-        {/* The title takes the rows' own label seat, so the summary beside it
-            starts on the same line the bars start on. */}
-        <span className="w-24 shrink-0 text-sm font-medium">Spec Health</span>
+        {/* The title's seat is the rows' indent plus their label seat, so the
+            summary beside it starts on the same line the bars start on. */}
+        <span className="w-40 shrink-0 text-sm font-medium">Spec Health</span>
         <span className="text-muted-foreground min-w-0 truncate text-sm">
           {healthLine(vitals)}
         </span>
