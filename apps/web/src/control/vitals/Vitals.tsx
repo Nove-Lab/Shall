@@ -119,13 +119,18 @@ export function Vitals({ panel }: { panel: PanelMeta }) {
                   value={percent(row.numerator, row.denominator)}
                   className="min-w-32 flex-1"
                 />
-                <span className="shrink-0 font-mono text-sm">
+                {/* A fixed seat for the counts, right-aligned — the mirror of
+                    the fixed label seat on the left, so all four bars end at
+                    one point whatever width their numbers take. */}
+                <span className="min-w-16 shrink-0 text-right font-mono text-sm">
                   {ratioText(row.numerator, row.denominator)}
                 </span>
-                {row.note === null ? null : (
-                  <span className={CAPTION}>{row.note}</span>
-                )}
               </div>
+              {/* The note leaves the bar's line so it cannot push the bar's
+                  end around; what the denominator left out reads underneath. */}
+              {row.note === null ? null : (
+                <p className={CAPTION}>{row.note}</p>
+              )}
               <Drilldown
                 row={row}
                 vitals={vitals}

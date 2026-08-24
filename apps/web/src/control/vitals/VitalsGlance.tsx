@@ -55,7 +55,10 @@ export function VitalsGlance({ panel }: { panel: PanelMeta }) {
                 value={percent(row.numerator, row.denominator)}
                 className="min-w-0 flex-1"
               />
-              <span className="shrink-0 font-mono text-xs">
+              {/* A fixed seat for the counts, right-aligned, so every bar
+                  ends at the same point instead of where its number happens
+                  to begin — the mirror of the fixed label seat on the left. */}
+              <span className="min-w-12 shrink-0 text-right font-mono text-xs">
                 {ratioText(row.numerator, row.denominator)}
               </span>
             </li>
