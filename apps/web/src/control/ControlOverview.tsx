@@ -29,10 +29,13 @@ import { useProject } from "@/project-context";
 
 /**
  * How many rows the overview card shows before it says "and N more". A card is
- * a glance and not the panel: three lines say whether there is work and what
- * kind, and the panel behind "View all" says the rest.
+ * a glance and not the panel: enough lines to say whether there is work and
+ * what kind, and the panel behind "View all" says the rest. Five is the count
+ * that fills the height the four equal cards share — the Vitals card's two
+ * fixed sections set it — so a list runs to the bottom of its card before it
+ * starts counting what it left out.
  */
-const GLANCE = 3;
+const GLANCE = 5;
 
 /**
  * One row of a glance, whatever list it came from — a badge, a door, a note.
@@ -267,7 +270,10 @@ export function ControlOverview() {
           inner one silently loses. So the card keeps two doors of its own, the
           title at the top and "View all" at the foot, and everything between
           them is the panel's own rows with their own destinations. */}
-      <div className="grid gap-4 lg:grid-cols-2">
+      {/* `auto-rows-fr` makes the two grid rows share one height, so all four
+          cards stand equal and a shorter list stretches to the same bottom
+          edge instead of leaving the row ragged. */}
+      <div className="grid gap-4 lg:auto-rows-fr lg:grid-cols-2">
         {PANELS.map((panel) => (
           <Card key={panel.id} className="h-full">
             <CardHeader>
