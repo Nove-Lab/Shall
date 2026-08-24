@@ -9,7 +9,7 @@ import { countWord } from "../parts";
  * `activity-feed/rows.ts` are the same shape next door.
  *
  * NOTHING HERE COMPUTES A VERDICT OF ITS OWN. Every count, every reason a
- * criterion is open, every cause a work item is blocked by, and the order of
+ * criterion is open, every open work item's word, and the order of
  * the seven rules arrive from `core/arith/vitals.ts` through the daemon; this
  * file turns them into words, picks the fixed order the specification gives
  * the four rows, and holds the labels and the one-line hints as `Record`s over
@@ -50,10 +50,12 @@ export interface ProgressRow {
  * wire's — the wire's `progress` is an object, and an object's key order is
  * not a contract — so it is spelled here once and both surfaces read it.
  *
- * THE NOTE SAYS WHAT THE DENOMINATOR LEFT OUT. A satisfaction ratio is over
- * the carriers that demand a criterion, and the ones that demand none are
- * said beside it rather than hidden; a work item ratio is over every work
- * item, blocked ones included, and how many are blocked is said beside it.
+ * THE NOTE SAYS WHAT THE DENOMINATOR LEFT OUT, and only that. A satisfaction
+ * ratio is over the carriers that demand a criterion, and the ones that demand
+ * none are said beside it rather than hidden. The work item ratio leaves
+ * nothing out — every work item is in it, blocked ones included — so its row
+ * carries no note: how many are blocked is the drill-down's answer, one word
+ * per row.
  */
 export function progressRows(vitals: Vitals): ProgressRow[] {
   const { scenarios, requirements, criteria, workItems } = vitals.progress;
@@ -94,10 +96,7 @@ export function progressRows(vitals: Vitals): ProgressRow[] {
       short: "WorkItem",
       numerator: workItems.numerator,
       denominator: workItems.denominator,
-      note:
-        blockedCount(vitals) > 0
-          ? `${String(blockedCount(vitals))} blocked`
-          : null,
+      note: null,
     },
   ];
 }
@@ -200,13 +199,6 @@ export function openByReason(
     groups[open.reason].push(open);
   }
   return groups;
-}
-
-/** How many work items wear blocked — the ratio's note, counted off the open list. */
-export function blockedCount(vitals: Vitals): number {
-  return vitals.progress.workItems.open.filter(
-    (held) => held.workItemState === "blocked",
-  ).length;
 }
 
 /** Whether there is nothing to measure yet — core's own word for it. */

@@ -342,7 +342,7 @@ demands none stays out of the ratio and is said beside it, "n unspecified",
 never hidden. AC closure counts the criteria wearing **Closed** over every
 criterion. Work item completion counts the work items wearing **Done** over
 every work item, blocked ones included — a ratio over the ready ones alone
-would rise as the work above them stalled — with "n blocked" beside it. Each
+would rise as the work above them stalled. Each
 row opens: the unsat carriers with how many of their criteria are still open;
 the open criteria in three reasons — nothing claims it, something claims it and
 nobody has judged the list (with a link to its Review Queue card when that card

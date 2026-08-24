@@ -31,6 +31,8 @@ Progress의 만족률이 쓰는 롤업 판정을 spec plane 배지로도 노출�
 | AC Closure | closed AC / 전체 AC | — |
 | WorkItem Completion | Done WorkItem / **전체 WorkItem (Blocked 포함)** | "n blocked" |
 
+(WorkItem 행의 "n blocked" 주석은 2026-08-24 결정으로 뺐다 — §7 참조)
+
 - 분모 규율: 만족률 분모에서 AC 0개 노드를 제외하되, 제외 수를 주석으로 반드시 표시한다 (숨기지 않는다). WorkItem 분모는 전체다 — Ready만 분모로 잡으면 상류가 막힐수록 진행률이 오르는 역설이 생긴다.
 - 행 순서 고정: Scenario → Requirement → AC → WorkItem (스펙의 하강 순서).
 
@@ -110,7 +112,7 @@ Vitals
 4. **Sat/Unsat의 집은 `ReviewStatus.satisfaction: "sat" | "unsat" | null`.** `core/arith/satisfaction.ts`의 롤업 하나를 `reviewGraph`가 캐리어마다 상태에 싣고(닫힘 verdict는 메모해 한 번만 해시), 배지(`spec.review`)와 Vitals 비율이 같은 필드를 읽는다. `NodeStatus`가 `ReviewStatus`를 펼치므로 `shall status --json` 행에도 실린다(`--json` 필드는 미동결). 캐리어 타입은 문법표에서 `HAS_CRITERION`의 출발 타입을 읽는다(철자 반복 없음).
 5. **페인트.** Sat은 Done·Closed와 같은 채운 에메랄드 pill(등록 green인 네모와 같은 색조, 다른 형태 — 단어만 다르다), Unsat은 디자인 시스템의 조용한 secondary 배지. 캔버스 카드·노드 패널의 ID 자리 셋 다 같은 슬롯 문법(`SecondAxisMark`의 셋째 arm).
 6. **open AC의 3분해.** `leftOpen !== null` → `left-open`(rationale 전문 인라인); 아니면 살아있는 claimant 0 → `no-evidence`; 아니면 `awaiting-review` — 이때 `bundleId`는 큐가 **지금** 카드를 자를 때만(`closureAsks`: AC green ∧ claimant 전부 green ∧ 판정 없음) `closure:<AC>`이고, 증거가 아직 yellow면 null이라 페이지는 링크 대신 "evidence awaiting approval"을 쓴다. 서로소·전수. 카드 id 철자는 `bundles.ts`에서 export한 `closureBundleIdOf` 하나.
-7. **WorkItem 드릴다운은 미완 항목의 평면 목록.** 처음에는 §5대로 Blocked 명단 아래 차단 원인(미완료 선행 `unfinished`·답 없는 id `missing`·green 아닌 상향 사슬 `unread`)을 계층으로 실었으나, 화면을 본 뒤의 사용자 결정(2026-08-24)으로 다른 세 행과 같은 폼 — done이 아닌 WorkItem 전부를 id 순 한 목록으로, 각자 `workItemState`(`ready`/`blocked`) 단어와 함께 — 로 바꿨다. 와이어는 `CompletionRow.open: (Ref & { workItemState })[]`이고 "n blocked" 주석은 이 목록에서 센다. 차단 원인은 이 표면 어디에도 없다 — 되살리려면 `core/arith/vitals.ts`의 open 행에 원인 필드를 더하는 한 자리다(기존 술어 `prerequisitesOf`·`upwardChainOf`의 합성으로 충분하다).
+7. **WorkItem 드릴다운은 미완 항목의 평면 목록.** 처음에는 §5대로 Blocked 명단 아래 차단 원인(미완료 선행 `unfinished`·답 없는 id `missing`·green 아닌 상향 사슬 `unread`)을 계층으로 실었으나, 화면을 본 뒤의 사용자 결정(2026-08-24)으로 다른 세 행과 같은 폼 — done이 아닌 WorkItem 전부를 id 순 한 목록으로, 각자 `workItemState`(`ready`/`blocked`) 단어와 함께 — 로 바꿨다. 와이어는 `CompletionRow.open: (Ref & { workItemState })[]`이다. 같은 결정의 연장으로 §2의 "n blocked" 주석도 바 옆에서 뺐다 — 이 행의 분모는 아무것도 빼지 않으므로(전체 WorkItem) 곁에 말할 제외분이 없고, blocked 몇인지는 드릴다운의 행마다 붙은 단어가 답한다; 위 세 행과 같은 폼이 된다. 차단 원인은 이 표면 어디에도 없다 — 되살리려면 `core/arith/vitals.ts`의 open 행에 원인 필드를 더하는 한 자리다(기존 술어 `prerequisitesOf`·`upwardChainOf`의 합성으로 충분하다).
 8. **빈 상태.** `empty = 살아있는 노드 0 ∧ 거부된 파일 0` — core가 계산한다. 전부 깨진 프로젝트는 빈 상태가 아니라 0/0 행을 보인다(Fix Spec 소관).
 9. **마지막 계산 시각은 클라이언트의 스탬프.** `spec.vitals` 응답에 시계를 싣지 않는다(데몬은 core의 답에 아무것도 더하지 않고, core에는 시계가 없다); 웹이 fetch가 resolve한 순간을 찍어 `Computed <locale>`로 보인다 — 매 ask마다 새로 계산하므로 그 순간이 곧 계산 순간이다.
 10. **바.** 디자인 시스템에 progress/meter가 없어 §0대로 멈춰 보고했고, 사용자 결정으로 shadcn 레지스트리(base-nova, Base UI Progress)의 `progress`를 `apps/web/src/components/ui/progress.tsx`로 설치해 썼다 — 같은 시스템의 요소를 들인 것이지 신설이 아니다. 기본 페인트(primary) 그대로, 셋째 초록 없음.

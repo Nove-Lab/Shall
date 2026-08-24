@@ -143,7 +143,7 @@ describe("progressRows", () => {
     const rows = progressRows(VITALS);
     assert.deepEqual(
       rows.map((row) => row.note),
-      ["2 unspecified", null, null, "3 blocked"],
+      ["2 unspecified", null, null, null],
     );
   });
 });
