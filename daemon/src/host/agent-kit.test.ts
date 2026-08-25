@@ -10,18 +10,23 @@ import {
 import os from "node:os";
 import path from "node:path";
 import { describe, test } from "node:test";
+import { SHALL_VERSION } from "@shall/core/version";
 import { KIT_MARKER, writeAgentKit } from "./agent-kit.js";
 
 /**
  * The kit Shall writes into a project's `.claude` — the plugin said in the
  * project-command dialect.
  *
- * WHAT IS PINNED IS THE DIALECT AND THE OWNERSHIP. The commands arrive under
- * the `shall.` names with the colon namespace translated away, the skills
- * arrive whole and callable by their bare names, the compile hook is wired
- * into the settings file with the merge restraint the deny rules taught, and
- * nothing without the marker is ever Shall's to remove.
+ * WHAT IS PINNED IS THE DIALECT, THE OWNERSHIP AND THE VERSION. The commands
+ * arrive under the `shall.` names with the colon namespace translated away, the
+ * skills arrive whole and callable by their bare names, the compile hook is
+ * wired into the settings file with the merge restraint the deny rules taught,
+ * nothing without the marker is ever Shall's to remove, and every marked file
+ * says which Shall wrote it on the line below the marker.
  */
+
+/** What the version line reads, built from the one semver rather than typed. */
+const KIT_VERSION_LINE = `<!-- Version: ${SHALL_VERSION} -->`;
 
 async function newProject(): Promise<string> {
   return mkdtemp(path.join(os.tmpdir(), "shall-agent-kit-"));
@@ -31,9 +36,28 @@ function at(project: string, relative: string): string {
   return path.join(project, ...relative.split("/"));
 }
 
-/** A generated file of an older kit, marker and all. */
+/**
+ * A generated file of an older kit, marker and all — and DELIBERATELY WITHOUT A
+ * VERSION LINE, because the kits already on people's disks have none. Ownership
+ * is the marker alone; a removal that also wanted a version would leave every
+ * kit written before this release behind for ever.
+ */
 function marked(body: string): string {
   return `${KIT_MARKER}\n\n${body}\n`;
+}
+
+/** Every `.md` under a folder, as absolute paths. */
+async function markdownUnder(folder: string): Promise<string[]> {
+  const found: string[] = [];
+  for (const entry of await readdir(folder, { withFileTypes: true })) {
+    const full = path.join(folder, entry.name);
+    if (entry.isDirectory()) {
+      found.push(...(await markdownUnder(full)));
+    } else if (entry.name.endsWith(".md")) {
+      found.push(full);
+    }
+  }
+  return found;
 }
 
 async function exists(target: string): Promise<boolean> {
@@ -52,9 +76,10 @@ describe("the agent kit", () => {
       at(project, ".claude/commands/shall.specify.md"),
       "utf8",
     );
-    // The frontmatter stays first; the marker sits under it.
+    // The frontmatter stays first; the marker sits under it, and the version
+    // that wrote the file directly under the marker.
     assert.ok(command.startsWith("---\n"), command.slice(0, 20));
-    assert.ok(command.includes(KIT_MARKER));
+    assert.ok(command.includes(`${KIT_MARKER}\n${KIT_VERSION_LINE}\n`));
     assert.ok(!command.includes("/shall:"), "colon namespace survived");
     assert.ok(!command.includes("${CLAUDE_PLUGIN_ROOT}"), "plugin root survived");
 
@@ -64,7 +89,7 @@ describe("the agent kit", () => {
     );
     assert.ok(skill.startsWith("---\n"));
     assert.match(skill, /name: shall-specify/);
-    assert.ok(skill.includes(KIT_MARKER));
+    assert.ok(skill.includes(`${KIT_MARKER}\n${KIT_VERSION_LINE}\n`));
     assert.ok(!skill.includes("shall:shall-"), "namespaced skill specifier survived");
 
     // A reference page rides along with its skill.
@@ -72,7 +97,7 @@ describe("the agent kit", () => {
       at(project, ".claude/skills/shall-work/references/develop.md"),
       "utf8",
     );
-    assert.ok(reference.includes(KIT_MARKER));
+    assert.ok(reference.includes(`${KIT_MARKER}\n${KIT_VERSION_LINE}\n`));
 
     const hook = await readFile(
       at(project, ".claude/hooks/shall/check-spec.mjs"),
@@ -87,6 +112,48 @@ describe("the agent kit", () => {
       settings.hooks.PostToolUse[0]?.hooks[0]?.command ?? "",
       /\$CLAUDE_PROJECT_DIR\/\.claude\/hooks\/shall\/check-spec\.mjs/,
     );
+  });
+
+  test("every generated page says which Shall wrote it, on the line under the marker", async () => {
+    const project = await newProject();
+    await writeAgentKit(project);
+
+    const pages = await markdownUnder(at(project, ".claude"));
+    assert.ok(pages.length > 0, "the kit wrote no pages at all");
+    for (const page of pages) {
+      const text = await readFile(page, "utf8");
+      assert.ok(
+        text.includes(`${KIT_MARKER}\n${KIT_VERSION_LINE}\n`),
+        `${page} does not carry the version under the marker`,
+      );
+      // Once, not once per section: a file with two stamps has been written
+      // over a file that was already Shall's.
+      assert.equal(text.split(KIT_VERSION_LINE).length - 1, 1, page);
+    }
+
+    // The hook is a script and takes no HTML comment, so it carries neither.
+    const hook = await readFile(
+      at(project, ".claude/hooks/shall/check-spec.mjs"),
+      "utf8",
+    );
+    assert.ok(!hook.includes(KIT_MARKER));
+    assert.ok(!hook.includes(KIT_VERSION_LINE));
+  });
+
+  test("a kit an older Shall wrote is regenerated when the version moves", async () => {
+    const project = await newProject();
+    await writeAgentKit(project);
+    const target = at(project, ".claude/commands/shall.specify.md");
+    const current = await readFile(target, "utf8");
+    // Yesterday's release: the same prose, stamped with the number that wrote
+    // it. Nothing else here has to change for the kit to be out of date.
+    await writeFile(
+      target,
+      current.replace(KIT_VERSION_LINE, "<!-- Version: 0.0.1 -->"),
+    );
+
+    await writeAgentKit(project);
+    assert.equal(await readFile(target, "utf8"), current);
   });
 
   test("a second write changes nothing that already stands", async () => {

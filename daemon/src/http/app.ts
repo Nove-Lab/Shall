@@ -1,8 +1,5 @@
-import { existsSync } from "node:fs";
-import { readFile } from "node:fs/promises";
-import path from "node:path";
 import { trpcServer } from "@hono/trpc-server";
-import { serveStatic } from "@hono/node-server/serve-static";
+import { SHALL_VERSION } from "@shall/core/version";
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import {
@@ -12,15 +9,24 @@ import {
 import { isRefusal } from "../service/errors.js";
 import { subscribe } from "../service/spec-events.js";
 import { appRouter, SERVED_PROCEDURES } from "./router.js";
+import { mountSpa } from "./spa.js";
 
 export function createApp(bindHost: string, spaRoot?: string): Hono {
   const app = new Hono();
 
-  // `procedures` is the build marker: the CLI reads it before adopting a
-  // running daemon, so one left over from an older install is restarted
-  // instead of answering every call with a sentence about a missing path.
+  // `version` and `procedures` are the two build markers, and the CLI reads
+  // both before adopting a running daemon: the version catches an install that
+  // moved at all, in either direction, and the procedure list still catches a
+  // daemon whose calls this client does not have — so one left over from an
+  // older install is restarted instead of answering every call with a sentence
+  // about a missing path.
   app.get("/health", (context) =>
-    context.json({ ok: true, host: bindHost, procedures: SERVED_PROCEDURES }),
+    context.json({
+      ok: true,
+      host: bindHost,
+      version: SHALL_VERSION,
+      procedures: SERVED_PROCEDURES,
+    }),
   );
 
   // TODO: a local token — browse and mkdir answer without one for now.
@@ -162,13 +168,10 @@ export function createApp(bindHost: string, spaRoot?: string): Hono {
     }),
   );
 
-  if (spaRoot && existsSync(path.join(spaRoot, "index.html"))) {
-    app.use("*", serveStatic({ root: spaRoot }));
-    app.get("*", async (context) => {
-      const html = await readFile(path.join(spaRoot, "index.html"), "utf8");
-      return context.html(html);
-    });
-  }
+  // Last, and after everything this daemon claims for itself: the catch-all
+  // that hands out the web app belongs to `spa.ts`, which knows whether the
+  // pages come off disk or out of the binary.
+  mountSpa(app, spaRoot);
 
   app.onError((error, context) => {
     console.error(error);

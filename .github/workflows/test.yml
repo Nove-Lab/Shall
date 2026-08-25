@@ -1,0 +1,39 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      # Bun installs the workspaces and drives the scripts, but every suite is
+      # `node --test` under tsx and every script in scripts/ is a .mjs, so node
+      # is not optional here. The version is the one package.json requires.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: bun install --frozen-lockfile
+
+      - run: bun run typecheck
+
+      # `bun run test` also builds core and lints the plugin prose; both are
+      # part of green.
+      #
+      # THE SPEC-WATCHER SUITES STAY IN. They are flaky on macOS, where fsevents
+      # coalesces and delays what the tests are waiting for — and this job runs
+      # on linux, where inotify reports each change once and on time. Skipping
+      # them here would give up the only platform that can hold them.
+      - run: bun run test

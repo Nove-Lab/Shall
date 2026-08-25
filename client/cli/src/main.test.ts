@@ -9,6 +9,7 @@ import path from "node:path";
 import { after, describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import { SHALL_VERSION } from "@shall/core/version";
 
 /**
  * The client as a person runs it: its own process, a `~` of its own, and a
@@ -36,6 +37,11 @@ import { promisify } from "node:util";
  * this machine cannot be talked out of. A REFUSAL THAT IS NOT AN `Error`: every
  * throw this client can meet is one, and the other half of that ternary is
  * there so a future one cannot arrive as `[object Object]`.
+ *
+ * `shall upgrade` IS HERE ONLY AS THE FORK. A run under this suite is a checkout
+ * and so meets the refusal, which is the branch that lives in this file; the
+ * download, the checksum and the swap are `upgrade.test.ts`'s, where the file
+ * being replaced belongs to the test rather than being the runtime it runs on.
  */
 
 const asked = promisify(execFile);
@@ -76,21 +82,45 @@ const EVERY_INTERFACE = "0.0.0.0";
  * that is not JSON — each of which `main.ts` reads as silence.
  */
 type Health =
-  | { host: string; procedures?: readonly unknown[] }
+  | { host: string; version?: string; procedures?: readonly unknown[] }
   | "unreadable"
   | "hostless"
   | "gibberish";
 
-/** A daemon of this build, listening where the app is this machine's. */
-const READY: Health = { host: LOOPBACK, procedures: SERVED };
+/**
+ * A daemon of this build, listening where the app is this machine's.
+ *
+ * THE VERSION IS IMPORTED WHERE THE PROCEDURES ARE TYPED OUT, and the two are
+ * different claims. The manifest is spelled a second time so a new call site
+ * that nobody added to it fails here; the semver is the ONE number, so a test
+ * carrying its own copy would only ever say that somebody bumped one of them
+ * and not the other — which is the release, not a bug.
+ */
+const READY: Health = {
+  host: LOOPBACK,
+  version: SHALL_VERSION,
+  procedures: SERVED,
+};
 
-/** A daemon missing one procedure this client calls: older than this CLI. */
+/**
+ * A daemon of this version missing one procedure this client calls — a build
+ * from a working tree where the semver never moved, which is why the manifest
+ * still has to be asked after the number matches.
+ */
 const OLD: Health = {
   host: LOOPBACK,
+  version: SHALL_VERSION,
   procedures: SERVED.filter((name) => name !== "spec.log"),
 };
 
-/** A daemon from before the marker existed, which cannot say what it serves. */
+/** A daemon of some other release: behind this CLI, and ahead of it. */
+const BEHIND: Health = { host: LOOPBACK, version: "0.0.1", procedures: SERVED };
+const AHEAD: Health = { host: LOOPBACK, version: "99.0.0", procedures: SERVED };
+
+/**
+ * A daemon from before the marker existed, which can say neither its version
+ * nor what it serves.
+ */
 const SILENT: Health = { host: LOOPBACK };
 
 /**
@@ -101,10 +131,20 @@ const SILENT: Health = { host: LOOPBACK };
  */
 const PATIENCE = 3;
 
+/**
+ * The one path the release lookup asks for. The stand-in answers it too, so a
+ * run of the CLI can be told there is a newer Shall without any part of this
+ * suite reaching GitHub — every run below is pointed at the stand-in, and a run
+ * that named no release gets a 404, which is silence.
+ */
+const RELEASES = "/repos/Nove-Lab/Shall/releases/latest";
+
 /** What one run of the CLI was asked to stand on, and answer with. */
 interface Setup {
   /** One answer per knock on `/health`; the last one repeats. */
   health?: readonly Health[];
+  /** The tag the release lookup answers with; none means nothing is published. */
+  release?: string;
   /** What each procedure answers. */
   answers?: Readonly<Record<string, unknown>>;
   /** The sentence a procedure refuses with, instead of answering. */
@@ -174,6 +214,15 @@ function standIn(setup: Setup): {
 
   const server = createServer((request, response) => {
     const at = new URL(request.url ?? "/", "http://localhost");
+    if (at.pathname === RELEASES) {
+      if (setup.release === undefined) {
+        response.writeHead(404).end();
+        return;
+      }
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({ tag_name: setup.release, assets: [] }));
+      return;
+    }
     if (at.pathname === "/health") {
       const says = health[Math.min(knocked, health.length - 1)] ?? READY;
       knocked += 1;
@@ -356,6 +405,10 @@ async function running(
     ...process.env,
     HOME: home,
     PATH: `${bin}:${process.env.PATH ?? ""}`,
+    // Every run, whether it cares about releases or not: a suite that left this
+    // unset would ask GitHub what the newest Shall is on every bare `shall` and
+    // every `init` it runs.
+    SHALL_RELEASES_API: `http://localhost:${port}`,
   };
 
   const said =
@@ -481,7 +534,10 @@ describe("finding the daemon to talk to", () => {
   });
 
   for (const [what, health] of [
-    ["listening on another bind", { host: EVERY_INTERFACE, procedures: SERVED }],
+    [
+      "listening on another bind",
+      { host: EVERY_INTERFACE, version: SHALL_VERSION, procedures: SERVED },
+    ],
     ["answering with an error", "unreadable"],
     ["answering without a bind", "hostless"],
   ] as const) {
@@ -520,34 +576,50 @@ describe("finding the daemon to talk to", () => {
     assert.ok(alive(pid), "a daemon was stopped over a probe that failed");
   });
 
-  test("a daemon on record older than this CLI is restarted", async () => {
-    const pid = sacrifice();
-    const ran = await running(["board", "--json"], {
-      state: { pid, at: "the port" },
-      // The bind is right, the build is not, and the one that takes the port
-      // afterwards is of this build.
-      health: [READY, OLD, READY],
-      answers: { "spec.board": { fixSpec: [], implement: [] } },
-    });
+  /**
+   * The four ways a daemon can be some Shall other than this one. Shall has ONE
+   * semver, so a number that is behind and a number that is ahead are the same
+   * answer: skew is the state where the templates, the schema and the calls
+   * stop agreeing with nobody being told. A daemon too old to say a number is
+   * that same answer once more, and a matching number with a missing procedure
+   * is why the manifest is still asked afterwards.
+   */
+  const NOT_THIS_SHALL = [
+    ["running an older release", BEHIND],
+    ["running a newer release", AHEAD],
+    ["too old to say which Shall it is", SILENT],
+    ["missing a procedure this client calls", OLD],
+  ] as const;
 
-    assert.equal(ran.code, 0);
-    assert.equal(
-      ran.err,
-      "Restarting the Shall daemon: the one running is older than this CLI.\n",
-    );
-    assert.equal(ran.onRecord, false);
-    assert.equal(alive(pid), false, "the old daemon was left running");
-  });
+  for (const [what, health] of NOT_THIS_SHALL) {
+    test(`a daemon on record ${what} is restarted`, async () => {
+      const pid = sacrifice();
+      const ran = await running(["board", "--json"], {
+        state: { pid, at: "the port" },
+        // The bind is right, the build is not, and the one that takes the port
+        // afterwards is of this build.
+        health: [READY, health, READY],
+        answers: { "spec.board": { fixSpec: [], implement: [] } },
+      });
+
+      assert.equal(ran.code, 0);
+      assert.equal(
+        ran.err,
+        "Restarting the Shall daemon: the one running is a different Shall from this CLI.\n",
+      );
+      assert.equal(ran.onRecord, false);
+      assert.equal(alive(pid), false, "the other Shall was left running");
+    });
+  }
 
   for (const [what, health] of [
-    ["missing a procedure this client calls", OLD],
-    ["too old to say what it serves", SILENT],
+    ...NOT_THIS_SHALL,
     [
       "answering with a list that is not names",
-      { host: LOOPBACK, procedures: ["spec.check", 7] },
+      { host: LOOPBACK, version: SHALL_VERSION, procedures: ["spec.check", 7] },
     ],
   ] as const) {
-    test(`an old daemon no state file names is adopted, ${what}, with a word about stopping it`, async () => {
+    test(`another Shall no state file names is adopted, ${what}, with a word about stopping it`, async () => {
       const ran = await running(["board", "--json"], {
         health: [health],
         answers: { "spec.board": { fixSpec: [], implement: [] } },
@@ -558,7 +630,7 @@ describe("finding the daemon to talk to", () => {
       assert.equal(ran.code, 0);
       assert.equal(
         ran.err,
-        `The Shall daemon at ${ran.url} is older than this CLI and no state file names its process — stop it yourself and run shall again.\n`,
+        `The Shall daemon at ${ran.url} is a different Shall from this CLI and no state file names its process — stop it yourself and run shall again.\n`,
       );
       assert.equal(ran.calls.length, 1);
     });
@@ -592,7 +664,9 @@ describe("opening the app", () => {
 
   test("--host asks for every interface, and adopts only a daemon bound there", async () => {
     const ran = await running(["--host"], {
-      health: [{ host: EVERY_INTERFACE, procedures: SERVED }],
+      health: [
+        { host: EVERY_INTERFACE, version: SHALL_VERSION, procedures: SERVED },
+      ],
     });
 
     assert.equal(ran.code, 0);
@@ -607,6 +681,156 @@ describe("opening the app", () => {
   });
 });
 
+/** A folder that is a Shall project, as far as a walk up from `cwd` can tell. */
+async function project(): Promise<string> {
+  const root = await folder("project");
+  await mkdir(path.join(root, ".shall"));
+  await writeFile(path.join(root, ".shall", "project.json"), "{}\n");
+  return root;
+}
+
+/** A release two majors above this one, whatever this one is. */
+function later(): string {
+  const [major = "0"] = SHALL_VERSION.split(".");
+  return `${Number(major) + 1}.0.0`;
+}
+
+describe("the folder somebody is standing in", () => {
+  test("a folder in no project is said so, and the app opens anyway", async () => {
+    const ran = await running([]);
+
+    assert.equal(ran.code, 0);
+    assert.equal(
+      ran.err,
+      "This folder is not inside a Shall project — run shall init to make it one.\n",
+    );
+    // The picker is still worth opening: a person's other projects are in it.
+    assert.deepEqual(ran.browsed, [ran.url]);
+  });
+
+  test("a project folder, and any folder under it, is said nothing about", async () => {
+    const root = await project();
+    const deep = path.join(root, "src", "parser");
+    await mkdir(deep, { recursive: true });
+
+    for (const where of [root, deep]) {
+      const ran = await running([], { cwd: where });
+
+      assert.equal(ran.code, 0);
+      assert.equal(ran.err, "");
+      assert.deepEqual(ran.browsed, [ran.url]);
+    }
+  });
+
+  // The line is about the folder and not about the network, so it arrives on a
+  // machine that could not ask about releases at all.
+  test("nothing is said about a folder when a command was typed", async () => {
+    const ran = await running(["board", "--json"], {
+      answers: { "spec.board": { fixSpec: [], implement: [] } },
+    });
+
+    assert.equal(ran.err, "");
+  });
+});
+
+describe("the version notice", () => {
+  for (const argv of [[], ["init"]] as const) {
+    test(`a newer release is one line on stderr under ${["shall", ...argv].join(" ")}`, async () => {
+      const ran = await running([...argv], {
+        release: `v${later()}`,
+        cwd: await project(),
+        answers: { "projects.create": PROJECT },
+      });
+
+      assert.equal(ran.code, 0);
+      assert.equal(ran.err, `Shall ${later()} is out — run shall upgrade.\n`);
+    });
+  }
+
+  test("the release this Shall already is says nothing", async () => {
+    const ran = await running([], {
+      release: SHALL_VERSION,
+      cwd: await project(),
+    });
+
+    assert.equal(ran.err, "");
+  });
+
+  test("--json keeps stdout to the one object, and the notice to stderr", async () => {
+    const ran = await running(["init", "--json"], {
+      release: later(),
+      answers: { "projects.create": PROJECT },
+    });
+
+    assert.equal(ran.code, 0);
+    assert.deepEqual(JSON.parse(ran.out), PROJECT);
+    assert.equal(ran.err, `Shall ${later()} is out — run shall upgrade.\n`);
+  });
+
+  for (const argv of [
+    ["board"],
+    ["check"],
+    ["status"],
+    ["log", "work_done", "did a thing"],
+  ] as const) {
+    test(`shall ${argv[0]} carries no notice`, async () => {
+      const ran = await running([...argv], {
+        release: later(),
+        cwd: await project(),
+        answers: {
+          "spec.board": { root: "/work/atlas", fixSpec: [], implement: [] },
+          "spec.check": {
+            root: "/work/atlas",
+            scope: [],
+            nodeCount: 0,
+            edgeCount: 0,
+            problems: [],
+            gaps: [],
+            notes: [],
+          },
+          "spec.status": {
+            root: "/work/atlas",
+            scope: [],
+            nodes: [],
+            missing: [],
+            broken: [],
+          },
+          "spec.log": { ok: true },
+        },
+      });
+
+      assert.equal(ran.code, 0);
+      assert.equal(ran.err, "");
+    });
+  }
+});
+
+describe("shall upgrade", () => {
+  test("a Shall running from a checkout is told what upgrades it", async () => {
+    const ran = await running(["upgrade"], { release: later() });
+
+    // A checkout has no single file to swap, and the refusal says what does the
+    // job there instead. Nothing was started to find that out.
+    assert.equal(ran.code, 1);
+    assert.equal(ran.out, "");
+    assert.equal(
+      ran.err,
+      "shall upgrade replaces the installed Shall binary; this Shall runs from a checkout, which upgrades with git.\n",
+    );
+    assert.equal(ran.knocks, 0);
+  });
+
+  test("it takes nothing after it", async () => {
+    const ran = await running(["upgrade", "--json"]);
+
+    assert.equal(ran.code, 1);
+    assert.equal(
+      ran.err,
+      "shall upgrade does not take --json — shall upgrade\n",
+    );
+  });
+});
+
 describe("the words alone", () => {
   test("help is the whole screen, on stdout", async () => {
     const ran = await running(["help"]);
@@ -614,8 +838,23 @@ describe("the words alone", () => {
     assert.equal(ran.code, 0);
     assert.match(ran.out, /^shall — the specification a team works from/);
     assert.match(ran.out, /shall log <kind> <summary>/);
+    assert.match(ran.out, /shall upgrade +Fetch the newest Shall there is/);
     // Nothing was started to answer a question about words.
     assert.equal(ran.knocks, 0);
+  });
+
+  test("--version is the number alone, on stdout, with nothing started to say it", async () => {
+    const ran = await running(["--version"]);
+
+    assert.equal(ran.code, 0);
+    // A bare semver and no sentence around it: the caller is as often a
+    // release script as it is a person.
+    assert.equal(ran.out, `${SHALL_VERSION}\n`);
+    assert.equal(ran.err, "");
+    assert.equal(ran.knocks, 0);
+    // The version this install rides is the daemon's too, which is the whole
+    // reason a daemon saying a different one is not adopted.
+    assert.match(ran.out, /^\d+\.\d+\.\d+\n$/);
   });
 
   test("a command shall does not know is answered with every command there is", async () => {

@@ -10,6 +10,7 @@ import {
 import os from "node:os";
 import path from "node:path";
 import { after, before, describe, test } from "node:test";
+import { SHALL_VERSION } from "@shall/core/version";
 import { createProject } from "../service/projects.js";
 import { closeAllFeeds } from "../service/spec-events.js";
 import { createApp } from "./app.js";
@@ -104,7 +105,7 @@ async function readUntil(
 }
 
 describe("the health route", () => {
-  test("carries the bind host and the procedures served, as the build marker", async () => {
+  test("carries the bind host, the version and the procedures served, as the build marker", async () => {
     const app = createApp("127.0.0.1");
 
     const response = await app.request("http://localhost/health");
@@ -113,10 +114,17 @@ describe("the health route", () => {
     const body = (await response.json()) as {
       ok: boolean;
       host: string;
+      version: string;
       procedures: string[];
     };
     assert.equal(body.ok, true);
     assert.equal(body.host, "127.0.0.1");
+    // The one semver, said whole: the CLI compares it against its own and will
+    // not adopt a daemon that answers with any other number — so a `/health`
+    // that stopped saying it, or said something that is not a version, would
+    // make every install look like skew.
+    assert.equal(body.version, SHALL_VERSION);
+    assert.match(body.version, /^\d+\.\d+\.\d+$/);
     // Non-empty and holding the two the CLI leans on hardest: an empty list
     // here would read as "everything is missing" to a knocking CLI, so a tRPC
     // upgrade that hides the router's record fails HERE and not in the field.

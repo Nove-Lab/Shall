@@ -1,0 +1,158 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  # Everything that makes the release: the number checked, the tests run, the
+  # four binaries compiled, their sums written, and the linux-x64 one put
+  # through a real install before any of it leaves this machine.
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # THE TAG IS NOT THE VERSION — core/version.ts IS, and package.json says
+      # it too. Shall has one semver and one install: the binary stamps
+      # SHALL_VERSION into the agent kit and the daemon answers /health with it,
+      # so a release cut at a tag the constant does not match ships a v0.2.0
+      # that calls itself 0.1.0 everywhere it matters, and every CLI that meets
+      # its daemon restarts it forever. Asked first, before anything is built.
+      - name: The tag, package.json and SHALL_VERSION say one number
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          package="$(node -p "require('./package.json').version")"
+          constant="$(sed -n 's/^export const SHALL_VERSION = "\(.*\)";$/\1/p' core/version.ts)"
+          echo "tag=$tag package.json=$package SHALL_VERSION=$constant"
+          if [ "$tag" != "$package" ] || [ "$tag" != "$constant" ]; then
+            echo "::error::$GITHUB_REF_NAME would ship as $package in package.json and $constant in core/version.ts. All three move together."
+            exit 1
+          fi
+
+      - run: bun install --frozen-lockfile
+
+      - run: bun run typecheck
+
+      - run: bun run test
+
+      # Builds the web app, embeds it and the agent kit, and compiles one
+      # executable per platform into dist-bin/.
+      - run: bun run build:binary
+
+      # Written from inside dist-bin so every line names a bare filename:
+      # scripts/install.sh downloads one binary and SHA256SUMS beside it into a
+      # temp folder, greps out the line for its target and hands that line to
+      # sha256sum -c. A path in it would send the installer looking for a folder
+      # nobody downloaded.
+      - name: SHA256SUMS
+        working-directory: dist-bin
+        run: |
+          sha256sum shall-darwin-arm64 shall-darwin-x64 \
+            shall-linux-arm64 shall-linux-x64 > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Smoke the linux-x64 binary
+        run: ./scripts/smoke-binary.sh dist-bin/shall-linux-x64
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: binaries
+          path: dist-bin/
+          if-no-files-found: error
+
+  # The arm64 binary cannot be run on the machine that built it, so it is smoked
+  # on the architecture it ships for. The x64 smoke is not a proxy for this one:
+  # bun compiles a different runtime into each executable.
+  smoke-arm:
+    needs: build
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: binaries
+          path: dist-bin
+
+      # An artifact is a zip, and a zip does not carry the executable bit.
+      - name: Smoke the linux-arm64 binary
+        run: |
+          chmod +x dist-bin/shall-linux-arm64
+          ./scripts/smoke-binary.sh dist-bin/shall-linux-arm64
+
+  # A DRAFT, ALWAYS. Publishing is a person's move: the notes want reading, and
+  # both readers of "latest" — scripts/install.sh and `shall upgrade` — ask the
+  # GitHub API, which does not answer with drafts. Nothing installs this and
+  # nothing upgrades onto it until somebody has looked at it and pressed publish.
+  publish:
+    needs: [build, smoke-arm]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: binaries
+          path: dist-bin
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          generate_release_notes: true
+          # Named one by one because the installer builds its download URL from
+          # these exact names — shall-<os>-<arch>, and SHA256SUMS beside them.
+          files: |
+            dist-bin/shall-darwin-arm64
+            dist-bin/shall-darwin-x64
+            dist-bin/shall-linux-arm64
+            dist-bin/shall-linux-x64
+            dist-bin/SHA256SUMS
+
+  # https://shall.sh/install is a file on the gh-pages branch, and the installer
+  # a release serves has to be the one that release was cut with — it is what
+  # names the asset filenames and how the checksum is verified. Nothing else on
+  # that branch is CI's to touch: CNAME and index.html are hand-written.
+  pages-sync:
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: tag
+
+      # Whole history, shallow being the one thing a push out of a checkout
+      # cannot always do. The branch is three files deep, so there is nothing
+      # to save by cutting it.
+      - uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: pages
+          fetch-depth: 0
+
+      - name: Serve this tag's installer
+        working-directory: pages
+        run: |
+          cp ../tag/scripts/install.sh install
+          if git diff --quiet -- install; then
+            echo "The served installer already matches $GITHUB_REF_NAME."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add install
+          git commit -m "Serve the installer $GITHUB_REF_NAME was cut with"
+          git push

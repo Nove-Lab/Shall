@@ -1,7 +1,7 @@
 {
   "name": "@shall/daemon",
   "private": true,
-  "version": "0.0.1",
+  "version": "0.1.0",
   "license": "AGPL-3.0-only",
   "type": "module",
   "exports": {
@@ -12,6 +12,10 @@
     "./router": {
       "types": "./dist/http/router.d.ts",
       "default": "./dist/http/router.js"
+    },
+    "./embedded": {
+      "types": "./dist/host/embedded.d.ts",
+      "default": "./dist/host/embedded.js"
     },
     "./home": {
       "types": "./dist/host/shall-home.d.ts",

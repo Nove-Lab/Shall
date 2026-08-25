@@ -129,6 +129,50 @@ export async function openProject(
 }
 
 /**
+ * EVERY REGISTERED PROJECT'S AGENT KIT AND RULES PAGE, BROUGHT CURRENT — once,
+ * when the daemon starts.
+ *
+ * IT IS WHAT MAKES AN UPGRADE REACH THE PROJECTS. Both files are written out of
+ * the daemon that is running and stamped with its version, so a Shall that was
+ * replaced under a person's feet would otherwise leave every project carrying
+ * the old release's commands until somebody happened to open it. `shall upgrade`
+ * swaps the binary and restarts the daemon; this sweep is the other half, and
+ * together they are an upgrade nobody has to click through project by project.
+ *
+ * IT IS DELIBERATELY THE SAME PAIR AN OPEN WRITES, and not the whole of what an
+ * open does. The agent settings are somebody else's file and are merged into
+ * only when a project is actually opened; the spec folder and the shared
+ * templates are made where they are needed. What this sweep owns is the prose
+ * Shall generates and re-generates, which is exactly the prose a new version
+ * changes.
+ *
+ * NOTHING HERE IS A CONDITION OF STARTING, and nothing here throws. A registry
+ * that will not read, a folder somebody deleted, a checkout mounted read-only:
+ * each is skipped in silence, for the same reason an open's conveniences are —
+ * the right to write into a project is not the price of running Shall. A PATH
+ * WHOSE `.shall` IS GONE IS NO LONGER A PROJECT and is skipped too, because a
+ * `.claude` kit written into a folder that stopped being one is litter left by a
+ * daemon nobody asked to visit.
+ */
+export async function refreshRegisteredKits(): Promise<void> {
+  const registry = await readRegistry().catch(() => null);
+  if (registry === null) {
+    return;
+  }
+  await Promise.all(
+    registry.projects.map(async (project) => {
+      if (!(await pathExists(getProjectShallPath(project.path)))) {
+        return;
+      }
+      await Promise.all([
+        writeAgentRules(project.path),
+        writeAgentKit(project.path),
+      ]);
+    }),
+  );
+}
+
+/**
  * The registry entry behind `/p/:projectId`, for the surfaces that cannot
  * carry on without one — settings and the spec graph both write to files the
  * registry is what points at.

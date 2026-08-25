@@ -100,6 +100,37 @@ describe("the commands", () => {
     assert.deepEqual(invocation("--help"), { command: "help" });
   });
 
+  test("--version asks which Shall this is, and takes nothing with it", () => {
+    assert.deepEqual(invocation("--version"), { command: "version" });
+    // Repeated is the one ask again, the way --host repeated is.
+    assert.deepEqual(invocation("--version", "--version"), {
+      command: "version",
+    });
+    assert.equal(
+      refusalOf("--version", "--json"),
+      "shall --version does not take --json — shall --version",
+    );
+    // It is a question about this install, not an option on a command.
+    assert.match(
+      refusalOf("check", "--version"),
+      /^shall check does not take --version — /,
+    );
+  });
+
+  test("upgrade takes nothing at all, --json included", () => {
+    assert.deepEqual(invocation("upgrade"), { command: "upgrade" });
+    // There is no answer to shape: the whole of it is a sentence saying whether
+    // the swap happened.
+    assert.equal(
+      refusalOf("upgrade", "--json"),
+      "shall upgrade does not take --json — shall upgrade",
+    );
+    assert.equal(
+      refusalOf("upgrade", "now"),
+      "shall upgrade does not take now — shall upgrade",
+    );
+  });
+
   test("a word shall does not have is a command it does not know", () => {
     assert.deepEqual(invocation("approve"), {
       command: "unknown",
@@ -474,6 +505,7 @@ describe("what a person is told when the words are wrong", () => {
       refusalOf("log", "a", "b", "c"),
       refusalOf("log", "a", "b", "--refs"),
       refusalOf("status", "--refs", "WL-0001"),
+      refusalOf("--version", "board"),
     ];
     for (const refusal of refusals) {
       const shape = refusal.split(" — ").at(-1) ?? "";
@@ -501,6 +533,8 @@ describe("the help screen", () => {
       "shall board [--json]",
       "shall add-spec-node --type <Type> [--json]",
       "shall log <kind> <summary> [--refs <id,id>] [--json]",
+      "shall upgrade",
+      "shall --version",
       "shall help",
     ]) {
       assert.ok(

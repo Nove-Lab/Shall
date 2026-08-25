@@ -60,15 +60,19 @@ And you always understand where the project stands — and where it's drifting.
 
 ### 1. Install
 
-Requires Node.js 22.5+ and Bun.
+One self-contained binary — no runtime to install first.
 
 ```bash
-git clone https://github.com/Nove-Lab/Shall.git && cd Shall
-bun install && bun run build
-cd client/cli && bun link   # puts `shall` on your PATH
+curl -fsSL https://shall.sh/install | sh
 ```
 
+Or `brew install nove-lab/tap/shall`, or grab a binary from the [Releases page](https://github.com/Nove-Lab/Shall/releases).
+macOS and Linux, Apple Silicon and x64; on Windows, run it inside WSL.
+Later, `shall upgrade` replaces the binary with the newest release.
+
 Nothing else to install for the agent side: `shall init` wires the commands below into the project itself.
+Claude Code is the first agent Shall drives — the core is agent-agnostic, and adapters for others are on the roadmap.
+(Building from source instead: see [CONTRIBUTING.md](./CONTRIBUTING.md).)
 
 ### 2. `shall init`
 

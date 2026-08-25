@@ -1,7 +1,7 @@
 {
   "name": "shall",
   "private": true,
-  "version": "0.0.1",
+  "version": "0.1.0",
   "license": "AGPL-3.0-only",
   "workspaces": [
     "core",
@@ -17,6 +17,8 @@
     "dev:web": "bun run --filter @shall/web dev",
     "dev": "node scripts/dev.mjs",
     "build": "bun run build:core && bun run build:daemon && bun run build:cli && bun run --filter @shall/web build",
+    "build:binary": "node scripts/build-binary.mjs",
+    "build:binary:local": "node scripts/build-binary.mjs --local",
     "typecheck": "bun run build:core && bun run build:daemon && bun run build:cli && bun run --filter @shall/web typecheck",
     "test": "bun run build:core && bun run --filter '*' test && node scripts/lint-plugin.mjs",
     "shall": "node client/cli/dist/main.js"

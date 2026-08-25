@@ -19,6 +19,7 @@ import {
   getProjectGitBranch,
   listRecentProjects,
   openProject,
+  refreshRegisteredKits,
   removeRecentProject,
   requireRegistryProject,
 } from "./projects.js";
@@ -307,5 +308,51 @@ describe("the recent list", () => {
       false,
     );
     assert.ok(await exists(metadataPathOf(project.path)));
+  });
+});
+
+/**
+ * The sweep is the other half of `shall upgrade`: the binary is swapped and the
+ * daemon restarted, and this is what carries the new release's prose into every
+ * project without anybody opening one. What it has to survive is a registry full
+ * of paths that have moved on since they were written down.
+ */
+describe("the sweep at the daemon's start", () => {
+  test("brings a project's kit and rules page back to what this Shall writes", async () => {
+    const project = await createProject(await newFolder());
+    const rules = rulesPathOf(project.path);
+    const command = path.join(
+      project.path,
+      ".claude",
+      "commands",
+      "shall.help.md",
+    );
+    const current = await readFile(rules, "utf8");
+    await writeFile(rules, "what an older Shall said here\n", "utf8");
+    await rm(command);
+
+    await refreshRegisteredKits();
+
+    assert.equal(await readFile(rules, "utf8"), current);
+    assert.ok(await exists(command), "the kit was not written back");
+  });
+
+  test("a folder that is gone and one that is no longer a project are skipped", async () => {
+    const deleted = await createProject(await newFolder());
+    await rm(deleted.path, { recursive: true, force: true });
+    const undone = await createProject(await newFolder());
+    await rm(path.join(undone.path, ".shall"), { recursive: true, force: true });
+    await rm(path.join(undone.path, ".claude"), { recursive: true, force: true });
+
+    // Silence rather than a throw: a daemon that would not start over somebody
+    // else's deleted folder is a daemon nobody can run.
+    await refreshRegisteredKits();
+
+    assert.equal(await exists(deleted.path), false);
+    assert.equal(
+      await exists(path.join(undone.path, ".claude")),
+      false,
+      "a kit was written into a folder that stopped being a project",
+    );
   });
 });

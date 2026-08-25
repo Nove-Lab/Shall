@@ -1,11 +1,14 @@
 #!/usr/bin/env node
 
 import { execFile } from "node:child_process";
-import { spawn } from "node:child_process";
+import { access } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+// The one semver, read and never retyped: `shall --version` says it and the
+// daemon on the port is measured against it.
+import { SHALL_VERSION } from "@shall/core/version";
 // The CLI is a client, not a second reader of the host: `~/.shall` has one
 // implementation and it belongs to the daemon. This borrows it to find the
 // port to talk to, and nothing else.
@@ -15,8 +18,22 @@ import {
   readDaemonState,
   removeDaemonState,
 } from "@shall/daemon/home";
+// Whether this Shall carries its own files is the same question as whether it
+// is the single binary, and the answer decides how a daemon is started.
+import { isEmbedded } from "@shall/daemon/embedded";
 import { parseArguments, USAGE, type Answering } from "./args.js";
+import { DAEMON_FLAG } from "./binary-main.js";
 import { connect } from "./client.js";
+import {
+  healthOf,
+  isProcessAlive,
+  startDaemon,
+  stopProcess,
+  waitForDaemon,
+  type DaemonHealth,
+} from "./daemon-process.js";
+import { upgradeNotice } from "./release.js";
+import { upgradeShall } from "./upgrade.js";
 
 process.title = "shall";
 
@@ -31,6 +48,12 @@ process.title = "shall";
 // `status` AND `board` MAKE THAT BARGAIN TWICE OVER — nobody here works out a
 // colour or a place on the board for themselves, for the reason `statusSpec`
 // gives in full in `daemon/src/service/spec-status.ts`.
+//
+// `shall upgrade` IS THE ONE COMMAND ABOUT SHALL ITSELF rather than about a
+// project, and it is the one place this client writes a file: the executable it
+// is running out of. Its work is `upgrade.ts`; what is here is the fork between
+// the two installs, because whether there is a single file to swap is the same
+// question as whether this Shall carries its own web app.
 //
 // WHAT IS NOT HERE IS AS DELIBERATE AS WHAT IS. There is no `shall approve`, no
 // `shall reject` and no `shall close`: a judgement is a person's, made in the
@@ -47,52 +70,6 @@ const LOOPBACK = "127.0.0.1";
 
 /** What `--host` asks for: every interface, so another machine can reach it. */
 const EVERY_INTERFACE = "0.0.0.0";
-
-function isProcessAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * What `/health` answered: the bind host, and — on daemons new enough to say —
- * the procedures served, which is the build marker. `procedures: null` means
- * the daemon predates the marker, and `isOutOfDate` reads that as what it is.
- * A null RETURN is different: nothing answered at all.
- */
-interface DaemonHealth {
-  host: string;
-  procedures: readonly string[] | null;
-}
-
-async function healthOf(url: string): Promise<DaemonHealth | null> {
-  try {
-    const response = await fetch(`${url}/health`);
-    if (!response.ok) {
-      return null;
-    }
-    const body = (await response.json()) as {
-      host?: unknown;
-      procedures?: unknown;
-    };
-    if (typeof body.host !== "string") {
-      return null;
-    }
-    return {
-      host: body.host,
-      procedures:
-        Array.isArray(body.procedures) &&
-        body.procedures.every((name) => typeof name === "string")
-          ? (body.procedures as string[])
-          : null,
-    };
-  } catch {
-    return null;
-  }
-}
 
 async function getRunningHost(url: string): Promise<string | null> {
   return (await healthOf(url))?.host ?? null;
@@ -114,36 +91,29 @@ const NEEDED_PROCEDURES: readonly string[] = [
   "spec.status",
 ];
 
+/**
+ * A daemon this CLI will not talk to — older, newer, or too old to say which.
+ *
+ * THE VERSION IS ASKED FIRST AND IN BOTH DIRECTIONS. Shall has ONE semver and
+ * one install: a daemon whose number is not this one is the other half of some
+ * other install, whether it is behind or ahead, and skew between the two is
+ * exactly the state where the templates, the schema and the calls stop agreeing
+ * without anybody being told. A daemon too old to say a version at all is the
+ * same answer — it predates the number, so it cannot be this one.
+ *
+ * THE PROCEDURE LIST STILL DECIDES AFTER THAT, and it is not redundant: a
+ * daemon can be rebuilt from a working tree without the semver moving, and the
+ * manifest is what catches a call site this CLI has and that build does not.
+ */
 function isOutOfDate(health: DaemonHealth): boolean {
+  if (health.version !== SHALL_VERSION) {
+    return true;
+  }
   const served = health.procedures;
   if (served === null) {
     return true;
   }
   return NEEDED_PROCEDURES.some((name) => !served.includes(name));
-}
-
-async function waitForServer(
-  url: string,
-  expectedHost: string,
-): Promise<boolean> {
-  for (let attempt = 0; attempt < 30; attempt += 1) {
-    if ((await getRunningHost(url)) === expectedHost) {
-      return true;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  }
-  return false;
-}
-
-async function stopProcess(pid: number): Promise<void> {
-  process.kill(pid, "SIGTERM");
-  for (let attempt = 0; attempt < 30; attempt += 1) {
-    if (!isProcessAlive(pid)) {
-      return;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  }
-  throw new Error(`Could not stop Shall daemon process ${pid}`);
 }
 
 async function openBrowser(url: string): Promise<boolean> {
@@ -176,9 +146,10 @@ async function openBrowser(url: string): Promise<boolean> {
  * one is stopped and forgotten before a new one takes the port.
  *
  * TWO MORE THINGS ARE ASKED BEFORE ANYTHING IS ADOPTED OR SPAWNED. The MARKER:
- * a daemon the state file names is asked what it serves, and one older than
- * this CLI — missing a procedure this file calls, or too old to say — is
- * stopped and replaced, so "your Shall is out of date" arrives as a restart
+ * a daemon the state file names is asked which Shall it is and what it serves,
+ * and one that is not this CLI's — a version that differs either way, a version
+ * it is too old to say, or a procedure this file calls that it does not have —
+ * is stopped and replaced, so "your Shall is out of date" arrives as a restart
  * rather than as a tRPC sentence about a missing path. The KNOCK: with no
  * state on record the port is asked before a child is spawned, because a
  * healthy daemon whose state file went missing would win the bind and leave
@@ -218,7 +189,7 @@ async function ensureDaemon(bindHost: string): Promise<string> {
     const health = await healthOf(url);
     if (health !== null && isOutOfDate(health)) {
       console.error(
-        "Restarting the Shall daemon: the one running is older than this CLI.",
+        "Restarting the Shall daemon: the one running is a different Shall from this CLI.",
       );
       await stopProcess(daemonState.pid);
       await removeDaemonState(daemonState.pid);
@@ -233,24 +204,24 @@ async function ensureDaemon(bindHost: string): Promise<string> {
     if (answering !== null && answering.host === bindHost) {
       if (isOutOfDate(answering)) {
         console.error(
-          `The Shall daemon at ${url} is older than this CLI and no state file names its process — stop it yourself and run shall again.`,
+          `The Shall daemon at ${url} is a different Shall from this CLI and no state file names its process — stop it yourself and run shall again.`,
         );
       }
       return url;
     }
-    const daemonPath = fileURLToPath(import.meta.resolve("@shall/daemon/main"));
-    const child = spawn(process.execPath, [daemonPath], {
-      detached: true,
-      stdio: "ignore",
-      env: {
-        ...process.env,
-        NODE_ENV: "production",
-        SHALL_HOST: bindHost,
-      },
-    });
-    child.unref();
+    // THE TWO INSTALLS START THE SAME DAEMON TWO WAYS. From a checkout there
+    // is a `dist/main.js` to hand node; from the single binary there is no file
+    // to name and no node to hand it to, so the executable starts a second copy
+    // of itself under the flag `binary-main.ts` reads. `import.meta.resolve` is
+    // asked only on the branch that has a checkout to resolve against.
+    startDaemon(
+      isEmbedded()
+        ? [DAEMON_FLAG]
+        : [fileURLToPath(import.meta.resolve("@shall/daemon/main"))],
+      bindHost,
+    );
 
-    if (!(await waitForServer(url, bindHost))) {
+    if (!(await waitForDaemon(url, (health) => health.host === bindHost))) {
       throw new Error(`Shall daemon did not start at ${url}`);
     }
   }
@@ -262,6 +233,58 @@ async function ensureDaemon(bindHost: string): Promise<string> {
 async function openShall(url: string): Promise<void> {
   if (!(await openBrowser(url))) {
     console.log(`Shall is running at ${url}`);
+  }
+}
+
+/**
+ * Whether the folder a person is standing in is inside a Shall project — a
+ * `.shall/project.json`, here or anywhere above.
+ *
+ * IT IS THE ONE FILE THIS CLIENT GOES LOOKING FOR, AND IT NEVER OPENS IT. The
+ * discipline it stands beside — nobody here reads a project's files, because the
+ * daemon is Shall's one reader — is about what those files SAY, and a question
+ * about whether a name exists on the way up from `cwd` says nothing about a spec
+ * and cannot disagree with the daemon about anything. Asking the daemon instead
+ * would mean starting one in order to find out whether there was anything to
+ * open.
+ */
+async function insideProject(from: string): Promise<boolean> {
+  let here = path.resolve(from);
+  for (;;) {
+    const found = await access(path.join(here, ".shall", "project.json")).then(
+      () => true,
+      () => false,
+    );
+    if (found) {
+      return true;
+    }
+    const above = path.dirname(here);
+    if (above === here) {
+      return false;
+    }
+    here = above;
+  }
+}
+
+/**
+ * How long a version check may hold up a command somebody is waiting on. It is
+ * short on purpose and it is asked EARLY: the answer is read after the command
+ * has already done its work, so a machine with no network pays nothing for it.
+ */
+const NOTICE_PATIENCE = 1_500;
+
+/**
+ * The notice, printed if one arrived — ON STDERR, always.
+ *
+ * It is an aside rather than an answer, and `--json` promises that stdout
+ * carries one object and nothing else; a line about a release printed above one
+ * would break every caller that parses it. A person reading a terminal sees both
+ * channels and never knows the difference.
+ */
+async function sayNotice(notice: Promise<string | null> | null): Promise<void> {
+  const line = await notice;
+  if (line !== null) {
+    console.error(line);
   }
 }
 
@@ -802,6 +825,12 @@ if ("usage" in asked) {
   process.exitCode = 1;
 } else if (asked.command === "help") {
   console.log(USAGE);
+} else if (asked.command === "version") {
+  // The number alone, on one line: the caller is as often a release script or
+  // an agent checking what it is talking to as it is a person, and a bare
+  // semver is the answer neither of them has to parse a sentence out of.
+  // Nothing is started to say it — the version of this install is known here.
+  console.log(SHALL_VERSION);
 } else if (asked.command === "unknown") {
   // A mistyped command has no shape of its own to be shown, so it is answered
   // with every shape there is — the screen `shall help` prints, quoted rather
@@ -812,11 +841,48 @@ if ("usage" in asked) {
   );
   console.error(USAGE);
   process.exitCode = 1;
+} else if (asked.command === "upgrade") {
+  // A CHECKOUT HAS NOTHING TO SWAP. The client, the daemon and the web app are
+  // three builds out of a working tree there, and the file this would replace is
+  // one `tsc` writes; `git` is the upgrade, and saying so is more use than
+  // putting a release binary where node stands.
+  if (!isEmbedded()) {
+    console.error(
+      "shall upgrade replaces the installed Shall binary; this Shall runs from a checkout, which upgrades with git.",
+    );
+    process.exitCode = 1;
+  } else {
+    try {
+      console.log((await upgradeShall()).join("\n"));
+    } catch (error) {
+      console.error(sentenceOf(error));
+      process.exitCode = 1;
+    }
+  }
 } else if (asked.command === "open") {
   // No command means the app: find or start the daemon, then open it.
+  //
+  // THE FOLDER IS NAMED BEFORE THE BROWSER OPENS. A person who ran `shall`
+  // somewhere that is not a project gets the app all the same — the picker is
+  // there and their other projects are in it — and one line saying that THIS
+  // folder is not one of them, which is the question they were actually asking.
+  const notice = upgradeNotice(NOTICE_PATIENCE);
+  if (!(await insideProject(process.cwd()))) {
+    console.error(
+      "This folder is not inside a Shall project — run shall init to make it one.",
+    );
+  }
   await openShall(
     await ensureDaemon(asked.network ? EVERY_INTERFACE : LOOPBACK),
   );
+  await sayNotice(notice);
 } else {
+  // THE NOTICE RIDES ON THE TWO COMMANDS A PERSON TYPES AND ON NO OTHERS.
+  // `check`, `status`, `board` and `log` are an agent's, and a sentence about a
+  // release in the middle of a turn is one more thing an agent has to be taught
+  // to ignore.
+  const notice =
+    asked.command === "init" ? upgradeNotice(NOTICE_PATIENCE) : null;
   await report(asked);
+  await sayNotice(notice);
 }

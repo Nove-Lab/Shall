@@ -11,7 +11,7 @@
     },
     "apps/web": {
       "name": "@shall/web",
-      "version": "0.0.1",
+      "version": "0.1.0",
       "dependencies": {
         "@base-ui/react": "^1.7.0",
         "@fontsource-variable/geist": "^5.3.0",
@@ -44,11 +44,12 @@
     },
     "client/cli": {
       "name": "@shall/cli",
-      "version": "0.0.1",
+      "version": "0.1.0",
       "bin": {
         "shall": "./dist/main.js",
       },
       "dependencies": {
+        "@shall/core": "workspace:*",
         "@shall/daemon": "workspace:*",
         "@trpc/client": "latest",
       },
@@ -58,7 +59,7 @@
     },
     "core": {
       "name": "@shall/core",
-      "version": "0.0.1",
+      "version": "0.1.0",
       "dependencies": {
         "yaml": "2.9.0",
       },
@@ -68,7 +69,7 @@
     },
     "daemon": {
       "name": "@shall/daemon",
-      "version": "0.0.1",
+      "version": "0.1.0",
       "dependencies": {
         "@hono/node-server": "latest",
         "@hono/trpc-server": "latest",
@@ -652,7 +653,7 @@
 
     "hast-util-whitespace": ["hast-util-whitespace@3.0.0", "", { "dependencies": { "@types/hast": "^3.0.0" } }, "sha512-88JUN06ipLwsnv+dVn+OIYOvAuvBMy/Qoi6O7mQHxdPXpjy+Cd6xRkWwux7DKO+4sYILtLBRIKgsdpS2gQc7qw=="],
 
-    "hono": ["hono@4.13.2", "", {}, "sha512-JydRilDRkYBQMt9qR9U92mXxmbGqsqSn/IKOrh4e7/gEbn+0zSr8igTu0obwJoNGN4sez28DIql7FBHWydoJpA=="],
+    "hono": ["hono@4.13.4", "", {}, "sha512-AGEwKIyRMHRv1t8Wjwa3LHxQ61X5CqrdFT+4BRNTpqS5aJNnpl5WLjADb7vFlJzI/8uK7T5QLVApCMQKNa3LgQ=="],
 
     "html-url-attributes": ["html-url-attributes@3.0.1", "", {}, "sha512-ol6UPyBWqsrO6EJySPz2O7ZSr856WDrEzM5zMqp+FJJLGMW35cLYmmZnl0vztAZxRUoNZJFTCohfjuIJ8I4QBQ=="],
 

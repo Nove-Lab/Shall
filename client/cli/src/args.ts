@@ -8,9 +8,13 @@
  * the router's types, and so the daemon's build, into a test run that has
  * neither.
  *
- * THE PARSER IS HAND-WRITTEN AND STAYS HAND-WRITTEN. The whole surface is nine
+ * THE PARSER IS HAND-WRITTEN AND STAYS HAND-WRITTEN. The whole surface is eleven
  * shapes and four options; a library would be a dependency to keep current, a
  * second vocabulary for what a flag is, and a help screen somebody else wrote.
+ *
+ * THE VERSION ITSELF IS NOT HERE, only the asking. The number lives in
+ * `@shall/core/version` and `main.ts` prints it from there, so this file goes
+ * on importing nothing and there is no second place for the semver to be wrong.
  */
 
 /** One command: how it is typed, and the line a help screen says about it. */
@@ -21,7 +25,9 @@ interface CommandShape {
 
 /**
  * EVERY COMMAND THERE IS, in the order a person meets them — the app first, the
- * project next, then the three readings, then the two things this client writes.
+ * project next, then the three readings, then the two things this client
+ * writes, then the one that replaces the install, and last the two it says
+ * about itself.
  *
  * IT IS THE ONE HOME OF THE SHAPES. The help screen below is built from this
  * table and so is the line a usage error ends with, which is why the shape a
@@ -58,6 +64,14 @@ const SHAPES = {
   log: {
     shape: "shall log <kind> <summary> [--refs <id,id>] [--json]",
     says: "Write one line of the activity feed: a run finished, and what it finished.",
+  },
+  upgrade: {
+    shape: "shall upgrade",
+    says: "Fetch the newest Shall there is and put it where this one stands.",
+  },
+  "--version": {
+    shape: "shall --version",
+    says: "Which Shall this is — the one number the whole install rides.",
   },
   help: { shape: "shall help", says: "This screen." },
 } as const satisfies Record<string, CommandShape>;
@@ -108,6 +122,8 @@ export interface UsageError {
 export type Invocation =
   | { command: "open"; network: boolean }
   | { command: "help" }
+  | { command: "version" }
+  | { command: "upgrade" }
   | { command: "unknown"; name: string }
   | { command: "init"; json: boolean }
   | { command: "check"; json: boolean; scope: string[] }
@@ -307,12 +323,32 @@ export function parseArguments(
       : unexpected("--host", stray);
   }
 
+  // `--version` is read the same way, and for the same reason: it is a question
+  // about this install rather than an option on a command, so nothing may ride
+  // along with it and repeating it is the one ask again.
+  if (word === "--version") {
+    const stray = rest.find((argument) => argument !== "--version");
+    return stray === undefined
+      ? { command: "version" }
+      : unexpected("--version", stray);
+  }
+
   if (word === "help" || word === "--help") {
     const stray = rest[0];
     if (stray !== undefined) {
       return unexpected("help", stray);
     }
     return { command: "help" };
+  }
+
+  // `upgrade` carries nothing, `--json` included: it swaps one file for another
+  // and the whole of its answer is the sentence saying whether that happened,
+  // which is not a shape a caller was ever going to parse.
+  if (word === "upgrade") {
+    const stray = rest[0];
+    return stray === undefined
+      ? { command: "upgrade" }
+      : unexpected("upgrade", stray);
   }
 
   if (word === "init") {

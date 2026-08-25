@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { getRequestListener } from "@hono/node-server";
 import httpProxy from "http-proxy";
 import { createApp } from "./http/app.js";
+import { isEmbedded } from "./host/embedded.js";
 import { writeSharedTemplates } from "./host/project-files.js";
 import {
   ensureShallHome,
@@ -11,6 +12,7 @@ import {
   removeDaemonState,
   writeDaemonState,
 } from "./host/shall-home.js";
+import { refreshRegisteredKits } from "./service/projects.js";
 import { closeAllFeeds } from "./service/spec-events.js";
 
 process.title = "shall";
@@ -23,13 +25,22 @@ await writeSharedTemplates().catch(() => undefined);
 const config = await readConfig();
 const bindHost =
   process.env.SHALL_HOST === "0.0.0.0" ? "0.0.0.0" : "127.0.0.1";
-const isDevelopment = process.env.NODE_ENV === "development";
+// THE BINARY IS NEVER IN DEVELOPMENT, and the carry is what says so rather
+// than the environment. `bun build` INLINES `process.env.NODE_ENV` AT BUILD
+// TIME — it reads "development" inside a compiled executable no matter what the
+// parent process exported — so a daemon that trusted the variable alone would
+// hand every page to a Vite server that is not there. A Shall that carries its
+// own web app has a checkout behind it for exactly nobody.
+const isDevelopment =
+  process.env.NODE_ENV === "development" && !isEmbedded();
 const moduleDirectory = path.dirname(fileURLToPath(import.meta.url));
-// dist/main.js, so the built SPA is two levels up and over in apps/web.
-const spaRoot =
-  !isDevelopment
-    ? path.resolve(moduleDirectory, "../../apps/web/dist")
-    : undefined;
+// dist/main.js, so the built SPA is two levels up and over in apps/web — the
+// path a checkout has. In development Vite serves the pages, and in the single
+// binary there is no checkout to point at: the pages are carried, and `spa.ts`
+// takes them from there without being told.
+const spaRoot = isDevelopment
+  ? undefined
+  : path.resolve(moduleDirectory, "../../apps/web/dist");
 const app = createApp(bindHost, spaRoot);
 const honoListener = getRequestListener(app.fetch, { hostname: bindHost });
 const viteProxy = isDevelopment
@@ -121,3 +132,9 @@ process.once("SIGINT", () => {
 process.once("SIGTERM", () => {
   void shutdown();
 });
+
+// EVERY REGISTERED PROJECT'S KIT, ONCE — the half of an upgrade nobody clicks
+// for, argued in full over `refreshRegisteredKits`. It runs here, after the port
+// is held and a signal would be heard, because a machine with twenty projects
+// should not wait on a walk of all of them before its app answers.
+await refreshRegisteredKits();
