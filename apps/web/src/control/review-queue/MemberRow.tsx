@@ -87,6 +87,15 @@ export interface MemberRowProps {
   defaultOpen?: boolean;
   /** One line under the top line: who submitted this, or why this row has no buttons. */
   caption?: ReactNode;
+  /**
+   * WHAT THE TOGGLE OPENS, NAMED BY WHAT IS UNDER IT. The default says
+   * "contents" and not "changes" because a diff is only one of the two things
+   * that can be down there: a node nobody has approved, and any node in a
+   * project git cannot answer for, has no earlier version to move from and
+   * shows the file as it stands. A row that promised changes and opened on a
+   * whole file was naming the rarer case. The report and claim cards override
+   * it with their own noun.
+   */
   showLabel?: string;
   hideLabel?: string;
   onApprove: (id: string) => Promise<void>;
@@ -115,8 +124,8 @@ export function MemberRow({
   canReject,
   defaultOpen = false,
   caption = null,
-  showLabel = "Show changes",
-  hideLabel = "Hide changes",
+  showLabel = "Show contents",
+  hideLabel = "Hide contents",
   onApprove,
   onReject,
   onWithdraw,
@@ -161,6 +170,7 @@ export function MemberRow({
     }
     asked.current = diffKey;
     let live = true;
+    let settled = false;
     setVersionBusy(true);
     setVersionError(null);
     api.spec.approvedVersion
@@ -183,12 +193,27 @@ export function MemberRow({
         }
       })
       .finally(() => {
+        settled = true;
         if (live) {
           setVersionBusy(false);
         }
       });
     return () => {
       live = false;
+      /*
+       * A READ STILL IN FLIGHT LEAVES NO LATCH BEHIND. The `then` and the
+       * `finally` above are disarmed the moment `live` goes false, so nothing
+       * this run fetched can ever reach the screen — while the latch, a ref,
+       * survives the cleanup and would tell the next run the question had
+       * already been asked. Neither answers, and the panel sits on "Reading
+       * the approved version…" for as long as it is open. React's development
+       * double-mount does exactly this to every row that opens with the card,
+       * which is why the sentence was the whole of what a person saw. A read
+       * that settled keeps its latch: that is the reopen that costs nothing.
+       */
+      if (!settled) {
+        asked.current = null;
+      }
     };
   }, [open, diffKey, projectId, member.id]);
 
@@ -196,7 +221,7 @@ export function MemberRow({
   const shown = version !== null && version.key === diffKey ? version.value : null;
 
   /**
-   * WHAT TO DRAW UNDER "SHOW CHANGES", WHICH IS NOT ALWAYS A DIFF.
+   * WHAT TO DRAW UNDER "SHOW CONTENTS", WHICH IS NOT ALWAYS A DIFF.
    *
    * A node nobody has approved has no earlier version to move from, so the
    * whole file IS the change — that is what approving it signs off. `changed`
@@ -423,7 +448,7 @@ export function MemberRow({
                   <div className="grid gap-2">
                     {member.reason === "changed" && shown?.approved === null ? (
                       <p className="text-muted-foreground text-sm">
-                        Git no longer holds the version this was approved at, so
+                        Git does not hold the version this was approved at, so
                         there is nothing to compare against. This is the file as
                         it stands.
                       </p>
