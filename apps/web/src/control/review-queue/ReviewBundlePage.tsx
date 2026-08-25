@@ -7,12 +7,7 @@ import {
   type ReactNode,
 } from "react";
 import { Link, useParams } from "react-router";
-import {
-  BAND_ORDER,
-  bandOf,
-  isNodeType,
-  type NodeTypeName,
-} from "@shall/core/graph";
+import { isNodeType, type NodeTypeName } from "@shall/core/graph";
 import { api } from "@/api";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -643,7 +638,7 @@ function Unchanged({
         render={<Button type="button" variant="ghost" size="sm" />}
       >
         {open ? <ChevronDown /> : <ChevronRight />}
-        {`Unchanged in this subgraph — confirm this is intended (${String(nodes.length)})`}
+        {`Related to this change but not changed themselves — confirm this is intended (${String(nodes.length)})`}
       </CollapsibleTrigger>
       <CollapsibleContent className="grid gap-2 pt-2">
         {nodes.map((node) => (
@@ -655,59 +650,6 @@ function Unchanged({
         ))}
       </CollapsibleContent>
     </Collapsible>
-  );
-}
-
-/**
- * HOW MUCH OF THE GRAPH IS UNDER THIS DECISION, counted by type and grouped by
- * the band the type is drawn in — the same four columns as the Spec plane, so
- * "three requirements and a criterion" reads as a place on the board rather
- * than as a list of words. There is no mini graph: the count IS the answer to
- * how big this is, and a picture of it would be a new visual element for a
- * question a number already settles.
- */
-function Counts({
-  counts,
-}: {
-  counts: readonly { type: string; count: number }[];
-}) {
-  if (counts.length === 0) {
-    return null;
-  }
-  const loose = counts.filter((entry) => bandOf(entry.type) === null);
-  return (
-    <div className="grid gap-2">
-      {BAND_ORDER.map((band) => {
-        const inBand = counts.filter((entry) => bandOf(entry.type) === band);
-        if (inBand.length === 0) {
-          return null;
-        }
-        return (
-          <div key={band} className="grid gap-1">
-            <p className={CAPTION}>{band}</p>
-            <div className="flex flex-wrap gap-2">
-              {inBand.map((entry) => (
-                <Badge key={entry.type} variant="outline">
-                  {`${entry.type} ${String(entry.count)}`}
-                </Badge>
-              ))}
-            </div>
-          </div>
-        );
-      })}
-      {/* A type the canon does not know still gets counted. Nothing should
-          reach this, and a count silently dropped would be the worst way to
-          find out otherwise. */}
-      {loose.length === 0 ? null : (
-        <div className="flex flex-wrap gap-2">
-          {loose.map((entry) => (
-            <Badge key={entry.type} variant="outline">
-              {`${entry.type} ${String(entry.count)}`}
-            </Badge>
-          ))}
-        </div>
-      )}
-    </div>
   );
 }
 
@@ -765,7 +707,6 @@ function ApprovalCard({
           {...wiring}
         />
       )}
-      <Counts counts={bundle.counts} />
       {rest.map((member) => (
         <MemberRow
           key={member.id}
@@ -845,7 +786,6 @@ function ReportCard({
           {...wiring}
         />
       ))}
-      <Counts counts={bundle.counts} />
       <Unchanged nodes={bundle.unchanged} />
     </div>
   );
@@ -926,7 +866,6 @@ function FindingCard({
           {...wiring}
         />
       ))}
-      <Counts counts={bundle.counts} />
     </div>
   );
 }
