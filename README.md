@@ -4,6 +4,7 @@
 
 **Spec as the control plane for your agents.**
 
+[![Agents: Claude Code](https://img.shields.io/badge/agents-Claude%20Code-D97757.svg)](https://claude.com/claude-code)
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](./LICENSE)
 [![Runtime: Bun](https://img.shields.io/badge/runtime-Bun-black.svg)](https://bun.sh)
 
