@@ -95,10 +95,6 @@ not banned because it is ordinary English. A skill that drifts back to "the
 task" for a work item would pass. Where it lands: the same file, as a rule that
 fails "task" only inside a code span or beside a type name.
 
-**Delete `docs/plans/*`?** The two files are self-marked temporary and still
-carry the old vocabulary; they were left untouched this round and excluded from
-the completion grep. Deleting them is one `git rm`, and the user's call.
-
 **A module's hidden decision has no home.** The old "Hidden Decision" section
 was abolished because it sheltered vagueness; the hiding question survives in
 stage 1 as a boundary test only, and what a module keeps to itself is meant to
@@ -117,10 +113,10 @@ but it is a change to the linter for its own sake and belongs to a round that
 is about the linter. Recorded so the third payment is the last.
 
 **The feed has no read path from the CLI, and the absence is deliberate.**
-`docs/Shall_Activity_Feed_Spec.md` §0 forbids any agent-facing read, and
+The feed's charter forbids any agent-facing read, and
 `spec.activity` takes a project id, which the CLI never has. Written down so
 nobody adds `shall feed` as the obvious completion: if it were ever reversed,
-the spec's §0 changes first, then a path-taking procedure beside `spec.board`
+this entry changes first, then a path-taking procedure beside `spec.board`
 in `daemon/src/http/router.ts`, a `SHAPES` entry, and a lint entry.
 
 ## From the batched-approval round (2026-08-22)

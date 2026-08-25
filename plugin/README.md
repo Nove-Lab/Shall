@@ -86,10 +86,10 @@ And it never decides. A `Decision` is a person's judgment, so the place one is w
 
 **A turn that breaks off mid-session leaves nothing behind but git.** There is no note file, no scratch state, no resume token: `/shall:work.report` reconstructs the turn from the commits and the specification, and asks about anything that left no commit. That is the whole recovery path, and it was chosen over persisting notes that would go stale the first time somebody edited the code by hand.
 
-**Neither work command has been dogfooded yet.** `/shall:specify` and `/shall:plan` were each run against a weak model on purpose before they were trusted, and `docs/specify-dogfood.md` and `docs/plan-dogfood.md` are what came back. The work cycle has had no such round.
+**Neither work command has been dogfooded yet.** `/shall:specify` and `/shall:plan` were each run against a weak model on purpose before they were trusted, and what those rounds turned up is folded into the prose the skills carry now. The work cycle has had no such round.
 
-**`/shall:plan`'s two-stage shape has not been dogfooded.** `docs/plan-dogfood.md` records the phase-gated version; the two stages, the stack question and the one-pass write are what the next headless round checks.
+**`/shall:plan`'s two-stage shape has not been dogfooded.** The round that was run saw the earlier, phase-gated version; the two stages, the stack question and the one-pass write are what the next headless round checks.
 
 **The feed has no read path for an agent, and is not going to get one.** `shall log` is write-only and answers yes or no; an agent that needs the past reads the graph and `shall status`. If a reason for reading ever appears it is a new question, not a flag.
 
-**`/shall:help` has not been dogfooded.** Its three probes — an empty folder, a project, a project question — are listed in `docs/Shall_Help_Skill_Spec.md`; a headless pass is the check before it is trusted, and a session with a person has not happened.
+**`/shall:help` has not been dogfooded.** Its three probes — an empty folder, a project, a project question — await a headless pass before it is trusted, and a session with a person has not happened.
