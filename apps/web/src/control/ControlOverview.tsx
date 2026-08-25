@@ -38,6 +38,18 @@ import { useProject } from "@/project-context";
 const GLANCE = 5;
 
 /**
+ * THE WIDTH EVERY GLANCE ROW RESERVES FOR ITS LABEL, so the three list cards
+ * start their titles on one line. A badge is a pill sized by its own words —
+ * "Fix Spec" is barely half of "Standalone finding" — so a row that let the
+ * badge set the title's left edge gave each card its own edge, and each row
+ * inside a card another one under it. The badge keeps its own width; the column
+ * holding it does not. Eight rems clears the longest label the three kinds
+ * spell — `Standalone finding`, seven and three quarters at the badge's twelve
+ * pixels — and everything past it belongs to the title.
+ */
+const LABEL_COLUMN = "w-32 shrink-0";
+
+/**
  * One row of a glance, whatever list it came from — a badge, a door, a note.
  * The door is null where the row has no page of its own: a feed row is an
  * event that happened, not a thing to open, and its refs are doors only on
@@ -195,7 +207,9 @@ function PanelGlance({
     <ul className="grid gap-2">
       {rows.slice(0, GLANCE).map((row) => (
         <li key={row.key} className="flex min-w-0 items-center gap-2">
-          <Badge variant="secondary">{row.label}</Badge>
+          <span className={LABEL_COLUMN}>
+            <Badge variant="secondary">{row.label}</Badge>
+          </span>
           {/* EVERY ROW THAT HAS A PAGE IS ITS OWN DOOR. A glance that could
               only be entered through "View all" made a person land on the list
               they had just read and find the row again; the title here goes
