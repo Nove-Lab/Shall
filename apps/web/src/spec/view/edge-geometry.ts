@@ -54,7 +54,14 @@ export type CardBox = Point & {
  * module can be read and tested without the layout — any placement satisfies
  * it.
  */
-export type CardOrigin = Point;
+export type CardOrigin = Point & {
+  /**
+   * A card that sizes itself — the metamodel's, whose cards fit their own
+   * names. Absent everywhere else, where every card is the geometry's one
+   * width; the fallback in `boxOf` is what keeps the two readings one rule.
+   */
+  readonly width?: number;
+};
 
 /**
  * The part of the layout's `GEOMETRY.grid` / `GEOMETRY.graph` this module
@@ -110,7 +117,7 @@ function boxOf(origin: CardOrigin, geometry: CardGeometry): CardBox {
   return {
     x: origin.x,
     y: origin.y,
-    width: geometry.cardWidth,
+    width: origin.width ?? geometry.cardWidth,
     height: geometry.cardHeight,
   };
 }

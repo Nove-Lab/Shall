@@ -131,7 +131,7 @@ export const ANCHOR_RULES: readonly AnchorRule[] = [
   { type: "CompletionReport",     anchors: [{ direction: "out", edgeType: "CLAIMS" }] },
   { type: "Finding",              anchors: [] },
 
-  // The satellite, which hangs off the chalk node that assumed it.
+  // The satellite, which hangs off whichever node assumed it.
   { type: "Assumption",           anchors: [{ direction: "in", edgeType: "ASSUMES" }] },
 ];
 

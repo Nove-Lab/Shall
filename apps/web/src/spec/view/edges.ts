@@ -32,12 +32,14 @@ import { sinksIntoDomain, type Band } from "./model";
  * relations give byte-identical paths on every machine.
  */
 
-/** A card as this module needs it: an id, a band, and where its top-left sits. */
+/** A card as this module needs it: an id, a band, where its top-left sits — and, when it sizes itself, how wide it is. */
 export type RoutableCard = {
   readonly id: string;
   readonly band: Band;
   readonly x: number;
   readonly y: number;
+  /** See `CardOrigin` — the metamodel's cards fit their names; everything else takes the geometry's width. */
+  readonly width?: number;
 };
 
 /**
@@ -81,7 +83,7 @@ export function routedEdges<E extends Incidence>(
     box: {
       x: card.x,
       y: card.y,
-      width: geometry.cardWidth,
+      width: card.width ?? geometry.cardWidth,
       height: geometry.cardHeight,
     },
   }));
@@ -103,7 +105,7 @@ export function routedEdges<E extends Incidence>(
             {
               x: source.x,
               y: source.y,
-              width: geometry.cardWidth,
+              width: source.width ?? geometry.cardWidth,
               height: geometry.cardHeight,
             },
             ends.offset,

@@ -39,8 +39,8 @@ export function MetamodelDialog({ onClose }: { onClose: () => void }) {
         <DialogHeader>
           <DialogTitle>Spec graph metamodel</DialogTitle>
           <DialogDescription>
-            Every node type the canon has, and every relation it allows between
-            them. Click a type to light what it touches.
+            Every node type, and every relation allowed between them. Click a
+            type to light what it touches.
           </DialogDescription>
         </DialogHeader>
         <ReactFlowProvider>

@@ -22,7 +22,7 @@ In a revision run the scan covers only what this run wrote or changed, not the w
 2. **Extract what the dictionary lacks** — a word used as if everyone already agreed what it means, and a concept with structure behind it. Compare against the terms `shall status --json` lists; a word you had to explain inside a body is a word that belongs in the dictionary.
 3. **Register them under Phase 3's rules**: one term one definition, spelling variants settled the three ways, entities kept implementation-agnostic. Those rules live in [phase 3](./phase-3.md) — read them there. One term, one definition; the rule about that has one home too.
 4. **Correct usage that conflicts with a definition. The term wins and the statement is revised.** Only when the definition itself is wrong do you revise the term, and only with the user's confirmation: a definition is what every statement above it leans on, so moving it moves them all.
-5. **Resolve what is left by asking.** This phase has nothing that may assume — `ASSUMES` runs from a goal, a responsibility or a requirement, and Phase 6 writes none of the three — so a default here has nowhere to hang and would land as an orphan. Ask instead.
+5. **Resolve what is left by asking.** This phase records no assumption — its writes are vocabulary lines and revisions, and the three types this process hangs assumptions on are not being written — so a default here is not recorded. Ask instead.
 
 ## The questions
 

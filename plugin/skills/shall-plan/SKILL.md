@@ -101,7 +101,7 @@ Every relation this process uses, and the file each one is written in.
 | a work item waits on another | `WorkItem —DEPENDS_ON→ WorkItem` | the **waiting** work item's file |
 | a work item aims at criteria | `WorkItem —TARGETS→ AcceptanceCriterion` — none, one or several | the **work item's** file |
 | the stack binds a module | `Decision —AFFECTS→ Module` — the technology decision, and the one decision this process writes | the decision's file |
-| a default recorded as an assumption | `Module —ASSUMES→ Assumption` — from a module and nothing else | the module's file |
+| a default recorded as an assumption | `Module —ASSUMES→ Assumption` — the plan band's one assuming type | the module's file |
 | a term used in prose | `MENTIONS → Term` | the mentioning node's file |
 | a module depending on another module | **nothing — no relation joins two modules** | — |
 | a module answering to a requirement or a constraint | **nothing — no relation joins them either** | — |

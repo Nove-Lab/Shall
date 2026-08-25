@@ -707,28 +707,33 @@ export function typeCardPieces(
   geometry: { readonly cardWidth: number; readonly cardHeight: number },
   highlight: Highlight,
 ): TypeCardPiece[] {
-  return placements.map((placement) => ({
-    // The canvas's own id, so a type named like a piece of scenery cannot
-    // displace one — the same defence `cardNodeId` gives the graph.
-    id: cardNodeId(placement.id),
-    type: "type" as const,
-    position: { x: placement.x, y: placement.y },
-    width: geometry.cardWidth,
-    height: geometry.cardHeight,
-    measured: { width: geometry.cardWidth, height: geometry.cardHeight },
-    data: {
-      type: placement.type,
-      picked: highlight.selected === placement.id,
-      neighbour:
-        highlight.selected !== null &&
-        highlight.selected !== placement.id &&
-        highlight.nodes.has(placement.id),
-      dimmed:
-        highlight.selected !== null && !highlight.nodes.has(placement.id),
-      width: geometry.cardWidth,
+  return placements.map((placement) => {
+    // The metamodel's cards fit their own names — the placement carries the
+    // width; the geometry's one width is the fallback the routing shares.
+    const width = placement.width ?? geometry.cardWidth;
+    return {
+      // The canvas's own id, so a type named like a piece of scenery cannot
+      // displace one — the same defence `cardNodeId` gives the graph.
+      id: cardNodeId(placement.id),
+      type: "type" as const,
+      position: { x: placement.x, y: placement.y },
+      width,
       height: geometry.cardHeight,
-    },
-    draggable: false,
-    zIndex: Z.card,
-  }));
+      measured: { width, height: geometry.cardHeight },
+      data: {
+        type: placement.type,
+        picked: highlight.selected === placement.id,
+        neighbour:
+          highlight.selected !== null &&
+          highlight.selected !== placement.id &&
+          highlight.nodes.has(placement.id),
+        dimmed:
+          highlight.selected !== null && !highlight.nodes.has(placement.id),
+        width,
+        height: geometry.cardHeight,
+      },
+      draggable: false,
+      zIndex: Z.card,
+    };
+  });
 }

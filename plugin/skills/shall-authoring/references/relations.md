@@ -29,7 +29,8 @@ Goal ──PURSUED_BY──▶ Actor ──PERFORMS──▶ UseCase ──DETAI
 Scenario ──DERIVES_RESPONSIBILITY──▶ SystemResponsibility ──REQUIRES──▶ Requirement
 Requirement ──HAS_CRITERION──▶ AcceptanceCriterion   (the unit verdict)
 Scenario ──HAS_CRITERION──▶ AcceptanceCriterion      (the integration verdict)
-Requirement ──HAS_CONSTRAINT──▶ Constraint
+any intent type ──HAS_CONSTRAINT──▶ Constraint       (except Constraint itself; Module may too)
+any intent type ──ASSUMES──▶ Assumption              (and Module, one band down; nothing in execution assumes)
 ```
 
 `SATISFIES`, `DERIVED_FROM`, `ASSIGNED_TO` and `CONSTRAINS` **do not exist**. Older process documents use them; write one and the file is refused.
@@ -43,13 +44,14 @@ SystemResponsibility ──IS_REALIZED_BY──▶ Module
 Module ──EXPOSES──▶ Interface ──CARRIES──▶ DataSchema ──REPRESENTS──▶ DomainEntity
 Module ──CONSUMES──▶ Interface        (the contract this module calls)
 Module ──ALLOCATES──▶ WorkItem ──DEPENDS_ON──▶ WorkItem
+Module ──HAS_CONSTRAINT──▶ Constraint       (a fence on the boundary, held in the module's file)
 WorkItem ──TARGETS──▶ AcceptanceCriterion   (written in the work item; none, one or several)
 Decision ──AFFECTS──▶ Module               (the technology decision /shall:plan writes)
 ```
 
 **No relation joins two modules.** A module depends on another by consuming what that one exposes, so the dependency is two lines about one contract and never a line between the two files — which is also why a dependency you cannot name a contract for is a dependency reaching past a boundary into somebody's internals.
 
-**No relation joins a module to a requirement or a constraint.** Those are read while the boundaries are being cut and leave no trace in the graph, so the reasoning that used one has to be written into the module's own words or it is gone.
+**No relation joins a module to a requirement.** Requirements are read while the boundaries are being cut and leave no trace in the graph, so the reasoning that used one has to be written into the module's own words or it is gone. A constraint is different now: a module may hold one with `HAS_CONSTRAINT` in its own file, the way an intent node does.
 
 ## Which end owns the line
 

@@ -39,7 +39,12 @@ import { relationLabel } from "./relations";
 
 /** One card, and how the board is spaced. Nothing outside this file reads it. */
 export const METAMODEL = {
-  /** Wide enough for `SystemResponsibility` in the mono face, on the 8px scale. */
+  /**
+   * The routing fallback `CardGeometry` requires. Every placement this file
+   * makes carries its own width — `typeCardWidth` below, cut to the name — so
+   * nothing on this board actually takes it; it is the widest name's room,
+   * kept so a placement that somehow lost its width still gets a sane box.
+   */
   cardWidth: 176,
   /** One `text-xs` line box in `py-1.25` inside the border: 1 + 5 + 16 + 5 + 1. */
   cardHeight: 28,
@@ -85,6 +90,17 @@ export const METAMODEL = {
   /** A wrapped row starts a little further in, so its own cross-band legs stay long. */
   rowIndent: 40,
 } as const;
+
+/**
+ * How wide one type's card is: the name in the card's own face, plus the
+ * card's chrome. `CARD_SHELL` is `px-2` in a 1px border (16 + 2), the face is
+ * `font-mono text-xs` — a 12px monospace advance is 7.2px — and two pixels of
+ * slack keep a rounding difference from ever truncating a name. Each card
+ * fits its own name, so `Term` is narrow and `SystemResponsibility` wide.
+ */
+function typeCardWidth(name: string): number {
+  return Math.ceil(name.length * 7.2) + 18 + 2;
+}
 
 /** The whole board: where the cards go, the band strips, and how big it is. */
 export interface MetamodelBoard {
@@ -133,9 +149,12 @@ export function metamodelBoard(): MetamodelBoard {
         if (index > 0) {
           const previous = row[index - 1];
           x +=
-            METAMODEL.cardWidth +
+            (previous === undefined
+              ? METAMODEL.cardWidth
+              : typeCardWidth(previous)) +
             (previous === undefined ? METAMODEL.minGap : gapBetween(previous, type));
         }
+        const width = typeCardWidth(type);
         placements.push({
           id: type,
           type,
@@ -144,8 +163,9 @@ export function metamodelBoard(): MetamodelBoard {
           band: bandOf(type) ?? band,
           x,
           y,
+          width,
         });
-        widest = Math.max(widest, x + METAMODEL.cardWidth);
+        widest = Math.max(widest, x + width);
       }
     }
     const height = rows.length * METAMODEL.rowHeight;

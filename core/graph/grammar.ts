@@ -19,7 +19,7 @@ export interface EdgeTriple {
 }
 
 /**
- * Every triple the canon allows: 64 rows over 29 numbered edge types.
+ * Every triple the canon allows: 74 rows over 29 numbered edge types.
  *
  * v5 numbered 33. #19 PRODUCED and #20 CITES went with the Commit type, whose
  * one job — naming the commits a piece of work produced — is now a `commits:`
@@ -50,7 +50,17 @@ export const EDGE_GRAMMAR: readonly EdgeTriple[] = [
   { fromType: "SystemResponsibility", toType: "Requirement",          edgeType: "REQUIRES" },               // #6
   { fromType: "Requirement",          toType: "AcceptanceCriterion",  edgeType: "HAS_CRITERION" },          // #7  unit verdict
   { fromType: "Scenario",             toType: "AcceptanceCriterion",  edgeType: "HAS_CRITERION" },          // #7— integration verdict
-  { fromType: "Requirement",          toType: "Constraint",           edgeType: "HAS_CONSTRAINT" },         // #8
+  // #8 HAS_CONSTRAINT runs from every intent type except Constraint itself —
+  // a constraint constraining a constraint anchors nothing and reads as noise
+  // — and, one band down, from a Module (§3-2 note): a boundary can be fenced
+  // the way a requirement is.
+  { fromType: "Goal",                 toType: "Constraint",           edgeType: "HAS_CONSTRAINT" },         // #8
+  { fromType: "Actor",                toType: "Constraint",           edgeType: "HAS_CONSTRAINT" },         // #8—
+  { fromType: "UseCase",              toType: "Constraint",           edgeType: "HAS_CONSTRAINT" },         // #8—
+  { fromType: "Scenario",             toType: "Constraint",           edgeType: "HAS_CONSTRAINT" },         // #8—
+  { fromType: "SystemResponsibility", toType: "Constraint",           edgeType: "HAS_CONSTRAINT" },         // #8—
+  { fromType: "Requirement",          toType: "Constraint",           edgeType: "HAS_CONSTRAINT" },         // #8—
+  { fromType: "AcceptanceCriterion",  toType: "Constraint",           edgeType: "HAS_CONSTRAINT" },         // #8—
   { fromType: "Requirement",          toType: "Requirement",          edgeType: "DEPENDS_ON" },             // #9  self-loop by design
   { fromType: "Requirement",          toType: "Requirement",          edgeType: "CONFLICTS_WITH" },         // #10 self-loop by design
 
@@ -60,6 +70,7 @@ export const EDGE_GRAMMAR: readonly EdgeTriple[] = [
   { fromType: "Module",         toType: "Interface",            edgeType: "CONSUMES" },               // #12
   { fromType: "Interface",            toType: "DataSchema",           edgeType: "CARRIES" },                // #13
   { fromType: "Module",         toType: "WorkItem",   edgeType: "ALLOCATES" },              // #14
+  { fromType: "Module",         toType: "Constraint",           edgeType: "HAS_CONSTRAINT" },         // #8— the one plan-band source
   { fromType: "WorkItem",   toType: "WorkItem",   edgeType: "DEPENDS_ON" },             // #15 the second DEPENDS_ON
 
   // §3-3 Execution view. #19 PRODUCED and #20 CITES are gone with the Commit
@@ -87,13 +98,19 @@ export const EDGE_GRAMMAR: readonly EdgeTriple[] = [
   // work item's closure is judged over, as #24 is a criterion's.
   { fromType: "CompletionReport", toType: "WorkItem",   edgeType: "CLAIMS" },                 // #24—
 
-  // §3-5 The assumption. ASSUMES attaches to the five chalk nodes of §0.5 and to
-  // nothing else, so the five sources are written out rather than implied.
+  // §3-5 The assumption. ASSUMES attaches to the whole intent band and to the
+  // Module one band down, and to nothing in the execution band: a record of
+  // what happened assumes nothing — it reports. The nine sources are written
+  // out rather than implied.
   { fromType: "Goal",                 toType: "Assumption",           edgeType: "ASSUMES" },                // #25
+  { fromType: "Actor",                toType: "Assumption",           edgeType: "ASSUMES" },                // #25
+  { fromType: "UseCase",              toType: "Assumption",           edgeType: "ASSUMES" },                // #25
+  { fromType: "Scenario",             toType: "Assumption",           edgeType: "ASSUMES" },                // #25
   { fromType: "SystemResponsibility", toType: "Assumption",           edgeType: "ASSUMES" },                // #25
   { fromType: "Requirement",          toType: "Assumption",           edgeType: "ASSUMES" },                // #25
+  { fromType: "AcceptanceCriterion",  toType: "Assumption",           edgeType: "ASSUMES" },                // #25
+  { fromType: "Constraint",           toType: "Assumption",           edgeType: "ASSUMES" },                // #25
   { fromType: "Module",         toType: "Assumption",           edgeType: "ASSUMES" },                // #25
-  { fromType: "WorkLog",              toType: "Assumption",           edgeType: "ASSUMES" },                // #25
 
   // §3-5b The revision edges, both out of a Decision and nothing else.
   //
@@ -126,12 +143,13 @@ export const EDGE_GRAMMAR: readonly EdgeTriple[] = [
   // somebody simply wanted is as good a reason as one an agent reported.
   { fromType: "Decision",             toType: "Finding",              edgeType: "RESOLVES" },               // #27
 
-  // §3-6 Domain, the global sink. MENTIONS #30 has exactly fifteen sources —
-  // the rows that carry it in §4's Term column. Term, DomainEntity, Journal,
-  // Evidence, CompletionReport and Finding are not among them, and no
-  // stated rule predicts that: it is read off the table, so it is written out.
-  // A Decision names a term here and revises one above; the two are different
-  // facts and a decision may need both.
+  // §3-6 Domain, the global sink. MENTIONS #30 has exactly fourteen sources:
+  // the domain relations are drawn down to the plan band and no further — the
+  // execution band records, it does not name vocabulary — so no execution
+  // type is among them, and neither are Term and DomainEntity themselves. It
+  // is read off the table, so it is written out. A Decision names a term here
+  // and revises one above; the two are different facts and a decision may
+  // need both.
   { fromType: "Goal",                 toType: "Term",                 edgeType: "MENTIONS" },
   { fromType: "Actor",                toType: "Term",                 edgeType: "MENTIONS" },
   { fromType: "UseCase",              toType: "Term",                 edgeType: "MENTIONS" },
@@ -144,7 +162,6 @@ export const EDGE_GRAMMAR: readonly EdgeTriple[] = [
   { fromType: "Interface",            toType: "Term",                 edgeType: "MENTIONS" },
   { fromType: "DataSchema",           toType: "Term",                 edgeType: "MENTIONS" },
   { fromType: "WorkItem",   toType: "Term",                 edgeType: "MENTIONS" },
-  { fromType: "WorkLog",              toType: "Term",                 edgeType: "MENTIONS" },
   { fromType: "Assumption",           toType: "Term",                 edgeType: "MENTIONS" },
   { fromType: "Decision",             toType: "Term",                 edgeType: "MENTIONS" },
   { fromType: "Term",                 toType: "DomainEntity",         edgeType: "DENOTES" },                // #31 the only edge out of Term

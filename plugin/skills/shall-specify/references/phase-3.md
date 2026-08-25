@@ -39,7 +39,7 @@ Ask through AskUserQuestion under the spine's rules. What is worth asking here:
 | two entities blur | where does one stop and the other begin? | 2–4 dividing rules | `Boundary` |
 | an alias may be a weed | should this spelling be retired from the prose? | retire it and correct the prose / keep it as a synonym | `Alias` |
 
-This phase writes nothing that may assume — `ASSUMES` runs from a goal, a responsibility or a requirement, and none is written here. So a point that a default would have carried is asked instead; the alternative is an orphan.
+This phase writes nothing that may assume — nothing in the domain band draws `ASSUMES`, and the three types this process hangs assumptions on are not written here. So a point that a default would have carried is asked instead.
 
 ## Authoring mechanics
 

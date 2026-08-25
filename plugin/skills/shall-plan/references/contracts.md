@@ -42,7 +42,7 @@ The validation rules the requirements already state — format, range, whether s
 6. **Carry the requirements' validation rules into the schema.**
 7. **Reconcile the contracts against each other.** The same data defined two ways by two schemas is a contradiction that whoever implements the second one will discover the hard way.
 
-An ambiguity a sensible default carries is not asked about — but **neither an interface nor a schema may assume anything**. `ASSUMES` runs from a module alone. So hang the default on the module that owns the contract, or ask.
+An ambiguity a sensible default carries is not asked about — but **neither an interface nor a schema may assume anything**. In this plane `ASSUMES` runs from a module alone. So hang the default on the module that owns the contract, or ask.
 
 ## The gate
 

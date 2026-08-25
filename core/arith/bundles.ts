@@ -329,7 +329,6 @@ const SCAN_ORDER = [
   "SystemResponsibility",
   "Requirement",
   "AcceptanceCriterion",
-  "Constraint",
   "Module",
   "Interface",
   "DataSchema",
@@ -344,16 +343,18 @@ const SCAN_ORDER = [
 ] as const satisfies readonly NodeTypeName[];
 
 /**
- * The types whose rank is borrowed from whatever they hang off. One today, and
- * still a list with the machinery around it — because `ASSUMES` runs from three
- * bands at once (a Goal, a responsibility or a requirement in Intent, a module
- * in Plan, a work log in Execution), an assumption has no fixed depth AND no
- * fixed side. Give it a static rank and either the walk climbs backwards out of
- * a work log into the report, or a work log's assumption is judged on the spec
- * side. Both of those are the borrow doing its job.
+ * The types whose rank is borrowed from whatever they hang off — because their
+ * holding relation runs from two bands at once. `ASSUMES` runs from the whole
+ * intent band and from a module; `HAS_CONSTRAINT` runs from the same two
+ * bands. So neither an assumption nor a constraint has a fixed depth: give one
+ * a static rank and either the walk climbs backwards out of a module into the
+ * intent band, or a module's fence is judged on somebody else's card. The
+ * borrow puts each beside the node that holds it, which is where a reviewer
+ * meets it.
  */
 const SATELLITE_TYPES = [
   "Assumption",
+  "Constraint",
 ] as const satisfies readonly NodeTypeName[];
 
 /**

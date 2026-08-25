@@ -29,7 +29,7 @@ Nothing in this skill or in its phase files lists a type's fields, its body head
 
 **Ask in options.** Questions go through AskUserQuestion: at most four per round, 2–4 options each (a free-text "Other" is added for you), the option you recommend first with `(Recommended)` suffixed to its label, header label 12 characters or fewer. A question you could answer correctly yourself is not a question.
 
-**A default becomes an Assumption, not a question.** Ambiguity a sensible default can carry is recorded as an Assumption node hanging off the node that assumes it. `ASSUMES` runs only from **Goal, SystemResponsibility and Requirement** in this process, so an Assumption needs one of those three present in the phase to hang off. Phases 2, 3 and 6 have no such anchor: there, resolve the point by asking, because the alternative is an orphan.
+**A default becomes an Assumption, not a question.** Ambiguity a sensible default can carry is recorded as an Assumption node hanging off the node that assumes it. This process draws `ASSUMES` only from **Goal, SystemResponsibility and Requirement** — the three whose statements carry defaults — though the canon lets any intent type assume. Phases 2, 3 and 6 write none of the three: there, resolve the point by asking.
 
 **Everything else is settled inside the phase.** A phase never closes over an open point. If the person defers, narrow the scope until a decision is possible and ask again.
 

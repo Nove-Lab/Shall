@@ -75,6 +75,12 @@ export interface Placement {
   band: Band;
   x: number;
   y: number;
+  /**
+   * A card that sizes itself — set only by the metamodel, whose cards fit
+   * their own names. Grid and graph placements carry none and every card
+   * takes the geometry's one width.
+   */
+  width?: number;
 }
 
 export interface ColumnHeader {

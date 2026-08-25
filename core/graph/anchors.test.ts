@@ -103,7 +103,7 @@ describe("ANCHOR_RULES", () => {
 });
 
 describe("EDGE_GRAMMAR", () => {
-  test("is 64 rows under 28 names, and answers to neither ESCALATES nor RAISES", () => {
+  test("is 74 rows under 28 names, and answers to neither ESCALATES nor RAISES", () => {
     // The counts are a hand-written pair because membership alone is blind to
     // a row added beside a row removed. The two names are written out for the
     // opposite reason: they are the ones an old file, an old ledger or an old
@@ -111,7 +111,7 @@ describe("EDGE_GRAMMAR", () => {
     // here before it can reach a node. Nothing raises a question — the canon
     // has no node to park one in — and a finding escalates nothing, because it
     // starts no relation at all.
-    assert.equal(EDGE_GRAMMAR.length, 64);
+    assert.equal(EDGE_GRAMMAR.length, 74);
     assert.equal(EDGE_TYPE_NAMES.length, 28);
     for (const name of ["ESCALATES", "RAISES"]) {
       assert.equal(EDGE_TYPE_NAMES.includes(name), false);

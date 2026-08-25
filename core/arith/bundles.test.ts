@@ -260,13 +260,15 @@ describe("the scan order", () => {
     assert.equal(scanRankOf("Sandwich"), null);
   });
 
-  test("the one satellite is flagged, and every body type is not", () => {
+  test("the two satellites are flagged, and every body type is not", () => {
     assert.deepEqual(scanRankOf("Decision"), { rank: 0, satellite: false });
     assert.deepEqual(scanRankOf("Goal"), { rank: 1, satellite: false });
-    // `ASSUMES` runs from three bands at once, so an assumption has no depth of
-    // its own: the flag is what sends it to borrow one per node, and the rank
-    // here is only the fallback it takes when nothing living holds it.
-    assert.deepEqual(scanRankOf("Assumption"), { rank: 20, satellite: true });
+    // `ASSUMES` and `HAS_CONSTRAINT` each run from two bands at once, so
+    // neither an assumption nor a constraint has a depth of its own: the flag
+    // is what sends each to borrow one per node, and the rank here is only
+    // the fallback taken when nothing living holds it.
+    assert.deepEqual(scanRankOf("Assumption"), { rank: 19, satellite: true });
+    assert.deepEqual(scanRankOf("Constraint"), { rank: 19, satellite: true });
   });
 
   test("a Decision outranks every type the canon has", () => {
@@ -853,11 +855,12 @@ describe("the work report", () => {
     assert.deepEqual(memberIds(queue, "report:WL-0001"), ["WL-0001"]);
   });
 
-  test("a finding stays in the report, and a mention does not drag the vocabulary in", () => {
+  test("a finding stays in the report, and the vocabulary stands apart from it", () => {
     // A FINDING STARTS NO RELATION AT ALL, so nothing points out of the record
     // at the spec it concerns — the ids it is about sit in its own frontmatter,
-    // where nothing resolves them. What still points out is MENTIONS: the log
-    // names a term, and the term is not part of the record for it. The counts
+    // where nothing resolves them. And nothing else points out either: the
+    // mention rows stop at the plan band, so a log cannot name a term, and a
+    // yellow term near the record stands alone by the domain rule. The counts
     // are over the members and the unchanged together, in canon order.
     const finding = node("Finding", "F-0001");
     // A second finding, already read, is the green member here: an evidence or
@@ -871,11 +874,10 @@ describe("the work report", () => {
       edge("J-0001", "LOGS", "WL-0001"),
       edge("WL-0001", "RECORDS", "F-0001"),
       edge("WL-0001", "RECORDS", "F-0002"),
-      edge("WL-0001", "MENTIONS", "T-0001"),
     ];
     const queue = queueOf(nodes, edges, { green: [...SPINE, noted] });
-    // The term is yellow and reached by nobody, so it stands alone — which is
-    // the domain rule, and the proof that the report did not take it.
+    // The term is yellow and reached by nobody — nothing in the execution band
+    // may reach it — so it stands alone, and the report did not take it.
     assert.deepEqual(bundleIds(queue), ["spec:T-0001", "report:J-0001"]);
     const bundle = queue.bundles.find((held) => held.id === "report:J-0001");
     assert.ok(bundle !== undefined && bundle.kind === "work-report");
