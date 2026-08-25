@@ -391,14 +391,15 @@ async function running(
 
   // The machine's browser opener, caught before it can put a window on a
   // screen: it writes down what it was handed and then does what it was told.
+  // Under both of its names, because the name is the platform's: `open` is what
+  // a mac calls and `xdg-open` what linux calls, and this suite runs on both.
   const bin = path.join(home, "bin");
   await mkdir(bin);
   const browsed = path.join(home, "browsed");
-  await writeFile(
-    path.join(bin, "open"),
-    `#!/bin/sh\nprintf '%s\\n' "$1" >> '${browsed}'\nexit ${setup.browser ?? 0}\n`,
-    { mode: 0o755 },
-  );
+  const opener = `#!/bin/sh\nprintf '%s\\n' "$1" >> '${browsed}'\nexit ${setup.browser ?? 0}\n`;
+  for (const name of ["open", "xdg-open"]) {
+    await writeFile(path.join(bin, name), opener, { mode: 0o755 });
+  }
 
   const cwd = setup.cwd ?? (await folder("work"));
   const env: NodeJS.ProcessEnv = {
