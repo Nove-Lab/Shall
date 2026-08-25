@@ -5,7 +5,6 @@
 **Spec as the control plane for your agents.**
 
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](./LICENSE)
-[![CLA](https://img.shields.io/badge/contributions-CLA%20required-lightgrey.svg)](./CLA.md)
 [![Runtime: Bun](https://img.shields.io/badge/runtime-Bun-black.svg)](https://bun.sh)
 
 </div>
@@ -127,7 +126,7 @@ How far the spec has come and what it still lacks, computed on every read and st
 ## License
 
 Shall is licensed under the [GNU Affero General Public License v3.0](./LICENSE).
-Contributions are welcome and require signing the [Contributor License Agreement](./CLA.md); a bot will ask for your signature on your first pull request.
+Contributions are welcome — first-time contributors are asked to sign a short [CLA](./CLA.md) on their pull request.
 
 ---
 
