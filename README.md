@@ -127,4 +127,4 @@ Contributions are welcome — first-time contributors are asked to sign a short 
 
 ---
 
-Design and invariants live in [`docs/Project_Structure_and_Architecture.md`](./docs/Project_Structure_and_Architecture.md); the agent plugin is documented in [`plugin/README.md`](./plugin/README.md).
+Design and invariants live in [`docs/Project_Structure_and_Architecture.md`](./docs/Project_Structure_and_Architecture.md); the `shall` CLI and the `/shall.…` agent commands each have a page of their own in [`docs/Shall_CLI_Commands.md`](./docs/Shall_CLI_Commands.md) and [`docs/Shall_Agent_Commands.md`](./docs/Shall_Agent_Commands.md); the agent plugin is documented in [`plugin/README.md`](./plugin/README.md).
