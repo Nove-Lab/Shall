@@ -1,5 +1,5 @@
-import type { FixSpecItem, ImplementItem, WorkBoard } from "@/spec/review";
-import { firstLine } from "@/spec/review";
+import type { FixSpecItem, ImplementItem, WorkBoard } from "../../spec/review";
+import { firstLine } from "../../spec/review";
 import { countWord } from "../parts";
 
 /**

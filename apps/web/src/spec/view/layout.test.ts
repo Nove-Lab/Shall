@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { graphLayout, gridLayout, type Layout, type Placement } from "./layout";
+import {
+  graphLayout,
+  gridLayout,
+  typeAtPoint,
+  type Layout,
+  type Placement,
+} from "./layout";
 import type { SpecEdge, SpecNode } from "./model";
 
 /**
@@ -214,5 +220,69 @@ test("the grid never sees a relation", () => {
     for (const [index, y] of ys.slice(1).entries()) {
       assert.equal(y - (ys[index] as number), 51, `${type} steps oddly`);
     }
+  }
+});
+
+/**
+ * THE LAYOUT READ BACKWARDS. The grid's numbers below are written out the way
+ * the graph's are above: the band gutter is 104, a slot is 148 wide with a 16px
+ * lane after it, and the fixture's four bands are 154, 307, 205 and 103 tall,
+ * stacked from zero.
+ */
+const GRID = gridLayout(NODES);
+const GUTTER = 104;
+const SLOT_PITCH = 164;
+/** The first row of the Intent band, and of the Plan band under it. */
+const INTENT_Y = 154;
+const PLAN_Y = 461;
+const BOARD_BOTTOM = 769;
+
+test("the grid answers the type whose slot the point is in", () => {
+  assert.equal(typeAtPoint(GRID, { x: GUTTER, y: 10 }), "Term");
+  assert.equal(typeAtPoint(GRID, { x: GUTTER + SLOT_PITCH, y: 10 }), "DomainEntity");
+  assert.equal(typeAtPoint(GRID, { x: GUTTER, y: INTENT_Y }), "Goal");
+  assert.equal(typeAtPoint(GRID, { x: GUTTER, y: PLAN_Y }), "Module");
+});
+
+test("the band decides first, so the same x is a different type one band down", () => {
+  // The sixth Intent column. Domain holds two columns and ends long before it.
+  const x = GUTTER + 5 * SLOT_PITCH;
+  assert.equal(typeAtPoint(GRID, { x, y: INTENT_Y }), "Requirement");
+  assert.equal(typeAtPoint(GRID, { x, y: 10 }), null);
+});
+
+test("a slot's right edge is open, and the lane between two columns belongs to neither", () => {
+  assert.equal(typeAtPoint(GRID, { x: GUTTER + 147, y: 10 }), "Term");
+  assert.equal(typeAtPoint(GRID, { x: GUTTER + 148, y: 10 }), null);
+  assert.equal(typeAtPoint(GRID, { x: GUTTER + 163, y: 10 }), null);
+});
+
+test("the gutter, and everything past the last band, is no type at all", () => {
+  assert.equal(typeAtPoint(GRID, { x: 0, y: 10 }), null);
+  assert.equal(typeAtPoint(GRID, { x: GUTTER - 1, y: 10 }), null);
+  assert.equal(typeAtPoint(GRID, { x: GUTTER, y: BOARD_BOTTOM }), null);
+  assert.equal(typeAtPoint(GRID, { x: GUTTER, y: -1 }), null);
+});
+
+test("a widened column answers its own type across both sub-columns", () => {
+  const crowded = gridLayout([
+    ...NODES,
+    node("R-0006", "Requirement"),
+  ]);
+  const x = GUTTER + 5 * SLOT_PITCH;
+  assert.equal(typeAtPoint(crowded, { x, y: INTENT_Y }), "Requirement");
+  assert.equal(typeAtPoint(crowded, { x: x + SLOT_PITCH, y: INTENT_Y }), "Requirement");
+  // And the column after it has been pushed one whole pitch to the right.
+  assert.equal(
+    typeAtPoint(crowded, { x: x + 2 * SLOT_PITCH, y: INTENT_Y }),
+    "AcceptanceCriterion",
+  );
+});
+
+test("the graph view has one row of columns, so x alone answers at any y", () => {
+  for (const y of [-500, 0, 46, 5000]) {
+    assert.equal(typeAtPoint(SETTLED, { x: 0, y }), "Term");
+    assert.equal(typeAtPoint(SETTLED, { x: 7 * COLUMN_PITCH, y }), "Requirement");
+    assert.equal(typeAtPoint(SETTLED, { x: 148, y }), null);
   }
 });

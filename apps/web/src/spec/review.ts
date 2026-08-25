@@ -1,4 +1,4 @@
-import type { api } from "@/api";
+import type { api } from "../api";
 import type { SpecEdge, SpecNode } from "./spec-node";
 import type { Closure, Satisfaction, Signal } from "./view/furniture";
 

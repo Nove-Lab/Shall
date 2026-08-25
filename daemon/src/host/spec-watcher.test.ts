@@ -134,10 +134,56 @@ describe("watching a project's folder", () => {
     const shallPath = await newShall();
     const folder = path.join(shallPath, "spec", "intent", "Goal");
     const watch = watching(shallPath);
+    // macOS hands a new watch the writes made just before it — here the mkdir
+    // that built the folder — so this waits that out. Every other test writes
+    // something the watch must speak about, which swallows the same noise; a
+    // test whose whole answer is silence has to start from silence.
+    while ((await watch.next(400)) !== "silence") {
+      /* what building the folder left behind */
+    }
 
     await writeFile(path.join(folder, "G-0001.md.9.tmp"), "half a file", "utf8");
 
     assert.equal(await watch.next(400), "silence");
+  });
+
+  test("a folder that goes away is let go, and what is left is still heard", async () => {
+    const shallPath = await newShall();
+    const intent = path.join(shallPath, "spec", "intent");
+    const watch = watching(shallPath);
+
+    // A type folder emptied and removed — by a `git checkout` of a branch that
+    // never had it, or by a person in a file manager.
+    await rm(path.join(intent, "Goal"), { recursive: true });
+    assert.equal(await watch.next(), "changed");
+
+    // The watch on the folder that went is dropped rather than kept as a
+    // descriptor on a dead inode, and the folders still there still speak.
+    await writeByRename(path.join(intent, "notes.md"), "still here");
+    assert.equal(await watch.next(), "changed");
+  });
+
+  test("a stop inside a burst takes the pending change with it", async () => {
+    const shallPath = await newShall();
+    const folder = path.join(shallPath, "spec", "intent", "Goal");
+    let changes = 0;
+    const stop = watchShallFolder(
+      shallPath,
+      () => {
+        changes += 1;
+      },
+      () => assert.fail("a watch that was stopped failed"),
+    );
+    stops.push(stop);
+
+    await writeByRename(path.join(folder, "G-0001.md"), "one");
+    // Long enough that the event has certainly arrived and short enough that
+    // the burst has not settled: the timer is pending when the stop lands.
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    stop();
+
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    assert.equal(changes, 0);
   });
 
   test("stopping is silence, and stopping twice is allowed", async () => {

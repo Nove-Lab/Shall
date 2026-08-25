@@ -1,5 +1,6 @@
 import { getProjectShallPath } from "../host/project-files.js";
 import { watchShallFolder } from "../host/spec-watcher.js";
+import { conflict } from "./errors.js";
 import { requireRegistryProject } from "./projects.js";
 
 /**
@@ -76,6 +77,15 @@ export async function subscribe(
   if (feed === undefined) {
     const listeners = new Set<Listener>();
     const opened: Feed = { listeners, stop: () => undefined };
+    // THE MAP HOLDS THE FEED BEFORE THE WATCH IS OPENED, because a watch can
+    // come apart while it is opening — a project folder that has been moved
+    // away is the ordinary way — and `tearDown` lets go of the feed the map is
+    // holding and of no other. Registered afterwards, that failure would pass
+    // over a feed nobody was holding yet and the map would then keep it,
+    // watchless, for the life of the daemon: every later subscriber to the
+    // project would join a feed that says nothing, and no reconnect would ever
+    // build another.
+    feeds.set(shallPath, opened);
     opened.stop = watchShallFolder(
       shallPath,
       () => {
@@ -91,12 +101,22 @@ export async function subscribe(
         );
       },
     );
-    feeds.set(shallPath, opened);
     feed = opened;
   }
   feed.listeners.add(listener);
 
   const held = feed;
+  if (feeds.get(shallPath) !== held) {
+    // The watch died while it was being opened, so this listener has joined a
+    // feed that is already over — and it was not among the ones told, because
+    // it was not there to tell. It is refused rather than held: a caller that
+    // is given a subscription opens a stream over a folder nothing is watching,
+    // and the whole point of this file is that such a screen does not exist.
+    held.listeners.delete(listener);
+    throw conflict(
+      `Shall could not watch ${shallPath}, so nothing on this project's screen would stay true. Nothing is listening.`,
+    );
+  }
   let released = false;
   return () => {
     if (released) {

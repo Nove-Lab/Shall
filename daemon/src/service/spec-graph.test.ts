@@ -177,6 +177,23 @@ describe("the create door", () => {
     );
   });
 
+  test("refuses an id carrying a NUL in the reader's own sentence, not the shape one", async () => {
+    // A file holding a NUL is a file git calls binary, so the exact sentence
+    // comes from the reader that judges the bytes and not from the id's shape
+    // rule, which would say something less true about what is wrong.
+    const project = await newProject();
+    await says(
+      createSpecNode({
+        projectId: project.id,
+        type: "Requirement",
+        id: `R-0001${"\u0000"}`,
+        ...values("R-0001", REQUIREMENT_BODY),
+      }),
+      "invalid",
+      "An id cannot contain a NUL character.",
+    );
+  });
+
   test("refuses an id no filesystem could carry", async () => {
     const project = await newProject();
     await says(
@@ -550,6 +567,21 @@ describe("the edge doors", () => {
     );
   });
 
+  test("refuse a target that is not there", async () => {
+    const project = await newProject();
+    await node(project, "Requirement", "R-0001", REQUIREMENT_BODY);
+    await says(
+      createSpecEdge({
+        projectId: project.id,
+        type: "HAS_CRITERION",
+        fromId: "R-0001",
+        toId: "AC-0001",
+      }),
+      "missing",
+      "Unknown node: AC-0001",
+    );
+  });
+
   test("refuse a relation from a node to itself", async () => {
     const project = await newProject();
     await node(project, "Requirement", "R-0001", REQUIREMENT_BODY);
@@ -773,6 +805,19 @@ describe("the project's own folder", () => {
       }
     },
   );
+
+  test("a project whose folder has gone is refused rather than served as an empty graph", async () => {
+    // The registry outlives the folder it points at, and a graph with nothing
+    // in it is the right answer for a project nobody has written in yet — so
+    // the two are told apart here rather than left to look alike.
+    const project = await newProject();
+    await rm(path.join(project.path, ".shall"), { recursive: true, force: true });
+    await says(
+      listSpecNodes(project.id),
+      "missing",
+      `Not a Shall project: ${project.path}`,
+    );
+  });
 
   test("tells the settings screen where the spec is", async () => {
     const project = await newProject();
@@ -1020,6 +1065,53 @@ describe("checkSpec", () => {
     );
     // The canvas is not asked to draw a line to a box that is not there.
     assert.deepEqual(await listSpecEdges(project.id), []);
+  });
+
+  test("the gaps arrive by file, and two holes in one file stay in the order they were found", async () => {
+    // What a person does with this list is open a file and fix the lines in
+    // it, so the order is the file's — and a file with two holes in it is one
+    // stop and not two.
+    const project = await newProject();
+    await node(project, "Goal", "G-0001", GOAL_BODY);
+    await node(project, "Term", "T-0001", "The repository the spec travels with.");
+    await node(project, "Term", "T-0002", "The folder the spec sits in.");
+    for (const toId of ["T-0001", "T-0002"]) {
+      await createSpecEdge({
+        projectId: project.id,
+        type: "MENTIONS",
+        fromId: "G-0001",
+        toId,
+      });
+    }
+    // Two anchorless nodes whose files sit either side of the Goal's, so the
+    // sort has something to move in both directions.
+    await node(project, "Actor", "A-0001", GOAL_BODY);
+    await node(project, "Requirement", "R-0001", REQUIREMENT_BODY);
+    for (const id of ["T-0001", "T-0002"]) {
+      await rm(
+        path.join(project.path, ".shall", "spec", "domain", "Term", `${id}.md`),
+      );
+    }
+
+    const check = await checkSpec(project.path);
+    assert.deepEqual(
+      check.gaps.map((gap) => gap.file),
+      [
+        "intent/Actor/A-0001.md",
+        "intent/Goal/G-0001.md",
+        "intent/Goal/G-0001.md",
+        "intent/Requirement/R-0001.md",
+      ],
+    );
+    assert.deepEqual(
+      check.gaps.map((gap) => gap.message),
+      [
+        "A-0001 is an Actor with no live anchor — it is held to the graph by a PURSUED_BY relation into it, and none stands. Draw the relation, or remove the node.",
+        "G-0001 has a MENTIONS relation to T-0001, and no file names T-0001. The relation is kept as written, so writing or restoring T-0001 attaches it again.",
+        "G-0001 has a MENTIONS relation to T-0002, and no file names T-0002. The relation is kept as written, so writing or restoring T-0002 attaches it again.",
+        "R-0001 is a Requirement with no live anchor — it is held to the graph by a REQUIRES relation into it, and none stands. Draw the relation, or remove the node.",
+      ],
+    );
   });
 
   test("a node no live anchor reaches is a gap the check names", async () => {

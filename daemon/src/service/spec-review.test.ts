@@ -18,6 +18,7 @@ import {
   rejectSpecDeletion,
   restoreSpecNode,
   reviewSpec,
+  userName,
 } from "./spec-review.js";
 import type { RegistryProject } from "../types.js";
 
@@ -137,6 +138,43 @@ async function says(
   const refusal = await refused(work);
   assert.equal(refusal.message, message);
   assert.equal(refusal.kind, kind);
+}
+
+/** A commit of the spec folder made the way a person's own terminal makes one. */
+async function commitByHand(
+  project: RegistryProject,
+  message: string,
+): Promise<void> {
+  await run("git", ["add", "-A", "--", ".shall/spec"], { cwd: project.path });
+  await run(
+    "git",
+    ["-c", "user.name=T", "-c", "user.email=t@t", "commit", "-q", "-m", message],
+    { cwd: project.path },
+  );
+}
+
+/** An environment variable put back the way it was found, unset and all. */
+function restore(name: string, held: string | undefined): void {
+  if (held === undefined) {
+    delete process.env[name];
+    return;
+  }
+  process.env[name] = held;
+}
+
+/**
+ * The same doors on a machine with no git. `runGit` spawns git by its name, so
+ * an empty `PATH` is a machine where that name answers to nothing — the same
+ * `ENOENT` a missing binary gives, which is what `absent` is.
+ */
+async function withoutGit<T>(work: () => Promise<T>): Promise<T> {
+  const held = process.env.PATH;
+  process.env.PATH = "";
+  try {
+    return await work();
+  } finally {
+    restore("PATH", held);
+  }
 }
 
 describe("the review", () => {
@@ -686,6 +724,94 @@ describe("the deletion doors", () => {
       "No commit in this repository holds a file for G-0001, so there is nothing to restore it from — only the working tree ever had it.",
     );
   });
+
+  test("rejecting a deletion on an id nothing answers to is refused", async () => {
+    const project = await newProject();
+    await goal(project, "G-0001");
+    await says(
+      rejectSpecDeletion({ projectId: project.id, id: "G-9999" }),
+      "missing",
+      "Unknown node: G-9999",
+    );
+  });
+
+  test("rejecting a deletion in a file that will not read names the file, not the id", async () => {
+    // The proposal is a line in the file, so a file Shall cannot read is a
+    // file whose proposal it cannot find — and the edit is the thing to fix.
+    const project = await newProject();
+    await goal(project, "G-0001");
+    await writeFile(
+      specFile(project, "intent/Goal/G-0002.md"),
+      "just some notes\n",
+      "utf8",
+    );
+    await says(
+      rejectSpecDeletion({ projectId: project.id, id: "G-0002" }),
+      "conflict",
+      'intent/Goal/G-0002.md has been edited into a state Shall cannot read — G-0002.md does not begin with a "---" frontmatter block, so it cannot be read as a spec node. Nothing was written, so that edit is still there to fix.',
+    );
+  });
+
+  test("a restore refuses a file that is standing but will not read", async () => {
+    // A restore is for a file that is GONE. One that is there and unreadable is
+    // an edit to fix, and putting history over it would take the edit with it.
+    const project = await newProject();
+    await goal(project, "G-0001");
+    await writeFile(
+      specFile(project, "intent/Goal/G-0002.md"),
+      "just some notes\n",
+      "utf8",
+    );
+    await says(
+      restoreSpecNode({ projectId: project.id, id: "G-0002" }),
+      "conflict",
+      "G-0002 is already on disk at intent/Goal/G-0002.md, so there is nothing to restore.",
+    );
+  });
+
+  test("a restore of a version that will not read writes nothing and names the commit", async () => {
+    const project = await newProject();
+    await goal(project, "G-0001");
+    const file = specFile(project, "intent/Goal/G-0001.md");
+    await writeFile(file, "just some notes\n", "utf8");
+    await commitByHand(project, "A file nobody can read");
+    await rm(file);
+
+    await says(
+      restoreSpecNode({ projectId: project.id, id: "G-0001" }),
+      "conflict",
+      'The version of G-0001 held by HEAD is in a state Shall cannot read — G-0001.md does not begin with a "---" frontmatter block, so it cannot be read as a spec node. Nothing was written, because a restore that lands a file the graph refuses restores nothing.',
+    );
+    await assert.rejects(stat(file));
+  });
+
+  test("a node deleted in a commit comes back from the commit before it", async () => {
+    const project = await newProject();
+    await goal(project, "G-0001");
+    const file = specFile(project, "intent/Goal/G-0001.md");
+    await commitSpec({ projectId: project.id, message: "Commit the goal" });
+    const sealed = await readFile(file, "utf8");
+    const approved = await approveSpecNode({ projectId: project.id, id: "G-0001" });
+
+    // Deleted the way no door sanctions, and the deletion itself committed —
+    // so HEAD has no such file and the history has to be walked back one.
+    await rm(file);
+    await commitSpec({ projectId: project.id, message: "Remove the goal" });
+
+    const restored = await restoreSpecNode({ projectId: project.id, id: "G-0001" });
+    assert.deepEqual(restored, { file: "intent/Goal/G-0001.md" });
+    assert.equal(await readFile(file, "utf8"), sealed);
+
+    // And the diff base is found past the commit that removed the file: that
+    // commit holds no version at all, and the one before it holds the approved
+    // bytes.
+    const version = await readApprovedVersion({ projectId: project.id, id: "G-0001" });
+    assert.equal(version.approved, sealed);
+    const review = await reviewSpec(project.id);
+    assert.deepEqual(review.statuses, [
+      status("G-0001", "green", "approved", stamped(approved)),
+    ]);
+  });
 });
 
 describe("the git doors", () => {
@@ -875,5 +1001,160 @@ describe("the git doors", () => {
     await commitSpec({ projectId: project.id, message: "Commit the goal" });
     const version = await readApprovedVersion({ projectId: project.id, id: "G-0001" });
     assert.equal(version.approved, null);
+  });
+
+  test("the approved version of an id nothing answers to is refused", async () => {
+    const project = await newProject();
+    await goal(project, "G-0001");
+    await says(
+      readApprovedVersion({ projectId: project.id, id: "G-9999" }),
+      "missing",
+      "Unknown node: G-9999",
+    );
+  });
+
+  test("the walk steps over the versions that will not read and takes the one that does", async () => {
+    const project = await newProject();
+    await goal(project, "G-0001");
+    const file = specFile(project, "intent/Goal/G-0001.md");
+    const canonical = await readFile(file, "utf8");
+    await commitByHand(project, "The goal as it reads");
+
+    // Two committed versions of the same path that are not spec nodes at all:
+    // one with no frontmatter, one whose frontmatter never closes. Neither is
+    // a version anybody can fix, so the walk goes past them.
+    await writeFile(file, "just some notes\n", "utf8");
+    await commitByHand(project, "Notes over the goal");
+    await writeFile(file, "---\nshort_name: travel\n", "utf8");
+    await commitByHand(project, "A frontmatter that never closes");
+
+    await writeFile(file, canonical, "utf8");
+    await approveSpecNode({ projectId: project.id, id: "G-0001" });
+    await writeFile(
+      file,
+      canonical.replace("repository.\n", "repository, always.\n"),
+      "utf8",
+    );
+
+    const version = await readApprovedVersion({ projectId: project.id, id: "G-0001" });
+    assert.equal(version.approved, canonical);
+  });
+
+  test("a retired approval block is taken out with the lines under it and nothing after them", async () => {
+    // The block an older Shall wrote, with the keys that outlived it still
+    // below — so the strip has to stop at the first line that is not under it.
+    const project = await newProject();
+    await goal(project, "G-0001");
+    const file = specFile(project, "intent/Goal/G-0001.md");
+    const canonical = await readFile(file, "utf8");
+    await writeFile(
+      file,
+      canonical.replace(
+        "---\n",
+        '---\napproval:\n  hash: sha256:00\n  tag: gone\n  by: yjshin\n  at: "2026-08-15T00:00:00.000Z"\n',
+      ),
+      "utf8",
+    );
+    await commitByHand(project, "Before the ledger");
+
+    await writeFile(file, canonical, "utf8");
+    await approveSpecNode({ projectId: project.id, id: "G-0001" });
+    await writeFile(
+      file,
+      canonical.replace("repository.\n", "repository, always.\n"),
+      "utf8",
+    );
+
+    const version = await readApprovedVersion({ projectId: project.id, id: "G-0001" });
+    assert.equal(version.approved, canonical);
+  });
+
+  test("with the repository taken away, the approved version is null and not a refusal", async () => {
+    const project = await newProject();
+    await goal(project, "G-0001");
+    await commitSpec({ projectId: project.id, message: "Commit the goal" });
+    await approveSpecNode({ projectId: project.id, id: "G-0001" });
+    const sealed = await readFile(specFile(project, "intent/Goal/G-0001.md"), "utf8");
+
+    await rm(path.join(project.path, ".git"), { recursive: true, force: true });
+    const version = await readApprovedVersion({ projectId: project.id, id: "G-0001" });
+    assert.equal(version.approved, null);
+    assert.equal(version.current, sealed);
+  });
+
+  test("with no git on the machine, the restore and the commit each name the fix", async () => {
+    const project = await newProject();
+    await goal(project, "G-0001");
+    await commitSpec({ projectId: project.id, message: "Commit the goal" });
+    await rm(specFile(project, "intent/Goal/G-0001.md"));
+
+    await withoutGit(async () => {
+      await says(
+        restoreSpecNode({ projectId: project.id, id: "G-0001" }),
+        "conflict",
+        "Shall could not run git on this machine, so the history G-0001 needs cannot be read — install git, or restore the file by hand.",
+      );
+      await says(
+        commitSpec({ projectId: project.id, message: "Commit the removal" }),
+        "conflict",
+        "Shall could not run git on this machine, so the spec could not be committed — install git, or commit by hand.",
+      );
+    });
+  });
+
+  test("a commit git itself refuses arrives in git's own words, and nothing is committed", async () => {
+    const project = await newProject();
+    await goal(project, "G-0001");
+    // A person's own `git commit` running in a terminal holds this lock, which
+    // is the ordinary way the button meets a git that will not stage.
+    const lock = path.join(project.path, ".git", "index.lock");
+    await writeFile(lock, "", "utf8");
+    const refusal = await refused(
+      commitSpec({ projectId: project.id, message: "Commit the goal" }),
+    );
+    await rm(lock);
+
+    assert.equal(refusal.kind, "conflict");
+    assert.ok(
+      refusal.message.startsWith("git refused the commit: fatal: Unable to create"),
+      refusal.message,
+    );
+    assert.ok(refusal.message.endsWith("Nothing was committed."), refusal.message);
+    assert.deepEqual(await readSpecGitStatus(project.id), {
+      repo: true,
+      dirty: true,
+    });
+  });
+});
+
+describe("the name on a record", () => {
+  test("a machine with no passwd entry, and one with no name in it, both fall back to the environment", async () => {
+    // `os.userInfo` throws where there is no passwd entry — a container — and
+    // there is no other way to stand in one; the environment is what is left,
+    // and the order it is asked in is what a record ends up carrying.
+    const held = os.userInfo;
+    const posix = process.env.USER;
+    const windows = process.env.USERNAME;
+    try {
+      os.userInfo = (() => {
+        throw new Error("no passwd entry for uid 1000");
+      }) as typeof os.userInfo;
+      process.env.USER = "container";
+      assert.equal(userName(), "container");
+
+      os.userInfo = (() => ({ ...held(), username: "" })) as typeof os.userInfo;
+      assert.equal(userName(), "container");
+
+      delete process.env.USER;
+      process.env.USERNAME = "windows";
+      assert.equal(userName(), "windows");
+
+      delete process.env.USERNAME;
+      assert.equal(userName(), "someone");
+    } finally {
+      os.userInfo = held;
+      restore("USER", posix);
+      restore("USERNAME", windows);
+    }
   });
 });

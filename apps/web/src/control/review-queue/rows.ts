@@ -1,4 +1,4 @@
-import type { BundleKind, ReviewBundle } from "@/spec/review";
+import type { BundleKind, ReviewBundle } from "../../spec/review";
 import { countWord } from "../parts";
 
 /**

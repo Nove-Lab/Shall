@@ -20,6 +20,7 @@ import type { SpecGraph } from "../store/file-store.js";
 import type { Ledgers, PayloadHash } from "./color.js";
 import { reviewGraph } from "./review.js";
 import {
+  closureBundleIdOf,
   reviewBundles,
   scanRankOf,
   type BundleMember,
@@ -258,6 +259,16 @@ describe("the scan order", () => {
       );
     }
     assert.equal(scanRankOf("Sandwich"), null);
+  });
+
+  test("a node of a type the canon does not have is nowhere in the queue", () => {
+    // It has no rank, so it has no place and no side; it has no colour either,
+    // so nothing stands it up and nothing reaches it. The loader never serves
+    // one, and the queue is honest about it rather than sorting it first.
+    const stray = node("Sandwich", "SW-0001");
+    const queue = queueOf([...SPINE, stray], SPINE_EDGES, { green: ABOVE });
+    assert.deepEqual(bundleIds(queue), ["spec:R-0001"]);
+    assert.deepEqual(memberIds(queue, "spec:R-0001"), ["R-0001"]);
   });
 
   test("the two satellites are flagged, and every body type is not", () => {
@@ -765,6 +776,57 @@ describe("the specification walk", () => {
     assert.deepEqual(memberIds(queue, "spec:R-0003"), ["R-0003"]);
   });
 
+  test("a line at an id no file names takes nothing onto the card", () => {
+    // The walk follows relations to nodes the graph HAS. A criterion nobody
+    // wrote is a row on `shall check`'s missing list and not a member here —
+    // there is nothing to put a colour or a button beside.
+    const queue = queueOf(
+      SPINE,
+      [...SPINE_EDGES, edge("R-0001", "HAS_CRITERION", "AC-0404")],
+      { green: ABOVE },
+    );
+    assert.deepEqual(memberIds(queue, "spec:R-0001"), ["R-0001"]);
+  });
+
+  test("a line drawn by a file the graph does not have reaches nothing either", () => {
+    // The other end of the same rule. The loader drops a refused file's edges,
+    // so this arrangement is written in by hand — and the walk is against the
+    // living set rather than against the edge list precisely so that no other
+    // assembly of a graph can put a dead referrer's node on a card.
+    const assumption = node("Assumption", "AS-0001");
+    const queue = queueOf(
+      [...SPINE, assumption],
+      [
+        ...SPINE_EDGES,
+        edge("R-0001", "ASSUMES", "AS-0001"),
+        edge("R-0404", "REQUIRES", "R-0001"),
+      ],
+      { green: ABOVE },
+    );
+    assert.deepEqual(memberIds(queue, "spec:R-0001"), ["R-0001", "AS-0001"]);
+  });
+
+  test("a chain of satellites that closes on itself terminates rather than hanging", () => {
+    // The canon cannot draw this today — no relation holds a satellite to
+    // another satellite — and the visited set is here anyway, because one
+    // hand-written file must not take the whole panel down with it. Neither of
+    // the two is held by anything homed, so both are homeless and fall in with
+    // the specification, which is where a person would go looking for them.
+    const assumption = node("Assumption", "AS-0001");
+    const constraint = node("Constraint", "CN-0001");
+    const queue = queueOf(
+      [...SPINE, assumption, constraint],
+      [
+        ...SPINE_EDGES,
+        edge("AS-0001", "HAS_CONSTRAINT", "CN-0001"),
+        edge("CN-0001", "ASSUMES", "AS-0001"),
+      ],
+      { green: ABOVE },
+    );
+    assert.deepEqual(bundleIds(queue), ["spec:AS-0001", "spec:R-0001"]);
+    assert.deepEqual(memberIds(queue, "spec:AS-0001"), ["AS-0001", "CN-0001"]);
+  });
+
   test("a vocabulary word stands alone, and no walk descends into it", () => {
     const term = node("Term", "T-0001");
     const queue = queueOf(
@@ -1183,6 +1245,68 @@ describe("AC closure", () => {
     assert.deepEqual(bundleIds(stale), ["closure:AC-0001"]);
   });
 
+  test("evidence two turns of work submitted names both logs, in id order", () => {
+    // One piece of evidence can be brought by more than one log, and the row
+    // is the thread back to the work: every submitter, each with its own
+    // commits, in an order that is the same on every read.
+    const otherLog = node("WorkLog", "WL-0002", { commits: ["9f8e7d"] });
+    const nodes = [...NODES, otherLog];
+    const edges = [
+      ...EDGES,
+      edge("J-0001", "LOGS", "WL-0002"),
+      edge("WL-0002", "ADDRESSES", "WI-0001"),
+      edge("WL-0002", "SUBMITS", "EV-0001"),
+    ];
+    const queue = queueOf(nodes, edges, { green: nodes });
+    const bundle = queue.bundles.find((held) => held.id === "closure:AC-0001");
+    assert.ok(bundle !== undefined && bundle.kind === "ac-closure");
+    assert.deepEqual(bundle.evidence[0]?.submittedBy, [
+      { workLogId: "WL-0001", commits: ["a1b2c3", "d4e5f6"] },
+      { workLogId: "WL-0002", commits: ["9f8e7d"] },
+    ]);
+  });
+
+  test("refusals that have since been fixed are the card's history, oldest first", () => {
+    // All three were refused and all three have been rewritten since, so every
+    // record has lapsed and every row is green — the criterion is asked about
+    // and the hearings are what happened to the question on the way here. They
+    // are read in the order they happened, and two heard in the same instant
+    // fall into id order so that the list is the same on every read.
+    const earlier = {
+      by: "t",
+      at: "2026-08-16T09:00:00Z",
+      rationale: "The run it shows is not the run the criterion asks for.",
+    };
+    const fixed = new Map(
+      [first, second, third].map((held) => [
+        held.id,
+        { ...held, body: `${held.body} And the empty case, now shown.` },
+      ]),
+    );
+    const nodes = NODES.map((held) => fixed.get(held.id) ?? held);
+    const ledgers: Ledgers = {
+      approvals: new Map(nodes.map((held) => approve(held, EDGES))),
+      rejections: new Map<string, RejectionRecord>([
+        [first.id, { rejectedHash: hashOf(first, EDGES), ...earlier }],
+        [second.id, { rejectedHash: hashOf(second, EDGES), ...REFUSAL }],
+        [third.id, { rejectedHash: hashOf(third, EDGES), ...earlier }],
+      ]),
+      acceptances: new Map(),
+      hash,
+    };
+    const queue = reviewBundles(graphOf(nodes, EDGES), ledgers);
+    const bundle = queue.bundles.find((held) => held.id === "closure:AC-0001");
+    assert.ok(bundle !== undefined && bundle.kind === "ac-closure");
+    assert.deepEqual(
+      bundle.history.map((row) => [row.evidenceId, row.at]),
+      [
+        ["EV-0001", earlier.at],
+        ["EV-0003", earlier.at],
+        ["EV-0002", REFUSAL.at],
+      ],
+    );
+  });
+
   test("stays away while a criterion left open over this list stands", () => {
     // The other exit: a person said "not met, and here is why". The word is in
     // the rejection ledger under the criterion's id, and it does not make the
@@ -1358,12 +1482,72 @@ describe("work item closure", () => {
     assert.equal(bundleIds(queue).includes("completion:WI-0001"), false);
   });
 
+  test("the aims travel in id order, and a line that is no aim is not one", () => {
+    // The criteria a work item aimed at are context for the person deciding
+    // whether the work item is done — all of them, and only them: a word of the
+    // vocabulary the work item mentions is neither an aim nor a row.
+    const otherCriterion = node("AcceptanceCriterion", "AC-0002");
+    const term = node("Term", "T-0001");
+    const nodes = [...NODES, otherCriterion, term];
+    const edges = [
+      ...EDGES,
+      edge("R-0001", "HAS_CRITERION", "AC-0002"),
+      edge("WI-0001", "TARGETS", "AC-0002"),
+      edge("WI-0001", "MENTIONS", "T-0001"),
+    ];
+    const queue = queueOf(nodes, edges, { green: nodes });
+    const bundle = queue.bundles.find(
+      (held) => held.id === "completion:WI-0001",
+    );
+    assert.ok(bundle !== undefined && bundle.kind === "work-item-closure");
+    assert.deepEqual(
+      bundle.targets.map((held) => held.id),
+      ["AC-0001", "AC-0002"],
+    );
+  });
+
+  test("a work item that aimed at nothing carries no targets, and is asked about all the same", () => {
+    // WI-0002 draws no line of its own at all — it targets nothing and waits
+    // on nothing — and the report claiming it is still a list a person judges.
+    // A work item is finished when somebody closes it over its reports, never
+    // when a criterion closes, so no aim is not a reason to stay off the queue.
+    const report = node("CompletionReport", "CR-0003");
+    const nodes = [...NODES, report];
+    const edges = [
+      ...EDGES,
+      edge("WL-0002", "ADDRESSES", "WI-0002"),
+      edge("WL-0002", "SUBMITS", "CR-0003"),
+      edge("CR-0003", "CLAIMS", "WI-0002"),
+    ];
+    const queue = queueOf(nodes, edges, { green: nodes });
+    const bundle = queue.bundles.find(
+      (held) => held.id === "completion:WI-0002",
+    );
+    assert.ok(bundle !== undefined && bundle.kind === "work-item-closure");
+    assert.deepEqual(bundle.targets, []);
+    assert.deepEqual(
+      bundle.reports.map((held) => held.id),
+      ["CR-0003"],
+    );
+  });
+
   test("is not asked while the work item's own wording is refused", () => {
     const queue = queueOf(NODES, EDGES, {
       green: NODES.filter((held) => held.id !== "WI-0001"),
       rejected: [workItem],
     });
     assert.equal(bundleIds(queue).includes("completion:WI-0001"), false);
+  });
+});
+
+describe("the id a closure card is found under", () => {
+  test("names the subject under its own prefix, and nothing for a type that closes nothing", () => {
+    // ONE SPELLING: the card is built under this id and the Vitals name the
+    // card an open subject is waiting on with it, so a panel link and a queue
+    // row cannot drift apart by a prefix.
+    assert.equal(closureBundleIdOf("AcceptanceCriterion", "AC-0001"), "closure:AC-0001");
+    assert.equal(closureBundleIdOf("WorkItem", "WI-0001"), "completion:WI-0001");
+    assert.equal(closureBundleIdOf("Requirement", "R-0001"), null);
   });
 });
 

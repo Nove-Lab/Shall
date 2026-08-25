@@ -321,6 +321,23 @@ describe("the reject door", () => {
     await assert.rejects(stat(rejectionsAt(project)));
   });
 
+  test("a rationale no file could carry is refused in the reader's own sentence", async () => {
+    // The rationale is judged as a body, so the sentence is the reader's and
+    // not this door's: what is wrong is the bytes, wherever they were typed.
+    const project = await newProject();
+    await node(project, "Goal", "G-0001");
+    await says(
+      rejectSpecNode({
+        projectId: project.id,
+        id: "G-0001",
+        rationale: `The body says nothing.${"\u0000"}`,
+      }),
+      "invalid",
+      "The specification cannot contain a NUL character.",
+    );
+    await assert.rejects(stat(rejectionsAt(project)));
+  });
+
   test("a multi-line rationale round-trips through the book", async () => {
     const project = await newProject();
     await node(project, "Goal", "G-0001");
@@ -1072,6 +1089,20 @@ describe("the leave-open door", () => {
       leaveSpecOpen({ projectId: project.id, id: "AC-0001", rationale: "  \n " }),
       "invalid",
       "A rationale is required — what the evidence does not show, and what would.",
+    );
+    await assert.rejects(stat(rejectionsAt(project)));
+  });
+
+  test("a rationale no file could carry is refused here too, in the same sentence", async () => {
+    const project = await greenProject();
+    await says(
+      leaveSpecOpen({
+        projectId: project.id,
+        id: "AC-0001",
+        rationale: `The evidence shows nothing.${"\u0000"}`,
+      }),
+      "invalid",
+      "The specification cannot contain a NUL character.",
     );
     await assert.rejects(stat(rejectionsAt(project)));
   });

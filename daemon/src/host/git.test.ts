@@ -77,4 +77,21 @@ describe("readGitBranch", () => {
     );
     assert.equal(await readGitBranch(dangling), null);
   });
+
+  test("a .git file that names no directory stops the walk rather than passing it on", async () => {
+    // The walk stops here rather than carrying on upwards: a folder holding a
+    // `.git` file IS the repository as far as this can tell, and a parent
+    // repository's branch would be the wrong answer rather than a spare one.
+    const outer = await repository("ref: refs/heads/outer\n");
+    const inner = path.join(outer, "packages", "app");
+    await mkdir(inner, { recursive: true });
+
+    // Nothing shaped like a pointer at all.
+    await writeFile(path.join(inner, ".git"), "not a pointer\n", "utf8");
+    assert.equal(await readGitBranch(inner), null);
+
+    // A pointer whose target is nothing but the space the regex needed.
+    await writeFile(path.join(inner, ".git"), "gitdir:  \n", "utf8");
+    assert.equal(await readGitBranch(inner), null);
+  });
 });

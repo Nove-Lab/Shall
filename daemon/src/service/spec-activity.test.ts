@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import {
+  chmod,
   mkdir,
   mkdtemp,
   readFile,
@@ -402,6 +403,34 @@ describe("the activity reader", () => {
       month: null,
       entries: [],
     });
+  });
+
+  test("a feed that is somehow a file is no months either", async () => {
+    const project = await newProject();
+    await mkdir(path.dirname(feedDir(project)), { recursive: true });
+    await writeFile(feedDir(project), "not a folder\n", "utf8");
+    assert.deepEqual(await activityFeed({ projectId: project.id }), {
+      months: [],
+      month: null,
+      entries: [],
+    });
+  });
+
+  test("a feed folder nobody can list is a conflict, with the folder named", async () => {
+    const project = await newProject();
+    await mkdir(feedDir(project), { recursive: true });
+    // Anything but "it is not there" is an answer the person should hear: a
+    // folder shut this way holds months the panel is not being shown.
+    await chmod(feedDir(project), 0o000);
+    try {
+      await says(
+        activityFeed({ projectId: project.id }),
+        "conflict",
+        `The activity feed folder at ${feedDir(project)} could not be listed: the filesystem refused permission.`,
+      );
+    } finally {
+      await chmod(feedDir(project), 0o755);
+    }
   });
 });
 

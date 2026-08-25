@@ -146,6 +146,24 @@ describe("progressRows", () => {
       ["2 unspecified", null, null, null],
     );
   });
+
+  test("each carrier row answers for its own count, and the other two never do", () => {
+    // The same vitals with the two unspecified counts swapped: the note follows
+    // the row rather than the position, and closure and completion leave
+    // nothing out to say.
+    const swapped = progressRows({
+      ...VITALS,
+      progress: {
+        ...VITALS.progress,
+        scenarios: { ...VITALS.progress.scenarios, unspecified: 0 },
+        requirements: { ...VITALS.progress.requirements, unspecified: 4 },
+      },
+    });
+    assert.deepEqual(
+      swapped.map((row) => row.note),
+      [null, "4 unspecified", null, null],
+    );
+  });
 });
 
 describe("ratioText and percent", () => {

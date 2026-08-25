@@ -6,11 +6,13 @@ import {
   anchorsFor,
   isColored,
   isRootless,
+  orphanFixSentence,
   orphanStem,
 } from "./anchors.js";
 import { articleFor, openingArticleFor } from "./article.js";
 import { NODE_TYPES } from "./canon.js";
 import { CLOSURE_KINDS, closureKindNamed, closureKindOf } from "./closure-kinds.js";
+import type { ClosureSubject } from "./closure-kinds.js";
 import { EDGE_GRAMMAR, EDGE_TYPE_NAMES, isPermittedTriple } from "./grammar.js";
 
 /**
@@ -290,6 +292,23 @@ describe("orphanStem", () => {
     );
   });
 
+  test("carries the check's own tail in `orphanFixSentence`, and nothing else's", () => {
+    // Two speakers say this one identically — `shall check` and the Work
+    // Board's Fix Spec row — so it has one home. The approve and reject doors
+    // keep tails of their own and quote the stem, which is why the tail is
+    // added here rather than folded into the diagnosis above.
+    assert.equal(
+      orphanFixSentence("M-0002", "Module"),
+      "M-0002 is a Module with no live anchor — it is held to the graph by an IS_REALIZED_BY relation into it, and none stands. Draw the relation, or remove the node.",
+    );
+    assert.equal(
+      orphanFixSentence("M-0002", "Module").startsWith(
+        orphanStem("M-0002", "Module"),
+      ),
+      true,
+    );
+  });
+
   test("stops before the full stop, so each caller writes its own tail", () => {
     const stem = orphanStem("EV-0001", "Evidence");
     assert.equal(stem.endsWith("and none stands"), true);
@@ -343,5 +362,15 @@ describe("CLOSURE_KINDS", () => {
   test("finds a row back from the tag a record carries", () => {
     assert.equal(closureKindNamed("workItem").subjectType, "WorkItem");
     assert.equal(closureKindNamed("criterion").claim, "CLAIMS");
+  });
+
+  test("throws for a tag with no row rather than closing the wrong thing", () => {
+    // The cast is what a third subject added to the union without a row here
+    // would look like at the call site. The throw is the whole point: a
+    // default would close a criterion when a record asked about something
+    // else, and would do it quietly.
+    assert.throws(() => closureKindNamed("evidence" as ClosureSubject), {
+      message: "No closure kind named evidence",
+    });
   });
 });

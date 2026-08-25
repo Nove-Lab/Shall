@@ -14,7 +14,15 @@ import {
 } from "../serialize/index.js";
 import type { SpecGraph } from "../store/file-store.js";
 import { colorContextOf, type Ledgers, type PayloadHash } from "./color.js";
-import { closureAsks, closureOf, isAcceptanceStanding } from "./closure.js";
+import {
+  claimantHashesOf,
+  claimantsOf,
+  closureAsks,
+  closureOf,
+  isAcceptanceStanding,
+  isLeftOpenStanding,
+  unapprovedClaimantsOf,
+} from "./closure.js";
 import { reviewGraph, type ReviewStatus } from "./review.js";
 
 /**
@@ -520,6 +528,96 @@ describe("what the queue asks about", () => {
     const { graph } = world();
     const context = colorContextOf(graph, booksOf({}));
     assert.equal(closureAsks(criterion, context), false);
+  });
+});
+
+describe("the list itself", () => {
+  test("an id nothing living answers to has no list, and neither has a type that closes nothing", () => {
+    // The relation that makes the list is read off the node at the id, so an id
+    // with no node has no kind to read and a Requirement has none either.
+    // Neither is an error and neither is a guess: both are the empty list.
+    const { graph, edges } = world(evidence);
+    const context = colorContextOf(
+      graph,
+      booksOf({ approvals: [approve(criterion, edges)] }),
+    );
+    assert.deepEqual(claimantsOf("AC-0404", context), []);
+    assert.deepEqual(claimantsOf("R-0001", context), []);
+  });
+
+  test("a criterion nothing points at at all has an empty list rather than none", () => {
+    // Not one edge names AC-0002 — not even the HAS_CRITERION that would
+    // anchor it — so the index holds no entry under its id at all.
+    const loose = node("AcceptanceCriterion", "AC-0002");
+    const { graph, edges } = world(evidence);
+    const context = colorContextOf(
+      graphOf([...graph.nodes, loose], edges),
+      booksOf({}),
+    );
+    assert.deepEqual(claimantsOf("AC-0002", context), []);
+    assert.deepEqual([...claimantHashesOf("AC-0002", context)], []);
+  });
+
+  test("the claimants nobody has approved are named, in id order", () => {
+    // The gate on asking, read as a list rather than as a yes or no: this is
+    // what a panel shows a person who wonders why a criterion is not on the
+    // queue yet.
+    const { graph, edges } = world(evidence, second);
+    const oneUnread = colorContextOf(
+      graph,
+      booksOf({ approvals: [approve(criterion, edges), approve(evidence, edges)] }),
+    );
+    assert.deepEqual(
+      unapprovedClaimantsOf("AC-0001", oneUnread).map((held) => held.id),
+      ["EV-0002"],
+    );
+    const allRead = colorContextOf(
+      graph,
+      booksOf({
+        approvals: [
+          approve(criterion, edges),
+          approve(evidence, edges),
+          approve(second, edges),
+        ],
+      }),
+    );
+    assert.deepEqual(unapprovedClaimantsOf("AC-0001", allRead), []);
+  });
+});
+
+describe("a record a caller holds, asked about before it is filed", () => {
+  test("a left-open record stands on the same clauses an acceptance does", () => {
+    // The daemon's door checks what it is about to replace, so the record is
+    // passed in rather than looked up — and the three clauses are the ones the
+    // ledger's own reader applies.
+    const { graph, edges } = world(evidence);
+    const [, record] = leaveOpen(criterion, [evidence], edges);
+    const books = booksOf({});
+    assert.equal(
+      isLeftOpenStanding(record, criterion, colorContextOf(graph, books)),
+      true,
+    );
+    // Reworded, it is a word about a sentence nobody has now.
+    const reworded = { ...criterion, body: "Something rather stricter." };
+    const moved = graphOf(
+      [responsibility, requirement, reworded, journal, workLog, evidence],
+      edges,
+    );
+    assert.equal(
+      isLeftOpenStanding(record, reworded, colorContextOf(moved, books)),
+      false,
+    );
+  });
+
+  test("a rejection of the criterion's own words is no left-open word at all", () => {
+    // A rejection record without a claimant map is the colour chain's business:
+    // it refuses the node's content, and says nothing about the list.
+    const { graph, edges } = world(evidence);
+    const [, refusal] = reject(criterion, edges);
+    assert.equal(
+      isLeftOpenStanding(refusal, criterion, colorContextOf(graph, booksOf({}))),
+      false,
+    );
   });
 });
 

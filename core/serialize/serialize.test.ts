@@ -13,11 +13,18 @@ import {
   type AcceptanceRecord,
 } from "./acceptances.js";
 import {
+  activityFileFor,
+  activityMonthOf,
   emitActivity,
   parseActivity,
   type ActivityRecord,
 } from "./activity.js";
-import { approvalPayload, emitNodeFile } from "./emit.js";
+import {
+  approvalPayload,
+  blocksOf,
+  emitNodeFile,
+  valuesOf,
+} from "./emit.js";
 import {
   emitApprovalLedger,
   parseApprovalLedger,
@@ -31,7 +38,7 @@ import {
 } from "./rejections.js";
 import { emitScalar, isPlainSafe } from "./scalar.js";
 import { emitScaffold, emitTemplate } from "./template.js";
-import { mapKeysAt } from "./yaml.js";
+import { describeValue, isMap, mapKeysAt } from "./yaml.js";
 import { isCanonical } from "./index.js";
 
 /**
@@ -483,6 +490,28 @@ The daemon refuses a malformed id.
     assert.equal(edges[0]?.type, "MENTIONS");
   });
 
+  test("one relation handed over twice is written twice, for the reader to refuse", () => {
+    // The emitter writes what it was handed and invents nothing, here as in the
+    // acceptance ledger: two edges with one type and one target are two lines,
+    // and the sentence about them is the READER's — which is what the store's
+    // read-back check is for. Silently dropping one would be the emitter
+    // deciding a fact the caller never asked it to decide.
+    const written = emitNodeFile("Requirement", REQUIREMENT_NODE, [
+      { type: "MENTIONS", toId: "T-0002" },
+      { type: "MENTIONS", toId: "T-0001" },
+      { type: "MENTIONS", toId: "T-0001" },
+    ]);
+    assert.ok(
+      written.includes(
+        "edges:\n  - type: MENTIONS\n    to: T-0001\n  - type: MENTIONS\n    to: T-0001\n  - type: MENTIONS\n    to: T-0002\n",
+      ),
+      written,
+    );
+    assert.deepEqual(parseNodeFile("Requirement", "R-0001.md", written).problems, [
+      "R-0001 already has a MENTIONS relation to T-0001.",
+    ]);
+  });
+
   test("omits the edges key entirely when there are none", () => {
     const text = emitNodeFile("Requirement", REQUIREMENT_NODE, []);
     assert.equal(text.includes("edges"), false);
@@ -507,6 +536,49 @@ The daemon refuses a malformed id.
       () => emitNodeFile("Sandwich", REQUIREMENT_NODE, []),
       /Unknown node type: Sandwich/,
     );
+  });
+
+  test("the two carry-overs hand back every key a file can hold", () => {
+    // A caller that spelled the object out would keep compiling when a key is
+    // added and quietly drop it — a restore would hand back a Finding with its
+    // judgement gone and nothing would have said so. These two exist so that
+    // cannot happen, and the key lists below are what they owe.
+    const fields = {
+      shortName: "f",
+      name: "A finding",
+      body: "## Statement\n\nThe list is empty.",
+      commits: ["9f2b1c4"],
+      blocking: true,
+      relatedNodes: ["R-0001"],
+    };
+    assert.deepEqual(valuesOf(fields), fields);
+    assert.deepEqual(Object.keys(valuesOf(fields)).sort(), [
+      "blocking",
+      "body",
+      "commits",
+      "name",
+      "relatedNodes",
+      "shortName",
+    ]);
+    // Absent is carried as absent rather than invented, so a node without a
+    // per-type key still has no value for it after the round trip.
+    assert.deepEqual(
+      valuesOf({ shortName: "r", name: "R", body: "" }),
+      {
+        shortName: "r",
+        name: "R",
+        body: "",
+        commits: undefined,
+        blocking: undefined,
+        relatedNodes: undefined,
+      },
+    );
+    const deletionProposed = {
+      by: "session-1",
+      rationale: "Superseded by R-0002.",
+    };
+    assert.deepEqual(blocksOf({ deletionProposed }), { deletionProposed });
+    assert.deepEqual(blocksOf({}), { deletionProposed: undefined });
   });
 });
 
@@ -564,6 +636,22 @@ describe("parseNodeFile round trip", () => {
     const reading = parseNodeFile("Term", "T-0001.md", MOTLEY);
     assert.deepEqual(reading.problems, []);
     assert.equal(reading.node?.body, MOTLEY_BODY);
+  });
+
+  test("the id is the file name with its suffix taken off, and a name without one is the id whole", () => {
+    // The loader only offers files that end in `.md`, so the suffix is stripped
+    // rather than checked for: a caller that hands over the bare id gets that
+    // id back, and no file name is refused here for the shape of its ending.
+    assert.equal(
+      parseNodeFile("Term", "T-0001.md", MOTLEY).node?.id,
+      "T-0001",
+    );
+    assert.equal(parseNodeFile("Term", "T-0001", MOTLEY).node?.id, "T-0001");
+    // And what is not an id is still refused by the id door, whichever way the
+    // name arrived.
+    assert.deepEqual(parseNodeFile("Term", "T 0001", MOTLEY).problems, [
+      "An id uses letters, digits, dots, hyphens and underscores, starts with a letter or digit, and holds at most 64 characters.",
+    ]);
   });
 
   test("a body that opens with an indented code block survives a round trip", () => {
@@ -2238,6 +2326,15 @@ describe("the WorkLog's commits", () => {
     assert.deepEqual(parseNodeFile("WorkLog", "WL-0001.md", mapped).problems, [
       "Every entry under commits is a commit sha, as text.",
     ]);
+    // A key that is not a list at all is the same one sentence: it is one rule
+    // about one list, and a person told the shape once will re-read the key.
+    const bare = LOGGED.replace(
+      'commits:\n  - 9f2b1c4\n  - "1234567"\n',
+      "commits: 9f2b1c4\n",
+    );
+    assert.deepEqual(parseNodeFile("WorkLog", "WL-0001.md", bare).problems, [
+      "Every entry under commits is a commit sha, as text.",
+    ]);
   });
 
   test("a blank sha is refused by name", () => {
@@ -2404,6 +2501,29 @@ The specification says nothing about what happens when the list is empty.
       [],
     );
     assert.ok(written.includes("relatedNodes:\n  - R-0001\n  - T-0002\n"), written);
+  });
+
+  test("one hint handed over twice is written twice, for the reader to refuse", () => {
+    // Sorting is all the emitter does to this list — it writes what it was
+    // handed, as it does with a repeated edge, and the sentence about the
+    // repetition is the reader's on the way back.
+    const written = emitNodeFile(
+      "Finding",
+      {
+        shortName: "f",
+        name: "F",
+        body: "",
+        relatedNodes: ["R-0002", "R-0001", "R-0001"],
+      },
+      [],
+    );
+    assert.ok(
+      written.includes("relatedNodes:\n  - R-0001\n  - R-0001\n  - R-0002\n"),
+      written,
+    );
+    assert.deepEqual(parseNodeFile("Finding", "F-0001.md", written).problems, [
+      "F-0001 names R-0001 twice under relatedNodes.",
+    ]);
   });
 
   test("an empty list is the same fact as no key", () => {
@@ -2601,6 +2721,26 @@ describe("the approval ledger", () => {
     );
   });
 
+  test("a value no text file can carry is named under its id, in the door's own words", () => {
+    // The escapes are the only way these two reach a ledger: a NUL makes git
+    // call the file binary and a lone surrogate has no UTF-8 encoding at all,
+    // so neither survives being typed. Both are judged by the very function the
+    // write doors run, which is why the sentence is the door's and not this
+    // book's.
+    assert.equal(
+      parseApprovalLedger(
+        'G-0001:\n  approvedHash: sha256:aa\n  by: "a\\u0000b"\n  at: x\n',
+      ).problem,
+      "Under G-0001, an approver cannot contain a NUL character.",
+    );
+    assert.equal(
+      parseApprovalLedger(
+        'G-0001:\n  approvedHash: "sha256:\\uD800"\n  by: yjshin\n  at: x\n',
+      ).problem,
+      "Under G-0001, an approved hash is not well-formed text.",
+    );
+  });
+
   test("an id written twice is refused, because an approval has one latest", () => {
     const twice = `${LEDGER}G-0001:\n  approvedHash: sha256:bb\n  by: later\n  at: x\n`;
     assert.equal(
@@ -2641,6 +2781,13 @@ describe("the approval ledger", () => {
     assert.equal(
       parseApprovalLedger("CON:\n  approvedHash: sha256:aa\n  by: a\n  at: x\n").problem,
       'The approval ledger names "CON", which is not a node id. CON is a reserved device name on Windows, so no file can be named after it. Choose another id.',
+    );
+    // A key that is not a scalar at all — YAML's explicit-key syntax allows a
+    // whole list or map there — is read as the text the library spells it and
+    // refused by the same door, so there is no shape of key that walks past it.
+    assert.equal(
+      parseApprovalLedger(`? [a, b]\n:\n${record}`).problem,
+      'The approval ledger names "[ a, b ]", which is not a node id. An id uses letters, digits, dots, hyphens and underscores, starts with a letter or digit, and holds at most 64 characters.',
     );
   });
 
@@ -3258,6 +3405,12 @@ describe("the acceptance ledger", () => {
       "AC-0001:\n  acHash: sha256:aa\n  reports:\n    WL-0001: sha256:dd\n  by: yjshin\n  at: x\n",
       // crossed the other way
       "AC-0001:\n  taskHash: sha256:aa\n  evidence:\n    EV-0001: sha256:cc\n  by: yjshin\n  at: x\n",
+      // Both hashes and no map: four keys, so the count says nothing, and it is
+      // the pair itself that is refused.
+      "AC-0001:\n  acHash: sha256:aa\n  taskHash: sha256:bb\n  by: yjshin\n  at: x\n",
+      // Two maps and no hash: four keys again, and a record that names no
+      // closed thing at all.
+      "AC-0001:\n  evidence:\n    EV-0001: sha256:aa\n  reports:\n    WL-0001: sha256:bb\n  by: yjshin\n  at: x\n",
     ]) {
       assert.equal(parseAcceptanceLedger(text).problem, shape, text);
     }
@@ -3397,6 +3550,42 @@ describe("the acceptance ledger", () => {
         bare,
       );
     }
+  });
+
+  test("a record written as an alias of another reads as its own copy", () => {
+    // The nested twin-key defence walks the DOCUMENT, where an alias is not a
+    // map however faithfully `toJS()` expands it. So a record spelled this way
+    // has no key list to check and is judged by its evidence ids alone — it
+    // reads, and the next write puts both records out in full.
+    const aliased = [
+      "AC-0001: &closed",
+      "  acHash: sha256:aa",
+      "  evidence:",
+      "    EV-0001: sha256:bb",
+      "  by: yjshin",
+      "  at: x",
+      "AC-0002: *closed",
+      "",
+    ].join("\n");
+    const reading = parseAcceptanceLedger(aliased);
+    assert.equal(reading.problem, null);
+    assert.deepEqual([...reading.records.keys()], ["AC-0001", "AC-0002"]);
+    assert.deepEqual(
+      reading.records.get("AC-0002"),
+      reading.records.get("AC-0001"),
+    );
+    const spelled = [
+      "  acHash: sha256:aa",
+      "  evidence:",
+      "    EV-0001: sha256:bb",
+      "  by: yjshin",
+      "  at: x",
+      "",
+    ].join("\n");
+    assert.equal(
+      emitAcceptanceLedger(reading.records),
+      `AC-0001:\n${spelled}AC-0002:\n${spelled}`,
+    );
   });
 
   test("an id written twice is refused, because an acceptance has one latest", () => {
@@ -3552,6 +3741,18 @@ describe("the activity feed", () => {
       reading.records.map((record) => Object.keys(record).sort()),
       RECORDS.map(() => ["at", "kind", "refs", "summary"]),
     );
+  });
+
+  test("an instant names the month file it belongs in, in UTC and nobody else's", () => {
+    // The month is the first seven characters of the instant and never a local
+    // calendar's: the same instant has to name the same file wherever the
+    // daemon is running, or two machines would write one run into two months.
+    assert.equal(activityMonthOf("2026-08-21T09:00:00.000Z"), "2026-08");
+    assert.equal(activityFileFor("2026-08-21T09:00:00.000Z"), "ledger/feed/2026-08.yaml");
+    // The last instant of a month in UTC is that month's, whatever the clock
+    // west of Greenwich says.
+    assert.equal(activityFileFor("2026-08-31T23:59:59.999Z"), "ledger/feed/2026-08.yaml");
+    assert.equal(activityFileFor("2026-09-01T00:00:00.000Z"), "ledger/feed/2026-09.yaml");
   });
 
   test("an absent feed and an empty one are the same nothing", () => {
@@ -3823,5 +4024,37 @@ describe("mapKeysAt", () => {
     assert.equal(mapKeysAt("- a\n", []), null);
     assert.equal(mapKeysAt("AC-0001: [\n", ["AC-0001"]), null);
     assert.equal(mapKeysAt("", []), null);
+  });
+
+  test("a step off a value that is not a map stops the walk, rather than walking into it", () => {
+    // The walk asks the question at every step and not only at the end: a step
+    // taken from a scalar has nowhere to look, and a root that is not a map has
+    // no first step at all.
+    assert.equal(mapKeysAt(NESTED, ["AC-0001", "by", "yjshin"]), null);
+    assert.equal(mapKeysAt("- a\n", ["a"]), null);
+    assert.equal(mapKeysAt("just text\n", ["a"]), null);
+  });
+});
+
+/**
+ * `describeValue` — the words a refusal names a value by, and the reason `isMap`
+ * refuses a date.
+ *
+ * A date cannot come out of our own reader: the 1.2 core schema hands back the
+ * string a timestamp looks like. It is here because a value that is an object
+ * and not a map is exactly what would slip through a check written as `typeof`,
+ * and the day a reader is pointed at a 1.1 schema the sentence has to already
+ * be the right one.
+ */
+describe("describeValue", () => {
+  test("every shape a refusal has to name has a word, and a date is not a map", () => {
+    assert.equal(describeValue([]), "a list");
+    assert.equal(describeValue(new Date("2026-08-14T00:00:00.000Z")), "a date");
+    assert.equal(describeValue(12), "a number");
+    assert.equal(describeValue(12n), "a number");
+    assert.equal(describeValue(true), "a boolean");
+    assert.equal(describeValue("closed"), "text");
+    assert.equal(describeValue({}), "a map");
+    assert.equal(isMap(new Date("2026-08-14T00:00:00.000Z")), false);
   });
 });

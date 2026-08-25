@@ -15,6 +15,8 @@
 Shall keeps your project's specification as a living graph of markdown files inside your own repository, with a local app over it where every judgement — approve, reject, close — stays yours.
 Your agents read the same graph through their own commands, so what they build is always the spec you approved.
 
+---
+
 ## 🧭 Principles Shall stands on
 
 **1. Intent engineering is the last work you'll never delegate.**
@@ -52,6 +54,8 @@ Spec changes are always traceable.
 Agents always know the blast radius of their work.
 And you always understand where the project stands — and where it's drifting.
 
+---
+
 ## 🚀 Getting started
 
 ### 1. Install
@@ -85,6 +89,8 @@ Everything stays on your machine.
 
 Ask it in Claude Code any time.
 It says what Shall is in a screen, reads where this project stands, and names the one or two commands that move it — the only command that also answers outside a Shall project.
+
+---
 
 ## 🔧 Working with Shall
 
@@ -144,10 +150,14 @@ Read any node, edit it, or propose its deletion right there.
 
 How far the spec has come and what it still lacks, computed on every read and stored nowhere: satisfaction, closure and completion ratios with drill-downs into what is open and why, and seven spec-health checks for the gaps that are neither errors nor waiting on anyone — every rule always shown, violated ones first.
 
+---
+
 ## 📜 License
 
 Shall is licensed under the [GNU Affero General Public License v3.0](./LICENSE).
 Contributions are welcome — first-time contributors are asked to sign a short [CLA](./CLA.md) on their pull request.
+
+---
 
 ## 📚 Learn more
 

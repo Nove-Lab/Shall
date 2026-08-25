@@ -141,6 +141,41 @@ describe("running git at all", () => {
       assert.match(answer.stderr, /deadbeef/);
     },
   );
+
+  test("an argument node itself refuses is an answer and not a throw", async () => {
+    const folder = await mkdtemp(path.join(os.tmpdir(), "shall-gitcli-nul-"));
+    // A NUL byte inside a path never reaches git at all: `execFile` throws
+    // over it before a process exists, and this module answers with values.
+    const answer = await runGit(folder, ["show", "HEAD:a\0b.md"]);
+    assert.equal(answer.kind, "failed");
+    if (answer.kind !== "failed") {
+      return;
+    }
+    assert.equal(answer.code, 1);
+    assert.match(answer.stderr, /null bytes/);
+  });
+
+  test(
+    "output past the cap is a failure with a sentence, never a truncated ok",
+    { skip: NO_GIT && "no git on this machine" },
+    async () => {
+      const root = await newRepository();
+      // One byte over the cap is enough, and a file of one repeated character
+      // is a fast thing for git to store.
+      await place(root, "big.bin", "a".repeat((16 << 20) + 1));
+      await commitEverything(root, "something too big to read");
+
+      const answer = await runGit(root, ["show", "HEAD:big.bin"]);
+      assert.equal(answer.kind, "failed");
+      if (answer.kind !== "failed") {
+        return;
+      }
+      // A process killed for its output has no exit status of its own, and
+      // git left no words either — so the sentence is node's.
+      assert.equal(answer.code, 1);
+      assert.match(answer.stderr, /maxBuffer/);
+    },
+  );
 });
 
 describe("finding the repository", () => {
@@ -374,6 +409,49 @@ describe("recording a commit", () => {
       );
     },
   );
+
+  test(
+    "a name or an email set to nothing is no identity at all",
+    { skip: NO_GIT && "no git on this machine" },
+    async () => {
+      const root = await newRepository();
+      await place(root, NODE, FIRST);
+      // git takes an empty value and hands it back on `--get` with an exit
+      // status of 0 — so the answer being `ok` is not the same as there being
+      // somebody to name.
+      await must(root, ["config", "user.name", "Someone"]);
+      await must(root, ["config", "user.email", ""]);
+
+      const answer = await commitPaths(root, [SPEC], "Save the spec");
+      assert.equal(answer.kind, "ok", JSON.stringify(answer));
+      assert.equal(
+        (await must(root, ["log", "-1", "--format=%an"])).trim(),
+        "Shall",
+      );
+    },
+  );
+
+  test(
+    "a git that refuses the staging hands its own words back unchanged",
+    { skip: NO_GIT && "no git on this machine" },
+    async () => {
+      const root = await newRepository();
+      await place(root, NODE, FIRST);
+      // What a person's own `git commit` in a terminal leaves behind while it
+      // is running. `status` does not want the lock — `GIT_OPTIONAL_LOCKS` is
+      // off — so the path survives the filter and it is `add` that refuses.
+      await place(root, ".git/index.lock", "");
+
+      const answer = await commitPaths(root, [SPEC], "Save the spec");
+      assert.equal(answer.kind, "failed", JSON.stringify(answer));
+      if (answer.kind !== "failed") {
+        return;
+      }
+      assert.match(answer.stderr, /index\.lock/);
+      // Nothing was committed and nothing was staged behind the failure.
+      assert.equal(await isDirtyUnder(root, [SPEC]), true);
+    },
+  );
 });
 
 describe("reading out of history", () => {
@@ -394,6 +472,10 @@ describe("reading out of history", () => {
 
       // The history of a file no commit ever named is empty, not a failure.
       assert.deepEqual(await fileHistory(root, `${SPEC}/nothing.md`), []);
+
+      // The walk is a search with a stopping condition, and a caller that
+      // knows how far it is willing to look says so.
+      assert.deepEqual(await fileHistory(root, NODE, 1), [second]);
     },
   );
 
@@ -412,6 +494,10 @@ describe("reading out of history", () => {
       // The commit that removed it holds nothing at that path, which is the
       // reason `^` is where a restore reads from.
       assert.equal(await fileAt(root, "HEAD", NODE), null);
+
+      // A path no commit ever named has no last commit, and git says so by
+      // succeeding with nothing to say rather than by failing.
+      assert.equal(await lastCommitTouching(root, `${SPEC}/never.md`), null);
     },
   );
 

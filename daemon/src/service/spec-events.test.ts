@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, rename, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rename, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { after, before, describe, test } from "node:test";
@@ -161,6 +161,57 @@ describe("a project's feed", () => {
     await writeNode(project.path, "G-0001");
     assert.equal(await second.next(), "changed");
     releaseSecond();
+  });
+
+  test("a release left over from a feed the shutdown closed does not take the new one with it", async () => {
+    const project = await newProject();
+    const first = heard();
+    const release = await subscribe(project.id, first.listener);
+    closeAllFeeds();
+    assert.equal(await first.next(), "failed");
+
+    // A second listener arrives afterwards and builds a watch of its own. The
+    // first one's release, called late, is about a feed nobody holds any more,
+    // and the last shutdown of the run is what says the new one is still held:
+    // a feed that release had closed would have nobody left to tell.
+    const second = heard();
+    await subscribe(project.id, second.listener);
+    release();
+
+    closeAllFeeds();
+    assert.equal(await second.next(), "failed");
+  });
+
+  test("a project whose folder has gone is refused, and the ask after it is back is watched", async () => {
+    // The registry outlives the folder it points at, so this is an ordinary
+    // state and not a broken one: there is nothing to watch, and a stream over
+    // a folder nothing is watching is a screen that has quietly stopped being
+    // true. Refusing is also the way back — the browser gives up on a refusal
+    // and retries a connection that merely opened and closed, for ever.
+    const project = await newProject();
+    const shall = path.join(project.path, ".shall");
+    await rm(shall, { recursive: true, force: true });
+    const lost = heard();
+    await assert.rejects(subscribe(project.id, lost.listener), (error: unknown) => {
+      assert.ok(isRefusal(error));
+      assert.equal(error.kind, "conflict");
+      assert.equal(
+        error.message,
+        `Shall could not watch ${shall}, so nothing on this project's screen would stay true. Nothing is listening.`,
+      );
+      return true;
+    });
+    assert.equal(lost.count(), 0);
+
+    // The folder comes back — a clone, a checkout, a folder moved back — and
+    // the next ask builds a watch, because the refused one left nothing behind
+    // for it to join.
+    await mkdir(path.join(shall, "spec", "intent", "Goal"), { recursive: true });
+    const listener = heard();
+    const release = await subscribe(project.id, listener.listener);
+    await writeNode(project.path, "G-0001");
+    assert.equal(await listener.next(), "changed");
+    release();
   });
 
   test("an id nobody knows is refused before a watch is taken", async () => {

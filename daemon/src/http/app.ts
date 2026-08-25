@@ -120,7 +120,7 @@ export function createApp(bindHost: string, spaRoot?: string): Hono {
         // client that has left is swallowed rather than thrown.
         stream.onAbort(finish);
         deliver = (event, reason) => {
-          void stream.writeSSE({
+          const written = stream.writeSSE({
             event,
             data: JSON.stringify(
               event === "over"
@@ -128,9 +128,15 @@ export function createApp(bindHost: string, spaRoot?: string): Hono {
                 : { at: new Date().toISOString() },
             ),
           });
+          // The frame has to have landed before the writer is closed: a close
+          // asked for while a write is still pending is queued ahead of it and
+          // the write is dropped, which would end the stream without the one
+          // sentence saying why — and that sentence is what `over` is for.
           if (event === "over") {
-            void stream.close();
-            finish();
+            void written.then(() => {
+              void stream.close();
+              finish();
+            });
           }
         };
         // The first line says the connection is up before anything has changed,

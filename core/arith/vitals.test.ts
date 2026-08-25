@@ -787,6 +787,29 @@ describe("spec health", () => {
     assert.deepEqual(ids(ruleOf(vitals, "criterion-without-work-item").nodes), ["AC-0002"]);
   });
 
+  test("a criterion no line reaches at all is examined like the rest", () => {
+    // The rules are inclusive at the node level: an orphan criterion is red on
+    // the Fix Spec board AND counted here, because rule 7 asks about aims and
+    // not about anchors.
+    const stray = node("AcceptanceCriterion", "AC-0003");
+    const nodes = [...SPINE_NODES, stray];
+    const vitals = vitalsFor(nodes, SPINE, booksOf({ approvals: settled(nodes, SPINE) }));
+    assert.deepEqual(ids(ruleOf(vitals, "criterion-without-work-item").nodes), ["AC-0003"]);
+    assert.equal(ruleOf(vitals, "criterion-without-work-item").examined, 2);
+  });
+
+  test("a decision revising a responsibility is not a step in the coverage chain", () => {
+    // Rule 5 climbs the five relations of the chain and nothing else, so an
+    // AFFECTS line into a responsibility changes no row on this page.
+    const decision = node("Decision", "D-0001");
+    const nodes = [...SPINE_NODES, decision];
+    const edges = [...SPINE, edge("D-0001", "AFFECTS", "SR-0001")];
+    assert.deepEqual(
+      vitalsFor(nodes, edges, booksOf({ approvals: settled(nodes, edges) })),
+      vitalsFor(SPINE_NODES, SPINE, booksOf({ approvals: settled() })),
+    );
+  });
+
   test("every rule is always a row, the violated ones first and the rest in the table's order", () => {
     const clean = vitalsFor(
       SPINE_NODES,

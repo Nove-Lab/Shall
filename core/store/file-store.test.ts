@@ -79,6 +79,22 @@ async function whileShut<T>(target: string, ask: () => Promise<T>): Promise<T> {
 }
 
 /**
+ * The write bit taken away and put back the same way, with the read and the
+ * execute bits left alone — so the folder still lists and only what would
+ * CHANGE it is refused, which is the state a deletion meets and a listing does
+ * not.
+ */
+async function whileSealed<T>(target: string, ask: () => Promise<T>): Promise<T> {
+  const mode = (await stat(target)).mode;
+  await chmod(target, 0o500);
+  try {
+    return await ask();
+  } finally {
+    await chmod(target, mode);
+  }
+}
+
+/**
  * Whether taking a read bit away actually takes the read away. It does not for
  * root, who walks through a permission bit — so the two cases that need a shut
  * file assert nothing at all under a container that runs its tests as root, and
@@ -650,6 +666,24 @@ describe("the loader's cross-file judgements", () => {
     );
   });
 
+  /**
+   * TWO NAMES READ AS ENGLISH AND MORE THAN TWO ARE A LIST. The sentence a
+   * person acts on names every file claiming the id, however many there are,
+   * and "a, b and c" would be a third form to keep in step with nothing.
+   */
+  test("three files claiming one id are named as a list, not joined by and", async () => {
+    const specDir = await makeSpecDir();
+    await place(specDir, "intent/Requirement/R-0001.md", requirement("one"));
+    await place(specDir, "intent/Goal/R-0001.md", goal("two"));
+    await place(specDir, "intent/AcceptanceCriterion/R-0001.md", criterion("three"));
+
+    const graph = await loadGraph(specDir);
+    assert.deepEqual(graph.nodes, []);
+    const sentence =
+      "R-0001 is the id of intent/AcceptanceCriterion/R-0001.md, intent/Goal/R-0001.md, intent/Requirement/R-0001.md. An id names one node, so every file claiming it is left out until one of them is renamed or removed.";
+    assert.deepEqual(messages(graph.problems), [sentence, sentence, sentence]);
+  });
+
   test("ids that differ only in case refuse both files, across folders", async () => {
     const specDir = await makeSpecDir();
     await place(specDir, "intent/Requirement/R-0001.md", requirement("upper"));
@@ -855,6 +889,139 @@ describe("the loader's cross-file judgements", () => {
       ]);
     },
   );
+
+  test(
+    "a band folder that cannot be listed leaves the other bands alone",
+    { skip: SHUT_MEANS_SHUT },
+    async () => {
+      const specDir = await makeSpecDir();
+      await place(specDir, "intent/Requirement/R-0001.md", requirement("shut"));
+      await place(
+        specDir,
+        "domain/Term/T-0001.md",
+        "---\nshort_name: thing\nname: Thing\n---\n\n## Definition\n\nA thing.\n",
+      );
+
+      const graph = await whileShut(path.join(specDir, "intent"), () =>
+        loadGraph(specDir),
+      );
+      assert.deepEqual(
+        graph.nodes.map((node) => node.id),
+        ["T-0001"],
+      );
+      assert.deepEqual(messages(graph.problems), [
+        "intent could not be listed: the filesystem refused permission. Every node file inside it is left out.",
+      ]);
+    },
+  );
+
+  test(
+    "a stray folder that cannot be listed is one sentence, and nothing inside it is guessed at",
+    { skip: SHUT_MEANS_SHUT },
+    async () => {
+      const specDir = await makeSpecDir();
+      await place(specDir, "intent/Requirement/R-0001.md", requirement("kept"));
+      await place(specDir, "notes/deep/R-0002.md", requirement("misfiled"));
+
+      // The walk that names every stray file inside is the walk that cannot
+      // happen, so the folder answers for itself and the files under it are
+      // neither named nor assumed away.
+      const graph = await whileShut(path.join(specDir, "notes"), () =>
+        loadGraph(specDir),
+      );
+      assert.deepEqual(
+        graph.nodes.map((node) => node.id),
+        ["R-0001"],
+      );
+      assert.deepEqual(messages(graph.problems), [
+        "notes could not be listed: the filesystem refused permission. Nothing inside it is read.",
+      ]);
+    },
+  );
+
+  test(
+    "a spec folder that cannot be listed reads as one sentence and writes nothing",
+    { skip: SHUT_MEANS_SHUT },
+    async () => {
+      const specDir = await makeSpecDir();
+      await place(specDir, "intent/Requirement/R-0001.md", requirement("hidden"));
+
+      const graph = await whileShut(specDir, () => loadGraph(specDir));
+      assert.deepEqual(graph.nodes, []);
+      assert.deepEqual(messages(graph.problems), [
+        "The spec folder could not be listed: the filesystem refused permission. Nothing under it is read.",
+      ]);
+      assert.equal(graph.problems[0]?.file, ".");
+
+      // The same hole a shut type folder leaves, at the top: a write cannot
+      // tell what the project holds, so it refuses rather than deciding from a
+      // listing that says nothing.
+      const refused = await whileShut(specDir, () =>
+        refusal(() =>
+          createNodeFile(specDir, "Requirement", "R-0002", {
+            shortName: "fresh",
+            name: "fresh",
+            body: "## Statement\n\nThe system shall do the thing.",
+          }),
+        ),
+      );
+      assert.deepEqual(refused, {
+        kind: "conflict",
+        message:
+          "The spec folder could not be listed: the filesystem refused permission. Nothing was written, because Shall cannot tell what this project holds while one of its folders is shut.",
+      });
+    },
+  );
+
+  test("a link at the top of spec that points at nothing is answered as a file", async () => {
+    const specDir = await makeSpecDir();
+    await place(specDir, "intent/Requirement/R-0001.md", requirement("kept"));
+    // The band and type levels resolve links, because a drawer pointed
+    // elsewhere is real work; a link pointing at nothing is not a folder, and
+    // the `.md` test has the next word about it rather than the walk
+    // disappearing in silence.
+    await symlink("nowhere", path.join(specDir, "R-0002.md"));
+
+    const graph = await loadGraph(specDir);
+    assert.deepEqual(
+      graph.nodes.map((node) => node.id),
+      ["R-0001"],
+    );
+    assert.deepEqual(messages(graph.problems), [
+      "R-0002.md sits at the top of the spec folder, but a node file lives at <band>/<Type>/R-0002.md.",
+    ]);
+  });
+
+  test("a node file that is a link to nothing is left out, and no door finds one", async () => {
+    const specDir = await makeSpecDir();
+    await place(specDir, "intent/Requirement/R-0001.md", requirement("kept"));
+    await symlink("gone.md", path.join(specDir, "intent", "Requirement", "R-0002.md"));
+
+    // The stat is the first thing that touches a candidate, and a link pointing
+    // at nothing answers it the way a file deleted between the listing and the
+    // read does: left out, and not a problem — nobody asked about a file that
+    // is not there.
+    const graph = await loadGraph(specDir);
+    assert.deepEqual(
+      graph.nodes.map((node) => node.id),
+      ["R-0001"],
+    );
+    assert.deepEqual(messages(graph.problems), []);
+
+    // The listing still names it, so a write door reaches for the file and
+    // finds nothing — which is the answer the caller would have had a moment
+    // later anyway.
+    assert.deepEqual(
+      await refusal(() =>
+        updateNodeFile(specDir, "R-0002", {
+          shortName: "fresh",
+          name: "fresh",
+          body: "## Statement\n\nThe system shall do the thing.",
+        }),
+      ),
+      { kind: "missing", message: "Unknown node: R-0002" },
+    );
+  });
 
   test("a type folder that is a symbolic link is walked, not dropped in silence", async () => {
     const specDir = await makeSpecDir();
@@ -1297,6 +1464,12 @@ Because a cart is not an order.
     });
     assert.deepEqual(
       await refusal(() =>
+        addEdge(specDir, { fromId: "R-0009", type: "MENTIONS", toId: "R-0001" }),
+      ),
+      { kind: "missing", message: "Unknown node: R-0009" },
+    );
+    assert.deepEqual(
+      await refusal(() =>
         addEdge(specDir, { fromId: "R-0001", type: "MENTIONS", toId: "T-0009" }),
       ),
       { kind: "missing", message: "Unknown node: T-0009" },
@@ -1304,6 +1477,12 @@ Because a cart is not an order.
     assert.deepEqual(
       await refusal(() => removeEdge(specDir, "R-0001 MENTIONS T-0009")),
       { kind: "missing", message: "Unknown edge: R-0001 MENTIONS T-0009" },
+    );
+    // A source that is not there and a relation the file does not have are one
+    // answer, because they are one fact from the caller's side.
+    assert.deepEqual(
+      await refusal(() => removeEdge(specDir, "R-0009 MENTIONS R-0001")),
+      { kind: "missing", message: "Unknown edge: R-0009 MENTIONS R-0001" },
     );
     assert.deepEqual(await refusal(() => removeEdge(specDir, "nonsense")), {
       kind: "missing",
@@ -1634,6 +1813,44 @@ describe("the scaffold door starts a node without pretending it is one", () => {
     });
     assert.deepEqual(await readdir(specDir).catch(() => []), []);
   });
+
+  /**
+   * THE WIDTH IS WHAT BOUNDS THE SEQUENCE. Four digits stop at `9999`, and one
+   * past that would sort between `R-0999` and `R-1000` and break byte order for
+   * every id after it — so the door says there is no name to choose rather than
+   * choosing a bad one, and hands the person the way out.
+   */
+  test("a sequence that has reached its last id is refused with a way out", async () => {
+    const specDir = await makeSpecDir();
+    await place(specDir, "intent/Requirement/R-9999.md", requirement("last"));
+
+    assert.deepEqual(await refusal(() => scaffoldNodeFile(specDir, "Requirement")), {
+      kind: "conflict",
+      message:
+        "Every Requirement id of the suggested shape is taken, so no name could be chosen. Write the file by hand with an id of your own.",
+    });
+    assert.deepEqual(await readdir(path.join(specDir, "intent", "Requirement")), [
+      "R-9999.md",
+    ]);
+  });
+
+  test("a band folder that is really a file refuses the scaffold in words", async () => {
+    const specDir = await makeSpecDir();
+    await mkdir(specDir, { recursive: true });
+    await writeFile(path.join(specDir, "intent"), "not a folder at all\n", "utf8");
+
+    // The loader passes such a path over without a word, so this door must
+    // answer in a sentence the panel has a slot for rather than an errno.
+    assert.deepEqual(await refusal(() => scaffoldNodeFile(specDir, "Requirement")), {
+      kind: "conflict",
+      message:
+        "intent/Requirement/R-0001.md could not be written: something along its path is a file and not a folder.",
+    });
+    assert.equal(
+      await readFile(path.join(specDir, "intent"), "utf8"),
+      "not a folder at all\n",
+    );
+  });
 });
 
 describe("deleting a node touches its own file and nothing else", () => {
@@ -1738,6 +1955,28 @@ describe("deleting a node touches its own file and nothing else", () => {
     }
   });
 
+  test(
+    "a file that cannot be removed is a refusal naming it, and the file is still there",
+    { skip: SHUT_MEANS_SHUT },
+    async () => {
+      const specDir = await makeSpecDir();
+      await createNodeFile(specDir, "Requirement", "R-0001", requirementValues);
+      const folder = path.join(specDir, "intent", "Requirement");
+
+      // The folder still lists, so the door finds the node and reaches for it;
+      // what it cannot do is change the folder. `conflict`, because the request
+      // is fine and it is the state on disk that stands in the way.
+      const refused = await whileSealed(folder, () =>
+        refusal(() => deleteNodeFile(specDir, "R-0001")),
+      );
+      assert.deepEqual(refused, {
+        kind: "conflict",
+        message:
+          "intent/Requirement/R-0001.md could not be removed: the filesystem refused permission.",
+      });
+      assert.deepEqual(await readdir(folder), ["R-0001.md"]);
+    },
+  );
 });
 
 describe("writes go through the queue one at a time", () => {
@@ -1981,6 +2220,17 @@ describe("the deletion proposal door", () => {
       message: "R-0001 carries no proposed deletion, so there is nothing to reject.",
     });
   });
+
+  test("clearing a proposal on a node nothing answers to is the door's own missing", async () => {
+    const specDir = await makeSpecDir();
+    await createNodeFile(specDir, "Requirement", "R-0001", requirementValues);
+    // Not "there is no proposal": the id names nothing at all, which is a
+    // different fact and a different kind.
+    assert.deepEqual(await refusal(() => clearDeletionProposal(specDir, "R-0009")), {
+      kind: "missing",
+      message: "Unknown node: R-0009",
+    });
+  });
 });
 
 /**
@@ -2021,6 +2271,20 @@ describe("the restore door", () => {
     // The dangling relation is restored as written: it is the healing the
     // loader's kept-line rule promises, run in the other direction.
     assert.ok(text.includes("to: T-0009"), text);
+  });
+
+  test("a restore of a type outside the canon is refused before any path is chosen", async () => {
+    const specDir = await makeSpecDir();
+    // Nothing further can be said about a type outside the canon — not which
+    // folder the file would live in, not what it would look like — so this
+    // answer is alone, and no folder is made on the way to it.
+    assert.deepEqual(
+      await refusal(() =>
+        restoreNodeFile(specDir, "Widget", "W-0001", requirementValues, [], {}),
+      ),
+      { kind: "invalid", message: "Unknown node type: Widget" },
+    );
+    assert.deepEqual(await readdir(specDir).catch(() => []), []);
   });
 
   test("a restore refuses a node already standing", async () => {

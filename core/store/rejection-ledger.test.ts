@@ -211,6 +211,26 @@ describe("the rejection ledger door", () => {
     }
   });
 
+  test("a record the reader would settle differently never reaches the disk", async () => {
+    const file = await makeLedgerPath();
+
+    // The door's fixpoint is over the TEXT and not over the records, which is
+    // what catches this: the emitter writes the spaces inside quotation marks,
+    // the reader trims them off the way it trims every identity, and the bytes
+    // that would come back are not the bytes that went out. A door comparing
+    // one id's record instead would have written a file whose `by` is not the
+    // `by` it was handed.
+    const answer = await refusal(() =>
+      recordRejection(file, "R-0001", { ...REJECTED, by: " yjshin " }),
+    );
+    assert.deepEqual(answer, {
+      kind: "invalid",
+      message:
+        "Shall emitted a rejection ledger it could not read back — What it read back is not what it wrote.",
+    });
+    await assert.rejects(() => readFile(file, "utf8"));
+  });
+
   test("a ledger with bytes that are not UTF-8 is a problem sentence and no records", async () => {
     const file = await makeLedgerPath();
     await mkdir(path.dirname(file), { recursive: true });

@@ -586,6 +586,30 @@ describe("the Implement column", () => {
     assert.deepEqual(row.requirements, []);
   });
 
+  test("names every carrier of the criteria it aims at, in id order", () => {
+    // A work item may aim at a requirement's criterion and a scenario's at
+    // once, which is why the field is not called `requirementsOnly` — and the
+    // list reads in id order however the aims themselves sort.
+    const integration = node("AcceptanceCriterion", "AC-0000");
+    const all = [...SPINE_NODES, integration];
+    const wired = [
+      ...SPINE,
+      edge("SC-0001", "HAS_CRITERION", "AC-0000"),
+      edge("WI-0001", "TARGETS", "AC-0000"),
+    ];
+    const board = boardOf(all, wired, settled(all, wired));
+    const row = board.implement.find((held) => held.id === "WI-0001");
+    assert.ok(row !== undefined);
+    assert.deepEqual(
+      row.targets.map((target) => target.id),
+      ["AC-0000", "AC-0001"],
+    );
+    assert.deepEqual(
+      row.requirements.map((ref) => ref.id),
+      ["R-0001", "SC-0001"],
+    );
+  });
+
   test("is exactly the work items the review calls ready", () => {
     // THE CROSS-CHECK THE BADGE OWES THE BOARD. One predicate, two readers, and
     // this is what makes them the same answer rather than two that agree today.
@@ -663,6 +687,48 @@ describe("the Fix Spec column", () => {
       "R-0002 is a Requirement with no live anchor — it is held to the graph by a REQUIRES relation into it, and none stands. Draw the relation, or remove the node.",
     );
     assert.equal(row.kind, "grammar");
+  });
+
+  test("says the aim rule's sentence under both ends of a breach", () => {
+    // The work was done under WI-0001, which aims at AC-0001; the evidence
+    // submitted for it claims some other criterion, so the log's file and the
+    // evidence's file are both places the seam can be closed.
+    const evidence = node("Evidence", "EV-0001");
+    const aside = node("AcceptanceCriterion", "AC-0002");
+    const nodes = [...SPINE_NODES, journal, workLog, evidence, aside];
+    const edges = [
+      ...SPINE,
+      edge("R-0001", "HAS_CRITERION", "AC-0002"),
+      edge("J-0001", "LOGS", "WL-0001"),
+      edge("WL-0001", "ADDRESSES", "WI-0001"),
+      edge("WL-0001", "SUBMITS", "EV-0001"),
+      edge("EV-0001", "CLAIMS", "AC-0002"),
+    ];
+    const board = boardOf(nodes, edges, settled(nodes, edges));
+    const rows = board.fixSpec.filter((held) => held.reason === "off-target");
+    assert.deepEqual(
+      rows.map((held) => held.id),
+      ["EV-0001", "WL-0001"],
+    );
+    assert.deepEqual(
+      rows.map((held) => held.kind),
+      ["grammar", "grammar"],
+    );
+    assert.deepEqual(
+      rows.map((held) => held.detail),
+      [
+        "EV-0001 claims AC-0002, but the work log that submitted it, WL-0001, addresses WI-0001, which target AC-0001 — a work log's evidence claims only the criteria its work items target.",
+        "WL-0001 addresses WI-0001, which target AC-0001, but submits EV-0001, which claims AC-0002 — a work log's evidence claims only the criteria its work items target.",
+      ],
+    );
+    // A rule of the graph wrote these, so no person is named against them.
+    assert.deepEqual(
+      rows.map((held) => [held.by, held.at]),
+      [
+        [null, null],
+        [null, null],
+      ],
+    );
   });
 
   test("lists a work item with two aims on Implement, naming both targets — two aims are no fault", () => {
@@ -756,6 +822,29 @@ describe("the Fix Spec column", () => {
     assert.equal(row.type, null);
   });
 
+  test("orders two stray files by the path each is named by", () => {
+    // Neither row has an id, so the last tiebreak falls through to the file —
+    // the only identity a file that would not read far enough has.
+    const board = boardOf(SPINE_NODES, SPINE, settled(), {
+      problems: [
+        { file: "notes.md", message: "A spec folder holds no loose files." },
+        {
+          file: "drafts/aside.md",
+          message: "A spec folder holds no loose files.",
+        },
+      ],
+    });
+    assert.deepEqual(
+      board.fixSpec
+        .filter((held) => held.reason === "malformed")
+        .map((held) => [held.id, held.key]),
+      [
+        [null, "fix:drafts/aside.md"],
+        [null, "fix:notes.md"],
+      ],
+    );
+  });
+
   test("says which line to cut when two work items wait on each other", () => {
     const second = node("WorkItem", "WI-0002");
     const nodes = [...SPINE_NODES, second];
@@ -834,6 +923,79 @@ describe("the Fix Spec column", () => {
     assert.deepEqual(
       boardOf(SPINE_NODES, SPINE, ledgers),
       boardOf(SPINE_NODES, SPINE, ledgers),
+    );
+  });
+});
+
+describe("work logged before its turn", () => {
+  test("puts the log on Fix Spec, naming the work item whose turn has not come", () => {
+    const second = node("WorkItem", "WI-0002");
+    const nodes = [...SPINE_NODES, second, journal, workLog];
+    const edges = [
+      ...SPINE,
+      edge("M-0001", "ALLOCATES", "WI-0002"),
+      edge("WI-0002", "DEPENDS_ON", "WI-0001"),
+      edge("J-0001", "LOGS", "WL-0001"),
+      edge("WL-0001", "ADDRESSES", "WI-0002"),
+    ];
+    const board = boardOf(nodes, edges, settled(nodes, edges));
+    const row = board.fixSpec.find((held) => held.id === "WL-0001");
+    assert.ok(row !== undefined);
+    assert.deepEqual(row, {
+      key: "fix:WL-0001",
+      id: "WL-0001",
+      type: "WorkLog",
+      shortName: "WL-0001",
+      name: "WorkLog WL-0001",
+      kind: "grammar",
+      reason: "premature",
+      detail:
+        "WL-0001 addresses WI-0002, and WI-0002 is blocked — work is logged only under a work item whose turn has come: its chain read and agreed, and everything it waits on finished.",
+      file: null,
+      by: null,
+      at: null,
+      updatedAt: 1,
+    });
+    // WI-0002 waits on WI-0001, which nobody has closed, so only the one work
+    // item whose turn HAS come is on the other half.
+    assert.deepEqual(
+      board.implement.map((held) => held.id),
+      ["WI-0001"],
+    );
+  });
+
+  test("says nothing about a log that addresses no work item at all", () => {
+    // Foundation work under a journal: the log is held by the journal that
+    // logs it, addresses nothing, and breaks no rule by it.
+    const nodes = [...SPINE_NODES, journal, workLog];
+    const edges = [...SPINE, edge("J-0001", "LOGS", "WL-0001")];
+    const ledgers = settled(nodes, edges);
+    assert.equal(colorsOf(nodes, edges, ledgers)("WL-0001"), "green");
+    assert.equal(
+      boardOf(nodes, edges, ledgers).fixSpec.some(
+        (held) => held.id === "WL-0001",
+      ),
+      false,
+    );
+  });
+
+  test("leaves a log addressing an id no file names to the missing rule", () => {
+    // The hole is one row, said once, and the log itself is not accused of
+    // starting early on a work item nobody can show the state of.
+    const nodes = [...SPINE_NODES, journal, workLog];
+    const edges = [
+      ...SPINE,
+      edge("J-0001", "LOGS", "WL-0001"),
+      edge("WL-0001", "ADDRESSES", "WI-0404"),
+    ];
+    const board = boardOf(nodes, edges, settled(nodes, edges));
+    assert.deepEqual(
+      board.fixSpec.filter((held) => held.reason === "missing").map((held) => held.id),
+      ["WI-0404"],
+    );
+    assert.equal(
+      board.fixSpec.some((held) => held.id === "WL-0001"),
+      false,
     );
   });
 });

@@ -194,6 +194,45 @@ describe("the activity feed door", () => {
     }
   });
 
+  test("a ref that is not a node id is caught by the door, not by the disk", async () => {
+    const file = await makeMonthPath();
+
+    // The emitter writes `refs` as a flow sequence with the one scalar rule,
+    // which is safe only because every element is an id. The reader is what
+    // says so, and the door's own read-back is where that answer arrives
+    // before any bytes do — an `invalid`, because this is Shall failing at its
+    // own job and not somebody's file being in the way.
+    const answer = await refusal(() =>
+      appendActivity(file, { ...LANDED, refs: ["not an id"] }),
+    );
+    assert.deepEqual(answer, {
+      kind: "invalid",
+      message:
+        'Shall emitted an activity feed it could not read back — Record 1 in the activity feed refers to "not an id", which is not a node id. An id uses letters, digits, dots, hyphens and underscores, starts with a letter or digit, and holds at most 64 characters.',
+    });
+    await assert.rejects(() => readFile(file, "utf8"));
+  });
+
+  test("a record the reader would settle differently never reaches the disk", async () => {
+    const file = await makeMonthPath();
+
+    // The fixpoint is over the TEXT and not over the records: the emitter
+    // writes the spaces inside quotation marks, the reader trims them off the
+    // way it trims every identity, and the bytes that would come back are not
+    // the bytes that went out. The line was the whole request, so the door
+    // says so rather than filing a record whose instant is not the one it was
+    // handed.
+    const answer = await refusal(() =>
+      appendActivity(file, { ...LANDED, at: " 2026-08-21T14:03:00.000Z " }),
+    );
+    assert.deepEqual(answer, {
+      kind: "invalid",
+      message:
+        "Shall emitted an activity feed it could not read back — What it read back is not what it wrote.",
+    });
+    await assert.rejects(() => readFile(file, "utf8"));
+  });
+
   test("a feed folder that is somehow a file is never written into, and the sentence says what stands there", async () => {
     for (const [standing, because] of [
       // `ledger/feed` is a file: the folder the month belongs in is taken.

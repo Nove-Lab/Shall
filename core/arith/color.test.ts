@@ -14,7 +14,19 @@ import {
   type RejectionRecord,
 } from "../serialize/index.js";
 import type { RefusedFile, SpecGraph } from "../store/file-store.js";
-import type { Ledgers, PayloadHash } from "./color.js";
+import {
+  colorContextOf,
+  colorOf,
+  hasSchemaViolation,
+  isHashMatched,
+  isMissing,
+  isOrphan,
+  livingSubject,
+  offTargetOf,
+  type ColorSubject,
+  type Ledgers,
+  type PayloadHash,
+} from "./color.js";
 import { reviewGraph, type GraphReview, type ReviewStatus } from "./review.js";
 
 /**
@@ -240,6 +252,33 @@ describe("red", () => {
         referencedBy: [
           { fromId: "D-0001", type: "AFFECTS" },
           { fromId: "SR-0001", type: "REQUIRES" },
+        ],
+      },
+    ]);
+  });
+
+  test("two lines from one file at one hole are listed by relation, not by arrival", () => {
+    // A module may both publish and call one contract, so one file can name one
+    // hole twice. The referrers sort by the file first and by the relation
+    // second, which is what keeps the list the same on every read when the
+    // file is the same at both ends.
+    const review = reviewGraph(
+      graphOf({
+        nodes: [node("SystemResponsibility", "SR-0001"), node("Module", "M-0001")],
+        edges: [
+          edge("SR-0001", "IS_REALIZED_BY", "M-0001"),
+          edge("M-0001", "EXPOSES", "I-0404"),
+          edge("M-0001", "CONSUMES", "I-0404"),
+        ],
+      }),
+      unapproved,
+    );
+    assert.deepEqual(review.missing, [
+      {
+        id: "I-0404",
+        referencedBy: [
+          { fromId: "M-0001", type: "CONSUMES" },
+          { fromId: "M-0001", type: "EXPOSES" },
         ],
       },
     ]);
@@ -1000,6 +1039,23 @@ describe("the aim rule", () => {
     assert.equal(statusOf(review, "EV-0001")?.reason, "off-target");
     // The approval is still carried, as it is for an orphan.
     assert.deepEqual(statusOf(review, "WL-0001")?.approval, APPROVER);
+  });
+
+  test("a SUBMITS line at an id no file names raises no breach — the missing rule owns the hole", () => {
+    // The rule reads the type of what was submitted to know which half of it
+    // applies, and nothing on disk claims EV-0404 to have a type. The log is
+    // left alone and the hole is said once, in the list that is for holes.
+    const review = reviewWith(
+      edge("EV-0001", "CLAIMS", "AC-0001"),
+      edge("WL-0001", "SUBMITS", "EV-0404"),
+    );
+    assert.deepEqual(
+      statusOf(review, "WL-0001"),
+      status("WL-0001", "yellow", "unapproved"),
+    );
+    assert.deepEqual(review.missing, [
+      { id: "EV-0404", referencedBy: [{ fromId: "WL-0001", type: "SUBMITS" }] },
+    ]);
   });
 
   test("a claim at a criterion no file names anchors nothing, and is still the log's breach", () => {
@@ -1853,6 +1909,79 @@ describe("rejection", () => {
     );
     assert.deepEqual(review.statuses, [
       status("G-0001", "yellow", "unapproved"),
+    ]);
+  });
+});
+
+/**
+ * THE PREDICATES, ASKED ONE AT A TIME. Every screen comes in by `reviewGraph`,
+ * and the chain's eight questions are exported beside it because the daemon and
+ * the panel are entitled to ask one of them on its own. What is under test here
+ * is what each answers for the two subjects the review never builds: an id with
+ * no file behind it, and a file that is there and would not read.
+ */
+describe("the chain asked a question at a time", () => {
+  const responsibility = node("SystemResponsibility", "SR-0001");
+  const requirement = node("Requirement", "R-0001");
+  const ANCHORING = [edge("SR-0001", "REQUIRES", "R-0001")];
+  const context = colorContextOf(
+    graphOf({ nodes: [responsibility, requirement], edges: ANCHORING }),
+    unapproved,
+  );
+
+  /** An id nothing on disk claims — no folder, so no type to read off one. */
+  const hole: ColorSubject = {
+    id: "R-0404",
+    type: null,
+    present: false,
+    node: null,
+    problems: [],
+  };
+
+  /** A file that is there and would not read: present, no node, and sentences. */
+  const unreadable: ColorSubject = {
+    id: "R-0002",
+    type: "Requirement",
+    present: true,
+    node: null,
+    problems: ["A short name is required."],
+  };
+
+  test("a subject carrying no node answers about the hole, and never invents one", () => {
+    assert.equal(isOrphan(hole, context), false);
+    assert.equal(offTargetOf(hole, context), null);
+    assert.equal(isHashMatched(hole, context), false);
+    assert.equal(hasSchemaViolation(hole, context), false);
+    // Nothing in this graph names R-0404, so it is not yet a hole in anything —
+    // both halves of the missing rule have to hold.
+    assert.equal(isMissing(hole, context), false);
+  });
+
+  test("a file that is there and would not read is malformed, and the chain stops there", () => {
+    // It is present, so it is not missing; it carries no node, so no later
+    // question could answer about its content. The loader's own sentences are
+    // what this reads, and it reaches them before any book is opened.
+    assert.equal(hasSchemaViolation(unreadable, context), true);
+    assert.deepEqual(colorOf(unreadable, context), {
+      color: "red",
+      reason: "malformed",
+    });
+  });
+
+  test("a type the canon does not have is not coloured, and takes no row", () => {
+    // Null is not a colour and not an absence of information — it is a subject
+    // the question does not apply to. The loader never serves such a node, and
+    // the answer is kept honest rather than cast away.
+    const stray = node("Sandwich", "SW-0001");
+    const graph = graphOf({
+      nodes: [responsibility, requirement, stray],
+      edges: ANCHORING,
+    });
+    assert.equal(colorOf(livingSubject(stray), colorContextOf(graph, unapproved)), null);
+    const review = reviewGraph(graph, unapproved);
+    assert.deepEqual(review.statuses.map((held) => held.id), [
+      "R-0001",
+      "SR-0001",
     ]);
   });
 });
