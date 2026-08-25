@@ -31,7 +31,7 @@ import {
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.dirname(scriptDirectory);
-const pluginRoot = path.join(repoRoot, "plugin");
+const pluginRoot = path.join(repoRoot, "agents", "claude");
 
 /**
  * SCREAMING_SNAKE words that are not relations and never will be.

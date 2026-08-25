@@ -23,13 +23,13 @@ export function createApp(bindHost: string, spaRoot?: string): Hono {
     context.json({ ok: true, host: bindHost, procedures: SERVED_PROCEDURES }),
   );
 
-  // TODO: local token — browse/mkdir이 무인증인 임시 상태
+  // TODO: a local token — browse and mkdir answer without one for now.
   app.get("/api/fs/browse", async (context) => {
     const requestedPath = context.req.query("path");
     return context.json(await browseDirectories(requestedPath));
   });
 
-  // TODO: local token — browse/mkdir이 무인증인 임시 상태
+  // TODO: a local token — browse and mkdir answer without one for now.
   app.post("/api/fs/mkdir", async (context) => {
     const body = (await context.req.json()) as {
       parent?: unknown;

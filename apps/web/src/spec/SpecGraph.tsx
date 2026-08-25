@@ -589,8 +589,8 @@ export function SpecGraph({
       nodesDraggable={false}
       proOptions={{ hideAttribution: true }}
       /* THE GRID IS NOT A CAMERA AT ALL, and these seven say so. The requirement
-         is literal — *"grid view에서는 zoom in/out 기능이 없이 스크롤로 표 형태
-         배치를 이동한다"* — and now that the board is a document of its own size,
+         is literal — the grid view has no zoom in or out, and moving over the
+         table layout is scrolling — and now that the board is a document of its own size,
          the movement is the browser's and React Flow is asked to sit still.
 
          The min/max clamp is the load-bearing half: with `panOnScroll` off, a

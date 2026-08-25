@@ -10,7 +10,7 @@ core/        graph · arith · serialize · store   — pure, browser-safe; no f
 daemon/      http · service · host               — the one process that writes spec files
 apps/web/    control · spec · settings · shell   — the localhost screen
 client/cli/  the `shall` command                 — a thin client; computes and serialises nothing
-plugin/      Claude Code plugin                  — the agent-side processes, prose only
+agents/      claude/ — the Claude Code plugin    — the agent-side processes, prose only; one folder per agent
 scripts/     lint-plugin.mjs                     — checks the plugin prose against core and the CLI
 ```
 
@@ -98,7 +98,8 @@ Two planes under `/p/:projectId`, plus Settings.
 
 Seven commands: specify, plan, work (+ work.todo, work.report), raise, help.
 Prose only — no hooks beyond the spec compiler, no state.
-The `plugin/` folder is the one source: `shall init` embeds it into each project as `/shall.…` commands — no install step, no marketplace; the colon namespace is the plugin form and only appears when developing the plugin with `--plugin-dir`.
+The `agents/claude/` folder is the one source: `shall init` embeds it into each project as `/shall.…` commands — no install step, no marketplace; the colon namespace is the plugin form and only appears when developing the plugin with `--plugin-dir`.
+It sits under `agents/` because Claude Code is the first agent Shall drives, not the last: a kit for another agent would be its sibling folder, embedded the same way.
 `scripts/lint-plugin.mjs` holds the prose to the code: canon names from core's build, the subcommand list read from the CLI's own `SHAPES` table, no retired vocabulary, no template-hint quotes.
 
 ## Invariants

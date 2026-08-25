@@ -30,8 +30,8 @@ import { writeByRename } from "./atomic-write.js";
  *
  * THIS IS CONVENTION DEFENCE, NOT A SANDBOX. Nothing here enforces anything: an
  * agent that ignores the file — a different tool, a patched one, a shell
- * command that writes the path directly — writes the ledger anyway. The user
- * spec says so in its own words: 관례 방어만.
+ * command that writes the path directly — writes the ledger anyway. It was
+ * asked for as exactly that: convention defence, and nothing stronger.
  *
  * It is worth writing because it makes the boundary LEGIBLE: a person reading
  * their own settings file can see which paths Shall considers off-limits, and

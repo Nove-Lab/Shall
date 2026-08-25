@@ -582,8 +582,9 @@ export function SpecPlane() {
    * part way through typing — none of it stored anywhere yet, and a canvas click
    * is trivially easy to make while reaching for the panel. The board this ports
    * from cleared the panel unconditionally on a pane click, which is exactly the
-   * behaviour the requirement rules out: *"노드 패널 작성/수정시에는 이렇게 닫히면
-   * 안됨"*. A draft leaves through Cancel or through a save, both of which say so.
+   * behaviour the requirement rules out: a panel someone is writing or editing
+   * in must not close this way. A draft leaves through Cancel or through a save,
+   * both of which say so.
    *
    * `closed` FALLS THROUGH THE SAME BRANCH and closes nothing, which is the only
    * honest answer for a click on an empty board.

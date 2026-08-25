@@ -12,7 +12,7 @@ import { getAgentSettingsPath } from "./agent-settings.js";
  * the deny rules are handled next door.
  *
  * THE PLUGIN STAYS THE ONE SOURCE. Nothing here is a second copy of the
- * process prose: the kit is read out of the repository's `plugin/` folder at
+ * process prose: the kit is read out of the repository's `agents/claude/` folder at
  * write time and transformed for the project-command dialect: the colon
  * namespace is the plugin form and a project command cannot wear it, so
  * `/shall:specify` becomes `/shall.specify`, a skill is called by its bare
@@ -31,9 +31,13 @@ import { getAgentSettingsPath } from "./agent-settings.js";
 
 const moduleDirectory = path.dirname(fileURLToPath(import.meta.url));
 
-/** The plugin folder of the checkout this daemon runs from — src and dist sit at the same depth. */
+/**
+ * The Claude plugin folder of the checkout this daemon runs from — src and dist
+ * sit at the same depth. It lives under `agents/` because Claude is the first
+ * agent Shall drives, not the last; a codex kit would be its sibling.
+ */
 function pluginRoot(): string {
-  return path.resolve(moduleDirectory, "..", "..", "..", "plugin");
+  return path.resolve(moduleDirectory, "..", "..", "..", "agents", "claude");
 }
 
 /** The one line that marks a generated file as Shall's to rewrite and to remove. */
