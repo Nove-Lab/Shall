@@ -4,7 +4,12 @@
 Any command starts the daemon when it is not already running; the client itself computes and stores nothing, so every answer below is the daemon's reading of your project's spec files at that moment.
 Run every command from inside the project folder.
 
+The first two groups are the ones you type yourself.
+The rest are what the embedded `/shall.…` agent processes run — you can type them too, but everything they answer, the browser already shows you.
+
 ## Opening the app
+
+**For you.**
 
 ```
 shall
@@ -16,6 +21,8 @@ Opens the project's screen in your browser — the control plane (overview, revi
 
 ## Setting up a project
 
+**For you.** Once per project.
+
 ```
 shall init [--json]
 ```
@@ -26,6 +33,8 @@ It is idempotent: running it again in an existing project touches nothing you wr
 You end with two ways in — `shall` to open the app, or `claude` and then `/shall.help`.
 
 ## Reading the project
+
+**For agents.** These are how an agent orients itself before touching the spec; the browser says the same things on the Vitals, Work Board and spec plane pages.
 
 ```
 shall check  [--scope <path>]... [--json]
@@ -39,6 +48,8 @@ shall board  [--json]
 
 ## Writing
 
+**For agents.** The agent processes use these while carrying out a turn; what they write shows up in the app for you to review.
+
 ```
 shall add-spec-node --type <Type> [--json]
 shall log <kind> <summary> [--refs <id,id>] [--json]
@@ -48,6 +59,8 @@ shall log <kind> <summary> [--refs <id,id>] [--json]
 `log` appends one line to the activity feed — a run finished, and what it finished — with `--refs` naming the nodes it was about.
 
 ## Help
+
+**For either.** It is the screen whoever typed — you or an agent — meets after a typo.
 
 ```
 shall help
