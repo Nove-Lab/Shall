@@ -11,12 +11,17 @@ import {
 } from "../host/filesystem.js";
 import { isRefusal } from "../service/errors.js";
 import { subscribe } from "../service/spec-events.js";
-import { appRouter } from "./router.js";
+import { appRouter, SERVED_PROCEDURES } from "./router.js";
 
 export function createApp(bindHost: string, spaRoot?: string): Hono {
   const app = new Hono();
 
-  app.get("/health", (context) => context.json({ ok: true, host: bindHost }));
+  // `procedures` is the build marker: the CLI reads it before adopting a
+  // running daemon, so one left over from an older install is restarted
+  // instead of answering every call with a sentence about a missing path.
+  app.get("/health", (context) =>
+    context.json({ ok: true, host: bindHost, procedures: SERVED_PROCEDURES }),
+  );
 
   // TODO: local token — browse/mkdir이 무인증인 임시 상태
   app.get("/api/fs/browse", async (context) => {

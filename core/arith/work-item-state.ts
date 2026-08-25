@@ -222,7 +222,7 @@ export function workItemStateOf(
  *
  * A CYCLE TERMINATES AND DOES NOT HANG. `DEPENDS_ON` is acyclic by rule and the
  * loader still does not refuse a loop — every work item on one is red (`cyclic`, in
- * `plan-seams.ts`) rather than rejected at the door, so a loop reaches this
+ * `seams.ts`) rather than rejected at the door, so a loop reaches this
  * walk. It carries the ids it is currently inside and DROPS a prerequisite
  * already on its own path: the
  * loop stops counting itself, and the number that comes back is the depth of

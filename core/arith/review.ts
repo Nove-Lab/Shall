@@ -6,7 +6,7 @@ import {
 } from "../graph/index.js";
 import type { RefusedFile, SpecGraph } from "../store/file-store.js";
 import { closureVerdictOf, type ClosureVerdict } from "./closure.js";
-import { cyclicOf, cyclicSentence } from "./plan-seams.js";
+import { cyclicOf, cyclicSentence } from "./seams.js";
 import {
   isCriteriaCarrier,
   satisfactionOf,

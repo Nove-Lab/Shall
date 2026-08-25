@@ -1139,7 +1139,7 @@ describe("a work item's aims and its anchor", () => {
   });
 });
 
-describe("a loop in the plan", () => {
+describe("a loop in the written order", () => {
   // One responsibility, one module, and as many work items as a test needs. The
   // module ALLOCATES every work item, so nothing here is red for want of an anchor
   // and the loop is the only thing on trial.
@@ -1398,6 +1398,53 @@ describe("a loop in the plan", () => {
     );
     assert.equal(statusOf(review, "WI-0001")?.reason, "cyclic");
     assert.equal(statusOf(review, "WI-0002")?.reason, "cyclic");
+  });
+
+  test("two goals refining each other are both red, each told from where it stands", () => {
+    const review = reviewGraph(
+      graphOf({
+        nodes: [node("Goal", "G-0001"), node("Goal", "G-0002")],
+        edges: [
+          edge("G-0001", "REFINES", "G-0002"),
+          edge("G-0002", "REFINES", "G-0001"),
+        ],
+      }),
+      unapproved,
+    );
+    assert.equal(statusOf(review, "G-0001")?.reason, "cyclic");
+    assert.equal(
+      statusOf(review, "G-0001")?.problem,
+      "G-0001 refines G-0002, which refines G-0001 — a refinement is a decomposition, and a loop of them has no top: every goal here is achieved only through itself. Remove one REFINES line, or lift what they share into a goal above them.",
+    );
+    assert.equal(
+      statusOf(review, "G-0002")?.problem,
+      "G-0002 refines G-0001, which refines G-0002 — a refinement is a decomposition, and a loop of them has no top: every goal here is achieved only through itself. Remove one REFINES line, or lift what they share into a goal above them.",
+    );
+  });
+
+  test("a goal refined through a third comes back marked, and a straight refinement does not", () => {
+    const review = reviewGraph(
+      graphOf({
+        nodes: [
+          node("Goal", "G-0001"),
+          node("Goal", "G-0002"),
+          node("Goal", "G-0003"),
+          node("Goal", "G-0004"),
+        ],
+        edges: [
+          edge("G-0001", "REFINES", "G-0002"),
+          edge("G-0002", "REFINES", "G-0003"),
+          edge("G-0003", "REFINES", "G-0001"),
+          edge("G-0001", "REFINES", "G-0004"),
+        ],
+      }),
+      unapproved,
+    );
+    for (const id of ["G-0001", "G-0002", "G-0003"]) {
+      assert.equal(statusOf(review, id)?.reason, "cyclic", id);
+    }
+    // The straight refinement hangs off the loop without standing on it.
+    assert.equal(statusOf(review, "G-0004")?.reason, "unapproved");
   });
 });
 

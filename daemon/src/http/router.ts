@@ -368,3 +368,16 @@ export const appRouter = t.router({
 });
 
 export type AppRouter = typeof appRouter;
+
+/**
+ * EVERY PROCEDURE THIS ROUTER SERVES, by its dotted path, sorted — the build
+ * marker `/health` hands out. It is read off the router's own record rather
+ * than kept as a list, so a procedure added or renamed above is on the wire in
+ * the same build with nothing written twice, and a CLI newer than a running
+ * daemon can tell "out of date" from "broken" by the names instead of by a
+ * tRPC sentence about a missing path. The http test holds this non-empty, so
+ * a tRPC upgrade that moves the record fails the build and not a user.
+ */
+export const SERVED_PROCEDURES: readonly string[] = Object.keys(
+  appRouter._def.procedures,
+).sort();

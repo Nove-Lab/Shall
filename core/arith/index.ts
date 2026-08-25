@@ -53,12 +53,12 @@ export {
   type ClosureVerdict,
 } from "./closure.js";
 export {
+  cyclesOf,
   cyclicOf,
   cyclicSentence,
   isCyclic,
-  planCyclesOf,
-} from "./plan-seams.js";
-export type { ModuleHop, PlanCycle, PlanCycles } from "./plan-seams.js";
+} from "./seams.js";
+export type { Cycle, Cycles, ModuleHop } from "./seams.js";
 export { missingSentence, reviewGraph } from "./review.js";
 export type {
   BrokenFile,

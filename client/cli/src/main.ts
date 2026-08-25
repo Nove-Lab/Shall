@@ -57,17 +57,69 @@ function isProcessAlive(pid: number): boolean {
   }
 }
 
-async function getRunningHost(url: string): Promise<string | null> {
+/**
+ * What `/health` answered: the bind host, and — on daemons new enough to say —
+ * the procedures served, which is the build marker. `procedures: null` means
+ * the daemon predates the marker, and `isOutOfDate` reads that as what it is.
+ * A null RETURN is different: nothing answered at all.
+ */
+interface DaemonHealth {
+  host: string;
+  procedures: readonly string[] | null;
+}
+
+async function healthOf(url: string): Promise<DaemonHealth | null> {
   try {
     const response = await fetch(`${url}/health`);
     if (!response.ok) {
       return null;
     }
-    const body = (await response.json()) as { host?: unknown };
-    return typeof body.host === "string" ? body.host : null;
+    const body = (await response.json()) as {
+      host?: unknown;
+      procedures?: unknown;
+    };
+    if (typeof body.host !== "string") {
+      return null;
+    }
+    return {
+      host: body.host,
+      procedures:
+        Array.isArray(body.procedures) &&
+        body.procedures.every((name) => typeof name === "string")
+          ? (body.procedures as string[])
+          : null,
+    };
   } catch {
     return null;
   }
+}
+
+async function getRunningHost(url: string): Promise<string | null> {
+  return (await healthOf(url))?.host ?? null;
+}
+
+/**
+ * THE PROCEDURES THIS CLI CALLS — its own manifest, one entry per call site in
+ * this file, compared against what a running daemon's `/health` says it
+ * serves. A daemon missing any of them, or too old to say, is older than this
+ * CLI: adopting it would turn every command into a tRPC sentence about a
+ * missing path, which is a worse way to hear "your Shall is out of date".
+ */
+const NEEDED_PROCEDURES: readonly string[] = [
+  "projects.create",
+  "spec.board",
+  "spec.check",
+  "spec.log",
+  "spec.scaffold",
+  "spec.status",
+];
+
+function isOutOfDate(health: DaemonHealth): boolean {
+  const served = health.procedures;
+  if (served === null) {
+    return true;
+  }
+  return NEEDED_PROCEDURES.some((name) => !served.includes(name));
 }
 
 async function waitForServer(
@@ -122,6 +174,19 @@ async function openBrowser(url: string): Promise<boolean> {
  * the config no longer names, or a bind address that is not the one asked for
  * all mean the process to talk to is not the process that is running, so the old
  * one is stopped and forgotten before a new one takes the port.
+ *
+ * TWO MORE THINGS ARE ASKED BEFORE ANYTHING IS ADOPTED OR SPAWNED. The MARKER:
+ * a daemon the state file names is asked what it serves, and one older than
+ * this CLI — missing a procedure this file calls, or too old to say — is
+ * stopped and replaced, so "your Shall is out of date" arrives as a restart
+ * rather than as a tRPC sentence about a missing path. The KNOCK: with no
+ * state on record the port is asked before a child is spawned, because a
+ * healthy daemon whose state file went missing would win the bind and leave
+ * every call paying for a process that was never going to live; a daemon that
+ * answers right is adopted, and only silence is spawned into. The knock
+ * cannot restart what it finds — no state file names a pid this process may
+ * kill — so an out-of-date daemon met this way is adopted with a sentence
+ * saying how to stop it, which is yesterday's behaviour plus the words.
  */
 async function ensureDaemon(bindHost: string): Promise<string> {
   await ensureShallHome();
@@ -145,7 +210,34 @@ async function ensureDaemon(bindHost: string): Promise<string> {
     daemonState = null;
   }
 
+  // THE MARKER. Only a daemon the state file names is restarted: the pid to
+  // stop is the state's own, so this can never kill a process the record
+  // does not point at. A probe that fails outright is left alone — a flaky
+  // moment is not a version.
+  if (daemonState !== null) {
+    const health = await healthOf(url);
+    if (health !== null && isOutOfDate(health)) {
+      console.error(
+        "Restarting the Shall daemon: the one running is older than this CLI.",
+      );
+      await stopProcess(daemonState.pid);
+      await removeDaemonState(daemonState.pid);
+      daemonState = null;
+    }
+  }
+
   if (daemonState === null) {
+    // THE KNOCK. A daemon answering at the configured port with the right
+    // bind is adopted even though no state file names it.
+    const answering = await healthOf(url);
+    if (answering !== null && answering.host === bindHost) {
+      if (isOutOfDate(answering)) {
+        console.error(
+          `The Shall daemon at ${url} is older than this CLI and no state file names its process — stop it yourself and run shall again.`,
+        );
+      }
+      return url;
+    }
     const daemonPath = fileURLToPath(import.meta.resolve("@shall/daemon/main"));
     const child = spawn(process.execPath, [daemonPath], {
       detached: true,

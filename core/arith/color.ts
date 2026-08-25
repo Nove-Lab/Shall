@@ -15,8 +15,8 @@ import {
   type ParsedNode,
   type RejectionLedger,
 } from "../serialize/index.js";
-import { isCyclic, planCyclesOf } from "./plan-seams.js";
-import type { PlanCycles } from "./plan-seams.js";
+import { isCyclic, cyclesOf } from "./seams.js";
+import type { Cycles } from "./seams.js";
 import type { SpecGraph } from "../store/file-store.js";
 
 /**
@@ -184,11 +184,11 @@ export interface ColorContext {
   readonly outgoing: ReadonlyMap<string, readonly SpecEdge[]>;
   /**
    * Every node standing on a loop, computed once for the whole graph — see
-   * `plan-seams.ts`. It is in here rather than asked per node because the
+   * `seams.ts`. It is in here rather than asked per node because the
    * question is about components of the graph, and answering it a node at a
    * time would walk the same edges once per node.
    */
-  readonly cycles: PlanCycles;
+  readonly cycles: Cycles;
   readonly ledgers: Ledgers;
 }
 
@@ -232,7 +232,7 @@ export function colorContextOf(
     nodes,
     incoming,
     outgoing,
-    cycles: planCyclesOf(graph),
+    cycles: cyclesOf(graph),
     ledgers,
   };
 }
@@ -304,7 +304,7 @@ export type ColorVerdict =
         | "off-target"
         // A LOOP IN THE PLAN — work waiting on itself, or two modules that
         // consume each other's contracts. Read off written lines like the two
-        // above it, so it stays inside the chain; see `plan-seams.ts`.
+        // above it, so it stays inside the chain; see `seams.ts`.
         | "cyclic"
         // THE ONE REASON `colorOf` NEVER ANSWERS. Work logged under a work item
         // whose turn has not come reads the ADDRESSED work item's state — other

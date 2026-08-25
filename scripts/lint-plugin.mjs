@@ -98,16 +98,47 @@ const ALLOWED_SHOUTS = new Set([
   "NODE_TYPES",
 ]);
 
-/** The subcommands `shall` answers to. */
-const SUBCOMMANDS = new Set([
-  "init",
-  "check",
-  "status",
-  "board",
-  "add-spec-node",
-  "log",
-  "help",
-]);
+/**
+ * The subcommands `shall` answers to — read out of `client/cli/src/args.ts`,
+ * whose `SHAPES` table calls itself the one home of the shapes. It was a
+ * hand-kept copy here twice over, and both times a new subcommand paid for the
+ * second entry; now a new subcommand needs no entry here at all. The source is
+ * read as TEXT rather than imported, because this lint runs before the CLI is
+ * built and must not start depending on `dist/`. The parse is deliberately
+ * narrow — the table's top-level keys sit at one indent, quoted or bare — and
+ * it fails loudly rather than shrinking: an empty set would wave every
+ * `shall <word>` through, which is worse than stopping the build.
+ */
+const argsSourcePath = path.join(repoRoot, "client", "cli", "src", "args.ts");
+const argsSource = readFileSync(argsSourcePath, "utf8");
+const shapesStart = argsSource.indexOf("const SHAPES = {");
+const shapesEnd =
+  shapesStart === -1 ? -1 : argsSource.indexOf("\n}", shapesStart);
+if (shapesStart === -1 || shapesEnd === -1) {
+  console.error(
+    `lint-plugin: could not find the SHAPES table in ${argsSourcePath} — the subcommand check has nothing to check against.`,
+  );
+  process.exit(1);
+}
+const SUBCOMMANDS = new Set();
+for (const line of argsSource.slice(shapesStart, shapesEnd).split("\n")) {
+  const key = /^  (?:"([^"]*)"|([A-Za-z_$][\w$-]*)):/.exec(line);
+  if (key === null) {
+    continue;
+  }
+  const word = key[1] ?? key[2];
+  // The bare line and the flags are ways to call `shall`, not subcommands.
+  if (word === "" || word.startsWith("-")) {
+    continue;
+  }
+  SUBCOMMANDS.add(word);
+}
+if (SUBCOMMANDS.size === 0) {
+  console.error(
+    `lint-plugin: the SHAPES table in ${argsSourcePath} yielded no subcommands — an empty set would let every \`shall <word>\` pass.`,
+  );
+  process.exit(1);
+}
 
 /**
  * The three the docs name in order to deny them. There is no `shall approve`,

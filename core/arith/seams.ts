@@ -3,8 +3,9 @@ import type { SpecGraph } from "../store/file-store.js";
 import type { ColorContext, ColorSubject } from "./color.js";
 
 /**
- * A LOOP IN THE PLAN — work that waits on itself, or two modules neither of
- * which can be built without the other.
+ * A LOOP IN THE WRITTEN ORDER — work that waits on itself, two modules neither
+ * of which can be built without the other, or a goal refined through others
+ * back into itself.
  *
  * WHY IT IS A COLOUR AND NOT A WARNING. `DEPENDS_ON` is what the board computes
  * readiness from: a work item is ready when everything it waits on is finished, so
@@ -25,13 +26,17 @@ import type { ColorContext, ColorSubject } from "./color.js";
  * and every colour question then reads a map. A per-node walk would be quadratic
  * over a graph that is re-read on every keystroke in the panel.
  *
+ * THE THIRD GRAPH IS THE INTENT'S OWN. `REFINES` is a decomposition — a goal
+ * refined into the sub-goals that achieve it — so a loop of them is a
+ * decomposition with no top: every goal on it is achieved through itself, and
+ * the sufficiency question the goal phase asks out loud has no place to start.
+ * It was an open question while this module was the plan's alone; taking it is
+ * why the module is named for the seams and not for one plane.
+ *
  * WHAT IT DELIBERATELY DOES NOT CATCH. `CONFLICTS_WITH` runs both ways between
  * two requirements by design — it says they disagree, not that one comes first —
  * so it is not an order and cannot be circular. `RELATES_TO` between domain
- * entities is a description of the world and not a precedence either. `REFINES`
- * between goals is left alone for now and written down as an open question: a
- * goal refining itself through others is a real defect, but it is a defect in
- * the intent plane, and this module is the plan's.
+ * entities is a description of the world and not a precedence either.
  *
  * PURE AND BROWSER-SAFE, like everything else in `core/arith`.
  */
@@ -42,6 +47,9 @@ const DEPENDS_ON = "DEPENDS_ON";
 /** How a module publishes a contract, and how another calls it — canon #11, #12. */
 const EXPOSES = "EXPOSES";
 const CONSUMES = "CONSUMES";
+
+/** How a goal is decomposed into the sub-goals that achieve it — canon #1. */
+const REFINES = "REFINES";
 
 /**
  * One step of a module loop: who calls, through which contract, and who
@@ -67,16 +75,17 @@ export interface ModuleHop {
  * `type` is the subject's node type, which is what decides between the two
  * sentences a waiting loop can be said in — a work item's and a requirement's.
  */
-export type PlanCycle =
+export type Cycle =
   | {
       readonly kind: "depends";
       readonly type: string;
       readonly loop: readonly string[];
     }
+  | { readonly kind: "refines"; readonly loop: readonly string[] }
   | { readonly kind: "module"; readonly loop: readonly ModuleHop[] };
 
 /** Every node standing on a loop, and the loop it stands on. */
-export type PlanCycles = ReadonlyMap<string, PlanCycle>;
+export type Cycles = ReadonlyMap<string, Cycle>;
 
 /** One node's outgoing steps in the derived graph, however the steps are labelled. */
 interface Step {
@@ -119,12 +128,14 @@ function push(map: Map<string, Step[]>, from: string, step: Step): void {
 function graphsOf(graph: SpecGraph): {
   waiting: Adjacency;
   modules: Adjacency;
+  refining: Adjacency;
 } {
   const living = new Set<string>();
   for (const node of graph.nodes) {
     living.add(node.id);
   }
   const waiting = new Map<string, Step[]>();
+  const refining = new Map<string, Step[]>();
   // The two halves of a module hop, indexed by the contract they meet at.
   const exposedBy = new Map<string, string[]>();
   const consumedBy = new Map<string, string[]>();
@@ -134,6 +145,10 @@ function graphsOf(graph: SpecGraph): {
     }
     if (edge.type === DEPENDS_ON) {
       push(waiting, edge.fromId, { to: edge.toId, via: null });
+      continue;
+    }
+    if (edge.type === REFINES) {
+      push(refining, edge.fromId, { to: edge.toId, via: null });
       continue;
     }
     const index =
@@ -173,10 +188,14 @@ function graphsOf(graph: SpecGraph): {
   for (const hop of between.values()) {
     push(modules, hop.from, { to: hop.to, via: hop.via });
   }
-  for (const steps of [...waiting.values(), ...modules.values()]) {
+  for (const steps of [
+    ...waiting.values(),
+    ...modules.values(),
+    ...refining.values(),
+  ]) {
     steps.sort((left, right) => compare(left.to, right.to));
   }
-  return { waiting, modules };
+  return { waiting, modules, refining };
 }
 
 /**
@@ -331,19 +350,20 @@ function shortestLoop(
 }
 
 /**
- * Every loop in the plan, one entry per node standing on one.
+ * Every loop in the specification, one entry per node standing on one.
  *
- * The two graphs are asked separately and their answers share one map, which
- * they can because no type is in both: `DEPENDS_ON` runs between two
- * requirements or between two work items, and a module never draws one.
+ * The three graphs are asked separately and their answers share one map, which
+ * they can because no type is in two of them: `DEPENDS_ON` runs between two
+ * requirements or between two work items, `REFINES` between two goals, and a
+ * module never draws either.
  */
-export function planCyclesOf(graph: SpecGraph): PlanCycles {
+export function cyclesOf(graph: SpecGraph): Cycles {
   const typeById = new Map<string, string>();
   for (const node of graph.nodes) {
     typeById.set(node.id, node.type);
   }
-  const { waiting, modules } = graphsOf(graph);
-  const cycles = new Map<string, PlanCycle>();
+  const { waiting, modules, refining } = graphsOf(graph);
+  const cycles = new Map<string, Cycle>();
 
   const looping = loopingNodes(waiting);
   for (const id of looping) {
@@ -354,6 +374,18 @@ export function planCyclesOf(graph: SpecGraph): PlanCycles {
     cycles.set(id, {
       kind: "depends",
       type: typeById.get(id) ?? "?",
+      loop: [id, ...steps.slice(0, -1).map((step) => step.to)],
+    });
+  }
+
+  const refined = loopingNodes(refining);
+  for (const id of refined) {
+    const steps = shortestLoop(id, refining, refined);
+    if (steps === null) {
+      continue;
+    }
+    cycles.set(id, {
+      kind: "refines",
       loop: [id, ...steps.slice(0, -1).map((step) => step.to)],
     });
   }
@@ -380,7 +412,7 @@ export function planCyclesOf(graph: SpecGraph): PlanCycles {
 export function cyclicOf(
   subject: ColorSubject,
   context: ColorContext,
-): PlanCycle | null {
+): Cycle | null {
   return context.cycles.get(subject.id) ?? null;
 }
 
@@ -402,12 +434,18 @@ export function isCyclic(
  * two ways out, because "there is a cycle" is a diagnosis and not an
  * instruction.
  */
-export function cyclicSentence(subjectId: string, cycle: PlanCycle): string {
+export function cyclicSentence(subjectId: string, cycle: Cycle): string {
   if (cycle.kind === "module") {
     const hops = cycle.loop
       .map((hop) => `${hop.from} consumes ${hop.via}, which ${hop.to} exposes`)
       .join(", and ");
     return `${hops} — a module's dependencies run one way, and a loop means neither module can be built, read or replaced without the other. Remove one CONSUMES line, or move what both need into a module of its own.`;
+  }
+  if (cycle.kind === "refines") {
+    const refined = [...cycle.loop.slice(1), cycle.loop[0] ?? subjectId].join(
+      ", which refines ",
+    );
+    return `${subjectId} refines ${refined} — a refinement is a decomposition, and a loop of them has no top: every goal here is achieved only through itself. Remove one REFINES line, or lift what they share into a goal above them.`;
   }
   const chain = [...cycle.loop.slice(1), cycle.loop[0] ?? subjectId].join(
     ", which waits on ",

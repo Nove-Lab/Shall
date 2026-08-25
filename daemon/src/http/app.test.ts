@@ -67,6 +67,31 @@ async function readUntil(
   }
 }
 
+describe("the health route", () => {
+  test("carries the bind host and the procedures served, as the build marker", async () => {
+    const app = createApp("127.0.0.1");
+
+    const response = await app.request("http://localhost/health");
+
+    assert.equal(response.status, 200);
+    const body = (await response.json()) as {
+      ok: boolean;
+      host: string;
+      procedures: string[];
+    };
+    assert.equal(body.ok, true);
+    assert.equal(body.host, "127.0.0.1");
+    // Non-empty and holding the two the CLI leans on hardest: an empty list
+    // here would read as "everything is missing" to a knocking CLI, so a tRPC
+    // upgrade that hides the router's record fails HERE and not in the field.
+    assert.ok(body.procedures.length > 0);
+    assert.ok(body.procedures.includes("spec.status"));
+    assert.ok(body.procedures.includes("spec.board"));
+    // Sorted, so the marker's bytes are stable across restarts of one build.
+    assert.deepEqual(body.procedures, [...body.procedures].sort());
+  });
+});
+
 describe("the events route", () => {
   test("a project is given a stream, and the first line says it is open", async () => {
     const project = await createProject(
