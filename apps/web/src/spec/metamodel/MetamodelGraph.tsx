@@ -87,9 +87,12 @@ export function MetamodelGraph() {
   const flowEdges = useMemo<FloatingEdge[]>(
     () =>
       routed.map(({ edge, route, dashed }) =>
-        // Nothing is quiet on the legend: its names are its content, and its
-        // columns are spaced for them.
-        floatingEdgeOf(edge, edge.label, route, dashed, highlight, false),
+        // EVERYTHING IS QUIET ON THE LEGEND. Seventy-odd relations naming
+        // themselves at once is ink, not information — the fan-in families
+        // pile their words into one smear — so an edge here says its name
+        // only while it touches the clicked type, where the highlight has
+        // already thinned the picture down to what one type touches.
+        floatingEdgeOf(edge, edge.label, route, dashed, highlight, true),
       ),
     [routed, highlight],
   );
