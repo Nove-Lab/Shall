@@ -17,6 +17,7 @@ import {
   writeProjectFiles,
   writeSharedTemplates,
 } from "../host/project-files.js";
+import { writeAgentKit } from "../host/agent-kit.js";
 import { writeAgentRules } from "../host/agent-rules.js";
 import { writeAgentDenyRules } from "../host/agent-settings.js";
 import { initRepository, repositoryRoot } from "../host/git-cli.js";
@@ -30,6 +31,7 @@ import {
 
 export async function createProject(
   projectPath: string,
+  options: { initGit?: boolean | undefined } = {},
 ): Promise<RegistryProject> {
   const absolutePath = normalizeProjectPath(projectPath);
   await assertDirectory(absolutePath);
@@ -41,16 +43,22 @@ export async function createProject(
   const metadata = createProjectMetadata(absolutePath);
   await writeProjectFiles(absolutePath, metadata);
   // The spec's restoration material is git and nothing else, so a folder that
-  // is in no repository gets one at the moment it becomes a project. Failure
-  // is swallowed on purpose — a machine without git still gets a project, and
-  // every door that actually needs history says so in its own sentence.
-  if ((await repositoryRoot(absolutePath)) === null) {
+  // is in no repository gets one at the moment it becomes a project — unless
+  // the caller asked to proceed without one: the CLI puts that question to the
+  // person, and this door honours the answer. Failure is swallowed on purpose —
+  // a machine without git still gets a project, and every door that actually
+  // needs history says so in its own sentence.
+  if (
+    options.initGit !== false &&
+    (await repositoryRoot(absolutePath)) === null
+  ) {
     await initRepository(absolutePath);
   }
   // The same conveniences an open runs — see openProject for why they are quiet.
   await Promise.all([
     writeAgentDenyRules(absolutePath),
     writeAgentRules(absolutePath),
+    writeAgentKit(absolutePath),
   ]);
   const project = toRegistryProject(absolutePath, metadata);
   await upsertRegistryProject(project);
@@ -112,6 +120,7 @@ export async function openProject(
     removeProjectTemplates(absolutePath).catch(() => undefined),
     writeAgentDenyRules(absolutePath),
     writeAgentRules(absolutePath),
+    writeAgentKit(absolutePath),
   ]);
 
   const project = toRegistryProject(absolutePath, metadata);

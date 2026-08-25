@@ -46,7 +46,7 @@ export const AGENT_DENY_RULES = [
   "Edit(/.shall/ledger/**)",
 ] as const;
 
-function getAgentSettingsPath(projectPath: string): string {
+export function getAgentSettingsPath(projectPath: string): string {
   return path.join(projectPath, ".claude", "settings.json");
 }
 

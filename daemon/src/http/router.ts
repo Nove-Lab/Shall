@@ -112,8 +112,12 @@ export const appRouter = t.router({
       .input(z.object({ path: z.string().min(1) }))
       .mutation(({ input }) => openProject(input.path)),
     create: procedure
-      .input(z.object({ path: z.string().min(1) }))
-      .mutation(({ input }) => createProject(input.path)),
+      .input(
+        z.object({ path: z.string().min(1), initGit: z.boolean().optional() }),
+      )
+      .mutation(({ input }) =>
+        createProject(input.path, { initGit: input.initGit }),
+      ),
     remove: procedure
       .input(z.object({ id: z.string().min(1) }))
       .mutation(async ({ input }) => {

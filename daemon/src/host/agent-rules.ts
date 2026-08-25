@@ -94,7 +94,7 @@ Working on the specification itself? \`/shall:specify\` runs the elicitation and
 the work? \`/shall:work\` takes a turn of it from the board and reports it as a
 journal, and \`/shall:raise\` is where a doubt about the specification goes — it
 explores, says what it found, and records a finding or a decision you dictated.
-The \`shall-authoring\` skill carries the rest, when the Shall plugin is loaded.
+The \`shall-authoring\` skill carries the rest — it is aboard this project already.
 Lost? \`/shall:help\` says what Shall is, where this project stands, and what to
 run next.
 `;

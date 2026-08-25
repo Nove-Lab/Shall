@@ -303,15 +303,70 @@ interface Said {
  * running this twice is not an error and the sentence printed says only what is
  * true either way: this is a Shall project, and here it is.
  */
-async function init(url: string): Promise<Said> {
+async function init(url: string, json: boolean): Promise<Said> {
+  const initGit = json ? null : await askAboutGit();
   const project = await connect(url).projects.create.mutate({
     path: process.cwd(),
+    ...(initGit === null ? {} : { initGit }),
   });
+  const prose = [`${project.name} is a Shall project at ${project.path}.`];
+  if (await isShallIgnored()) {
+    prose.push(
+      ".shall is matched by .gitignore — the spec and the ledgers are meant to be committed, so unignore it.",
+    );
+  }
+  prose.push(
+    "Open the app:  shall",
+    "Or ask your agent: run claude here, then /shall:help",
+  );
   return {
     answer: { id: project.id, name: project.name, path: project.path },
-    prose: [`${project.name} is a Shall project at ${project.path}.`],
+    prose,
     failed: false,
   };
+}
+
+/**
+ * The one question `init` may ask: this folder is in no git repository —
+ * initialise one, or proceed without? The spec's restoration material is git,
+ * so the daemon's default is to initialise; the question exists so that
+ * proceeding without one is a choice somebody made rather than a surprise.
+ * Null means "nothing to ask": already a repository, or no terminal to ask in —
+ * a piped or scripted run keeps the daemon's default.
+ */
+async function askAboutGit(): Promise<boolean | null> {
+  const inRepository = await execFileAsync("git", [
+    "rev-parse",
+    "--is-inside-work-tree",
+  ]).then(
+    () => true,
+    () => false,
+  );
+  if (inRepository || !process.stdin.isTTY || !process.stdout.isTTY) {
+    return null;
+  }
+  console.error(
+    "This folder is not a git repository. Git is how a specification is versioned and restored.",
+  );
+  const readline = await import("node:readline/promises");
+  const asker = readline.createInterface({
+    input: process.stdin,
+    output: process.stderr,
+  });
+  try {
+    const answer = await asker.question("Run git init here? [Y/n] ");
+    return !/^n/i.test(answer.trim());
+  } finally {
+    asker.close();
+  }
+}
+
+/** Whether .gitignore swallows the spec — said as a warning, never acted on. */
+async function isShallIgnored(): Promise<boolean> {
+  return execFileAsync("git", ["check-ignore", "-q", ".shall"]).then(
+    () => true,
+    () => false,
+  );
 }
 
 /**
@@ -685,7 +740,7 @@ async function board(url: string): Promise<Said> {
 function answerFor(url: string, asked: Answering): Promise<Said> {
   switch (asked.command) {
     case "init":
-      return init(url);
+      return init(url, asked.json);
     case "check":
       return check(url, asked.scope);
     case "status":

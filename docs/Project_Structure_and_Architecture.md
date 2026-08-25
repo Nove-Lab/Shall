@@ -79,7 +79,7 @@ One process, Hono + tRPC at `127.0.0.1:9461`, serving the built web app and `/tr
 - Path-family doors for a folder nobody registered: check, status, board, scaffold, log — what the CLI calls.
 - `/health` carries `procedures`, the sorted list of served procedure paths; the CLI compares it against what it needs and restarts an out-of-date daemon it owns.
 - A filesystem watcher raises one SSE `change` tick per project; the web refetches silently on it.
-- On project open the daemon writes the agent-facing statics: `.claude/rules/shall.md` and the deny rules in `.claude/settings.json`.
+- On init and on every open the daemon writes the agent-facing statics: the rules page `.claude/rules/shall.md`, the deny rules and the compile hook in `.claude/settings.json`, and the agent kit — the plugin's commands, skills and hook copied into `.claude/{commands/shall,skills,hooks}`, keeping their `/shall:` names, marker-guarded and rewritten whenever they drift.
 
 ## The web
 
@@ -96,8 +96,9 @@ Two planes under `/p/:projectId`, plus Settings.
 
 ## The plugin
 
-Seven commands: `/shall:specify`, `/shall:plan`, `/shall:work` (+ `.todo`, `.report`), `/shall:raise`, `/shall:help`.
+Seven commands: specify, plan, work (+ work.todo, work.report), raise, help.
 Prose only — no hooks beyond the spec compiler, no state.
+The `plugin/` folder is the one source: `shall init` embeds it into each project — no install step — and `--plugin-dir` serves the same commands when developing the plugin itself.
 `scripts/lint-plugin.mjs` holds the prose to the code: canon names from core's build, the subcommand list read from the CLI's own `SHAPES` table, no retired vocabulary, no template-hint quotes.
 
 ## Invariants

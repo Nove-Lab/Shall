@@ -52,11 +52,7 @@ bun install && bun run build
 cd client/cli && bun link   # puts `shall` on your PATH
 ```
 
-To give your agent the commands below, start Claude Code with the plugin:
-
-```bash
-claude --plugin-dir /path/to/Shall/plugin
-```
+Nothing else to install for the agent side: `shall init` wires the commands below into the project itself.
 
 ### 2. `shall init`
 
