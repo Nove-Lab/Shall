@@ -317,7 +317,7 @@ async function init(url: string, json: boolean): Promise<Said> {
   }
   prose.push(
     "Open the app:  shall",
-    "Or ask your agent: run claude here, then /shall:help",
+    "Or ask your agent: run claude here, then /shall.help",
   );
   return {
     answer: { id: project.id, name: project.name, path: project.path },

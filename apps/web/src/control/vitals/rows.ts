@@ -135,19 +135,19 @@ export const RULE_LABEL: Record<RuleId, string> = {
  */
 export const RULE_HINT: Record<RuleId, string> = {
   "requirement-without-criterion":
-    "Derive acceptance criteria for these requirements with /shall:specify.",
+    "Derive acceptance criteria for these requirements with /shall.specify.",
   "scenario-without-criterion":
-    "Derive acceptance criteria for these scenarios with /shall:specify.",
+    "Derive acceptance criteria for these scenarios with /shall.specify.",
   "actor-without-use-case":
-    "Give each of these actors a use case with /shall:specify.",
+    "Give each of these actors a use case with /shall.specify.",
   "use-case-without-scenario":
-    "Write each of these use cases' scenarios with /shall:specify.",
+    "Write each of these use cases' scenarios with /shall.specify.",
   "goal-without-responsibility":
-    "A goal reaches a responsibility through an actor, a use case and a scenario — continue with /shall:specify.",
+    "A goal reaches a responsibility through an actor, a use case and a scenario — continue with /shall.specify.",
   "module-without-work-item":
-    "Cut work items for these modules with /shall:plan.",
+    "Cut work items for these modules with /shall.plan.",
   "criterion-without-work-item":
-    "Aim a work item at these criteria with /shall:plan.",
+    "Aim a work item at these criteria with /shall.plan.",
 };
 
 /** Whether a rule stands violated: exactly when it names a node. */

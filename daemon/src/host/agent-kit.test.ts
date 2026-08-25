@@ -30,13 +30,13 @@ describe("the agent kit", () => {
     await writeAgentKit(project);
 
     const command = await readFile(
-      at(project, ".claude/commands/shall/specify.md"),
+      at(project, ".claude/commands/shall.specify.md"),
       "utf8",
     );
     // The frontmatter stays first; the marker sits under it.
     assert.ok(command.startsWith("---\n"), command.slice(0, 20));
     assert.ok(command.includes(KIT_MARKER));
-    // The /shall: names stay — the shall/ command folder is what carries them.
+    assert.ok(!command.includes("/shall:"), "colon namespace survived");
     assert.ok(!command.includes("${CLAUDE_PLUGIN_ROOT}"), "plugin root survived");
 
     const skill = await readFile(
@@ -73,7 +73,7 @@ describe("the agent kit", () => {
   test("a second write changes nothing that already stands", async () => {
     const project = await newProject();
     await writeAgentKit(project);
-    const target = at(project, ".claude/commands/shall/work.md");
+    const target = at(project, ".claude/commands/shall.work.md");
     const before = await readFile(target, "utf8");
     const settingsBefore = await readFile(
       at(project, ".claude/settings.json"),
@@ -91,19 +91,21 @@ describe("the agent kit", () => {
   test("a stale kit file with the marker is removed, and a person's file is not", async () => {
     const project = await newProject();
     await writeAgentKit(project);
-    const commands = at(project, ".claude/commands/shall");
+    const commands = at(project, ".claude/commands");
     await writeFile(
-      path.join(commands, "retired.md"),
+      path.join(commands, "shall.retired.md"),
       `---\n---\n${KIT_MARKER}\nAn old command.\n`,
     );
     await writeFile(
-      path.join(commands, "mine.md"),
-      "My own command that happens to share the folder.\n",
+      path.join(commands, "shall.mine.md"),
+      "My own command that happens to share the prefix.\n",
     );
 
     await writeAgentKit(project);
-    await assert.rejects(readFile(path.join(commands, "retired.md"), "utf8"));
-    assert.ok(await readFile(path.join(commands, "mine.md"), "utf8"));
+    await assert.rejects(
+      readFile(path.join(commands, "shall.retired.md"), "utf8"),
+    );
+    assert.ok(await readFile(path.join(commands, "shall.mine.md"), "utf8"));
   });
 
   test("a settings file somebody edited keeps its shape, and gains only the hook", async () => {

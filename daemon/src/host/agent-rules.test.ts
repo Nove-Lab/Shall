@@ -43,11 +43,11 @@ describe("the rules page", () => {
     // of them, and the guide for when the thread is lost. An agent that never
     // learns the work commands exist writes the execution record by hand,
     // which is what they were built to stop.
-    assert.match(text, /\/shall:specify/);
-    assert.match(text, /\/shall:plan/);
-    assert.match(text, /\/shall:work/);
-    assert.match(text, /\/shall:raise/);
-    assert.match(text, /\/shall:help/);
+    assert.match(text, /\/shall.specify/);
+    assert.match(text, /\/shall.plan/);
+    assert.match(text, /\/shall.work/);
+    assert.match(text, /\/shall.raise/);
+    assert.match(text, /\/shall.help/);
     // The one write under the ledger folder an agent is meant to ask for, named
     // beside the rule that forbids the rest — so the page that says "never open
     // the ledger" is the page that says how the feed's one line gets there.

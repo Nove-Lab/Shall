@@ -208,7 +208,7 @@ describe("the words", () => {
   test("every rule on the wire has a label and a hint that names a process", () => {
     for (const held of CLEAN) {
       assert.ok(RULE_LABEL[held.id].length > 0, held.id);
-      assert.match(RULE_HINT[held.id], /\/shall:(specify|plan)/, held.id);
+      assert.match(RULE_HINT[held.id], /\/shall\.(specify|plan)/, held.id);
     }
   });
 

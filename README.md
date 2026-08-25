@@ -69,7 +69,7 @@ shall
 Starts (or reuses) the local daemon and opens `http://localhost:9461` — the Control plane for governing the project and the Spec plane for reading and editing the graph.
 Everything stays on your machine.
 
-### 4. `/shall:help`
+### 4. `/shall.help`
 
 Ask it in Claude Code any time.
 It says what Shall is in a screen, reads where this project stands, and names the one or two commands that move it — the only command that also answers outside a Shall project.
@@ -78,24 +78,24 @@ It says what Shall is in a screen, reads where this project stands, and names th
 
 ### Driving your agents using Shall
 
-#### Specify — `/shall:specify`
+#### Specify — `/shall.specify`
 
 The staged elicitation that fills the domain and intent planes: goals, actors, use cases, scenarios, responsibilities, requirements, acceptance criteria and the project's own vocabulary.
 Each stage is drafted with you in the terminal, written once agreed, and lands in the Review Queue for your approval; `--auto` runs the stages through and asks once at the end.
 
-#### Plan — `/shall:plan`
+#### Plan — `/shall.plan`
 
 The design pass one layer below, in two stages.
 First it plans the way an agent plans anything — reads the repository, proposes the stack, draws module boundaries, cuts the work — and puts the whole plan to you for one yes, writing nothing.
 Then it transcribes the agreed plan in one pass: modules, their contracts, the work items the board will hand out, and the technology decision.
 `--auto` skips the terminal yes and nothing else.
 
-#### Work — `/shall:work`
+#### Work — `/shall.work`
 
 One turn of the work cycle: survey the board, pick a small bundle, do the development itself outside Shall, self-check the result against each item's definition of done and the criteria it targets, and write the turn up as one journal for the queue.
-`--auto` runs without stopping, `--dry` forecasts without writing; `/shall:work.todo` is the survey alone and `/shall:work.report` writes up work already done.
+`--auto` runs without stopping, `--dry` forecasts without writing; `/shall.work.todo` is the survey alone and `/shall.work.report` writes up work already done.
 
-#### Anytime — `/shall:raise`
+#### Anytime — `/shall.raise`
 
 The door for a doubt rather than a request.
 It explores, says what it found, and leaves behind a finding, a decision you dictated, both — or nothing at all.

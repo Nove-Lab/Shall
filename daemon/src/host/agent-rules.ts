@@ -23,9 +23,9 @@ import { writeByRename } from "./atomic-write.js";
  *
  * IT IS THE FIRST OF THE THREE LAYERS. This is what is true in every session;
  * how to write a node is the `shall-authoring` skill, and the processes are
- * commands — `/shall:specify` and `/shall:plan` for the specification and the
- * plan under it, `/shall:work` and `/shall:raise` for the work itself, and
- * `/shall:help` for an agent or a person who has lost the thread. The rules
+ * commands — `/shall.specify` and `/shall.plan` for the specification and the
+ * plan under it, `/shall.work` and `/shall.raise` for the work itself, and
+ * `/shall.help` for an agent or a person who has lost the thread. The rules
  * that must not be broken live here because the layers below are loaded only
  * when something asks for them, and an agent that never opens a skill still
  * must not delete a spec file.
@@ -89,13 +89,13 @@ Approving, rejecting and closing are a person's, made in the browser: \`shall\`
 with no arguments opens it. There is no \`shall approve\`, and \`shall log\` cannot
 write a judgment.
 
-Working on the specification itself? \`/shall:specify\` runs the elicitation and
-\`/shall:plan\` turns an approved intent into modules, contracts and work items. Doing
-the work? \`/shall:work\` takes a turn of it from the board and reports it as a
-journal, and \`/shall:raise\` is where a doubt about the specification goes — it
+Working on the specification itself? \`/shall.specify\` runs the elicitation and
+\`/shall.plan\` turns an approved intent into modules, contracts and work items. Doing
+the work? \`/shall.work\` takes a turn of it from the board and reports it as a
+journal, and \`/shall.raise\` is where a doubt about the specification goes — it
 explores, says what it found, and records a finding or a decision you dictated.
 The \`shall-authoring\` skill carries the rest — it is aboard this project already.
-Lost? \`/shall:help\` says what Shall is, where this project stands, and what to
+Lost? \`/shall.help\` says what Shall is, where this project stands, and what to
 run next.
 `;
 

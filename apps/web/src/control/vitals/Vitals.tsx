@@ -93,7 +93,7 @@ export function Vitals({ panel }: { panel: PanelMeta }) {
     return (
       <Card>
         <CardContent className="p-0">
-          <EmptyState message={panel.empty} hint="Start with /shall:specify" />
+          <EmptyState message={panel.empty} hint="Start with /shall.specify" />
         </CardContent>
       </Card>
     );
