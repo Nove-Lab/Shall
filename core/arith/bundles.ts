@@ -844,6 +844,18 @@ const SUBGRAPH_PREFIX: Readonly<Record<SubgraphKind, string>> = {
 };
 
 /**
+ * HOW EVERY BUNDLE OPENS ITS TITLE: the root's id and its short name.
+ *
+ * The short name is the half a person recognises — `A-0001 (Shopper)` — while
+ * the full name is a whole sentence, and the queue is a list of rows a sentence
+ * does not fit on. The id stays first because it is what the row is looked up
+ * by everywhere else.
+ */
+function namedRoot(node: SpecNode): string {
+  return `${node.id} (${node.shortName})`;
+}
+
+/**
  * One walked subgraph as a bundle — or null when nothing in it is yellow, which
  * is a Journal whose whole record is already approved.
  */
@@ -885,10 +897,29 @@ function subgraphBundle(
     }
   }
 
+  /**
+   * EVERYTHING THIS DECISION REACHES, MINUS THE ROOT ITSELF — the number the
+   * title's suffix turns on. Members and unchanged are disjoint (one is what is
+   * not green, the other is what is), so the two lists are a set with the root
+   * taken out; the root is in one of them in every case but the green Journal,
+   * where it leads its report without being a row.
+   */
+  const beyondRoot = new Set([...memberIds, ...unchangedIds]);
+  beyondRoot.delete(rootId);
+
   const body = {
     id: `${SUBGRAPH_PREFIX[kind]}:${rootId}`,
     rootId,
-    title: `${rootId} ${root.name}`,
+    /*
+     * THE SUFFIX IS THE WALKED SUBGRAPH'S ALONE. A spec approval, a report and
+     * a standalone finding are all a root with whatever the canon's chain hangs
+     * below it, and the chain runs one way — so "the nodes under it" names the
+     * direction the walk actually went. A root nothing came with is just itself.
+     */
+    title:
+      beyondRoot.size === 0
+        ? namedRoot(root)
+        : `${namedRoot(root)} and the nodes under it`,
     since: sinceOf(scan, memberIds),
     members,
     unchanged,
@@ -1060,7 +1091,14 @@ function closureBundleFor(
   }
   const hearings = hearingsOf(scan, subject.id, shown);
   const id = closureBundleIdFor(kind, subject.id);
-  const title = `${subject.id} ${subject.name}`;
+  /*
+   * NO SUFFIX HERE, AND THE DIRECTION IS WHY. A closure bundle's rows are the
+   * evidence and the reports that CLAIM this subject — relations written in the
+   * claimant and pointing up at it — so they hang above the subject and not
+   * below. Calling them "the nodes under it" would name the wrong end of the
+   * only line joining them.
+   */
+  const title = namedRoot(subject);
   const since = sinceOf(scan, [subject.id, ...shown]);
 
   if (kind.kind === "workItem") {

@@ -1198,7 +1198,7 @@ describe("the review queue", () => {
     const spec = queue.bundles.find((bundle) => bundle.id === "spec:R-0001");
     assert.ok(spec && spec.kind === "spec-approval");
     assert.equal(spec.rootId, "R-0001");
-    assert.equal(spec.title, "R-0001 The node called R-0001");
+    assert.equal(spec.title, "R-0001 (r-0001) and the nodes under it");
     assert.deepEqual(
       spec.members.map((member) => [member.id, member.color, member.reason]),
       [["R-0001", "yellow", "changed"]],

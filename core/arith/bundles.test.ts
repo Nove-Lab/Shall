@@ -450,6 +450,50 @@ describe("what a row says about itself", () => {
   });
 });
 
+describe("how a bundle names itself", () => {
+  test("the title is the ROOT's short name, never its long one", () => {
+    // The fixtures everywhere else give a node the same short name as its id,
+    // so an assertion over them cannot tell the two fields apart. THE ROOT is
+    // what is spelled differently here — it is the node the title is about —
+    // and the long name, the sentence that would not fit a row, is asserted
+    // absent rather than merely unmentioned.
+    const named = node("Requirement", "R-0001", {
+      shortName: "Duplicate submit absorbed",
+      name: "A resubmitted order creates no second order, whatever the network did",
+    });
+    const queue = queueOf(
+      [...ABOVE, named],
+      SPINE_EDGES,
+      { green: ABOVE },
+    );
+    const bundle = queue.bundles.find((held) => held.id === "spec:R-0001");
+    assert.ok(bundle !== undefined);
+    assert.equal(bundle.title, "R-0001 (Duplicate submit absorbed)");
+    assert.equal(bundle.title.includes(named.name), false);
+  });
+
+  test("a root the walk reached past says so, and one it did not says nothing", () => {
+    // The suffix turns on what the decision covers BESIDES its own root, so the
+    // same root gives two titles: one where an assumption came with it, and one
+    // where nothing did.
+    const assumption = node("Assumption", "AS-0001");
+    const withChild = queueOf(
+      [...SPINE, assumption],
+      [...SPINE_EDGES, edge("R-0001", "ASSUMES", "AS-0001")],
+      { green: ABOVE },
+    );
+    const alone = queueOf(SPINE, SPINE_EDGES, { green: ABOVE });
+    const reached = withChild.bundles.find((held) => held.id === "spec:R-0001");
+    const lone = alone.bundles.find((held) => held.id === "spec:R-0001");
+    assert.ok(reached !== undefined && lone !== undefined);
+    assert.equal(
+      reached.title,
+      `R-0001 (${requirement.shortName}) and the nodes under it`,
+    );
+    assert.equal(lone.title, `R-0001 (${requirement.shortName})`);
+  });
+});
+
 describe("the specification walk", () => {
   test("a satellite two nodes hang off goes with the deepest of them", () => {
     // A green Goal and a yellow Requirement share one assumption. Ranked by the
@@ -853,7 +897,7 @@ describe("the work report", () => {
       { type: "WorkLog", count: 1 },
       { type: "Finding", count: 2 },
     ]);
-    assert.equal(bundle.title, "J-0001 Journal J-0001");
+    assert.equal(bundle.title, "J-0001 (J-0001) and the nodes under it");
     assert.equal(bundle.rootId, "J-0001");
   });
 
@@ -932,7 +976,7 @@ describe("a standalone finding", () => {
     const bundle = queue.bundles.find((held) => held.id === "finding:F-0002");
     assert.ok(bundle !== undefined && bundle.kind === "standalone-finding");
     assert.equal(bundle.rootId, "F-0002");
-    assert.equal(bundle.title, "F-0002 Finding F-0002");
+    assert.equal(bundle.title, "F-0002 (F-0002)");
     assert.equal(bundle.since, 1);
     assert.deepEqual(
       bundle.members.map((member) => [member.id, member.color, member.reason]),
@@ -1056,7 +1100,7 @@ describe("AC closure", () => {
     const bundle = queue.bundles[0];
     assert.ok(bundle !== undefined && bundle.kind === "ac-closure");
     assert.equal(bundle.acId, "AC-0001");
-    assert.equal(bundle.title, "AC-0001 AcceptanceCriterion AC-0001");
+    assert.equal(bundle.title, "AC-0001 (AC-0001)");
     assert.equal(bundle.ac.closure, "open");
     // EVERY claimant is the list, in id order.
     assert.deepEqual(bundle.evidence.map((held) => held.id), [
@@ -1211,7 +1255,7 @@ describe("work item closure", () => {
     const bundle = queue.bundles[0];
     assert.ok(bundle !== undefined && bundle.kind === "work-item-closure");
     assert.equal(bundle.workItemId, "WI-0001");
-    assert.equal(bundle.title, "WI-0001 WorkItem WI-0001");
+    assert.equal(bundle.title, "WI-0001 (WI-0001)");
     assert.equal(bundle.workItem.closure, "open");
     assert.deepEqual(
       bundle.reports.map((held) => held.id),
