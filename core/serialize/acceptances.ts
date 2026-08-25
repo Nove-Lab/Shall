@@ -94,7 +94,7 @@ export interface AcceptanceLedgerReading {
 const SUBJECT_KEY: Readonly<Record<ClosureSubject, string>> = {
   criterion: "acHash",
   // `taskHash` is the key the book has carried since 2026-08-17 and is frozen
-  // bytes (ARCHITECTURE, 얼어붙은 것): the tag renamed to `workItem` on
+  // bytes (the frozen-bytes invariant): the tag renamed to `workItem` on
   // 2026-08-23, the key did not, and no book on disk moved.
   workItem: "taskHash",
 };

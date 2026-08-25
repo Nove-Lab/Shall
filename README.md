@@ -130,4 +130,4 @@ Contributions are welcome — first-time contributors are asked to sign a short 
 
 ---
 
-Design and invariants live in [`ARCHITECTURE.md`](./ARCHITECTURE.md); the agent plugin is documented in [`plugin/README.md`](./plugin/README.md).
+Design and invariants live in [`docs/Project_Structure_and_Architecture.md`](./docs/Project_Structure_and_Architecture.md); the agent plugin is documented in [`plugin/README.md`](./plugin/README.md).

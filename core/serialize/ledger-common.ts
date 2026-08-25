@@ -118,7 +118,7 @@ export const CLAIMANT_WORDS: Readonly<Record<ClosureSubject, ClaimantWords>> = {
     subject: "criterion",
   },
   // `reports` is the key the book has carried since 2026-08-17 and is frozen
-  // bytes (ARCHITECTURE, 얼어붙은 것): the tag renamed, the key did not.
+  // bytes (the frozen-bytes invariant): the tag renamed, the key did not.
   workItem: {
     key: "reports",
     entry: "a report entry",

@@ -9,7 +9,7 @@
 | ----------- | ---------------------------------------------------- |
 | `graph`     | 스펙 그래프의 문법 — 노드·엣지 타입, 밴드, 판정 규칙 |
 | `store`     | 프로젝트별 `.shall/spec/<Type>/*.md`와 승인 장부 — 파일이 정본 |
-| `arith`     | 판정 산술 — 충족·낡음·게이트·보드·vitals             |
+| `arith`     | 판정 산술 — 색·닫힘·상태·보드·큐·vitals              |
 | `serialize` | 파일 형식 — 정칙 emit과 관대한 parse                 |
 | `exchange`  | 비어 있는 자리 — 세션 중개는 git이 대신한다          |
 
@@ -17,7 +17,6 @@
 파일 이름이 id다 — 그래서 `serialize`가 내는 바이트가 무엇을 담고 무엇을 담지
 않는지가 `store`의 폴더 배치와 한 몸이다.
 
-`arith`는 아직 빈 틀이고, `exchange`는 비워 두기로 한 자리다. 모듈을 먼저 세워 두는
-이유는 둘이다 — 거기 들어갈 코드가 앉을 자리가 하나로 정해지고, 반대 방향 import가
-쓰이는 순간 눈에 띈다. 각 모듈이 무엇을 담을지는
-[`../ARCHITECTURE.md`](../ARCHITECTURE.md)에 있다.
+`exchange`는 비워 두기로 한 자리다 — 세션의 이력·병합·리뷰는 git이 맡는다.
+각 모듈이 무엇을 담는지는
+[`../docs/Project_Structure_and_Architecture.md`](../docs/Project_Structure_and_Architecture.md)에 있다.
