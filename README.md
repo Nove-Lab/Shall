@@ -106,7 +106,8 @@ It explores, says what it found, and leaves behind a finding, a decision you dic
 
 ### Governing your project on Shall
 
-Judgements are yours and are made in the browser; no command approves, rejects or closes anything.
+Everything below lives in the app — run `shall` and it opens in your browser at `http://localhost:9461`.
+Judgements are yours and are made there; no command approves, rejects or closes anything.
 
 #### Review & approve
 
