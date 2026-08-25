@@ -116,7 +116,7 @@ A finding may carry a mark saying it is blocking the work that found it. **Nothi
 
 - **One Work report card per journal**, holding its logs, what they submitted and what they recorded. Accepting it approves the whole subtree in one write.
 - **One Spec approval card for each piece of specification a Fix Spec item edited**, rooted at the topmost changed node.
-- **A Standalone finding card never comes from this process.** A finding written here belongs to the log that found it and is read inside that report; a finding standing alone is what `/shall:raise` leaves behind.
+- **A Finding card of its own never comes from this process.** A finding written here belongs to the log that found it and is read inside that report; a finding standing alone is what `/shall:raise` leaves behind.
 - **Closure cards come later, if at all.** A criterion or a work item is only asked about once the claims on it are approved, so nothing you do this turn puts one in the queue today.
 
 Say "a card is waiting" and where — never "approve the card" when there is more than one, because a person told to look for one card stops after the first.

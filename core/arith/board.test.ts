@@ -605,7 +605,7 @@ describe("the Implement column", () => {
     assert.deepEqual(words, ["ready"]);
   });
 
-  test("orders by depth, then by age, then by id", () => {
+  test("orders by id, whatever the depths and the ages say", () => {
     const first = node("WorkItem", "WI-0010", { updatedAt: 5 });
     const second = node("WorkItem", "WI-0011", { updatedAt: 3 });
     const later = node("WorkItem", "WI-0012", { updatedAt: 1 });
@@ -618,11 +618,11 @@ describe("the Implement column", () => {
       edge("WI-0012", "DEPENDS_ON", "WI-0011"),
     ];
     const board = boardOf(all, wired, settled(all, wired));
-    // WI-0012 waits on WI-0011, which is not closed — so it is not here at all,
-    // and the two that are sort by age.
+    // WI-0012 waits on WI-0011, which is not closed — so it is not here at
+    // all; the rest read in id order, however old or shallow they are.
     assert.deepEqual(
       board.implement.map((row) => row.id),
-      ["WI-0001", "WI-0011", "WI-0010"],
+      ["WI-0001", "WI-0010", "WI-0011"],
     );
   });
 });

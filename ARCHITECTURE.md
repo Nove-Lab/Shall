@@ -56,7 +56,7 @@ daemon 하나가 돌고, 사람은 localhost 웹 화면에서 스펙을 보고 �
   feed(`ledger/feed/`)도 같은 deny 아래 있다 — 에이전트는 `shall log`로 데몬에게 한
   줄을 부탁할 뿐, 파일을 열지 않고 되읽지도 않는다.
 - **번들도 저장하지 않는다.** 리뷰 큐가 보이는 번들(Spec approval · Work report ·
-  Standalone finding · AC closure · Work item closure)은 로드마다 그래프와 장부 세 권에서
+  Finding · AC closure · Completion)은 로드마다 그래프와 장부 세 권에서
   다시 계산한 배치이지
   테이블의 행이 아니다 — 저장·손편집·`git checkout`이 큐를 움직이고, 아무에게도 알릴
   것이 없다.
@@ -341,7 +341,7 @@ WorkLog에 한해 `commits`, Finding에 한해 `blocking`·`relatedNodes`, 그�
   중이면 닫힘을 묻지도, 쓰지도 않는다
 - 번들(`bundles.ts`) — 리뷰 큐. 먼저 Work report: Journal마다 실행 층(과 거기 매달린
   위성)만 걸어 서브트리를 묶고, 그다음 **어느 살아있는 WorkLog도 RECORDS하지 않는
-  yellow Finding은 각자 Standalone finding 번들**(`finding:<id>`, 자기 한 노드)로
+  yellow Finding은 각자 Finding 번들**(`finding:<id>`, 자기 한 노드)로
   세운다 — 여기서 세워 covered에 넣어야 다음 줄이 같은 노드를 한 줄짜리 Work report로
   다시 세우지 않는다. 이어서 Journal이 닿지 않는 나머지 실행 yellow는 각자 뿌리. 다음
   Spec approval: 순위표(Decision → Goal → Actor → UseCase → Scenario → SR →
@@ -371,8 +371,8 @@ WorkLog에 한해 `commits`, Finding에 한해 `blocking`·`relatedNodes`, 그�
   claimant(AC면 CLAIMS하는 증거, WorkItem이면 CLAIMS하는 CompletionReport)가 하나 이상
   **전부 green**인데 지금 목록에 대해 closed도 left open도 말해진 적 없는 주체(문구가
   반려 중이거나 non-green이면 제외; 미승인 claimant가 하나라도 있으면 그냥 open, 큐 밖).
-  정렬은 AC closure → Work item closure → Spec approval → Work report → Standalone
-  finding, 그 안에서 멤버 mtime 최솟값이 오래된 것 먼저. 단독 발견이 맨 뒤인 것은
+  정렬은 AC closure → Completion → Spec approval → Work report → Finding,
+  그 안에서 멤버 mtime 최솟값이 오래된 것 먼저. 단독 발견이 맨 뒤인 것은
   그 카드가 결정하는 것이 없기 때문이다 — 읽는 것이 전부이고, 답은 나중에 누군가
   쓰는 Decision이다. 뿌리는 yellow만이다 — 반려된 노드와 `premature`
   로그는 yellow 뿌리가 닿을 때 red 멤버로 남고(판정하는 사람이 봐야 하므로), 홀로
@@ -602,14 +602,14 @@ localhost 브라우저 화면. 사람의 관찰·편집 표면.
   먼저, rationale은 **전문**; 그다음 문법 red, 구멍, 안 읽히는 파일), 아래가
   Implement(미완료 ∧ 선행 전부 닫힘 ∧ 상향 사슬 all-green인 WorkItem만 — 조건 미달은 이유
   없이 아예 안 보인다). 두 열 다 저장 없음. **Review Queue**가 채워졌다: 목록은 `[종류 배지] 제목 — 요약
-  수치` 한 줄씩(AC closure → Work item closure → Spec approval → Work report → Standalone
-  finding, 오래된 것 먼저), 카드는
+  수치` 한 줄씩(AC closure → Completion → Spec approval → Work report → Finding,
+  오래된 것 먼저), 카드는
   전면에 판정 재료(뿌리의 diff/전문, Journal 본문, AC 본문)·멤버 목록(노드마다
   diff/전문, [Approve]·[Reject…]·[Open in Spec Plane])·접힌 무수정 확인 목록·번들 버튼
   하나 또는 둘([Approve all]/[Accept report]/[Accept finding]/[Close]+[Leave open…]).
-  번들은 다섯 종류다 — AC closure · Work item closure(그 작업 항목을 CLAIMS하는
+  번들은 다섯 종류다 — AC closure · Completion(그 작업 항목을 CLAIMS하는
   CompletionReport 목록, 겨냥한 AC들의 마크를 문맥으로) · Spec approval ·
-  Work report · Standalone finding(어느 WorkLog도 RECORDS하지 않는 yellow Finding
+  Work report · Finding(어느 WorkLog도 RECORDS하지 않는 yellow Finding
   한 장, 두 문이 다 열린 행 하나). 반려는 인라인
   팝오버 — 대상 id·이름, 필수 rationale, 확정/취소 — 이고 카드의 행 우클릭과 스펙
   플레인 카드 우클릭 어디서든 같은 팝오버다. 판정 직후 카드는 큐를 다시 계산하고,

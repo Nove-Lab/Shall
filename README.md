@@ -227,13 +227,13 @@ the queue with nobody told. Five kinds:
   evidence and reports, `RECORDS` findings, plus the assumptions a work log
   raised), with the journal's text in front and **Accept report** approving
   every yellow node under it in one write.
-- **Standalone finding** — a yellow `Finding` no living work log `RECORDS`:
+- **Finding** — a yellow `Finding` no living work log `RECORDS`:
   something brought between turns of work rather than found inside one, so
   there is no report for it to be read as part of. One card each, last in the
   queue because it decides nothing — reading it is the whole of what happens,
   and what answers it is a `Decision` somebody writes afterwards. **Accept
   finding** makes the same approval write the other two do.
-- **Work item closure** — a work item that completion reports claim, every one
+- **Completion** — a work item that completion reports claim, every one
   of them approved, about whose current list nobody has said a word. The card
   shows the work item, the reports claiming it (each with the work log that
   submitted it and its commits), and — as context, never as buttons — the

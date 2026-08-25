@@ -19,9 +19,9 @@ import { countWord } from "../parts";
 export const KIND_LABEL: Record<BundleKind, string> = {
   "spec-approval": "Spec approval",
   "work-report": "Work report",
-  "standalone-finding": "Standalone finding",
+  "standalone-finding": "Finding",
   "ac-closure": "AC closure",
-  "work-item-closure": "Work item closure",
+  "work-item-closure": "Completion",
 };
 
 /**

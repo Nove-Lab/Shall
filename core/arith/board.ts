@@ -100,7 +100,7 @@ export interface ImplementItem {
   targets: { id: string; name: string; closure: "open" | "closed" | null }[];
   /** Work already addressing it — the "somebody is on this" hint. */
   addressedBy: { id: string; name: string; color: "red" | "yellow" | "green" }[];
-  /** The longest prerequisite chain under it, for the order of the list. */
+  /** The longest prerequisite chain under it — the item page's own note; the list is in id order. */
   depth: number;
 }
 
@@ -366,10 +366,11 @@ export function workBoardOf(graph: SpecGraph, ledgers: Ledgers): WorkBoard {
       depth: depthOf(node.id, context),
     });
   }
-  implement.sort(
-    (a, b) =>
-      a.depth - b.depth || a.updatedAt - b.updatedAt || compare(a.id, b.id),
-  );
+  // ID ORDER, AND NOTHING CLEVERER. The list once sorted by depth and age so
+  // the shallow and the stale came first, and a person could not find a row
+  // where they expected it; ids are how every other list here reads, and the
+  // chain a work item sits in is its row's own facts.
+  implement.sort((a, b) => compare(a.id, b.id));
 
   return { fixSpec, implement };
 }

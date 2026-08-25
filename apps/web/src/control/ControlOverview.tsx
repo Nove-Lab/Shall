@@ -40,14 +40,14 @@ const GLANCE = 5;
 /**
  * THE WIDTH EVERY GLANCE ROW RESERVES FOR ITS LABEL, so the three list cards
  * start their titles on one line. A badge is a pill sized by its own words —
- * "Fix Spec" is barely half of "Standalone finding" — so a row that let the
+ * "Fix Spec" is barely half of "Spec approval" — so a row that let the
  * badge set the title's left edge gave each card its own edge, and each row
  * inside a card another one under it. The badge keeps its own width; the column
- * holding it does not. Eight rems clears the longest label the three kinds
- * spell — `Standalone finding`, seven and three quarters at the badge's twelve
- * pixels — and everything past it belongs to the title.
+ * holding it does not. Seven rems clears the longest label the three kinds
+ * spell — `Spec approval`, now that the queue's two long kinds go by
+ * `Finding` and `Completion` — and everything past it belongs to the title.
  */
-const LABEL_COLUMN = "w-32 shrink-0";
+const LABEL_COLUMN = "w-28 shrink-0";
 
 /**
  * One row of a glance, whatever list it came from — a badge, a door, a note.
