@@ -16,11 +16,12 @@ Requires Node.js 22.5+ and Bun.
 bun install
 bun run build       # core → daemon → cli → web
 bun run typecheck   # every workspace
-bun run test        # builds core, runs every workspace's tests, lints the plugin prose
+bun run test        # generates the agent tree, builds core, runs every workspace's tests, lints the prose
 ```
 
 Tests are colocated `*.test.ts` files (node:test via tsx) next to the code they test.
 The daemon's spec-watcher and feed suites are known to be flaky on macOS fsevents — rerun before reading a watcher failure as yours.
+The daemon reads the generated agent tree, so a standalone `bun run --filter @shall/daemon test` needs `bun run build:agents` once first; the root `bun run test` does it for you.
 
 ## Running from the checkout
 
@@ -37,7 +38,7 @@ An installed Shall on the same machine keeps its daemon, registry and templates 
 
 - `docs/Project_Structure_and_Architecture.md` says how the pieces fit and which invariants hold — read it first.
 - `core` stays pure and browser-safe: no filesystem, network, clock or randomness.
-- The agent-side processes are prose in `agents/claude/`; `node scripts/lint-plugin.mjs` holds that prose to the code and runs as part of `bun run test`.
+- The agent-side processes are prose in `agents/core`, rendered per agent by `agents/profiles/*`; `node scripts/lint-agents.mjs` holds that prose to the code and runs as part of `bun run test`.
 - Every judgement — approve, reject, close — belongs to a person in the browser; nothing you add may decide one in code.
 
 ## Pull requests

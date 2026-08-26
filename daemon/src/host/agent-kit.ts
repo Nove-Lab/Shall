@@ -14,9 +14,9 @@ import { isEmbedded, listEmbedded, readEmbeddedText } from "./embedded.js";
  * the deny rules are handled next door.
  *
  * THE PLUGIN STAYS THE ONE SOURCE. Nothing here is a second copy of the
- * process prose: the kit is read out of the repository's `agents/claude/` folder at
- * write time and transformed for the project-command dialect: the colon
- * namespace is the plugin form and a project command cannot wear it, so
+ * process prose: the kit is read out of the repository's `agents/dist/claude/`
+ * folder at write time and transformed for the project-command dialect: the
+ * colon namespace is the plugin form and a project command cannot wear it, so
  * `/shall:specify` becomes `/shall.specify`, a skill is called by its bare
  * name, and the hook runs from the project's own folder. The plugin folder
  * stays the source of the text; the kit is that text in the project's
@@ -42,8 +42,14 @@ const moduleDirectory = path.dirname(fileURLToPath(import.meta.url));
 
 /**
  * The Claude plugin folder of the checkout this daemon runs from — src and dist
- * sit at the same depth. It lives under `agents/` because Claude is the first
- * agent Shall drives, not the last; a codex kit would be its sibling.
+ * sit at the same depth.
+ *
+ * IT IS GENERATED, NOT WRITTEN. `scripts/build-agents.mjs` multiplies
+ * `agents/core` by `agents/profiles/claude` into this folder, so a checkout
+ * that has never run `bun run build:agents` has nothing here — which is why the
+ * root build and test chains run it first, and why writing the kit is allowed
+ * to fail quietly. Claude is the first agent Shall drives, not the last; a
+ * codex tree is this folder's sibling.
  *
  * A SINGLE-BINARY SHALL HAS NO CHECKOUT BEHIND IT, so it carries the same
  * folder as bytes and `pluginFiles` reads those instead. What is carried is
@@ -51,7 +57,15 @@ const moduleDirectory = path.dirname(fileURLToPath(import.meta.url));
  * every line after them.
  */
 function pluginRoot(): string {
-  return path.resolve(moduleDirectory, "..", "..", "..", "agents", "claude");
+  return path.resolve(
+    moduleDirectory,
+    "..",
+    "..",
+    "..",
+    "agents",
+    "dist",
+    "claude",
+  );
 }
 
 /**

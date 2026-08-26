@@ -12,7 +12,7 @@
  * second fact to keep in step with the first.
  *
  * THE KEYS ARE "/"-SEPARATED AND ROOTED IN TWO PREFIXES: `web/` is the SPA as
- * `apps/web/dist` laid it out, `kit/` is `agents/claude` as the agent kit walks
+ * `apps/web/dist` laid it out, `kit/` is `agents/dist/claude` as the agent kit walks
  * it. Nothing else is carried, because nothing else is read from the checkout.
  *
  * THE SOURCE FORM IS BASE64 because the generated module is TypeScript that

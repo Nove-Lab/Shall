@@ -10,8 +10,8 @@ core/        graph · arith · serialize · store   — pure, browser-safe; no f
 daemon/      http · service · host               — the one process that writes spec files
 apps/web/    control · spec · settings · shell   — the localhost screen
 client/cli/  the `shall` command                 — a thin client; computes and serialises nothing
-agents/      claude/ — the Claude Code plugin    — the agent-side processes, prose only; one folder per agent
-scripts/     lint-plugin.mjs                     — checks the plugin prose against core and the CLI
+agents/      core · profiles · dist              — the agent-side processes, prose only; core says it once, a profile spells it
+scripts/     build-agents.mjs · lint-agents.mjs  — renders the agent trees, and checks the prose against core and the CLI
 ```
 
 ## The graph
@@ -96,13 +96,13 @@ Two planes under `/p/:projectId`, plus Settings.
 `shall` opens the app (starting or adopting the daemon); subcommands `init`, `check`, `status`, `board`, `add-spec-node`, `log`, `help` — reads and scaffolds only.
 `--json` answers carry the daemon's computed words verbatim; no judgement can be made from a terminal.
 
-## The plugin
+## The agent prose
 
 Seven commands: specify, plan, work (+ work.todo, work.report), raise, help.
 Prose only — no hooks beyond the spec compiler, no state.
-The `agents/claude/` folder is the one source: `shall init` embeds it into each project as `/shall.…` commands — no install step, no marketplace; the colon namespace is the plugin form and only appears when developing the plugin with `--plugin-dir`.
-It sits under `agents/` because Claude Code is the first agent Shall drives, not the last: a kit for another agent would be its sibling folder, embedded the same way.
-`scripts/lint-plugin.mjs` holds the prose to the code: canon names from core's build, the subcommand list read from the CLI's own `SHAPES` table, no retired vocabulary, no template-hint quotes.
+Written once, rendered per agent. `agents/core` says what each process does in sentences that name no tool and no folder, writing `{{token}}` wherever one would have to; `agents/profiles/<agent>/profile.mjs` answers every token, emits the frontmatter in that agent's own keys, and says where each rendered file lands. `scripts/build-agents.mjs` multiplies the two into `agents/dist/<agent>`, which git ignores and the root build and test chains regenerate.
+`agents/dist/claude` is what everything downstream reads: `shall init` embeds it into each project as `/shall.…` commands — no install step, no marketplace; the colon namespace is the plugin form and only appears when developing with `--plugin-dir`. Claude Code is the first agent Shall drives, not the last: a second agent is a new folder under `profiles/` and no edit to core at all.
+`scripts/lint-agents.mjs` holds the prose to the code: canon names from core's build, the subcommand list read from the CLI's own `SHAPES` table, no retired vocabulary, no template-hint quotes — asked of what a person wrote, and asked again of each generated tree, where it also checks that the argument slot survived and no placeholder went out unexpanded.
 
 ## Invariants
 

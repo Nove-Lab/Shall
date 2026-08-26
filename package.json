@@ -16,14 +16,15 @@
     "build:core": "bun run --filter @shall/core build",
     "build:daemon": "bun run --filter @shall/daemon build",
     "build:cli": "bun run --filter @shall/cli build",
+    "build:agents": "node scripts/build-agents.mjs",
     "dev:daemon": "bun run --filter @shall/daemon dev",
     "dev:web": "bun run --filter @shall/web dev",
     "dev": "node scripts/dev.mjs",
-    "build": "bun run build:core && bun run build:daemon && bun run build:cli && bun run --filter @shall/web build",
+    "build": "bun run build:agents && bun run build:core && bun run build:daemon && bun run build:cli && bun run --filter @shall/web build",
     "build:binary": "node scripts/build-binary.mjs",
     "build:binary:local": "node scripts/build-binary.mjs --local",
     "typecheck": "bun run build:core && bun run build:daemon && bun run build:cli && bun run --filter @shall/web typecheck",
-    "test": "bun run build:core && bun run --filter '*' test && node scripts/lint-plugin.mjs",
+    "test": "bun run build:agents && bun run build:core && bun run --filter '*' test && node scripts/lint-agents.mjs",
     "shall": "node scripts/shall-dev.mjs"
   },
   "devDependencies": {

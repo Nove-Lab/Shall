@@ -12,26 +12,39 @@ import {
 } from "../core/dist/graph/index.js";
 
 /**
- * The plugin's compiler.
+ * The agent prose's compiler.
  *
- * The plugin ships prose and nothing else: its whole payload is sentences an
- * agent will follow literally. A skill that invents `SATISFIES` because the
+ * The agent tree ships prose and nothing else: its whole payload is sentences
+ * an agent will follow literally. A skill that invents `SATISFIES` because the
  * process document used to say so, or tells an agent to run a subcommand that
  * does not exist, fails in the only place it cannot be caught — inside somebody
  * else's session, hours later, as a spec file the graph refuses. So the prose
  * gets checked against the same tables the code is checked against.
  *
- * Every rule here is a rule about a name, because a name is the one thing in
- * documentation that can be wrong in a way a reader cannot see. Six rules:
+ * TWO KINDS OF ROOT, TWO RULE SETS. Everything under `agents/` that a person
+ * typed — core's documents, the folder's README, and the sentences inside each
+ * profile — is WRITTEN, so it answers the naming rules a person can get wrong.
+ * Each tree under `agents/dist` is GENERATED, so it answers two questions about
+ * the generation instead: that the user's words still reach every entry, and
+ * that no placeholder went out unexpanded. Linting both is what makes a stale
+ * dist visible — the generator's own post-conditions only speak for the run
+ * that wrote it.
+ *
+ * Every written rule is a rule about a name, because a name is the one thing in
+ * documentation that can be wrong in a way a reader cannot see. Seven rules:
  * (a) shouts are relation names, (b) `--type` names a canon type, (c) `shall`
- * calls name a real subcommand, (d) a command interpolates its arguments,
+ * calls name a real subcommand, (d) an entry interpolates its arguments,
  * (e) no document carries a template's vocabulary, (f) no document carries a
- * type name the canon retired.
+ * type name the canon retired, (g) every placeholder core writes is one every
+ * profile answers.
  */
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.dirname(scriptDirectory);
-const pluginRoot = path.join(repoRoot, "agents", "claude");
+const agentsRoot = path.join(repoRoot, "agents");
+const coreRoot = path.join(agentsRoot, "core");
+const profilesRoot = path.join(agentsRoot, "profiles");
+const distRoot = path.join(agentsRoot, "dist");
 
 /**
  * SCREAMING_SNAKE words that are not relations and never will be.
@@ -87,6 +100,7 @@ const ALLOWED_SHOUTS = new Set([
   "STDERR",
   // Names this repository and Claude Code use.
   "ARGUMENTS",
+  "SCREAMING_SNAKE",
   "CLAUDE_PLUGIN_ROOT",
   "README",
   "SKILL",
@@ -116,7 +130,7 @@ const shapesEnd =
   shapesStart === -1 ? -1 : argsSource.indexOf("\n}", shapesStart);
 if (shapesStart === -1 || shapesEnd === -1) {
   console.error(
-    `lint-plugin: could not find the SHAPES table in ${argsSourcePath} — the subcommand check has nothing to check against.`,
+    `lint-agents: could not find the SHAPES table in ${argsSourcePath} — the subcommand check has nothing to check against.`,
   );
   process.exit(1);
 }
@@ -135,7 +149,7 @@ for (const line of argsSource.slice(shapesStart, shapesEnd).split("\n")) {
 }
 if (SUBCOMMANDS.size === 0) {
   console.error(
-    `lint-plugin: the SHAPES table in ${argsSourcePath} yielded no subcommands — an empty set would let every \`shall <word>\` pass.`,
+    `lint-agents: the SHAPES table in ${argsSourcePath} yielded no subcommands — an empty set would let every \`shall <word>\` pass.`,
   );
   process.exit(1);
 }
@@ -299,7 +313,7 @@ function checkShouts(file, lines) {
       report(
         file,
         index + 1,
-        `${token} is not a relation the canon has — the relations are the edge types in core/graph/grammar.ts, and an agent told to write this one will write a file the graph refuses. If it is an ordinary word, add it to ALLOWED_SHOUTS in scripts/lint-plugin.mjs.`,
+        `${token} is not a relation the canon has — the relations are the edge types in core/graph/grammar.ts, and an agent told to write this one will write a file the graph refuses. If it is an ordinary word, add it to ALLOWED_SHOUTS in scripts/lint-agents.mjs.`,
       );
     }
   });
@@ -355,21 +369,23 @@ function checkShallCalls(file, lines) {
 }
 
 /**
- * (d) Every command has to interpolate the request it was given.
+ * (d) Every entry has to interpolate the request it was given.
  *
- * It is asked of the whole `commands/` folder and not of one file by name. A
- * command is the only document in the plugin the user's own words pass
- * through, and a second command that forgot the slot would fail the same way
- * the first would have: the process runs, interviews nobody about anything the
- * person actually said, and produces a specification for a request it never
- * read.
+ * It is asked of the whole `entries/` folder and not of one file by name. An
+ * entry is the only document in the tree the user's own words pass through, and
+ * a second entry that forgot the slot would fail the same way the first would
+ * have: the process runs, interviews nobody about anything the person actually
+ * said, and produces a specification for a request it never read.
+ *
+ * The generated side of the same rule is `checkGeneratedArguments` — core is
+ * asked for the placeholder, dist is asked for what the placeholder became.
  */
-function checkCommandArguments(file, relative, source) {
-  if (!source.includes("$ARGUMENTS")) {
+function checkEntryArguments(file, relative, source) {
+  if (!source.includes("{{args}}")) {
     report(
       file,
       1,
-      `${relative} never mentions $ARGUMENTS, so the user's request never reaches the process.`,
+      `${relative} never writes {{args}}, so the user's request never reaches the process.`,
     );
   }
 }
@@ -453,29 +469,247 @@ function checkRetiredTypes(file, lines) {
   });
 }
 
+/**
+ * A profile's prose, laid out as if it were a document.
+ *
+ * A profile is JavaScript, and only its string literals are sentences an agent
+ * will ever read. Everything else is code: identifiers shout in SCREAMING_SNAKE
+ * for reasons the canon has nothing to do with, and a comment is a note to the
+ * next maintainer, not an instruction to a model. So the file is lexed — three
+ * states, strings and the two comment forms — and each literal's contents are
+ * filed at the line it opens on, which is the line a person would go to.
+ *
+ * TWO THINGS ARE DELIBERATELY DROPPED. An unescaped `${…}` is an interpolation,
+ * which is code wearing a string's clothes. An escaped one is not: `\${…}` is
+ * how a profile writes the runtime name a session will read, so it survives and
+ * is linted like any other word.
+ */
+function proseLinesOf(source) {
+  const lines = source.split("\n").map(() => "");
+  let line = 0;
+  let quote = null;
+  let held = "";
+  for (let at = 0; at < source.length; at += 1) {
+    const character = source[at];
+    if (quote === null) {
+      if (character === "/" && source[at + 1] === "/") {
+        while (at < source.length && source[at] !== "\n") {
+          at += 1;
+        }
+        line += 1;
+        continue;
+      }
+      if (character === "/" && source[at + 1] === "*") {
+        at += 2;
+        while (at < source.length && !(source[at] === "*" && source[at + 1] === "/")) {
+          if (source[at] === "\n") {
+            line += 1;
+          }
+          at += 1;
+        }
+        at += 1;
+        continue;
+      }
+      if (character === '"' || character === "'" || character === "`") {
+        quote = character;
+        held = "";
+        continue;
+      }
+      if (character === "\n") {
+        line += 1;
+      }
+      continue;
+    }
+    if (character === "\\") {
+      held += source[at + 1] ?? "";
+      at += 1;
+      continue;
+    }
+    if (character === "$" && quote === "`" && source[at + 1] === "{") {
+      at += 1;
+      let depth = 0;
+      do {
+        if (source[at] === "{") {
+          depth += 1;
+        } else if (source[at] === "}") {
+          depth -= 1;
+        } else if (source[at] === "\n") {
+          line += 1;
+        }
+        at += 1;
+      } while (at < source.length && depth > 0);
+      at -= 1;
+      continue;
+    }
+    if (character === quote) {
+      lines[line] = lines[line] === "" ? held : `${lines[line]} ${held}`;
+      quote = null;
+      continue;
+    }
+    if (character === "\n") {
+      // A template literal that spans lines is filed where it opened; the
+      // alternative is a rule reporting the middle of a sentence.
+      line += 1;
+      lines.push("");
+    }
+    held += character;
+  }
+  return lines;
+}
+
+/**
+ * (g) Every placeholder core writes is one every profile answers.
+ *
+ * The generator refuses an unknown token, so this rule catches nothing the
+ * build would let through — but it catches it in the place a person is looking:
+ * beside the sentence they just wrote, naming the profile that has not caught
+ * up. A token added to core and to one profile is the ordinary way a second
+ * agent falls behind.
+ */
+function checkPlaceholders(file, lines, profiles) {
+  lines.forEach((text, index) => {
+    for (const match of text.matchAll(/\{\{([a-zA-Z][a-zA-Z-]*)((?:\s+[^\s{}]+)*)\}\}/g)) {
+      const [, token, rest] = match;
+      const isBlock = rest.trim() !== "";
+      for (const { agent, module } of profiles) {
+        const answered = isBlock
+          ? typeof module.blocks?.[token] === "function"
+          : typeof module.vocabulary?.[token] === "string";
+        if (answered) {
+          continue;
+        }
+        report(
+          file,
+          index + 1,
+          `{{${token}}} is ${isBlock ? "a block" : "a placeholder"} the ${agent} profile does not answer — every token core writes belongs in every profile's ${isBlock ? "`blocks`" : "`vocabulary`"}.`,
+        );
+      }
+    }
+  });
+}
+
+/**
+ * The generated trees' own two rules: what the placeholder became is there, and
+ * no placeholder is. Everything else about a dist file was decided in core or
+ * in a profile and is checked at those two roots.
+ */
+function checkGeneratedTree(agent, module) {
+  const tree = path.join(distRoot, agent);
+  // Where this profile puts each core entry — rule (d)'s twin asks after those
+  // files and no others, because a skill has no argument slot to lose.
+  const entryTargets = new Set(
+    markdownFilesUnder(path.join(coreRoot, "entries")).map((file) =>
+      module.targetOf(`entries/${path.basename(file)}`),
+    ),
+  );
+  let entries;
+  try {
+    entries = readdirSync(tree);
+  } catch {
+    report(
+      path.join(distRoot, agent),
+      1,
+      `agents/dist/${agent} has not been generated — run \`bun run build:agents\`, then lint what it wrote.`,
+    );
+    return;
+  }
+  if (entries.length === 0) {
+    report(path.join(distRoot, agent), 1, `agents/dist/${agent} is empty.`);
+    return;
+  }
+  for (const file of markdownFilesUnder(tree)) {
+    const source = readFileSync(file, "utf8");
+    const relative = path.relative(tree, file).split(path.sep).join("/");
+    if (entryTargets.has(relative)) {
+      checkGeneratedArguments(agent, module, file, relative, source);
+    }
+    source.split("\n").forEach((text, index) => {
+      if (text.includes("{{")) {
+        report(
+          file,
+          index + 1,
+          `a placeholder reached agents/dist/${agent} unexpanded — the tree is stale, or the profile stopped answering a token core writes.`,
+        );
+      }
+    });
+  }
+}
+
+/** Rule (d) said at the generated end: the entry's slot survived the rendering. */
+function checkGeneratedArguments(agent, module, file, relative, source) {
+  const slot = module.vocabulary?.args;
+  if (typeof slot === "string" && !source.includes(slot)) {
+    report(
+      file,
+      1,
+      `${relative} never mentions ${slot}, so the user's request never reaches the process in the generated ${agent} tree.`,
+    );
+  }
+}
+
 // A guide that hands back nothing is a guide that moved, and rule (e) would
 // then pass every document in silence. Say so instead.
 if (TEMPLATE_HINTS.size === 0) {
   report(
     fileURLToPath(import.meta.url),
     1,
-    "sectionGuideFor returned no hints for any of the canon's types, so rule (e) is checking the plugin against an empty vocabulary and would pass a copy of anything. Point it back at the guide before trusting this run.",
+    "sectionGuideFor returned no hints for any of the canon's types, so rule (e) is checking the agent prose against an empty vocabulary and would pass a copy of anything. Point it back at the guide before trusting this run.",
   );
 }
 
-for (const file of markdownFilesUnder(pluginRoot)) {
+const profiles = [];
+for (const agent of readdirSync(profilesRoot).sort()) {
+  if (!statSync(path.join(profilesRoot, agent)).isDirectory()) {
+    continue;
+  }
+  const modulePath = path.join(profilesRoot, agent, "profile.mjs");
+  profiles.push({ agent, modulePath, module: await import(`file://${modulePath}`) });
+}
+if (profiles.length === 0) {
+  console.error(
+    `lint-agents: no profile under ${path.relative(repoRoot, profilesRoot)} — rule (g) would pass every placeholder in silence.`,
+  );
+  process.exit(1);
+}
+
+// Every markdown under `agents/` that is not generated: core's own documents,
+// and the folder's README, which is prose about the prose and drifts the same
+// way. `agents/dist` is walked separately and answers different questions.
+for (const file of markdownFilesUnder(agentsRoot)) {
+  if (file.startsWith(`${distRoot}${path.sep}`)) {
+    continue;
+  }
   const source = readFileSync(file, "utf8");
   const lines = source.split("\n");
-  const relative = path.relative(pluginRoot, file);
+  const relative = path.relative(agentsRoot, file).split(path.sep).join("/");
 
   checkShouts(file, lines);
   checkTypeFlags(file, lines);
   checkShallCalls(file, lines);
   checkTemplateVocabulary(file, lines);
   checkRetiredTypes(file, lines);
-  if (path.dirname(relative) === "commands") {
-    checkCommandArguments(file, relative.split(path.sep).join("/"), source);
+  // Rule (g) is about what core writes. The README writes `{{token}}` to say
+  // what a placeholder is, and a rule that read that as one would be a rule
+  // against explaining itself.
+  if (relative.startsWith("core/")) {
+    checkPlaceholders(file, lines, profiles);
   }
+  if (path.dirname(relative) === "core/entries") {
+    checkEntryArguments(file, relative, source);
+  }
+}
+
+for (const { modulePath } of profiles) {
+  const lines = proseLinesOf(readFileSync(modulePath, "utf8"));
+  checkShouts(modulePath, lines);
+  checkTypeFlags(modulePath, lines);
+  checkShallCalls(modulePath, lines);
+  checkTemplateVocabulary(modulePath, lines);
+  checkRetiredTypes(modulePath, lines);
+}
+
+for (const { agent, module } of profiles) {
+  checkGeneratedTree(agent, module);
 }
 
 if (violations.length > 0) {

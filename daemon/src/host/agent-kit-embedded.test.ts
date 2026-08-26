@@ -13,7 +13,7 @@ import { setEmbeddedFiles } from "./embedded.js";
  * IT IS A FILE OF ITS OWN AND NOT A CASE IN `agent-kit.test.ts` BECAUSE THE
  * CARRY HAS NO UNDO: once files are handed in, this process is a binary for as
  * long as it lives, and the suite next door is the one that must go on reading
- * the real `agents/claude`. Node gives every test file its own process, so the
+ * the real `agents/dist/claude`. Node gives every test file its own process, so
  * two answers are kept apart by being kept in separate files.
  *
  * THE PLUGIN HERE IS INVENTED, WORD FOR WORD, and that is the assertion: none

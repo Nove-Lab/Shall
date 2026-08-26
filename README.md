@@ -168,4 +168,4 @@ Contributions are welcome — first-time contributors are asked to sign a short 
 - [`docs/Project_Structure_and_Architecture.md`](./docs/Project_Structure_and_Architecture.md) — design and invariants
 - [`docs/Shall_CLI_Commands.md`](./docs/Shall_CLI_Commands.md) — the `shall` CLI, command by command
 - [`docs/Shall_Agent_Commands.md`](./docs/Shall_Agent_Commands.md) — the `/shall.…` agent commands
-- [`agents/claude/README.md`](./agents/claude/README.md) — the Claude Code plugin itself
+- [`agents/README.md`](./agents/README.md) — the agent-side processes, and how one prose core becomes a plugin per agent

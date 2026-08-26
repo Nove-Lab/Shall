@@ -1,5 +1,7 @@
 node_modules/
 dist/
+# Written by scripts/build-agents.mjs from agents/core and agents/profiles.
+agents/dist/
 *.tsbuildinfo
 .DS_Store
 dist-bin/

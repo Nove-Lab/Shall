@@ -36,7 +36,10 @@ async function runToCompletion(command, args) {
 }
 
 // The daemon runs from source under tsx, but web reads the daemon's router
-// types out of dist, and the daemon reads core out of dist.
+// types out of dist, and the daemon reads core out of dist. The agent tree is
+// generated too, and the daemon writes it into every project it opens — so a
+// fresh checkout has to have it before the daemon starts, not after.
+await runToCompletion("bun", ["run", "build:agents"]);
 await runToCompletion("bun", ["run", "build:core"]);
 await runToCompletion("bun", ["run", "build:daemon"]);
 
