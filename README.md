@@ -6,7 +6,7 @@
 
 **Spec as the control plane for your agents.**
 
-[![Agents: Claude Code](https://img.shields.io/badge/agents-Claude%20Code-D97757.svg)](https://claude.com/claude-code)
+[![Agents: Claude Code · Codex](https://img.shields.io/badge/agents-Claude%20Code%20%C2%B7%20Codex-D97757.svg)](./docs/Shall_Agent_Commands.md)
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](./LICENSE)
 [![Runtime: Bun](https://img.shields.io/badge/runtime-Bun-black.svg)](https://bun.sh)
 
@@ -73,7 +73,7 @@ macOS and Linux, Apple Silicon and x64; on Windows, run it inside WSL.
 Later, `shall upgrade` replaces the binary with the newest release.
 
 Nothing else to install for the agent side: `shall init` wires the commands below into the project itself.
-Claude Code is the first agent Shall drives — the core is agent-agnostic, and adapters for others are on the roadmap.
+Shall drives Claude Code and Codex today — the core is agent-agnostic, and each agent gets the same processes in its own grammar.
 (Building from source instead: see [CONTRIBUTING.md](./CONTRIBUTING.md).)
 
 ### 2. `shall init`
@@ -91,9 +91,9 @@ shall
 Starts (or reuses) the local daemon and opens `http://localhost:9461` — the Control plane for governing the project and the Spec plane for reading and editing the graph.
 Everything stays on your machine.
 
-### 4. `/shall.help`
+### 4. Ask your agent
 
-Ask it in Claude Code any time.
+`/shall.help` in Claude Code, `$shall:help` in Codex — any time.
 It says what Shall is in a screen, reads where this project stands, and names the one or two commands that move it — the only command that also answers outside a Shall project.
 
 ---
@@ -102,36 +102,45 @@ It says what Shall is in a screen, reads where this project stands, and names th
 
 ### 1. Driving your agents using Shall
 
-Seven commands, each a process in prose — everything they write lands in the Review Queue for your yes.
+Seven processes, each written as prose — everything they write lands in the Review Queue for your yes.
+The process is the same in every agent; only the call wears the agent's own grammar: `/shall.specify` in Claude Code is `$shall:specify` in Codex, and a dotted name like `work.todo` becomes `$shall:work:todo`.
 
-| Command | In one line |
+| Process | In one line |
 | --- | --- |
-| `/shall.specify` | interviews you and writes the spec, phase by phase |
-| `/shall.plan` | designs the layer below — modules, contracts, work items — for one yes |
-| `/shall.work` | takes one turn of work off the board and writes it up |
-| `/shall.work.todo` | surveys what the project needs, writes nothing |
-| `/shall.work.report` | writes up work already done, reconstructed from git |
-| `/shall.raise` | brings a doubt, lands a finding or a decision — or nothing |
-| `/shall.help` | says what Shall is and what to run next |
+| `specify` | interviews you and writes the spec, phase by phase |
+| `plan` | designs the layer below — modules, contracts, work items — for one yes |
+| `work` | takes one turn of work off the board and writes it up |
+| `work.todo` | surveys what the project needs, writes nothing |
+| `work.report` | writes up work already done, reconstructed from git |
+| `raise` | brings a doubt, lands a finding or a decision — or nothing |
+| `help` | says what Shall is and what to run next |
 
-#### 1.1. Specify — `/shall.specify`
+#### 1.1. Specify
+
+**Claude Code** `/shall.specify` — **Codex** `$shall:specify`
 
 The staged elicitation that fills the domain and intent planes: goals, actors, use cases, scenarios, responsibilities, requirements, acceptance criteria and the project's own vocabulary.
 Each stage is drafted with you in the terminal, written once agreed, and lands in the Review Queue for your approval; `--auto` runs the stages through and asks once at the end.
 
-#### 1.2. Plan — `/shall.plan`
+#### 1.2. Plan
+
+**Claude Code** `/shall.plan` — **Codex** `$shall:plan`
 
 The design pass one layer below, in two stages.
 First it plans the way an agent plans anything — reads the repository, proposes the stack, draws module boundaries, cuts the work — and puts the whole plan to you for one yes, writing nothing.
 Then it transcribes the agreed plan in one pass: modules, their contracts, the work items the board will hand out, and the technology decision.
 `--auto` skips the terminal yes and nothing else.
 
-#### 1.3. Work — `/shall.work`
+#### 1.3. Work
+
+**Claude Code** `/shall.work` — **Codex** `$shall:work`
 
 One turn of the work cycle: survey the board, pick a small bundle, do the development itself outside Shall, self-check the result against each item's definition of done and the criteria it targets, and write the turn up as one journal for the queue.
-`--auto` runs without stopping, `--dry` forecasts without writing; `/shall.work.todo` is the survey alone and `/shall.work.report` writes up work already done.
+`--auto` runs without stopping, `--dry` forecasts without writing; `work.todo` is the survey alone and `work.report` writes up work already done.
 
-#### 1.4. Anytime — `/shall.raise`
+#### 1.4. Anytime — raise
+
+**Claude Code** `/shall.raise` — **Codex** `$shall:raise`
 
 The door for a doubt rather than a request.
 It explores, says what it found, and leaves behind a finding, a decision you dictated, both — or nothing at all.
@@ -169,5 +178,5 @@ Contributions are welcome — first-time contributors are asked to sign a short 
 
 - [`docs/Project_Structure_and_Architecture.md`](./docs/Project_Structure_and_Architecture.md) — design and invariants
 - [`docs/Shall_CLI_Commands.md`](./docs/Shall_CLI_Commands.md) — the `shall` CLI, command by command
-- [`docs/Shall_Agent_Commands.md`](./docs/Shall_Agent_Commands.md) — the `/shall.…` agent commands
+- [`docs/Shall_Agent_Commands.md`](./docs/Shall_Agent_Commands.md) — the agent processes, with each agent's spelling
 - [`agents/README.md`](./agents/README.md) — the agent-side processes, and how one prose core becomes a plugin per agent
