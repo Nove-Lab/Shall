@@ -38,6 +38,10 @@ We structured the spec as an interrelated graph across four planes — domain, i
 
 Change is the normal case, not waterfall reborn — every revision reaches both you and your agents.
 
+**4. Your intent is what holds your agents steady.**
+
+We built the daily control surface on top of it — agents pull approved work and run; you review, decide, and steer.
+
 ## ✨ What you get, working with Shall
 
 **1. Talk through what you want — get a structured spec.**
