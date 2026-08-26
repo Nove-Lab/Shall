@@ -3,6 +3,12 @@
 Every release lists what changed; a release that changes the spec schema — node types, edge grammar, file format — must additionally carry a **Migrating** section saying what an existing `.shall/` tree needs.
 Shall never migrates a spec by itself: old nodes read as red, and the notes here say what to do about them.
 
+## 0.1.1 — 2026-08-26
+
+- `shall report`, and a **Generate report** button on the spec plane: the whole spec assembled into static HTML under the project's own `shall/report/`, for a reader who never opens Shall. Seven chapters of tables built from the graph and the ledgers, a page per node carrying its relations and its body verbatim, and a progress chapter of four bars — scenarios, requirements, criteria, work items — each leading to its full listing. Status is said in plain words (`Approved`, `Awaiting review`, `Met`, `Blocked`…), the figures are the Vitals' own, links work from disk with no server, and every page prints. The folder ignores itself in git; regeneration replaces it whole; nothing is ever written into `.shall/`.
+- The help screen says `shall [--host]` on one line — one command, one line.
+- `SHALL_HOME` relocates Shall's home folder. Nothing an installed Shall runs sets it; the checkout's dev scripts do, which keeps developing Shall entirely off the installed Shall's `~/.shall`.
+
 ## 0.1.0 — 2026-08-26
 
 The first release.
