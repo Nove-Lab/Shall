@@ -49,7 +49,7 @@ Partial progress is written as a narrative and no completion report. A turn that
 
 ## The questions
 
-Ask through AskUserQuestion under the spine's rules. What is worth asking here:
+Ask with AskUserQuestion under the spine's rules. What is worth asking here:
 
 | When | Ask | Options | Header |
 |---|---|---|---|

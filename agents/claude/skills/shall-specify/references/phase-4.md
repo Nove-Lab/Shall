@@ -42,7 +42,7 @@ The anchor sits one level below "derived from the use case", and that fineness i
 
 ## The questions
 
-Ask through AskUserQuestion under the spine's rules. What is worth asking here:
+Ask with AskUserQuestion under the spine's rules. What is worth asking here:
 
 | When | Ask | Options | Header |
 |---|---|---|---|

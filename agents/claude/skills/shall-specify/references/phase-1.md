@@ -22,7 +22,7 @@ If the project is not empty you are in revision mode. Run `shall board --json` a
 
 ## The questions
 
-Ask through AskUserQuestion under the spine's rules. What is worth asking here:
+Ask with AskUserQuestion under the spine's rules. What is worth asking here:
 
 | When | Ask | Options | Header |
 |---|---|---|---|

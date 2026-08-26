@@ -16,7 +16,7 @@ The phase stands here for one reason: **terms are harvested from narrative, not 
 
 ## Steps
 
-1. **Read the approved prose and pull the terms that carry weight** — the nouns a reader would already have to know to read a scenario correctly. Register each as a `Term`. The prose is reached with the file tools, not with the CLI: `shall status` reports color, relations and the rest of a node's standing and **never a body**. Glob `.shall/spec/intent/**/*.md` and Read what comes back. Read the existing `.shall/spec/domain/Term/*.md` bodies in the same pass — a term's aliases live in its body, so a spelling somebody already settled is invisible until you open the file, and unopened it becomes a second term for a word that has one.
+1. **Read the approved prose and pull the terms that carry weight** — the nouns a reader would already have to know to read a scenario correctly. Register each as a `Term`. The prose is reached with the file tools, not with the CLI: `shall status` reports color, relations and the rest of a node's standing and **never a body**. List `.shall/spec/intent/**/*.md` with your file tools and read what comes back. Read the existing `.shall/spec/domain/Term/*.md` bodies in the same pass — a term's aliases live in its body, so a spelling somebody already settled is invisible until you open the file, and unopened it becomes a second term for a word that has one.
 2. **One term, one definition, in one place.** The term's file is the only home of its definition; a scenario, a criterion or a responsibility that restates it is a second home, and a second home drifts. Where a definition already exists, extend the term that exists rather than writing a second one.
 3. **A term that names something with structure also gets a `DomainEntity`**, and the term's file gains `DENOTES`. Keep the entity implementation-agnostic: what the domain has, not what a table or a payload has. Structural detail belongs to the Plan band later, and an entity written as a schema will have to be written twice. Where two entities are related in the domain itself, write `RELATES_TO` in the source entity's file.
 4. **Settle every spelling variant by what the variant IS.** Three handlings, and they are not interchangeable:
@@ -30,7 +30,7 @@ The phase stands here for one reason: **terms are harvested from narrative, not 
 
 ## The questions
 
-Ask through AskUserQuestion under the spine's rules. What is worth asking here:
+Ask with AskUserQuestion under the spine's rules. What is worth asking here:
 
 | When | Ask | Options | Header |
 |---|---|---|---|

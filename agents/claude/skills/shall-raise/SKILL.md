@@ -45,7 +45,7 @@ Find out what is actually there.
 - The findings, and whether any decision answers each: a finding is answered when some decision's own relations reach it, and unanswered when none does. Join that out of the same status.
 - `shall check` — the seams the grammar found. An exit 1 here is information about the project, not a failure of this step.
 - `shall board --json` — whether this is already somebody's turn.
-- The files themselves, and the code: Read and Grep. `git log` over the spec folder and the code says what changed recently and when.
+- The files themselves, and the code: your file and search tools. `git log` over the spec folder and the code says what changed recently and when.
 
 **Nothing is written in this step. Not a node, not a scratch file, not a note on disk.** The user asked a question; a process that started editing while working out the answer would be answering it by hand.
 
@@ -112,7 +112,7 @@ In every case: you are not waiting for the review.
 
 ## The questions
 
-Ask through AskUserQuestion under the rules above. What is worth asking here:
+Ask with AskUserQuestion under the rules above. What is worth asking here:
 
 | When | Ask | Options | Header |
 |---|---|---|---|

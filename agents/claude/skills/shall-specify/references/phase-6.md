@@ -18,7 +18,7 @@ In a revision run the scan covers only what this run wrote or changed, not the w
 
 ## Steps
 
-1. **Collect the prose and read the bodies**, not the names. A term hides in a sentence, and `short_name` will not show it to you. Reach the prose the way [phase 3](./phase-3.md) step 1 reaches it — `shall status` reports no body, so the files are opened with Glob and Read — over everything this run wrote or changed.
+1. **Collect the prose and read the bodies**, not the names. A term hides in a sentence, and `short_name` will not show it to you. Reach the prose the way [phase 3](./phase-3.md) step 1 reaches it — `shall status` reports no body, so the files are opened with your file tools — over everything this run wrote or changed.
 2. **Extract what the dictionary lacks** — a word used as if everyone already agreed what it means, and a concept with structure behind it. Compare against the terms `shall status --json` lists; a word you had to explain inside a body is a word that belongs in the dictionary.
 3. **Register them under Phase 3's rules**: one term one definition, spelling variants settled the three ways, entities kept implementation-agnostic. Those rules live in [phase 3](./phase-3.md) — read them there. One term, one definition; the rule about that has one home too.
 4. **Correct usage that conflicts with a definition. The term wins and the statement is revised.** Only when the definition itself is wrong do you revise the term, and only with the user's confirmation: a definition is what every statement above it leans on, so moving it moves them all.
@@ -26,7 +26,7 @@ In a revision run the scan covers only what this run wrote or changed, not the w
 
 ## The questions
 
-Ask through AskUserQuestion under the spine's rules. What is worth asking here:
+Ask with AskUserQuestion under the spine's rules. What is worth asking here:
 
 | When | Ask | Options | Header |
 |---|---|---|---|

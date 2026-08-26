@@ -10,12 +10,12 @@
  * tell it which of the six taught it the wrong shape. This hook closes that gap
  * to a single write.
  *
- * WHY EXIT 2 AND NOT 1. A PostToolUse hook fires after the write has landed, so
- * it cannot undo anything and blocking is not what it is for. Exit 2 is the one
- * code Claude Code hands back to the agent as text, which is the whole point:
- * the agent that just wrote the file reads the check's own sentences and fixes
- * the file itself. Any other non-zero code is noise in a transcript nobody acts
- * on.
+ * WHY EXIT 2 AND NOT 1. A post-write hook fires after the write has landed, so
+ * it cannot undo anything and blocking is not what it is for. Exit 2 is the
+ * code an agent harness hands back to the agent as text, which is the whole
+ * point: the agent that just wrote the file reads the check's own sentences and
+ * fixes the file itself. Any other non-zero code is noise in a transcript
+ * nobody acts on.
  *
  * A FRESHLY WRITTEN CHILD IS EXPECTED TO REPORT "no live anchor" until its
  * parent gains the relation line. A relation lives in the file of the node it
@@ -57,7 +57,10 @@ function run() {
     return 0;
   }
 
-  const reported = payload?.tool_input?.file_path;
+  // The path arrives in the hook payload, or — for a harness whose payload
+  // spells it differently — as the script's own first argument, so one script
+  // serves any hook schema that can pass a path at all.
+  const reported = payload?.tool_input?.file_path ?? process.argv[2];
   if (typeof reported !== "string" || !SPEC_NODE_FILE.test(reported)) {
     return 0;
   }

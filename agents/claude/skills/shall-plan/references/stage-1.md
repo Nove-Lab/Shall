@@ -36,7 +36,7 @@ Steps 1 to 9 happen **in the conversation**. Nothing reaches disk until stage 2.
 
 ## The questions
 
-Ask through AskUserQuestion under the spine's rules. What is worth asking here:
+Ask with AskUserQuestion under the spine's rules. What is worth asking here:
 
 | When | Ask | Options | Header |
 |---|---|---|---|
