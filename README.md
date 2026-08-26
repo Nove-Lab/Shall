@@ -4,7 +4,7 @@
 
 # Shall
 
-**Spec as the control plane for your agents.**
+### Spec as the control plane for your agents.
 
 [![Agents: Claude Code · Codex](https://img.shields.io/badge/agents-Claude%20Code%20%C2%B7%20Codex-D97757.svg)](./docs/Shall_Agent_Commands.md)
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](./LICENSE)
