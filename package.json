@@ -21,7 +21,7 @@
     "build:binary:local": "node scripts/build-binary.mjs --local",
     "typecheck": "bun run build:core && bun run build:daemon && bun run build:cli && bun run --filter @shall/web typecheck",
     "test": "bun run build:core && bun run --filter '*' test && node scripts/lint-plugin.mjs",
-    "shall": "node client/cli/dist/main.js"
+    "shall": "node scripts/shall-dev.mjs"
   },
   "devDependencies": {
     "@types/node": "latest",

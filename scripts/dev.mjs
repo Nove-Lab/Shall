@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { devHomeEnvironment } from "./dev-home.mjs";
 
 const argumentsList = process.argv.slice(2);
 const unknownArguments = argumentsList.filter(
@@ -11,6 +12,7 @@ if (unknownArguments.length > 0) {
 const bindHost = argumentsList.includes("--host") ? "0.0.0.0" : "127.0.0.1";
 const environment = {
   ...process.env,
+  ...(await devHomeEnvironment()),
   SHALL_HOST: bindHost,
 };
 

@@ -7,6 +7,9 @@ import tailwindcss from "@tailwindcss/vite";
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 const bindHost =
   process.env.SHALL_HOST === "0.0.0.0" ? "0.0.0.0" : "127.0.0.1";
+// The dev daemon's port — `scripts/dev.mjs` exports it from the checkout's own
+// home, and 9462 is that home's default. Never the installed Shall's 9461.
+const daemonPort = Number(process.env.SHALL_DAEMON_PORT ?? "9462");
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
@@ -20,11 +23,11 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     hmr: {
-      clientPort: 9461,
+      clientPort: daemonPort,
     },
     proxy: {
-      "/api": "http://127.0.0.1:9461",
-      "/trpc": "http://127.0.0.1:9461",
+      "/api": `http://127.0.0.1:${daemonPort}`,
+      "/trpc": `http://127.0.0.1:${daemonPort}`,
     },
   },
 });

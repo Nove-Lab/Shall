@@ -22,6 +22,16 @@ bun run test        # builds core, runs every workspace's tests, lints the plugi
 Tests are colocated `*.test.ts` files (node:test via tsx) next to the code they test.
 The daemon's spec-watcher and feed suites are known to be flaky on macOS fsevents — rerun before reading a watcher failure as yours.
 
+## Running from the checkout
+
+```bash
+bun run dev          # daemon (tsx watch) + web (Vite HMR), app at http://localhost:9462
+bun run shall …      # the checkout's CLI, aimed at the same place
+```
+
+Both run against the checkout's own home — `.shall-dev/` in the repo, on port 9462 — never `~/.shall`.
+An installed Shall on the same machine keeps its daemon, registry and templates while you develop; the seam is the `SHALL_HOME` environment variable, which `scripts/dev-home.mjs` sets for these two commands and which nothing a user installs ever sets.
+
 ## What to know before changing things
 
 - `docs/Project_Structure_and_Architecture.md` says how the pieces fit and which invariants hold — read it first.

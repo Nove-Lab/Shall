@@ -67,6 +67,8 @@ All of it pure functions over `(graph, ledgers)`; the sha256 arrives injected so
 ~/.shall/                    registry.json, daemon.json (pid + port), config.json, templates/
 ```
 
+`~/.shall` is the machine's one Shall home; `SHALL_HOME` relocates it, and only a checkout's dev scripts set that (to `.shall-dev/` in the repo, port 9462), so developing Shall never touches an installed Shall's home.
+
 The node body is opaque: nothing computed reads it.
 A frontmatter key outside the closed set refuses the file; a refused node is invisible to every count and shows on Fix Spec.
 

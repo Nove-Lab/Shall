@@ -14,7 +14,14 @@ export interface ShallHome {
 }
 
 export function getShallHome(): ShallHome {
-  const root = path.join(os.homedir(), ".shall");
+  // `SHALL_HOME` points a checkout at a home of its own — its daemon slot, its
+  // registry, its templates — so developing Shall never rewrites the installed
+  // Shall's. Nothing a user installs sets it; `scripts/dev-home.mjs` does.
+  const override = process.env.SHALL_HOME;
+  const root =
+    override !== undefined && override !== ""
+      ? path.resolve(override)
+      : path.join(os.homedir(), ".shall");
   return {
     root,
     configPath: path.join(root, "config.json"),

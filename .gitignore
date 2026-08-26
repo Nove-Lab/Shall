@@ -3,5 +3,6 @@ dist/
 *.tsbuildinfo
 .DS_Store
 dist-bin/
+.shall-dev/
 client/cli/binary/assets.generated.ts
 *.bun-build

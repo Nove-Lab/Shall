@@ -40,6 +40,9 @@ import {
 async function freshHome(): Promise<string> {
   const home = await mkdtemp(path.join(os.tmpdir(), "shall-own-home-"));
   process.env.HOME = home;
+  // A dev shell exports SHALL_HOME for the checkout's own home; a test run in
+  // that shell must still be about the home directory unless a test says so.
+  delete process.env.SHALL_HOME;
   return home;
 }
 
@@ -56,6 +59,21 @@ describe("Shall's own home", () => {
       path.join(shallHome.root, "registry.json"),
     );
     assert.equal(shallHome.daemonPath, path.join(shallHome.root, "daemon.json"));
+  });
+
+  test("follows SHALL_HOME when it is set, and leaves the home directory out of it", async () => {
+    const home = await freshHome();
+    const override = await mkdtemp(path.join(os.tmpdir(), "shall-home-override-"));
+    process.env.SHALL_HOME = override;
+    try {
+      const shallHome = getShallHome();
+
+      assert.equal(shallHome.root, path.resolve(override));
+      assert.equal(isShallHomePath(override), true);
+      assert.equal(isShallHomePath(path.join(home, ".shall")), false);
+    } finally {
+      delete process.env.SHALL_HOME;
+    }
   });
 
   test("knows itself from a project's folder of the same name", async () => {
