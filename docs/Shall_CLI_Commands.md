@@ -57,11 +57,13 @@ No other command asks, nothing is cached between runs, and no failure to ask is 
 shall check  [--scope <path>]... [--json]
 shall status [--scope <path>]... [--json]
 shall board  [--json]
+shall report [--json]
 ```
 
 `check` reads the spec files and says what is wrong with them — files that will not parse, edges the grammar refuses, anchors that are missing.
 `status` lists every node with its colour, plus what is missing or will not read; with `--json` this is the full per-node judgement, satisfaction included.
 `board` answers the working question: what the spec needs fixed, and which work items are ready to be implemented.
+`report` assembles the whole spec into static HTML under the project's own `shall/report/` — a document for a reader who never opens Shall, printable straight to PDF. It prints the index path first and bare; the folder ignores itself in git, and regeneration replaces it whole. The same report is a button on the spec plane.
 
 ## Writing
 

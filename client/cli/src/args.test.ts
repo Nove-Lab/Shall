@@ -61,6 +61,7 @@ describe("the commands", () => {
       scope: [],
     });
     assert.deepEqual(invocation("board"), { command: "board", json: false });
+    assert.deepEqual(invocation("report"), { command: "report", json: false });
   });
 
   test("add-spec-node takes its type in either spelling", () => {
@@ -184,6 +185,10 @@ describe("--scope", () => {
       refusalOf("board", "--scope", "intent"),
       "shall board does not take --scope — shall board [--json]",
     );
+    assert.equal(
+      refusalOf("report", "--scope", "intent"),
+      "shall report does not take --scope — shall report [--json]",
+    );
     assert.match(
       refusalOf("init", "--scope=intent"),
       /^shall init does not take/,
@@ -294,6 +299,7 @@ describe("--json", () => {
       ["check", { command: "check", json: true, scope: [] }],
       ["status", { command: "status", json: true, scope: [] }],
       ["board", { command: "board", json: true }],
+      ["report", { command: "report", json: true }],
     ] as const) {
       assert.deepEqual(invocation(command, "--json"), expected);
     }
@@ -530,6 +536,7 @@ describe("the help screen", () => {
       "shall check [--scope <path>]... [--json]",
       "shall status [--scope <path>]... [--json]",
       "shall board [--json]",
+      "shall report [--json]",
       "shall add-spec-node --type <Type> [--json]",
       "shall log <kind> <summary> [--refs <id,id>] [--json]",
       "shall upgrade",

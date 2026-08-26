@@ -61,6 +61,8 @@
       "name": "@shall/core",
       "version": "0.1.0",
       "dependencies": {
+        "micromark": "4.0.2",
+        "micromark-extension-gfm": "3.0.0",
         "yaml": "2.9.0",
       },
       "devDependencies": {

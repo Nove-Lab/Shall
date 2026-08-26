@@ -238,6 +238,89 @@ describe("the events route", () => {
   });
 });
 
+describe("the report route", () => {
+  /** A project with a report already on disk — the route only serves. */
+  async function reportedProject() {
+    const project = await createProject(
+      await mkdtemp(path.join(workspace, "project-")),
+    );
+    const dir = path.join(project.path, "shall", "report", "assets");
+    await mkdir(dir, { recursive: true });
+    await writeFile(
+      path.join(dir, "..", "index.html"),
+      "<!doctype html><title>held</title>",
+      "utf8",
+    );
+    await writeFile(path.join(dir, "report.css"), "body{}", "utf8");
+    // Something outside the report folder a traversal would love to read.
+    await writeFile(path.join(project.path, "secret.txt"), "not yours", "utf8");
+    return project;
+  }
+
+  test("serves the pages with their types, and the bare prefix is the index", async () => {
+    const project = await reportedProject();
+    const app = createApp("127.0.0.1");
+    const base = `/api/projects/${encodeURIComponent(project.id)}/report`;
+
+    const index = await app.request(`${base}/index.html`);
+    assert.equal(index.status, 200);
+    assert.match(index.headers.get("content-type") ?? "", /^text\/html/);
+    assert.match(await index.text(), /held/);
+
+    const css = await app.request(`${base}/assets/report.css`);
+    assert.equal(css.status, 200);
+    assert.match(css.headers.get("content-type") ?? "", /^text\/css/);
+
+    const bare = await app.request(`${base}/`);
+    assert.equal(bare.status, 200);
+    assert.match(await bare.text(), /held/);
+  });
+
+  test("an id nobody knows is a refusal with a sentence", async () => {
+    const app = createApp("127.0.0.1");
+
+    const response = await app.request(
+      "/api/projects/01ABCDEFGHIJKLMNOPQRSTUVWX/report/index.html",
+    );
+
+    assert.equal(response.status, 404);
+    const body = (await response.json()) as { error: string };
+    assert.match(body.error, /Unknown project/);
+  });
+
+  test("a project with no report yet says what to press", async () => {
+    const project = await createProject(
+      await mkdtemp(path.join(workspace, "project-")),
+    );
+    const app = createApp("127.0.0.1");
+
+    const response = await app.request(
+      `/api/projects/${encodeURIComponent(project.id)}/report/index.html`,
+    );
+
+    assert.equal(response.status, 404);
+    const body = (await response.json()) as { error: string };
+    assert.match(body.error, /No report has been generated/);
+  });
+
+  test("a traversal answers from inside the folder or not at all", async () => {
+    const project = await reportedProject();
+    const app = createApp("127.0.0.1");
+    const base = `/api/projects/${encodeURIComponent(project.id)}/report`;
+
+    for (const attempt of [
+      `${base}/../secret.txt`,
+      `${base}/%2e%2e/secret.txt`,
+      `${base}/..%2fsecret.txt`,
+      `${base}/assets/../../secret.txt`,
+    ]) {
+      const response = await app.request(attempt);
+      const text = await response.text();
+      assert.doesNotMatch(text, /not yours/, `${attempt} escaped the folder`);
+    }
+  });
+});
+
 describe("the folder picker's routes", () => {
   test("browse answers the visible children, and which of them are projects", async () => {
     const root = await mkdtemp(path.join(workspace, "browse-"));

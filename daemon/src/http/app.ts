@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { trpcServer } from "@hono/trpc-server";
 import { SHALL_VERSION } from "@shall/core/version";
 import { Hono } from "hono";
@@ -8,8 +10,10 @@ import {
 } from "../host/filesystem.js";
 import { isRefusal } from "../service/errors.js";
 import { subscribe } from "../service/spec-events.js";
+import { projectSpecFor } from "../service/spec-graph.js";
+import { reportDirOf } from "../service/spec-report.js";
 import { appRouter, SERVED_PROCEDURES } from "./router.js";
-import { mountSpa } from "./spa.js";
+import { contentTypeOf, keyOf, mountSpa } from "./spa.js";
 
 export function createApp(bindHost: string, spaRoot?: string): Hono {
   const app = new Hono();
@@ -157,6 +161,52 @@ export function createApp(bindHost: string, spaRoot?: string): Hono {
           deliver("change");
         }
       });
+    });
+  });
+
+  /**
+   * A generated report, handed back out — so the web's "Generate report" can
+   * open a tab on the same files a manager would get off disk. Under `/api/`
+   * for the same reason the event stream is: in development everything else
+   * belongs to Vite.
+   *
+   * TWO LOCKS ON THE PATH. `keyOf` drops `..` and empty segments the way the
+   * SPA's table does, and the resolved target is then required to still stand
+   * inside the report folder — the folder holds only generator output, and
+   * nothing outside it is this route's to hand out.
+   */
+  app.get("/api/projects/:id/report/*", async (context) => {
+    const projectId = context.req.param("id");
+    let projectPath: string;
+    try {
+      projectPath = (await projectSpecFor(projectId)).projectPath;
+    } catch (reason) {
+      const message = isRefusal(reason)
+        ? reason.message
+        : `Shall could not find ${projectId}.`;
+      return context.json({ error: message }, isRefusal(reason) ? 404 : 500);
+    }
+    const reportRoot = path.resolve(reportDirOf(projectPath));
+    const marker = "/report/";
+    const at = context.req.path.indexOf(marker);
+    const key = keyOf(at === -1 ? "" : context.req.path.slice(at + marker.length));
+    const relative = key === "" ? "index.html" : key;
+    const target = path.resolve(path.join(reportRoot, ...relative.split("/")));
+    if (target !== reportRoot && !target.startsWith(reportRoot + path.sep)) {
+      return context.notFound();
+    }
+    const bytes = await readFile(target).catch(() => null);
+    if (bytes === null) {
+      return context.json(
+        {
+          error:
+            "No report has been generated for this project yet — press Generate report in the app, or run shall report in the project folder.",
+        },
+        404,
+      );
+    }
+    return context.body(new Uint8Array(bytes), 200, {
+      "content-type": contentTypeOf(target),
     });
   });
 

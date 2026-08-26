@@ -18,6 +18,7 @@ import {
   updateProjectSettings,
 } from "../service/settings.js";
 import { activityFeed, logActivity } from "../service/spec-activity.js";
+import { generateReport, reportAt } from "../service/spec-report.js";
 import {
   checkSpec,
   createSpecEdge,
@@ -250,6 +251,16 @@ export const appRouter = t.router({
     board: procedure
       .input(z.object({ path: z.string().min(1) }))
       .query(({ input }) => boardAt(input.path)),
+    // A mutation and not a query, because it writes — the report files under
+    // the project's own `shall/`, never a byte of `.shall/`. The path form is
+    // the CLI's; `generateReport` below is the same act for the web, which
+    // names a project instead of standing in one.
+    report: procedure
+      .input(z.object({ path: z.string().min(1) }))
+      .mutation(({ input }) => reportAt(input.path)),
+    generateReport: procedure
+      .input(z.object({ projectId: z.string().min(1) }))
+      .mutation(({ input }) => generateReport(input.projectId)),
     scaffold: procedure
       .input(z.object({ path: z.string().min(1), type: z.string() }))
       .mutation(({ input }) => scaffoldSpecNode(input)),

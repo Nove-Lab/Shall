@@ -113,7 +113,8 @@ const CASUALTY: Record<
   | "accept"
   | "board"
   | "status"
-  | "vitals",
+  | "vitals"
+  | "report",
   string
 > = {
   approve:
@@ -128,6 +129,7 @@ const CASUALTY: Record<
   board: `Nothing on the board can be trusted until it reads — what needs fixing, what is finished and what is ready to work on are all counted out of the ledgers; ${RESTORE_THE_BOOK}`,
   status: `Nothing here can be told apart until it reads — every colour, every rejection and every closure is counted out of the ledgers; ${RESTORE_THE_BOOK}`,
   vitals: `Nothing here can be counted until it reads — every ratio, every open criterion's reason and every blocked work item's cause is counted out of the ledgers; ${RESTORE_THE_BOOK}`,
+  report: `No report was generated — every status and every ratio in it is counted out of the ledgers, and a report over an unreadable book would show progress nobody has made; ${RESTORE_THE_BOOK}`,
 };
 
 /** The first book that would not read, said as a refusal — or nothing at all. */

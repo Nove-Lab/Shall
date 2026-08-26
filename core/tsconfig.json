@@ -9,5 +9,5 @@
     "rootDir": ".",
     "types": ["node"]
   },
-  "include": ["graph", "store", "arith", "serialize", "exchange", "version.ts"]
+  "include": ["graph", "store", "arith", "serialize", "exchange", "report", "version.ts"]
 }

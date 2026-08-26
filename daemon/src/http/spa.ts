@@ -48,7 +48,7 @@ const CONTENT_TYPES: Readonly<Record<string, string>> = {
   ".wasm": "application/wasm",
 };
 
-function contentTypeOf(held: string): string {
+export function contentTypeOf(held: string): string {
   const dot = held.lastIndexOf(".");
   const extension = dot === -1 ? "" : held.slice(dot).toLowerCase();
   return CONTENT_TYPES[extension] ?? "application/octet-stream";
@@ -60,7 +60,7 @@ function contentTypeOf(held: string): string {
  * filesystem, so a traversal cannot reach anything either way — the segments go
  * because a key that cannot be typed is a key that cannot be argued about.
  */
-function keyOf(pathname: string): string {
+export function keyOf(pathname: string): string {
   let decodedPath = pathname;
   try {
     decodedPath = decodeURIComponent(pathname);

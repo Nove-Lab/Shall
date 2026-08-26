@@ -25,6 +25,10 @@
       "types": "./dist/exchange/index.d.ts",
       "default": "./dist/exchange/index.js"
     },
+    "./report": {
+      "types": "./dist/report/index.d.ts",
+      "default": "./dist/report/index.js"
+    },
     "./version": {
       "types": "./dist/version.d.ts",
       "default": "./dist/version.js"
@@ -36,9 +40,11 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --import tsx --test arith/*.test.ts graph/*.test.ts serialize/*.test.ts store/*.test.ts"
+    "test": "node --import tsx --test arith/*.test.ts graph/*.test.ts report/*.test.ts report/chapters/*.test.ts report/render/*.test.ts serialize/*.test.ts store/*.test.ts"
   },
   "dependencies": {
+    "micromark": "4.0.2",
+    "micromark-extension-gfm": "3.0.0",
     "yaml": "2.9.0"
   },
   "devDependencies": {

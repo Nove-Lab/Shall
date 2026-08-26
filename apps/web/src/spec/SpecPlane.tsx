@@ -14,6 +14,7 @@ import {
   CircleHelp,
   Ban,
   Eye,
+  FileText,
   GitCommitVertical,
   LayoutGrid,
   Pencil,
@@ -251,6 +252,7 @@ export function SpecPlane() {
    * board as a whole.
    */
   const [actionError, setActionError] = useState<string | null>(null);
+  const [reportBusy, setReportBusy] = useState(false);
   /**
    * WHAT THE DAEMON SAYS ABOUT THE GRAPH, WHICH IS NOT PART OF THE GRAPH.
    *
@@ -974,6 +976,38 @@ export function SpecPlane() {
   }
 
   /**
+   * THE TAB OPENS BEFORE THE ASK, because a popup blocker trusts only the
+   * click itself: a `window.open` on the far side of an await is a tab most
+   * browsers refuse. So a blank tab is taken synchronously, pointed at the
+   * finished report when the daemon says it is there, and closed again when
+   * the daemon refuses — the refusal lands on the toolbar's own error line.
+   */
+  async function runReport() {
+    if (reportBusy) {
+      return;
+    }
+    const tab = window.open("about:blank", "_blank");
+    setReportBusy(true);
+    setActionError(null);
+    try {
+      await api.spec.generateReport.mutate({ projectId: project.id });
+      const target = `/api/projects/${project.id}/report/index.html`;
+      if (tab === null) {
+        window.location.assign(target);
+      } else {
+        tab.location.assign(target);
+      }
+    } catch (error) {
+      tab?.close();
+      setActionError(
+        error instanceof Error ? error.message : "Could not generate the report",
+      );
+    } finally {
+      setReportBusy(false);
+    }
+  }
+
+  /**
    * WHAT IS SAID OVER THE CANVAS WHEN THERE IS NOTHING ON IT.
    *
    * THE EMPTY STATE IS THE GRAPH'S ALONE. The grid draws every column the canon
@@ -1097,6 +1131,19 @@ export function SpecPlane() {
                 Commit spec
               </Button>
             ) : null}
+            {/* THE SPEC AS A DOCUMENT, for whoever never opens Shall: the
+                daemon assembles static pages under the project's own shall/
+                and the finished index opens in a tab of its own. */}
+            <Button
+              variant="outline"
+              disabled={reportBusy || loading || loadError !== null}
+              onClick={() => {
+                void runReport();
+              }}
+            >
+              <FileText />
+              {reportBusy ? "Generating…" : "Generate report"}
+            </Button>
             {/* The toolbar points at no column, so it preselects no type. */}
             <Button
               disabled={loading || loadError !== null}

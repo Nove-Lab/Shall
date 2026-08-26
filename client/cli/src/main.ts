@@ -87,6 +87,7 @@ const NEEDED_PROCEDURES: readonly string[] = [
   "spec.board",
   "spec.check",
   "spec.log",
+  "spec.report",
   "spec.scaffold",
   "spec.status",
 ];
@@ -760,6 +761,24 @@ async function board(url: string): Promise<Said> {
 }
 
 /** Which command was asked for, and nothing about how its answer is said. */
+/**
+ * The whole spec as a document a manager reads: the daemon assembles it under
+ * the project's own `shall/report/` and this prints where. The index path is
+ * the FIRST line and bare, the way `add-spec-node` prints its file — the one
+ * thing a pipe or a double-click wants.
+ */
+async function generateReport(url: string): Promise<Said> {
+  const result = await connect(url).spec.report.mutate({ path: process.cwd() });
+  return {
+    answer: result,
+    prose: [
+      result.index,
+      `The report on ${result.root} — ${count(result.pages, "page", "pages")} under shall/report/. Open it in a browser, or print it.`,
+    ],
+    failed: false,
+  };
+}
+
 function answerFor(url: string, asked: Answering): Promise<Said> {
   switch (asked.command) {
     case "init":
@@ -770,6 +789,8 @@ function answerFor(url: string, asked: Answering): Promise<Said> {
       return status(url, asked.scope);
     case "board":
       return board(url);
+    case "report":
+      return generateReport(url);
     case "add-spec-node":
       return addSpecNode(url, asked.type);
     case "log":
@@ -792,7 +813,7 @@ function answerFor(url: string, asked: Answering): Promise<Said> {
  * standing refusal, an empty board are answers and not errors. A CALLER BRANCHES
  * ON THE CONTENT, NEVER ON THE CODE.
  */
-async function report(asked: Answering): Promise<void> {
+async function deliver(asked: Answering): Promise<void> {
   try {
     // Every command here works on the folder the person is standing in, which is
     // the folder their editor and their agent are standing in too.
@@ -883,6 +904,6 @@ if ("usage" in asked) {
   // to ignore.
   const notice =
     asked.command === "init" ? upgradeNotice(NOTICE_PATIENCE) : null;
-  await report(asked);
+  await deliver(asked);
   await sayNotice(notice);
 }

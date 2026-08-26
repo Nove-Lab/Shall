@@ -66,6 +66,7 @@ const SERVED = [
   "spec.board",
   "spec.check",
   "spec.log",
+  "spec.report",
   "spec.scaffold",
   "spec.status",
 ];
@@ -1272,6 +1273,48 @@ describe("shall status", () => {
       "Intent",
       "  G-0001  Goal  green  Ship the reader",
     ]);
+  });
+});
+
+describe("shall report", () => {
+  const generated = {
+    root: "/work/atlas",
+    dir: "/work/atlas/shall/report",
+    index: "/work/atlas/shall/report/index.html",
+    pages: 12,
+  };
+
+  test("prints the index path first and bare, then the one sentence", async () => {
+    const ran = await running(["report"], {
+      answers: { "spec.report": generated },
+    });
+
+    assert.equal(ran.code, 0);
+    assert.deepEqual(lines(ran.out), [
+      "/work/atlas/shall/report/index.html",
+      "The report on /work/atlas — 12 pages under shall/report/. Open it in a browser, or print it.",
+    ]);
+    assert.deepEqual(ran.calls, [
+      { procedure: "spec.report", input: { path: ran.cwd } },
+    ]);
+  });
+
+  test("--json is the daemon's answer whole, and nothing else", async () => {
+    const ran = await running(["report", "--json"], {
+      answers: { "spec.report": generated },
+    });
+
+    assert.equal(ran.code, 0);
+    assert.deepEqual(JSON.parse(ran.out), generated);
+  });
+
+  test("a refusal arrives as the daemon's own sentence", async () => {
+    const ran = await running(["report"], {
+      refusals: { "spec.report": "Not a Shall project." },
+    });
+
+    assert.equal(ran.code, 1);
+    assert.match(ran.err, /Not a Shall project\./);
   });
 });
 

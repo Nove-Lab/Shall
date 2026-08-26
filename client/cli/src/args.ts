@@ -58,6 +58,10 @@ const SHAPES = {
     shape: "shall board [--json]",
     says: "What the spec needs fixed, and what is ready to be implemented.",
   },
+  report: {
+    shape: "shall report [--json]",
+    says: "Assemble the spec into a readable report under shall/report/.",
+  },
   "add-spec-node": {
     shape: "shall add-spec-node --type <Type> [--json]",
     says: "Start a new node file of that type.",
@@ -130,6 +134,7 @@ export type Invocation =
   | { command: "check"; json: boolean; scope: string[] }
   | { command: "status"; json: boolean; scope: string[] }
   | { command: "board"; json: boolean }
+  | { command: "report"; json: boolean }
   | { command: "add-spec-node"; json: boolean; type: string }
   | {
       command: "log";
@@ -370,6 +375,16 @@ export function parseArguments(
       words: false,
     });
     return "usage" in read ? read : { command: "board", json: read.json };
+  }
+
+  if (word === "report") {
+    const read = optionsOf("report", rest, {
+      scope: false,
+      type: false,
+      refs: false,
+      words: false,
+    });
+    return "usage" in read ? read : { command: "report", json: read.json };
   }
 
   if (word === "check" || word === "status") {
