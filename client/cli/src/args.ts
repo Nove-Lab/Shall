@@ -36,10 +36,11 @@ interface CommandShape {
  */
 const SHAPES = {
   // The bare command — no word at all, which is how a person opens the app.
-  "": { shape: "shall", says: "Open the app in a browser." },
-  "--host": {
-    shape: "shall --host",
-    says: "Open it and let other machines on this network reach it.",
+  // `--host` rides on it rather than holding a row of its own: it is the same
+  // command with the door open to the network, and one command is one line.
+  "": {
+    shape: "shall [--host]",
+    says: "Open the app in a browser; --host lets other machines on this network reach it.",
   },
   init: {
     shape: "shall init [--json]",
@@ -320,7 +321,7 @@ export function parseArguments(
     const stray = rest.find((argument) => argument !== "--host");
     return stray === undefined
       ? { command: "open", network: true }
-      : unexpected("--host", stray);
+      : unexpected("", stray);
   }
 
   // `--version` is read the same way, and for the same reason: it is a question

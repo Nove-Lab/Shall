@@ -12,8 +12,7 @@ The rest are what the embedded `/shall.…` agent processes run — you can type
 **For you.**
 
 ```
-shall
-shall --host
+shall [--host]
 ```
 
 Opens the project's screen in your browser — the control plane (overview, review queue, work board, activity feed, vitals) and the spec graph.

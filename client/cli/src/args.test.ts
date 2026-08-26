@@ -359,7 +359,7 @@ describe("--json", () => {
   test("is not an option of the app itself", () => {
     assert.equal(
       refusalOf("--host", "--json"),
-      "shall --host does not take --json — shall --host",
+      "shall does not take --json — shall [--host]",
     );
   });
 });
@@ -525,8 +525,7 @@ describe("what a person is told when the words are wrong", () => {
 describe("the help screen", () => {
   test("names every command exactly once", () => {
     for (const shape of [
-      "shall",
-      "shall --host",
+      "shall [--host]",
       "shall init [--json]",
       "shall check [--scope <path>]... [--json]",
       "shall status [--scope <path>]... [--json]",
