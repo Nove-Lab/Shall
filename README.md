@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="./docs/assets/logo.png" alt="The Shall snail" width="140">
+
 # Shall
 
 **Spec as the control plane for your agents.**
