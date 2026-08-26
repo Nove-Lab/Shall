@@ -12,6 +12,13 @@ import { fileURLToPath } from "node:url";
  * ignores. So a change to a procedure is a change to one file under core, and a
  * new agent is a new folder under profiles with core untouched.
  *
+ * A PROFILE ANSWERS FOUR THINGS, AND MAY ANSWER THREE MORE. The four are the
+ * contract — the vocabulary, the blocks, the frontmatter, the layout — and the
+ * three arrived with the second agent: `rewrite` mends the links a page draws
+ * once this profile has moved it, `extras` assembles a file core does not have
+ * out of what core's entries declare, and `forbidden` names the words another
+ * agent's dialect owns, which `lint-agents.mjs` then refuses in this tree.
+ *
  * A PLACEHOLDER IS A CONTRACT, AND IT IS CHECKED BOTH WAYS. Core writes
  * `{{token}}` wherever the sentence would otherwise name Claude; a profile that
  * does not define a token core uses stops the build, and a token no profile
@@ -34,6 +41,18 @@ const distRoot = path.join(agentsRoot, "dist");
 
 /** `{{token}}` and `{{block arg arg}}` — lowercase inside the braces, always. */
 const TOKEN = /\{\{([a-zA-Z][a-zA-Z-]*)((?:\s+[^\s{}]+)*)\}\}/g;
+
+/**
+ * Where a block that rendered to nothing stood, until the paragraph around it
+ * is taken away with it.
+ *
+ * A profile may have nothing to say at a site core wrote for — the fallback for
+ * a refused skill specifier means nothing to an agent that never had one — and
+ * an empty string alone would leave a blank paragraph in the middle of a step.
+ * The mark is a character no prose contains, so the pass that removes it cannot
+ * take a real blank line with it.
+ */
+const EMPTIED = "\u0000";
 
 const problems = [];
 
@@ -92,11 +111,17 @@ function splitDocument(source, relative) {
  *
  * The line number is counted from the text as core wrote it, so an unknown
  * token is reported where an author would look for it.
+ *
+ * A VALUE MAY BE A FUNCTION OF THE FILE IT IS RENDERED INTO. Most are one
+ * string for the whole tree, and a string is what a profile writes for those;
+ * an answer that differs per file — the slot a command's arguments arrive in,
+ * for an agent whose commands are invoked by name — is a function handed the
+ * core-relative path, and it answers with the same kind of sentence.
  */
 function expand(body, profile, relative) {
   let line = 1;
   let at = 0;
-  return body.replace(TOKEN, (whole, token, rest, index) => {
+  const expanded = body.replace(TOKEN, (whole, token, rest, index) => {
     while (at < index) {
       if (body[at] === "\n") {
         line += 1;
@@ -113,18 +138,24 @@ function expand(body, profile, relative) {
         );
         return whole;
       }
-      return render(names);
+      const block = render(names);
+      return block === "" ? EMPTIED : block;
     }
     const value = profile.vocabulary?.[token];
-    if (typeof value !== "string") {
+    const said = typeof value === "function" ? value({ file: relative }) : value;
+    if (typeof said !== "string") {
       fail(
         `${relative}:${line}`,
         `{{${token}}} is a placeholder this profile does not define. Every token core uses is every profile's to answer.`,
       );
       return whole;
     }
-    return value;
+    return said;
   });
+  // The paragraph an emptied block stood in goes with it, blank line and all: a
+  // hole between two steps reads as something missing rather than as something
+  // this agent never needed.
+  return expanded.split(`\n${EMPTIED}\n`).join("").split(EMPTIED).join("");
 }
 
 /** The invocation-name table, longest source first so no rename eats another's prefix. */
@@ -144,6 +175,7 @@ async function renderProfile(agent, profile) {
   const skills = new Set(
     await readdir(path.join(coreRoot, "skills")).catch(() => []),
   );
+  const entries = [];
 
   for (const relative of await filesUnder(coreRoot)) {
     const target = profile.targetOf(relative);
@@ -163,29 +195,57 @@ async function renderProfile(agent, profile) {
       : path.basename(relative) === "SKILL.md"
         ? profile.skillFrontmatter
         : null;
+    let document;
     if (front === null) {
-      files.set(target, Buffer.from(applyNames(expand(source, profile, relative), profile)));
-      continue;
-    }
-    const { fields, body } = splitDocument(source, relative);
-    // The name table is applied to the assembled file, frontmatter included: a
-    // skill's `description` says which command loads it, and a profile that
-    // renamed the commands and not that sentence would ship a catalog line
-    // pointing at a command it does not have.
-    const document = `---\n${front(fields, relative).join("\n")}\n---\n${expand(body, profile, relative)}`;
-    files.set(target, Buffer.from(applyNames(document, profile)));
+      document = expand(source, profile, relative);
+    } else {
+      const { fields, body } = splitDocument(source, relative);
+      const keys = front(fields, relative);
+      // A PROFILE MAY ANSWER WITH NO FRONTMATTER AT ALL. Core's keys are what a
+      // document declares about itself, and an agent that has no place to put
+      // one of these documents — a process page that is not a skill in its
+      // dialect, and lands as a reference page — says so by asking for no
+      // frontmatter rather than by writing keys nothing reads. A document whose
+      // frontmatter is taken away opens on its first line, not on the blank one
+      // that used to separate the two.
+      document =
+        keys === null
+          ? expand(body, profile, relative).replace(/^\n+/, "")
+          : `---\n${keys.join("\n")}\n---\n${expand(body, profile, relative)}`;
 
-    // Every entry loads skills that exist. A typo here is a session that reads
-    // a path with nothing behind it and carries on without the process.
-    if (relative.startsWith("entries/")) {
-      for (const match of body.matchAll(/\{\{load-skills\s+([^{}]+)\}\}/g)) {
-        for (const name of match[1].trim().split(/\s+/)) {
-          if (!skills.has(name)) {
-            fail(relative, `loads \`${name}\`, and \`agents/core/skills/${name}\` does not exist.`);
+      // Every entry loads skills that exist. A typo here is a session that
+      // reads a path with nothing behind it and carries on without the process.
+      if (relative.startsWith("entries/")) {
+        entries.push({ file: relative, fields });
+        for (const match of body.matchAll(/\{\{load-skills\s+([^{}]+)\}\}/g)) {
+          for (const name of match[1].trim().split(/\s+/)) {
+            if (!skills.has(name)) {
+              fail(relative, `loads \`${name}\`, and \`agents/core/skills/${name}\` does not exist.`);
+            }
           }
         }
       }
     }
+    // The name table is applied to the assembled file, frontmatter included: a
+    // skill's `description` says which command loads it, and a profile that
+    // renamed the commands and not that sentence would ship a catalog line
+    // pointing at a command it does not have. The rewrite after it is the one
+    // pass that knows where the file landed — the links a moved page draws are
+    // relative to the folder it is read from, not the folder core wrote it in.
+    const named = applyNames(document, profile);
+    files.set(
+      target,
+      Buffer.from(profile.rewrite === undefined ? named : profile.rewrite(named, relative)),
+    );
+  }
+
+  // A file core does not have, assembled from what core's entries declare: a
+  // block of always-on context is the shape of it today. It is given the
+  // entries in the order core is walked, each with its own frontmatter fields,
+  // and it may refuse — a profile that cannot say every command core has should
+  // stop the build rather than ship a catalog with a hole in it.
+  for (const [target, text] of Object.entries(profile.extras?.(entries) ?? {})) {
+    files.set(target, Buffer.from(text));
   }
 
   const staticFolder = path.join(profilesRoot, agent, profile.staticRoot);

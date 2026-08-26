@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -24,19 +24,26 @@ import {
  * TWO KINDS OF ROOT, TWO RULE SETS. Everything under `agents/` that a person
  * typed — core's documents, the folder's README, and the sentences inside each
  * profile — is WRITTEN, so it answers the naming rules a person can get wrong.
- * Each tree under `agents/dist` is GENERATED, so it answers two questions about
- * the generation instead: that the user's words still reach every entry, and
- * that no placeholder went out unexpanded. Linting both is what makes a stale
- * dist visible — the generator's own post-conditions only speak for the run
- * that wrote it.
+ * Each tree under `agents/dist` is GENERATED, so it answers questions about the
+ * generation instead: that the user's words still reach every entry, that no
+ * placeholder went out unexpanded, that no link in it points at nothing, that
+ * no word another agent's dialect owns survived the rendering, and that the
+ * tree has the shape its agent loads. Linting both is what makes a stale dist
+ * visible — the generator's own post-conditions only speak for the run that
+ * wrote it.
  *
  * Every written rule is a rule about a name, because a name is the one thing in
- * documentation that can be wrong in a way a reader cannot see. Seven rules:
+ * documentation that can be wrong in a way a reader cannot see. Seven of them:
  * (a) shouts are relation names, (b) `--type` names a canon type, (c) `shall`
  * calls name a real subcommand, (d) an entry interpolates its arguments,
  * (e) no document carries a template's vocabulary, (f) no document carries a
  * type name the canon retired, (g) every placeholder core writes is one every
  * profile answers.
+ *
+ * The generated trees answer three more, and all three are about a layout
+ * rather than a name: (h) every relative link points at a file that is there,
+ * (i) no word another agent's dialect owns survived the rendering, and (j) the
+ * tree has the shape its own agent's loader needs.
  */
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
@@ -98,10 +105,14 @@ const ALLOWED_SHOUTS = new Set([
   "STDIN",
   "STDOUT",
   "STDERR",
-  // Names this repository and Claude Code use.
+  // Names this repository and the agents it drives use.
   "ARGUMENTS",
   "SCREAMING_SNAKE",
   "CLAUDE_PLUGIN_ROOT",
+  "AGENTS",
+  "HANDED_OVER_TO",
+  "COMMAND_ORDER",
+  "SPINE_LINK",
   "README",
   "SKILL",
   "SHALL_HOST",
@@ -280,7 +291,10 @@ function markdownFilesUnder(directory) {
     const full = path.join(directory, entry);
     if (statSync(full).isDirectory()) {
       found.push(...markdownFilesUnder(full));
-    } else if (entry.endsWith(".md")) {
+    } else if (entry.endsWith(".md") || entry.endsWith(".md.block")) {
+      // A block written to be inserted into somebody else's markdown file is
+      // markdown, and every rule that reads a page reads it too — it is prose
+      // an agent will follow, whichever file it ends up inside.
       found.push(full);
     }
   }
@@ -572,9 +586,12 @@ function checkPlaceholders(file, lines, profiles) {
       const [, token, rest] = match;
       const isBlock = rest.trim() !== "";
       for (const { agent, module } of profiles) {
+        // A vocabulary value is one sentence for the whole tree, or a function
+        // of the file it lands in when the answer differs per file. Both are
+        // answers; only a missing key is not.
         const answered = isBlock
           ? typeof module.blocks?.[token] === "function"
-          : typeof module.vocabulary?.[token] === "string";
+          : ["string", "function"].includes(typeof module.vocabulary?.[token]);
         if (answered) {
           continue;
         }
@@ -589,18 +606,23 @@ function checkPlaceholders(file, lines, profiles) {
 }
 
 /**
- * The generated trees' own two rules: what the placeholder became is there, and
- * no placeholder is. Everything else about a dist file was decided in core or
- * in a profile and is checked at those two roots.
+ * The generated trees' rules: what the placeholder became is there, no
+ * placeholder is, every link points at a file, no word another agent's dialect
+ * owns survived, and the tree has the shape its agent loads. Everything else
+ * about a dist file was decided in core or in a profile and is checked at those
+ * two roots.
  */
 function checkGeneratedTree(agent, module) {
   const tree = path.join(distRoot, agent);
   // Where this profile puts each core entry — rule (d)'s twin asks after those
-  // files and no others, because a skill has no argument slot to lose.
-  const entryTargets = new Set(
-    markdownFilesUnder(path.join(coreRoot, "entries")).map((file) =>
-      module.targetOf(`entries/${path.basename(file)}`),
-    ),
+  // files and no others, because a skill has no argument slot to lose. The core
+  // path is kept beside the target, because a slot that is a function of the
+  // file it lands in cannot be asked for without saying which file.
+  const entryTargets = new Map(
+    markdownFilesUnder(path.join(coreRoot, "entries")).map((file) => {
+      const source = `entries/${path.basename(file)}`;
+      return [module.targetOf(source), source];
+    }),
   );
   let entries;
   try {
@@ -620,10 +642,13 @@ function checkGeneratedTree(agent, module) {
   for (const file of markdownFilesUnder(tree)) {
     const source = readFileSync(file, "utf8");
     const relative = path.relative(tree, file).split(path.sep).join("/");
+    const lines = source.split("\n");
     if (entryTargets.has(relative)) {
-      checkGeneratedArguments(agent, module, file, relative, source);
+      checkGeneratedArguments(agent, module, file, relative, source, entryTargets.get(relative));
     }
-    source.split("\n").forEach((text, index) => {
+    checkLinks(file, lines);
+    checkForbidden(agent, module, file, lines);
+    lines.forEach((text, index) => {
       if (text.includes("{{")) {
         report(
           file,
@@ -633,11 +658,13 @@ function checkGeneratedTree(agent, module) {
       }
     });
   }
+  TREE_SHAPE[agent]?.(tree, agent);
 }
 
 /** Rule (d) said at the generated end: the entry's slot survived the rendering. */
-function checkGeneratedArguments(agent, module, file, relative, source) {
-  const slot = module.vocabulary?.args;
+function checkGeneratedArguments(agent, module, file, relative, source, from) {
+  const value = module.vocabulary?.args;
+  const slot = typeof value === "function" ? value({ file: from }) : value;
   if (typeof slot === "string" && !source.includes(slot)) {
     report(
       file,
@@ -646,6 +673,120 @@ function checkGeneratedArguments(agent, module, file, relative, source) {
     );
   }
 }
+
+/**
+ * (h) Every relative link in a generated tree points at a file that is there.
+ *
+ * A tree is a layout decision, and a profile that moves a page moves every link
+ * that page draws and every link drawn at it. Those rewrites are mechanical and
+ * they are exactly the kind of mechanical that misses a form nobody thought of
+ * — a backticked link text, a folder one level further up — and the miss is
+ * invisible until a session follows the link into nothing and carries on
+ * without the page. Anchors and absolute and remote targets are somebody else's
+ * to answer for.
+ */
+const MARKDOWN_LINK = /\[[^\]]*\]\(([^)\s]+)\)/g;
+
+function checkLinks(file, lines) {
+  lines.forEach((text, index) => {
+    for (const match of text.matchAll(MARKDOWN_LINK)) {
+      const [target] = match[1].split("#");
+      if (target === "" || target.startsWith("/") || /^[a-z][a-z0-9+.-]*:/i.test(target)) {
+        continue;
+      }
+      if (existsSync(path.resolve(path.dirname(file), target))) {
+        continue;
+      }
+      report(
+        file,
+        index + 1,
+        `${target} is a link to nothing — no file sits there, so a session that follows it reads the page it was sent to instead of the one it was sent for.`,
+      );
+    }
+  });
+}
+
+/**
+ * (i) No word another agent's dialect owns survives into this one's tree.
+ *
+ * A profile says what those words are, because a profile is the only thing that
+ * knows what its agent would do with one: `$ARGUMENTS` in a Codex tree is a
+ * slot that does not exist, and `/shall:plan` there is a slash command the CLI
+ * removed. Every one of them would pass every other rule in this file and then
+ * fail in somebody's session, which is the failure this whole script exists to
+ * move earlier.
+ */
+function checkForbidden(agent, module, file, lines) {
+  for (const [word, why] of module.forbidden ?? []) {
+    lines.forEach((text, index) => {
+      if (text.includes(word)) {
+        report(
+          file,
+          index + 1,
+          `${word} reached agents/dist/${agent}, and ${why}`,
+        );
+      }
+    });
+  }
+}
+
+/**
+ * (j) The shape of a generated tree, for an agent that has no validator of its
+ * own.
+ *
+ * `claude plugin validate --strict` reads the claude tree and says whether the
+ * plugin is loadable, so nothing here duplicates it; the Codex CLI ships no
+ * such command, and its loader is silent about a folder it cannot read. So the
+ * three things its loader needs are asked here.
+ */
+const TREE_SHAPE = {
+  codex(tree) {
+    const skillsRoot = path.join(tree, "skills");
+    for (const folder of readdirSync(skillsRoot).sort()) {
+      if (!statSync(path.join(skillsRoot, folder)).isDirectory()) {
+        continue;
+      }
+      if (!existsSync(path.join(skillsRoot, folder, "SKILL.md"))) {
+        report(
+          path.join(skillsRoot, folder),
+          1,
+          `skills/${folder} has no SKILL.md, so Codex loads nothing from it — a folder under the skills root is a skill or it is invisible.`,
+        );
+      }
+    }
+    for (const file of markdownFilesUnder(skillsRoot)) {
+      if (path.basename(file) !== "SKILL.md") {
+        continue;
+      }
+      const relative = path.relative(tree, file).split(path.sep).join("/");
+      if (relative.includes("/references/")) {
+        report(
+          file,
+          1,
+          `${relative} is a SKILL.md under a references folder — Codex reads one skill per folder under the skills root, and a reference page that calls itself a skill is a second catalog line for a process nobody should start.`,
+        );
+        continue;
+      }
+      const source = readFileSync(file, "utf8");
+      const close = source.startsWith("---\n") ? source.indexOf("\n---\n", 4) : -1;
+      if (close === -1) {
+        report(file, 1, `${relative} opens with no frontmatter, and a Codex skill is its frontmatter — a name and a description, or the loader has no catalog line for it.`);
+        continue;
+      }
+      const keys = source
+        .slice(4, close)
+        .split("\n")
+        .map((line) => line.slice(0, Math.max(line.indexOf(":"), 0)));
+      if (keys.join(" ") !== "name description") {
+        report(
+          file,
+          2,
+          `${relative} carries ${keys.join(", ")} in its frontmatter, and Codex reads name and description and nothing else — a key from another agent's dialect is a key its loader has no meaning for.`,
+        );
+      }
+    }
+  },
+};
 
 // A guide that hands back nothing is a guide that moved, and rule (e) would
 // then pass every document in silence. Say so instead.

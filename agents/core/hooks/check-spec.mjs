@@ -10,6 +10,16 @@
  * tell it which of the six taught it the wrong shape. This hook closes that gap
  * to a single write.
  *
+ * IT IS ONE SCRIPT FOR EVERY AGENT, so it reads every shape a payload arrives
+ * in rather than one harness's. A payload that names the file outright —
+ * `tool_input.file_path`, which is what an edit or a write tool reports — names
+ * one file. A payload whose `tool_input.command` is a patch envelope names
+ * however many files the patch carried, in `*** Add File:` and `*** Update
+ * File:` lines, and every spec file among them is checked on its own. A harness
+ * that passes neither can pass the path as this script's first argument.
+ * Anything that is not a `.md` file under a `.shall/spec/` folder exits silently
+ * whichever way it arrived.
+ *
  * WHY EXIT 2 AND NOT 1. A post-write hook fires after the write has landed, so
  * it cannot undo anything and blocking is not what it is for. Exit 2 is the
  * code an agent harness hands back to the agent as text, which is the whole
@@ -46,6 +56,40 @@ import { dirname, resolve } from "node:path";
  */
 const SPEC_NODE_FILE = /(?:^|\/)\.shall\/spec\/.+\.md$/;
 
+/**
+ * A path inside a patch envelope. `*** Add File: <path>` and `*** Update File:
+ * <path>` are how a whole-patch tool says which files it touched, and one
+ * envelope may say it several times — a phase that writes a child and its
+ * parent's relation line in one patch is the ordinary case, not the odd one.
+ * `*** Delete File:` is deliberately not read: the spec is never deleted by
+ * these processes, and a check scoped to a file that is gone reports the hole
+ * rather than the write.
+ */
+const PATCHED_FILE = /^\*\*\* (?:Add|Update) File: (.+)$/gm;
+
+/**
+ * Every path one payload reported, in the order it reported them.
+ *
+ * The three shapes are the three ways a harness has of saying which file was
+ * written, and they are asked in order of how much they promise: a payload with
+ * `tool_input.file_path` has named one file outright; a payload whose
+ * `tool_input.command` is a patch envelope has named however many the patch
+ * carried; and the script's own first argument serves a harness that passes
+ * neither, so one script goes on serving any hook schema that can pass a path
+ * at all.
+ */
+function reportedPaths(payload) {
+  const named = payload?.tool_input?.file_path;
+  if (typeof named === "string") {
+    return [named];
+  }
+  const command = payload?.tool_input?.command;
+  if (typeof command === "string") {
+    return [...command.matchAll(PATCHED_FILE)].map((match) => match[1]);
+  }
+  return typeof process.argv[2] === "string" ? [process.argv[2]] : [];
+}
+
 function run() {
   let payload;
   try {
@@ -57,13 +101,19 @@ function run() {
     return 0;
   }
 
-  // The path arrives in the hook payload, or — for a harness whose payload
-  // spells it differently — as the script's own first argument, so one script
-  // serves any hook schema that can pass a path at all.
-  const reported = payload?.tool_input?.file_path ?? process.argv[2];
-  if (typeof reported !== "string" || !SPEC_NODE_FILE.test(reported)) {
-    return 0;
+  // One write may be several spec files, so each is checked on its own and the
+  // sentences come back one file after another — the agent that wrote them has
+  // to be told which of them taught it the wrong shape, which is the whole
+  // reason this hook fires per write rather than per phase.
+  const files = [...new Set(reportedPaths(payload).filter((path) => SPEC_NODE_FILE.test(path)))];
+  let worst = 0;
+  for (const reported of files) {
+    worst = Math.max(worst, checkOne(reported));
   }
+  return worst;
+}
+
+function checkOne(reported) {
   // Resolved once, against the working directory a relative tool path is itself
   // relative to, because both the folder to run in and the scope to pass are
   // this path and neither survives being resolved a second time somewhere else.

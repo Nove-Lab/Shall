@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "apply_patch|Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .codex/hooks/shall/check-spec.mjs",
+            "timeout": 90
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -15,6 +15,8 @@ profiles/
   claude/
     profile.mjs     the vocabulary, the blocks, the frontmatter, the layout
     static/         files that are Claude's own format and are copied, not rendered
+  codex/            the same answers in Codex's dialect: skills instead of commands,
+                    a mention instead of an argument slot, prose instead of a deny rule
 dist/               generated; git ignores it
 ```
 
@@ -26,10 +28,18 @@ A profile exports four things, and the four are the whole of what a second agent
 
 | Export | What it answers |
 |---|---|
-| `vocabulary` | one sentence, or one clause, per inline token |
-| `blocks` | the structural passages — `{{load-skills …}}` and its fallback — rendered from the skill names core names |
-| `entryFrontmatter` / `skillFrontmatter` | core's canonical keys said in this agent's own keys and order |
+| `vocabulary` | one sentence, or one clause, per inline token — a string, or a function of the file it lands in when the answer is not the same everywhere |
+| `blocks` | the structural passages — `{{load-skills …}}` and its fallback — rendered from the skill names core names, and empty where this agent has nothing to say |
+| `entryFrontmatter` / `skillFrontmatter` | core's canonical keys said in this agent's own keys and order, or `null` where a document of core's is not a document of this agent's |
 | `names` / `targetOf` / `staticRoot` | how a command is spelled, where a rendered file lands, what is copied whole |
+
+Three more are optional, and each arrived with the second profile rather than being designed for it:
+
+| Export | What it answers |
+|---|---|
+| `rewrite` | the links a page draws once it has been moved — the one pass that knows where a file landed rather than where core wrote it |
+| `extras` | a file core does not have, assembled from what core's entries declare: Codex's always-on `AGENTS.md` block is the one today |
+| `forbidden` | words that must never reach this tree, and what each would do in a session — `$ARGUMENTS` in a Codex tree is a slot that does not exist |
 
 The contract is checked both ways. A token no profile defines stops the build, naming the file and the line; a profile missing a token any core file uses stops it too. Neither can be discovered later — the failure would be an agent reading a brace in the middle of a procedure. `node scripts/lint-agents.mjs` asks the same question beside the sentence a person just wrote.
 
@@ -47,6 +57,8 @@ Today's vocabulary:
 
 **A profile value that is not a plain translation carries a comment saying why.** Rendering `{{Ask}}` as Claude's own tool name needs no defence. Emitting a key core never wrote, dropping one it did, or ending a shared sentence somewhere core did not, is a decision about the process rather than about spelling — and the next person to read the profile has no other way to tell the two apart. The claude profile has three such comments today: `disable-model-invocation`, which it adds to every entry; `summary`, which it drops because Claude's frontmatter has no key for it; and `process: false`, which it spells as the absence of a key.
 
+The codex profile has five, and they are all one kind: a promise that was kept by a permission layer next door and is kept by a sentence here. `{{no-write-guard}}` and the two ledger guards say outright that nothing will stop the agent, because Shall wires no per-path deny for Codex and a guard that implied one would be a lie a session acts on. Core's `description` is dropped for its `summary` — Codex reads every skill's description into a startup catalog on a small budget, and seven paragraphs there would be spent on prose nobody asked for — and core's `tools` is dropped altogether, because a Codex skill's frontmatter takes a name and a description and nothing else.
+
 ## Running it without installing
 
 ```bash
@@ -58,6 +70,15 @@ The path is resolved against wherever `claude` was started — which is the proj
 
 After editing any file under `core/` or `profiles/`, regenerate and then `/reload-plugins` in the running session picks the change up; there is no need to restart Claude Code. A change to the canon needs `bun run build:core` first, or the prose is linted against a stale copy of it.
 
+Codex has no plugin folder and no flag that points at one, so the codex tree is copied into the project it is meant to run in:
+
+```bash
+bun run build:agents
+cp -R ./agents/dist/codex/skills/. <project>/.agents/skills/
+```
+
+That much makes the seven commands invocable as `$shall:specify` and the rest — a Codex skill is a folder under the project's own skills root, and the mention is its frontmatter name. The other two pieces are not copied by that line and are not written by anything yet: `AGENTS.md.block` belongs inside the project's `AGENTS.md`, and `hooks/` belongs under `.codex/`, where it fires only once the project's hooks have been trusted. **And `shall` itself must run outside the sandbox**: `workspace-write` blocks the loopback connection to the daemon, so every `shall` call fails until the project allows it — `docs/Codex_Terrain_Survey.md` has the measurements and the escalation path.
+
 Before committing a change to the prose:
 
 ```bash
@@ -66,6 +87,8 @@ node scripts/lint-agents.mjs
 ```
 
 The first checks the manifest and the file layout of what was generated. The second checks the prose: that every relation the skills name is a relation the canon actually has, that every `--type` names a canon node type, and that every command the docs tell an agent to run exists. It also asks of every file in `core/entries/` — not one by name — that the user's own words reach the process through `{{args}}`, and of every generated tree that the slot survived the rendering, so an entry added without it fails here rather than in somebody's session. Prose is this folder's whole payload, so it gets a compiler too.
+
+The generated trees answer three questions of their own there: that every relative link in them points at a file that is there, that no word another agent's dialect owns survived the rendering, and — for an agent with no validator of its own to run beside the lint — that the tree has the shape its loader needs. The first of those is what a profile that moves a page owes its readers: a spine that came down into `references/` draws its links from a new place, and a rewrite that missed a form is invisible until a session follows the link into nothing.
 
 ## What it needs
 
@@ -102,10 +125,12 @@ The folder you run in must already be a Shall project. `shall init` makes one.
 | `core/skills/shall-work/` | the work cycle: the survey, the handover into the stretch outside Shall and the self-check on the way back, the record, and the forecast — one file per part |
 | `core/skills/shall-raise/` | the question process, and the mechanics of its four landings |
 | `core/skills/shall-help/` | the guide's own words: what Shall is in a screen, how the project's standing is read out of status and board, and the tree that turns it into a next step |
-| `core/hooks/check-spec.mjs` | runs `shall check --scope <file>` after any write under `.shall/spec/`, and hands the findings back to the agent by exiting 2 |
+| `core/hooks/check-spec.mjs` | runs `shall check --scope <file>` after any write under `.shall/spec/`, and hands the findings back to the agent by exiting 2. One script for every agent: it reads a payload that names one file, a payload whose command is a patch envelope naming several, or a path passed as its own first argument |
 | `profiles/claude/profile.mjs` | the Claude spelling of all of it — and the one file a second agent's folder has to answer |
 | `profiles/claude/static/.claude-plugin/plugin.json` | the manifest. `name` is `shall`, which is what puts every command under `/shall:` |
 | `profiles/claude/static/hooks/hooks.json` | wires the hook to `Write`, `Edit` and `MultiEdit` |
+| `profiles/codex/profile.mjs` | the Codex spelling. Seven commands become seven skills, the five process pages become the `references/spine.md` of the command that hands over to them, and the always-on block is assembled here from what the entries declare |
+| `profiles/codex/static/hooks/hooks.json` | wires the hook to `apply_patch`, `Edit` and `Write` — `apply_patch` is the tool name Codex reports, and its payload carries the patch rather than a path |
 
 An entry carries no process. It dispatches and delegates, so a change to how a phase or a stage runs is a change to one skill file and to nothing else — with one stated exception: `shall-help` carries its own part 1 in its body, because for a guide the words are the process.
 
@@ -129,7 +154,9 @@ And they never decide. A `Decision` is a person's judgment, so the place one is 
 
 ## Not yet
 
-**Claude is the only profile.** The split exists because a second agent was coming, not because one has arrived; a codex profile has nothing to add to `core/` and everything to answer in a file of its own, and until it is written the contract above has been tested in one direction only.
+**Nothing installs the codex tree.** It generates, it lints, and it loads when it is copied into a project by hand — and that copy is the whole of the wiring today. The daemon's kit writer knows one folder, `agents/dist/claude`, and one dialect to rewrite it into; `AGENTS.md` has no managed block and the hook has no `.codex/` to be written to, so a Codex session is wired by a person following the two commands above. The prose is the part that is finished.
+
+**Codex cannot reach the daemon from inside its sandbox.** `workspace-write` blocks the loopback connection every `shall` call needs, so the first act of every one of these processes fails unless the project runs `shall` escalated — a rule the user allows once. That is measured and unfixed, and it is the reason a Codex run of any of the seven commands has not been tried end to end.
 
 **Nothing locks on a finding marked as blocking, and nothing is going to.** The mark is the author agent's judgment, written so the next person or session sees it; no gate reads it, the queue does not order by it, and no work item is blocked or freed by one. What happens because of one happens in `shall-work` — the agent stops that item and says so — which is process rather than arithmetic, and deliberately so.
 
