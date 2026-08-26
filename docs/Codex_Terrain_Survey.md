@@ -13,8 +13,9 @@ Measured on codex-cli **0.149.1** (2026-08-24) on macOS, ChatGPT login; source f
 | `description` frontmatter (catalog) | `description` is load-bearing: startup catalog (names+descriptions only, ~2%-of-context budget) and implicit invocation both read it | ✅ live — probe skill was invoked implicitly off its description |
 | `.claude/rules/*.md` always-on context | `AGENTS.md`: always loaded, root→cwd chain, 32KiB total budget. No managed-block convention — Shall's `<!-- BEGIN SHALL -->` fences are our own invention | ✅ live — text inside and outside our fences both reached the model, fences harmless |
 | `settings.json` `permissions.deny` | Permission-profile filesystem deny globs + execpolicy rules (`.codex/rules/*.rules`) — **project layer loads only when the project is trusted** | ⚠️ source-verified, not live-tested |
-| `settings.json` hooks (PostToolUse) | `.codex/hooks.json`, same JSON shape (`hooks.PostToolUse[].matcher`, `hooks[].command`) — but gated by **hook trust**, a separate persisted approval; `--dangerously-bypass-hook-trust` exists for automation | ⚠️ schema accepted without error; firing not yet observed (hook-trust gate; retest pending) |
-| `AskUserQuestion` | `request_user_input` tool exists but is **Plan-mode only**. The working idiom: put the options in plain text and end the turn; the user's next message is the answer | ⚠️ source-verified; live test pending |
+| `settings.json` hooks (PostToolUse) | `.codex/hooks.json`, same JSON shape (`hooks.PostToolUse[].matcher`, `hooks[].command`) — gated by **hook trust**, a separate persisted approval; `--dangerously-bypass-hook-trust` exists for automation | ✅ live — fired on a file write once hook trust was bypassed; payload below |
+| Hook payload `tool_input.file_path` | **No `file_path`.** `tool_name` is `apply_patch` and `tool_input.command` is the whole patch envelope (`*** Begin Patch\n*** Add File: <path>…`). A shared hook script must parse `^\*\*\* (Add|Update) File: (.+)$` out of the envelope; the hook runs with cwd = project root and also receives `cwd` in the payload | ✅ live |
+| `AskUserQuestion` | `request_user_input` tool exists but is **Plan-mode only**. The working idiom: put the options in plain text and end the turn; the user's next message is the answer | ✅ live — the model presents options, recommends one, and ends its turn on the question |
 | Sandbox | seatbelt/landlock: `workspace-write` default, `network_access = false` | ✅ live — see below |
 | Headless | `codex exec` (approvals default Never; sandbox applies; `--sandbox`, `-c key=value` work) | ✅ live |
 
@@ -34,11 +35,10 @@ Three separate trusts, all recorded on the user's side (`~/.codex/config.toml` a
 - **Hook trust** — project hooks need their own persisted approval before they fire; `--dangerously-bypass-hook-trust` bypasses for vetted automation.
 - **Approval/escalation** — sandbox-blocked commands succeed only through an approval or a standing rule.
 
-## Still to measure (blocked on workspace credits at survey time)
+## Still to measure
 
-- Hook firing with hook trust granted (payload shape on stdin — `tool_input.file_path` vs `apply_patch` naming — decides nothing for us: `check-spec.mjs` reads the payload and falls back to argv).
-- The end-turn-and-wait interaction in the TUI (structурally certain — it is how chat works — but §5 runs it for the record).
-- Whether the model retries a sandbox-blocked `shall` call as an escalated run when a rule allows it.
+- Whether the model retries a sandbox-blocked `shall` call as an escalated run when a rule allows it, and how the TUI's approval prompt reads there (§5 runs the interactive scenario).
+- The unresolved compiled-binary knock failure under an allowed network (table above).
 
 ## Probe method (repeat for the next agent)
 
