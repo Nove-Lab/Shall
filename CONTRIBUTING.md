@@ -27,6 +27,7 @@ The daemon's spec-watcher and feed suites are known to be flaky on macOS fsevent
 ```bash
 bun run dev          # daemon (tsx watch) + web (Vite HMR), app at http://localhost:9462
 bun run shall …      # the checkout's CLI, aimed at the same place
+bun link             # once, at the root — puts the same CLI on your PATH as `shall-dev`
 ```
 
 Both run against the checkout's own home — `.shall-dev/` in the repo, on port 9462 — never `~/.shall`.
