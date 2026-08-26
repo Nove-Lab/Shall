@@ -21,6 +21,17 @@ import {
 // Whether this Shall carries its own files is the same question as whether it
 // is the single binary, and the answer decides how a daemon is started.
 import { isEmbedded } from "@shall/daemon/embedded";
+// The agents there are, in one list, in the daemon package — so the word a
+// person types is measured against the same rows the daemon wires from and no
+// second list of agent names exists to go stale.
+import {
+  AGENT_CHOICES,
+  AGENT_IDS,
+  agentNames,
+  choiceOf,
+  isAgentId,
+  type AgentId,
+} from "@shall/daemon/agents";
 import { parseArguments, USAGE, type Answering } from "./args.js";
 import { DAEMON_FLAG } from "./binary-main.js";
 import { connect } from "./client.js";
@@ -84,6 +95,7 @@ async function getRunningHost(url: string): Promise<string | null> {
  */
 const NEEDED_PROCEDURES: readonly string[] = [
   "projects.create",
+  "projects.wiring",
   "spec.board",
   "spec.check",
   "spec.log",
@@ -321,33 +333,276 @@ interface Said {
 }
 
 /**
- * `shall init` — this folder, made into a Shall project.
+ * The word after `--agent`, read as the agents it names — or null when it names
+ * none of them, which the caller answers with one sentence before anything is
+ * started.
+ *
+ * `all` IS ITS OWN WORD AND NOT A LIST. A person wiring for everything means
+ * everything there is, including whatever a later Shall adds, and spelling out
+ * today's two would be a line that quietly stops meaning that.
+ */
+function agentsNamed(word: string): AgentId[] | null {
+  if (word === "all") {
+    return [...AGENT_IDS];
+  }
+  return isAgentId(word) ? [word] : null;
+}
+
+/** Whether there is a terminal to ask a question in and to draw a list on. */
+function atATerminal(): boolean {
+  return process.stdin.isTTY === true && process.stderr.isTTY === true;
+}
+
+/**
+ * The closing line: how the agents this project was just wired for are actually
+ * run, here, in this folder.
+ *
+ * The one-agent lines are that agent's own hint, out of `AGENT_CHOICES`. The
+ * line for more than one is written out because it is a sentence rather than a
+ * list, and it is written for the two agents there are; a third would want it
+ * read again rather than appended to.
+ */
+function askLine(wired: readonly AgentId[]): string {
+  if (wired.length > 1) {
+    return "run claude (/shall.help) or codex ($shall:help) here.";
+  }
+  return choiceOf(wired[0] ?? "claude").hint;
+}
+
+/**
+ * `shall init` — this folder, made into a Shall project, wired for the agents
+ * that will work in it.
  *
  * `projects.create` already reopens a folder that has a `.shall` in it, so
  * running this twice is not an error and the sentence printed says only what is
  * true either way: this is a Shall project, and here it is.
+ *
+ * THE AGENTS FIELD IS SENT ONLY WHEN SOMEBODY CHOSE. Left out, the daemon wires
+ * whatever the project already shows — which is what a scripted run, a run with
+ * no terminal and a run that asked only for a refresh all mean, and what every
+ * caller meant before there was a choice at all.
  */
-async function init(url: string, json: boolean): Promise<Said> {
-  const initGit = json ? null : await askAboutGit();
+async function init(
+  url: string,
+  json: boolean,
+  agent: string | null,
+): Promise<Said> {
+  const named = agent === null ? null : agentsNamed(agent);
+  let wire: AgentId[] | null = named;
+  let initGit: boolean | null = null;
+  let already = false;
+
+  if (json) {
+    // A promise of no questions: `--agent` was required for exactly this run.
+  } else if (named !== null) {
+    initGit = await askAboutGit();
+  } else if (atATerminal()) {
+    // WHAT THE FOLDER ALREADY IS DECIDES WHICH QUESTION IS WORTH ASKING, so it
+    // is asked of the daemon first — the one process that reads projects for
+    // Shall. A fresh folder is a choice of agent; a project already wired is a
+    // choice of what to ADD, with the git question skipped because a project
+    // was made here once already.
+    const wiring = await connect(url).projects.wiring.query({
+      path: process.cwd(),
+    });
+    if (!wiring.isProject) {
+      initGit = await askAboutGit();
+      wire = await askWhichAgents();
+    } else if (wiring.wired.length < AGENT_IDS.length) {
+      wire = await askWhatToAdd(wiring.wired);
+    } else {
+      // Everything there is, already wired. Nothing to ask, and the run is a
+      // refresh — which is said afterwards rather than asked about first.
+      already = true;
+    }
+  }
+
   const project = await connect(url).projects.create.mutate({
     path: process.cwd(),
     ...(initGit === null ? {} : { initGit }),
+    ...(wire === null ? {} : { agents: wire }),
   });
+
+  // The one thing Shall knows about an agent that a person would otherwise meet
+  // as a failure, said once, on stderr — an aside, never part of the answer.
+  const wired = project.agents ?? [];
+  for (const id of wired) {
+    const notice = choiceOf(id).notice;
+    if (notice !== null) {
+      console.error(notice);
+    }
+  }
+
   const prose = [`${project.name} is a Shall project at ${project.path}.`];
   if (await isShallIgnored()) {
     prose.push(
       ".shall is matched by .gitignore — the spec and the ledgers are meant to be committed, so unignore it.",
     );
   }
-  prose.push(
-    "Open the app:  shall",
-    "Or ask your agent: run claude here, then /shall.help",
-  );
+  if (wired.length > 0) {
+    prose.push(
+      already
+        ? `Already wired for ${agentNames(wired)} — refreshed.`
+        : `Wired for ${agentNames(wired)}.`,
+    );
+  }
+  prose.push("Open the app:  shall", `Or ask your agent: ${askLine(wired)}`);
   return {
-    answer: { id: project.id, name: project.name, path: project.path },
+    answer: {
+      id: project.id,
+      name: project.name,
+      path: project.path,
+      agents: wired,
+    },
     prose,
     failed: false,
   };
+}
+
+/** The choice a fresh project is offered: one agent, or every one there is. */
+async function askWhichAgents(): Promise<AgentId[]> {
+  const rows = AGENT_CHOICES.map((choice) => choice.name);
+  const all = AGENT_CHOICES.length > 1;
+  const at = await askToChoose(
+    "Which agent will work in this project?",
+    all ? [...rows, "All of them"] : rows,
+  );
+  const chosen = AGENT_CHOICES[at];
+  return chosen === undefined ? [...AGENT_IDS] : [chosen.id];
+}
+
+/**
+ * The choice a project that is already wired is offered: bring what it has
+ * current, or add one of the agents it has not got.
+ *
+ * REFRESHING IS THE FIRST ROW BECAUSE IT IS WHY MOST PEOPLE TYPE THIS. Running
+ * `init` again in a project is how a kit is brought back after an upgrade or a
+ * bad merge, and it answers with no agents field at all — the daemon then wires
+ * what the files already show and nothing else.
+ */
+async function askWhatToAdd(wired: readonly AgentId[]): Promise<AgentId[] | null> {
+  const missing = AGENT_IDS.filter((id) => !wired.includes(id));
+  console.error(
+    `This folder is already a Shall project, wired for ${agentNames(wired)}.`,
+  );
+  const at = await askToChoose("What would you like to do?", [
+    "Refresh what is wired",
+    ...missing.map((id) => `Add ${choiceOf(id).name}`),
+  ]);
+  const chosen = missing[at - 1];
+  return at === 0 || chosen === undefined ? null : [chosen];
+}
+
+/** The four escapes the list is drawn with, spelled once. */
+const CLEAR_ROW = "\u001b[2K";
+const BOLD = "\u001b[1m";
+const PLAIN = "\u001b[0m";
+const up = (rows: number): string => `\u001b[${rows}A`;
+
+/**
+ * A LIST, AND THE ARROW KEYS — with no dependency to draw it.
+ *
+ * IT PAINTS TO STDERR AND READS FROM STDIN, which is what lets `--json` go on
+ * meaning that stdout carries one object: a question is not an answer. The list
+ * is redrawn in place by walking the cursor back over the rows it wrote, and
+ * the raw mode it needs to see an arrow key at all is put back the way it was
+ * found — on the way out, on Ctrl-C, and on any throw in between. A terminal
+ * left in raw mode is a shell that has stopped echoing what somebody types.
+ *
+ * A TERMINAL THAT HAS NO RAW MODE STILL GETS TO CHOOSE. Some do not — a
+ * restricted pty, a CI shell pretending to be one — and there the same question
+ * is asked as a numbered list and one line of typing, through the readline this
+ * client already uses for the git question. The choice is never taken away; it
+ * is only asked for differently.
+ *
+ * Ctrl-C EXITS 130, which is what a shell means by "the user interrupted it",
+ * and it exits rather than answering: a person who interrupts a question has
+ * not chosen the first row.
+ */
+async function askToChoose(
+  question: string,
+  labels: readonly string[],
+): Promise<number> {
+  const input = process.stdin;
+  console.error(question);
+  if (typeof input.setRawMode !== "function") {
+    return askByNumber(labels);
+  }
+
+  const { emitKeypressEvents } = await import("node:readline");
+  return new Promise<number>((resolve, reject) => {
+    let at = 0;
+    const paint = (again: boolean): void => {
+      const rows = labels
+        .map(
+          (label, index) =>
+            `${CLEAR_ROW}${index === at ? `${BOLD}>` : " "} ${label}${PLAIN}`,
+        )
+        .join("\n");
+      process.stderr.write(`${again ? up(labels.length) : ""}${rows}\n`);
+    };
+    const restore = (): void => {
+      input.off("keypress", onKey);
+      try {
+        input.setRawMode(false);
+      } catch {
+        // A stream that would not take raw mode will not take it back either.
+      }
+      input.pause();
+    };
+    const onKey = (
+      _typed: string | undefined,
+      key: { name?: string; ctrl?: boolean } | undefined,
+    ): void => {
+      try {
+        if (key?.ctrl === true && key.name === "c") {
+          restore();
+          process.stderr.write("\n");
+          process.exit(130);
+        }
+        if (key?.name === "up" || key?.name === "down") {
+          const step = key.name === "up" ? labels.length - 1 : 1;
+          at = (at + step) % labels.length;
+          paint(true);
+          return;
+        }
+        if (key?.name === "return" || key?.name === "enter") {
+          restore();
+          resolve(at);
+        }
+      } catch (error) {
+        restore();
+        reject(error instanceof Error ? error : new Error(String(error)));
+      }
+    };
+
+    paint(false);
+    emitKeypressEvents(input);
+    input.setRawMode(true);
+    input.resume();
+    input.on("keypress", onKey);
+  });
+}
+
+/** The same question where there is no raw mode to read an arrow key with. */
+async function askByNumber(labels: readonly string[]): Promise<number> {
+  const readline = await import("node:readline/promises");
+  const asker = readline.createInterface({
+    input: process.stdin,
+    output: process.stderr,
+  });
+  try {
+    for (const [index, label] of labels.entries()) {
+      console.error(`  ${index + 1}) ${label}`);
+    }
+    const answer = await asker.question("Choose [1]: ");
+    const picked = Number.parseInt(answer.trim(), 10);
+    // Anything that is not one of the rows is the first row, which is what the
+    // prompt already said it would be.
+    return picked >= 1 && picked <= labels.length ? picked - 1 : 0;
+  } finally {
+    asker.close();
+  }
 }
 
 /**
@@ -782,7 +1037,7 @@ async function generateReport(url: string): Promise<Said> {
 function answerFor(url: string, asked: Answering): Promise<Said> {
   switch (asked.command) {
     case "init":
-      return init(url, asked.json);
+      return init(url, asked.json, asked.agent);
     case "check":
       return check(url, asked.scope);
     case "status":
@@ -897,6 +1152,21 @@ if ("usage" in asked) {
     await ensureDaemon(asked.network ? EVERY_INTERFACE : LOOPBACK),
   );
   await sayNotice(notice);
+} else if (
+  asked.command === "init" &&
+  asked.agent !== null &&
+  agentsNamed(asked.agent) === null
+) {
+  // A WORD THAT NAMES NO AGENT IS ANSWERED BEFORE ANYTHING IS STARTED. It is
+  // not a usage error — the shape was right — so it does not carry a shape;
+  // it is one sentence naming the words that would have worked, said without a
+  // daemon being started, a folder being read or a project being made.
+  console.error(
+    `Shall does not know the agent ${asked.agent} — name one of ${AGENT_IDS.join(
+      ", ",
+    )}, or all.`,
+  );
+  process.exitCode = 1;
 } else {
   // THE NOTICE RIDES ON THE TWO COMMANDS A PERSON TYPES AND ON NO OTHERS.
   // `check`, `status`, `board` and `log` are an agent's, and a sentence about a

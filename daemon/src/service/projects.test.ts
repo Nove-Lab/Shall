@@ -19,6 +19,7 @@ import {
   getProjectGitBranch,
   listRecentProjects,
   openProject,
+  projectWiring,
   refreshRegisteredKits,
   removeRecentProject,
   requireRegistryProject,
@@ -79,6 +80,20 @@ async function exists(target: string): Promise<boolean> {
 
 /** An id in the registry's shape that no project was ever made under. */
 const UNKNOWN_ID = "01ABCDEFGHIJKLMNOPQRSTUVWX";
+
+/**
+ * The three keys the registry actually keeps. A door answers with the wired
+ * agents beside them, and that set is DELIBERATELY NOT STORED: it is read off
+ * the files every time, because a clone, a deleted folder or somebody else's
+ * `shall init` moves it under any record that held it.
+ */
+function stored(project: {
+  id: string;
+  name: string;
+  path: string;
+}): { id: string; name: string; path: string } {
+  return { id: project.id, name: project.name, path: project.path };
+}
 
 describe("opening a project", () => {
   test("a new project comes with the page an agent reads", async () => {
@@ -214,7 +229,7 @@ describe("the registry entry behind an id", () => {
 
     const entry = await requireRegistryProject(project.id);
 
-    assert.deepEqual(entry, project);
+    assert.deepEqual(entry, stored(project));
   });
 
   test("an id nobody knows is refused as missing", async () => {
@@ -256,7 +271,7 @@ describe("resolving an id for a screen", () => {
 
     const resolved = await getProject(project.id);
 
-    assert.deepEqual(resolved, project);
+    assert.deepEqual(resolved, stored(project));
   });
 });
 
@@ -312,6 +327,89 @@ describe("the recent list", () => {
 });
 
 /**
+ * WHICH AGENTS A DOOR WIRES FOR. The adapters are tested where they live; what
+ * has no home of its own is the POLICY at the doors — that a caller who named
+ * an agent gets that one and no other, that a caller who named none gets what
+ * every caller got before the choice existed, and that an open ADDS rather than
+ * replaces.
+ */
+describe("the agents a project is wired for", () => {
+  test("a caller that named none gets Claude, as every caller did before", async () => {
+    const project = await createProject(await newFolder());
+
+    assert.deepEqual(project.agents, ["claude"]);
+    assert.ok(await exists(rulesPathOf(project.path)));
+  });
+
+  test("a project made for Codex gets nothing of Claude's", async () => {
+    const folder = await newFolder();
+    const project = await createProject(folder, { agents: ["codex"] });
+
+    assert.deepEqual(project.agents, ["codex"]);
+    assert.ok(await exists(path.join(folder, ".agents", "skills")));
+    assert.ok(await exists(path.join(folder, "AGENTS.md")));
+    assert.equal(await exists(path.join(folder, ".claude")), false);
+  });
+
+  test("a project made for both gets both", async () => {
+    const folder = await newFolder();
+    const project = await createProject(folder, {
+      agents: ["claude", "codex"],
+    });
+
+    assert.deepEqual(project.agents, ["claude", "codex"]);
+    assert.ok(await exists(rulesPathOf(folder)));
+    assert.ok(await exists(path.join(folder, ".agents", "skills")));
+  });
+
+  test("an open that names an agent adds it, and takes nothing away", async () => {
+    const folder = await newFolder();
+    await createProject(folder, { agents: ["claude"] });
+
+    const reopened = await openProject(folder, { agents: ["codex"] });
+
+    // `init` has no door for unwiring an agent, so naming one is only ever
+    // an addition — and the answer says which set was actually written.
+    assert.deepEqual(reopened.agents, ["claude", "codex"]);
+    assert.ok(await exists(rulesPathOf(folder)));
+    assert.ok(await exists(path.join(folder, "AGENTS.md")));
+  });
+
+  test("an open that names nothing keeps what the files already show", async () => {
+    const folder = await newFolder();
+    await createProject(folder, { agents: ["codex"] });
+
+    const reopened = await openProject(folder);
+
+    assert.deepEqual(reopened.agents, ["codex"]);
+    assert.equal(await exists(path.join(folder, ".claude")), false);
+  });
+});
+
+describe("reading what a folder is", () => {
+  test("a folder that is no project says so, and names no agent", async () => {
+    assert.deepEqual(await projectWiring(await newFolder()), {
+      isProject: false,
+      wired: [],
+    });
+  });
+
+  test("a folder inside a project answers for the project above it", async () => {
+    const folder = await newFolder();
+    await createProject(folder, { agents: ["codex"] });
+    const deep = path.join(folder, "src", "parser");
+    await mkdir(deep, { recursive: true });
+
+    // A person runs `init` from wherever they are standing; the kit is the
+    // project root's, and that is where it is read.
+    assert.deepEqual(await projectWiring(deep), {
+      isProject: true,
+      wired: ["codex"],
+    });
+  });
+});
+
+/**
  * The sweep is the other half of `shall upgrade`: the binary is swapped and the
  * daemon restarted, and this is what carries the new release's prose into every
  * project without anybody opening one. What it has to survive is a registry full
@@ -354,5 +452,27 @@ describe("the sweep at the daemon's start", () => {
       false,
       "a kit was written into a folder that stopped being a project",
     );
+  });
+
+  test("a Codex-only project is swept as a Codex-only project", async () => {
+    const folder = await newFolder();
+    await createProject(folder, { agents: ["codex"] });
+    const skill = path.join(
+      folder,
+      ".agents",
+      "skills",
+      "shall-help",
+      "SKILL.md",
+    );
+    const current = await readFile(skill, "utf8");
+    await writeFile(skill, `${current}\nwhat an older Shall said here\n`, "utf8");
+
+    await refreshRegisteredKits();
+
+    // The sweep refreshes what each project is wired for and never widens it:
+    // an upgrade is not the moment to give somebody an agent they never asked
+    // for.
+    assert.equal(await readFile(skill, "utf8"), current);
+    assert.equal(await exists(path.join(folder, ".claude")), false);
   });
 });

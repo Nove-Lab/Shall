@@ -24,13 +24,18 @@ Run from a folder that is not inside a Shall project and it says so, names `shal
 **For you.** Once per project.
 
 ```
-shall init [--json]
+shall init [--agent <claude|codex|all>] [--json]
 ```
 
-Makes the current folder a Shall project and is the whole install: it creates the `.shall/` spec tree and ledgers, registers the project with the daemon, and embeds the agent kit into `.claude/` — the `/shall.…` commands, skills and hook that Claude Code picks up in this project.
+Makes the current folder a Shall project and is the whole install: it creates the `.shall/` spec tree and ledgers, registers the project with the daemon, and embeds the agent kit into the folders the agent you chose reads.
+For Claude Code that is `.claude/` — the `/shall.…` commands, skills and hook it picks up in this project.
+For Codex it is `.agents/skills/` for the `$shall:…` skills, `.codex/` for the hook, and a fenced block inside your `AGENTS.md` that nothing outside the fences is touched by.
 In a folder that is not a git repository it asks whether to run `git init` first.
+
+**It asks which agent, and takes the answer as `--agent`.** In a terminal with nothing named, it offers a list: an agent, or all of them. Running it again in a project already wired offers to refresh what is there, or to add the agent it has not got — naming an agent never takes one away. `--json` promises no questions, so with it `--agent` is required; `all` means every agent there is, including whatever a later Shall adds.
+
 It is idempotent: running it again in an existing project touches nothing you wrote and refreshes the embedded kit.
-You end with two ways in — `shall` to open the app, or `claude` and then `/shall.help`.
+You end with two ways in — `shall` to open the app, or the agent you wired it for.
 
 ## Upgrading
 

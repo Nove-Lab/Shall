@@ -70,14 +70,14 @@ The path is resolved against wherever `claude` was started — which is the proj
 
 After editing any file under `core/` or `profiles/`, regenerate and then `/reload-plugins` in the running session picks the change up; there is no need to restart Claude Code. A change to the canon needs `bun run build:core` first, or the prose is linted against a stale copy of it.
 
-Codex has no plugin folder and no flag that points at one, so the codex tree is copied into the project it is meant to run in:
+Codex has no plugin folder and no flag that points at one, so the codex tree is written into the project it is meant to run in — which `shall init --agent codex` now does, all three pieces of it: the skills under the project's own `.agents/skills/`, the hook under `.codex/` and wired from `.codex/hooks.json`, and `AGENTS.md.block` as a fenced span inside the project's `AGENTS.md`. To try a change to the prose without a daemon in the way, the skills alone are a copy:
 
 ```bash
 bun run build:agents
 cp -R ./agents/dist/codex/skills/. <project>/.agents/skills/
 ```
 
-That much makes the seven commands invocable as `$shall:specify` and the rest — a Codex skill is a folder under the project's own skills root, and the mention is its frontmatter name. The other two pieces are not copied by that line and are not written by anything yet: `AGENTS.md.block` belongs inside the project's `AGENTS.md`, and `hooks/` belongs under `.codex/`, where it fires only once the project's hooks have been trusted. **And `shall` itself must run outside the sandbox**: `workspace-write` blocks the loopback connection to the daemon, so every `shall` call fails until the project allows it — `docs/Codex_Terrain_Survey.md` has the measurements and the escalation path.
+That much makes the seven commands invocable as `$shall:specify` and the rest — a Codex skill is a folder under the project's own skills root, and the mention is its frontmatter name. **And `shall` itself must run outside the sandbox**: `workspace-write` blocks the loopback connection to the daemon, so every `shall` call fails until the project allows it — `docs/Codex_Terrain_Survey.md` has the measurements and the escalation path, and `shall init` says so in a line on the way past.
 
 Before committing a change to the prose:
 
@@ -154,9 +154,7 @@ And they never decide. A `Decision` is a person's judgment, so the place one is 
 
 ## Not yet
 
-**Nothing installs the codex tree.** It generates, it lints, and it loads when it is copied into a project by hand — and that copy is the whole of the wiring today. The daemon's kit writer knows one folder, `agents/dist/claude`, and one dialect to rewrite it into; `AGENTS.md` has no managed block and the hook has no `.codex/` to be written to, so a Codex session is wired by a person following the two commands above. The prose is the part that is finished.
-
-**Codex cannot reach the daemon from inside its sandbox.** `workspace-write` blocks the loopback connection every `shall` call needs, so the first act of every one of these processes fails unless the project runs `shall` escalated — a rule the user allows once. That is measured and unfixed, and it is the reason a Codex run of any of the seven commands has not been tried end to end.
+**Codex cannot reach the daemon from inside its sandbox.** `workspace-write` blocks the loopback connection every `shall` call needs, so the first act of every one of these processes fails unless the project runs `shall` escalated — a rule the user allows once. That is measured and unfixed, and it is the reason a Codex run of any of the seven commands has not been tried end to end. `shall init --agent codex` prints one line saying so, which is the whole of what Shall can do about it.
 
 **Nothing locks on a finding marked as blocking, and nothing is going to.** The mark is the author agent's judgment, written so the next person or session sees it; no gate reads it, the queue does not order by it, and no work item is blocked or freed by one. What happens because of one happens in `shall-work` — the agent stops that item and says so — which is process rather than arithmetic, and deliberately so.
 

@@ -9,7 +9,7 @@
  * neither.
  *
  * THE PARSER IS HAND-WRITTEN AND STAYS HAND-WRITTEN. The whole surface is eleven
- * shapes and four options; a library would be a dependency to keep current, a
+ * shapes and five options; a library would be a dependency to keep current, a
  * second vocabulary for what a flag is, and a help screen somebody else wrote.
  *
  * THE VERSION ITSELF IS NOT HERE, only the asking. The number lives in
@@ -43,7 +43,7 @@ const SHAPES = {
     says: "Open the app in a browser; --host lets other machines on this network reach it.",
   },
   init: {
-    shape: "shall init [--json]",
+    shape: "shall init [--agent <claude|codex|all>] [--json]",
     says: "Make this folder a Shall project.",
   },
   check: {
@@ -91,8 +91,8 @@ const COLUMN = Math.max(
 
 /**
  * The help screen: one line per command, and then the options a shape alone
- * does not explain — the two that cross the commands, and the one `log` carries
- * whose commas want saying.
+ * does not explain — the two that cross the commands, the one `init` carries
+ * whose word `all` wants saying, and the one `log` carries whose commas do.
  *
  * It is what `shall help` prints and what an unknown command is answered with,
  * so a person who cannot remember a name and a person who guessed one wrong are
@@ -106,6 +106,7 @@ export const USAGE = [
   ),
   "",
   "--scope may be given more than once, and each one names a file or a folder of .shall/spec.",
+  "--agent says which coding agent to wire this project for; all wires every one there is.",
   "--json writes the answer as one JSON object on stdout and nothing else.",
   "--refs names the nodes a log line is about, as ids separated by commas.",
 ].join("\n");
@@ -130,7 +131,13 @@ export type Invocation =
   | { command: "version" }
   | { command: "upgrade" }
   | { command: "unknown"; name: string }
-  | { command: "init"; json: boolean }
+  /**
+   * `agent` IS THE WORD AS TYPED AND NOT AN AGENT. Which agents there are is
+   * the daemon package's list, and this file imports nothing — so the word is
+   * carried through as it was written and `main.ts` measures it against that
+   * list. Null is "nobody said", which a terminal answers by asking.
+   */
+  | { command: "init"; json: boolean; agent: string | null }
   | { command: "check"; json: boolean; scope: string[] }
   | { command: "status"; json: boolean; scope: string[] }
   | { command: "board"; json: boolean }
@@ -215,6 +222,7 @@ interface Options {
   json: boolean;
   scope: string[];
   type: string | null;
+  agent: string | null;
   refs: string[];
   /** The words that began with no dash, in the order they were typed. */
   words: string[];
@@ -247,11 +255,18 @@ interface Options {
 function optionsOf(
   command: CommandKey,
   rest: readonly string[],
-  takes: { scope: boolean; type: boolean; refs: boolean; words: boolean },
+  takes: {
+    scope: boolean;
+    type: boolean;
+    agent: boolean;
+    refs: boolean;
+    words: boolean;
+  },
 ): Options | UsageError {
   let json = false;
   const scope: string[] = [];
   let type: string | null = null;
+  let agent: string | null = null;
   const refs: string[] = [];
   const positional: string[] = [];
   // Shifted rather than indexed, because an option that carries a value eats the
@@ -278,6 +293,17 @@ function optionsOf(
       type = value;
       continue;
     }
+    // LAST ONE WINS, the way `--type` does: two agents named one after the
+    // other is one person changing their mind mid-line, and there is a spelling
+    // for meaning both — `--agent all`.
+    if (takes.agent && isOption("--agent", word)) {
+      const value = valueOf("--agent", word, words);
+      if (value === undefined) {
+        return needs(command, "an agent after --agent");
+      }
+      agent = value;
+      continue;
+    }
     if (takes.refs && isOption("--refs", word)) {
       const value = valueOf("--refs", word, words);
       const ids =
@@ -297,7 +323,7 @@ function optionsOf(
     }
     return unexpected(command, word);
   }
-  return { json, scope, type, refs, words: positional };
+  return { json, scope, type, agent, refs, words: positional };
 }
 
 /**
@@ -361,16 +387,32 @@ export function parseArguments(
     const read = optionsOf("init", rest, {
       scope: false,
       type: false,
+      agent: true,
       refs: false,
       words: false,
     });
-    return "usage" in read ? read : { command: "init", json: read.json };
+    if ("usage" in read) {
+      return read;
+    }
+    // `--json` IS A PROMISE OF NO QUESTIONS, and which agents to wire is a
+    // question. A scripted `init` that named none used to mean Claude by
+    // silence; now that there is a choice, silence would mean this client
+    // picking for a caller that cannot be asked — so it is refused here, where
+    // nothing has been started and nothing has been made.
+    if (read.json && read.agent === null) {
+      return wrong(
+        "init",
+        "shall init --json needs --agent <claude|codex|all>",
+      );
+    }
+    return { command: "init", json: read.json, agent: read.agent };
   }
 
   if (word === "board") {
     const read = optionsOf("board", rest, {
       scope: false,
       type: false,
+      agent: false,
       refs: false,
       words: false,
     });
@@ -381,6 +423,7 @@ export function parseArguments(
     const read = optionsOf("report", rest, {
       scope: false,
       type: false,
+      agent: false,
       refs: false,
       words: false,
     });
@@ -391,6 +434,7 @@ export function parseArguments(
     const read = optionsOf(word, rest, {
       scope: true,
       type: false,
+      agent: false,
       refs: false,
       words: false,
     });
@@ -406,6 +450,7 @@ export function parseArguments(
     const read = optionsOf("add-spec-node", rest, {
       scope: false,
       type: true,
+      agent: false,
       refs: false,
       words: false,
     });
@@ -424,6 +469,7 @@ export function parseArguments(
     const read = optionsOf("log", rest, {
       scope: false,
       type: false,
+      agent: false,
       refs: true,
       words: true,
     });

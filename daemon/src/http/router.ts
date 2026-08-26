@@ -9,8 +9,10 @@ import {
   getProjectGitBranch,
   listRecentProjects,
   openProject,
+  projectWiring,
   removeRecentProject,
 } from "../service/projects.js";
+import { AGENT_IDS } from "../host/adapters/ids.js";
 import {
   readGlobalSettings,
   readProjectSettings,
@@ -112,13 +114,31 @@ export const appRouter = t.router({
     open: procedure
       .input(z.object({ path: z.string().min(1) }))
       .mutation(({ input }) => openProject(input.path)),
+    // `agents` NAMES WHAT TO ADD AND NEVER WHAT TO KEEP. Left out, the project
+    // is wired for whatever it already shows — which is what every caller that
+    // predates the choice means, and what the web app's picker means. Given, it
+    // is added to that set and nothing is taken away: `init` has no door for
+    // unwiring an agent, and the answer says which set was actually written.
     create: procedure
       .input(
-        z.object({ path: z.string().min(1), initGit: z.boolean().optional() }),
+        z.object({
+          path: z.string().min(1),
+          initGit: z.boolean().optional(),
+          agents: z.array(z.enum(AGENT_IDS)).min(1).optional(),
+        }),
       )
       .mutation(({ input }) =>
-        createProject(input.path, { initGit: input.initGit }),
+        createProject(input.path, {
+          initGit: input.initGit,
+          agents: input.agents,
+        }),
       ),
+    // What a folder IS, before anything is made of it: whether a `.shall` sits
+    // here or above, and which agents the files show it wired for. A reading,
+    // and the one question `shall init` asks before it asks a person anything.
+    wiring: procedure
+      .input(z.object({ path: z.string().min(1) }))
+      .query(({ input }) => projectWiring(input.path)),
     remove: procedure
       .input(z.object({ id: z.string().min(1) }))
       .mutation(async ({ input }) => {

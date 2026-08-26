@@ -10,6 +10,9 @@ import { after, describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { SHALL_VERSION } from "@shall/core/version";
+// The agents there are, read from the one list rather than typed again: a
+// guard below asks that every one of them is named on the help screen.
+import { AGENT_IDS } from "@shall/daemon/agents";
 
 /**
  * The client as a person runs it: its own process, a `~` of its own, and a
@@ -63,6 +66,7 @@ const LOADER = import.meta.resolve("tsx");
  */
 const SERVED = [
   "projects.create",
+  "projects.wiring",
   "spec.board",
   "spec.check",
   "spec.log",
@@ -133,6 +137,13 @@ const SILENT: Health = { host: LOOPBACK };
 const PATIENCE = 3;
 
 /**
+ * One press of the down arrow, which the harness sends with a newline after it
+ * — so it is a step down the list and then Enter, which is a choice of the
+ * second row.
+ */
+const DOWN = "\u001b[B";
+
+/**
  * The one path the release lookup asks for. The stand-in answers it too, so a
  * run of the CLI can be told there is a newer Shall without any part of this
  * suite reaching GitHub — every run below is pointed at the stand-in, and a run
@@ -156,7 +167,7 @@ interface Setup {
   cwd?: string;
   /** What the machine's browser opener does: 0 opens, 1 will not. */
   browser?: number;
-  /** The answer typed at `init`'s one question — given, the run gets a terminal. */
+  /** What is typed at whichever question `init` asks — given, the run gets a terminal. */
   typed?: string;
 }
 
@@ -208,7 +219,12 @@ function standIn(setup: Setup): {
   knocks(): number;
 } {
   const health = setup.health ?? [READY];
-  const answers = setup.answers ?? {};
+  // A folder nobody has made a project of yet, which is what most runs below
+  // are standing in. A test that wants the other answer says so.
+  const answers: Readonly<Record<string, unknown>> = {
+    "projects.wiring": { isProject: false, wired: [] },
+    ...(setup.answers ?? {}),
+  };
   const refusals = setup.refusals ?? {};
   const calls: { procedure: string; input: unknown }[] = [];
   let knocked = 0;
@@ -759,7 +775,7 @@ describe("the version notice", () => {
   });
 
   test("--json keeps stdout to the one object, and the notice to stderr", async () => {
-    const ran = await running(["init", "--json"], {
+    const ran = await running(["init", "--json", "--agent", "claude"], {
       release: later(),
       answers: { "projects.create": PROJECT },
     });
@@ -885,8 +901,21 @@ describe("the words alone", () => {
   });
 });
 
-/** A project as `projects.create` answers for it, reopened or made just now. */
-const PROJECT = { id: "P-1", name: "atlas", path: "/work/atlas" };
+/**
+ * A project as `projects.create` answers for it, reopened or made just now —
+ * with the agents the daemon says it wired, which is what the closing lines are
+ * written from.
+ */
+const PROJECT = {
+  id: "P-1",
+  name: "atlas",
+  path: "/work/atlas",
+  agents: ["claude"],
+};
+
+/** The same project, wired for the other agent, and for both. */
+const CODEX_PROJECT = { ...PROJECT, agents: ["codex"] };
+const BOTH_PROJECT = { ...PROJECT, agents: ["claude", "codex"] };
 
 describe("shall init", () => {
   test("says what is true either way, and how to go on from here", async () => {
@@ -897,18 +926,21 @@ describe("shall init", () => {
     assert.equal(ran.code, 0);
     assert.deepEqual(lines(ran.out), [
       "atlas is a Shall project at /work/atlas.",
+      "Wired for Claude Code.",
       "Open the app:  shall",
       "Or ask your agent: run claude here, then /shall.help",
     ]);
     // The folder the person is standing in, and no answer to a question that
-    // was never asked: a run with no terminal keeps the daemon's own default.
+    // was never asked: a run with no terminal keeps the daemon's own default —
+    // no git answer, and no agents field either, which is what makes an `init`
+    // in a script go on meaning what it always meant.
     assert.deepEqual(ran.calls, [
       { procedure: "projects.create", input: { path: ran.cwd } },
     ]);
   });
 
   test("--json is one object and nothing else", async () => {
-    const ran = await running(["init", "--json"], {
+    const ran = await running(["init", "--json", "--agent", "claude"], {
       answers: { "projects.create": PROJECT },
     });
 
@@ -934,6 +966,7 @@ describe("shall init", () => {
       assert.deepEqual(lines(ran.out), [
         "atlas is a Shall project at /work/atlas.",
         ".shall is matched by .gitignore — the spec and the ledgers are meant to be committed, so unignore it.",
+        "Wired for Claude Code.",
         "Open the app:  shall",
         "Or ask your agent: run claude here, then /shall.help",
       ]);
@@ -952,7 +985,10 @@ describe("shall init", () => {
       `a folder in no repository is asked about, and "${typed}" means ${answered}`,
       { skip: NO_TERMINAL ? "no pty on this platform" : false },
       async () => {
-        const ran = await running(["init"], {
+        // `--agent` NAMED, so the one question this run asks is the git one:
+        // the agent picker is what a person who named none is offered, and it
+        // has a case of its own below.
+        const ran = await running(["init", "--agent", "claude"], {
           typed,
           answers: { "projects.create": PROJECT },
         });
@@ -967,12 +1003,183 @@ describe("shall init", () => {
         assert.deepEqual(ran.calls, [
           {
             procedure: "projects.create",
-            input: { path: ran.cwd, initGit: answered },
+            input: {
+              path: ran.cwd,
+              initGit: answered,
+              agents: ["claude"],
+            },
           },
         ]);
       },
     );
   }
+});
+
+/**
+ * WHICH AGENT THE PROJECT IS FOR — named on the command line, or chosen from a
+ * list, or left to the daemon.
+ *
+ * WHAT IS ASSERTED IS THE RESULT AND NOT THE PAINT. A picker's whole output is
+ * escape codes and redrawn rows; what a person actually gets out of it is the
+ * set that reaches `projects.create`, so that is what is pinned. The rows
+ * themselves are asserted only where a person is told something they could not
+ * work out — that this folder is already a project, and what it is wired for.
+ */
+describe("shall init --agent", () => {
+  test("an agent named on the line is the one that is wired", async () => {
+    const ran = await running(["init", "--agent", "codex"], {
+      answers: { "projects.create": CODEX_PROJECT },
+    });
+
+    assert.equal(ran.code, 0);
+    assert.deepEqual(ran.calls, [
+      {
+        procedure: "projects.create",
+        input: { path: ran.cwd, agents: ["codex"] },
+      },
+    ]);
+    // The closing line is that agent's own way in, and the one thing Shall
+    // knows about Codex that a person meets as a failure is said on stderr.
+    assert.deepEqual(lines(ran.out), [
+      "atlas is a Shall project at /work/atlas.",
+      "Wired for Codex.",
+      "Open the app:  shall",
+      "Or ask your agent: run codex here, then use the $shall:help skill",
+    ]);
+    assert.match(ran.err, /sandbox blocks the daemon at localhost/);
+  });
+
+  test("all is every agent there is, and the line names both ways in", async () => {
+    const ran = await running(["init", "--agent=all"], {
+      answers: { "projects.create": BOTH_PROJECT },
+    });
+
+    assert.equal(ran.code, 0);
+    assert.deepEqual(ran.calls, [
+      {
+        procedure: "projects.create",
+        input: { path: ran.cwd, agents: ["claude", "codex"] },
+      },
+    ]);
+    assert.deepEqual(lines(ran.out), [
+      "atlas is a Shall project at /work/atlas.",
+      "Wired for Claude Code, Codex.",
+      "Open the app:  shall",
+      "Or ask your agent: run claude (/shall.help) or codex ($shall:help) here.",
+    ]);
+  });
+
+  test("a word that names no agent is refused before anything is started", async () => {
+    const ran = await running(["init", "--agent", "cursor"], {
+      answers: { "projects.create": PROJECT },
+    });
+
+    assert.equal(ran.code, 1);
+    assert.equal(ran.out, "");
+    assert.equal(
+      ran.err,
+      "Shall does not know the agent cursor — name one of claude, codex, or all.\n",
+    );
+    // Nothing was started and nothing was made to say so.
+    assert.equal(ran.knocks, 0);
+    assert.equal(ran.calls.length, 0);
+  });
+
+  test("--json with an agent passes the daemon's answer through", async () => {
+    const ran = await running(["init", "--json", "--agent", "claude"], {
+      answers: { "projects.create": PROJECT },
+    });
+
+    assert.equal(ran.code, 0);
+    assert.deepEqual(JSON.parse(ran.out), PROJECT);
+  });
+
+  test("--json without an agent is a usage error, before any knock", async () => {
+    const ran = await running(["init", "--json"], {
+      answers: { "projects.create": PROJECT },
+    });
+
+    assert.equal(ran.code, 1);
+    assert.equal(ran.out, "");
+    assert.equal(
+      ran.err,
+      "shall init --json needs --agent <claude|codex|all> — shall init [--agent <claude|codex|all>] [--json]\n",
+    );
+    assert.equal(ran.knocks, 0);
+  });
+
+  test(
+    "a fresh project with no agent named is chosen from a list",
+    {
+      skip: NO_TERMINAL
+        ? "no pty on this platform"
+        : NO_GIT
+          ? "no git on this machine"
+          : false,
+    },
+    async () => {
+      // A repository already, so the git question steps aside and the picker is
+      // the only thing reading what is typed.
+      const repo = await folder("repo");
+      await asked("git", ["init", "-q"], { cwd: repo });
+
+      const ran = await running(["init"], {
+        cwd: repo,
+        // One down, then Enter: the second row of the list.
+        typed: DOWN,
+        answers: { "projects.create": CODEX_PROJECT },
+      });
+
+      assert.deepEqual(ran.calls, [
+        { procedure: "projects.wiring", input: { path: repo } },
+        {
+          procedure: "projects.create",
+          input: { path: repo, agents: ["codex"] },
+        },
+      ]);
+    },
+  );
+
+  test(
+    "a project already wired is offered what it has not got",
+    { skip: NO_TERMINAL ? "no pty on this platform" : false },
+    async () => {
+      const ran = await running(["init"], {
+        typed: DOWN,
+        answers: {
+          "projects.wiring": { isProject: true, wired: ["claude"] },
+          "projects.create": BOTH_PROJECT,
+        },
+      });
+
+      // The first row refreshes what is there; the second adds the one agent
+      // this project has not got. No git question: a project was made here
+      // once already.
+      assert.match(
+        ran.out,
+        /This folder is already a Shall project, wired for Claude Code\./,
+      );
+      assert.ok(!/Run git init here/.test(ran.out), ran.out);
+      assert.deepEqual(ran.calls, [
+        { procedure: "projects.wiring", input: { path: ran.cwd } },
+        {
+          procedure: "projects.create",
+          input: { path: ran.cwd, agents: ["codex"] },
+        },
+      ]);
+    },
+  );
+
+  test("every agent there is has a line on the help screen", async () => {
+    const ran = await running(["help"]);
+
+    // The screen is where a person finds out what `--agent` takes, and an
+    // agent Shall can wire but never names there is one nobody will ask for.
+    for (const id of AGENT_IDS) {
+      assert.match(ran.out, new RegExp(id));
+    }
+    assert.match(ran.out, /--agent says which coding agent to wire/);
+  });
 });
 
 describe("shall add-spec-node", () => {

@@ -5,6 +5,11 @@
 # answer, running init twice changes nothing, and the daemon it started is
 # alive and stoppable.
 #
+# IT DOES IT ONCE PER AGENT, in a project each. The kits land in different
+# folders and are carried under different prefixes inside the executable, so a
+# release that carried only one of them would pass every check the other's
+# project makes and fail on the first `init` somebody typed.
+#
 # IT IS ONE FILE BECAUSE THE RELEASE SMOKES TWICE. x64 and arm64 run on
 # different machines in release.yml, and a smoke copied into both workflows
 # would drift the moment one copy learned something the other did not.
@@ -39,8 +44,11 @@ cd "$project"
 # repository is what a real install would have, so it gets one.
 git init -q .
 
+# `--agent` is required with `--json`: the flag promises no questions, and which
+# agent a project is for is a question. A release that wired one by default
+# would be choosing for whoever piped this.
 echo "== shall init"
-"$binary" init --json > init.json
+"$binary" init --agent claude --json > init.json
 python3 -m json.tool init.json > /dev/null
 
 echo "== the agent kit reached the project"
@@ -69,8 +77,43 @@ else
 fi
 before="$(sums)"
 test -n "$before"
-"$binary" init --json > /dev/null
+"$binary" init --agent claude --json > /dev/null
 test "$before" = "$(sums)"
+
+# A SECOND PROJECT, FOR THE OTHER AGENT. Codex's kit lands in three places
+# rather than one — the skills under the project's own skills root, the hook
+# under `.codex/`, and a fenced block inside `AGENTS.md` — and only the first of
+# those is prose the binary could get wrong on its own; the other two are files
+# a release has to carry the inputs for.
+codex_project="$(mktemp -d)"
+cd "$codex_project"
+git init -q .
+
+echo "== shall init --agent codex"
+"$binary" init --agent codex --json > init.json
+python3 -m json.tool init.json > /dev/null
+
+echo "== the codex kit reached the project"
+test -f .agents/skills/shall-help/SKILL.md
+python3 -m json.tool .codex/hooks.json > /dev/null
+test -f .codex/hooks/shall/check-spec.mjs
+grep -q "BEGIN SHALL" AGENTS.md
+# Nothing of the other agent's, in a project that asked for this one.
+test ! -d .claude
+
+echo "== a second init changed none of it"
+codex_sums() {
+  find .agents .codex AGENTS.md -type f -exec "$@" {} + | sort
+}
+if command -v sha256sum >/dev/null 2>&1; then
+  wired() { codex_sums sha256sum; }
+else
+  wired() { codex_sums shasum -a 256; }
+fi
+before="$(wired)"
+test -n "$before"
+"$binary" init --agent codex --json > /dev/null
+test "$before" = "$(wired)"
 
 echo "== the daemon it started answers, and stops"
 state="$HOME/.shall/daemon.json"

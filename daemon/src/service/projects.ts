@@ -9,6 +9,7 @@ import type { RecentProject, RegistryProject } from "../types.js";
 import {
   assertDirectory,
   ensureProjectSpec,
+  findProjectRootAbove,
   getProjectMetadataPath,
   getProjectShallPath,
   pathExists,
@@ -17,9 +18,12 @@ import {
   writeProjectFiles,
   writeSharedTemplates,
 } from "../host/project-files.js";
-import { writeAgentKit } from "../host/agent-kit.js";
-import { writeAgentRules } from "../host/agent-rules.js";
-import { writeAgentDenyRules } from "../host/agent-settings.js";
+import type { AgentId } from "../host/adapters/ids.js";
+import {
+  adapterOf,
+  agentsToWire,
+  detectWiredAgents,
+} from "../host/adapters/registry.js";
 import { initRepository, repositoryRoot } from "../host/git-cli.js";
 import { readGitBranch } from "../host/git.js";
 import { isShallHomePath } from "../host/shall-home.js";
@@ -29,15 +33,49 @@ import {
   upsertRegistryProject,
 } from "../host/registry.js";
 
+/**
+ * A project, and WHICH AGENTS IT IS WIRED FOR — the second half computed rather
+ * than stored.
+ *
+ * IT IS NOT PART OF THE REGISTRY RECORD, on purpose and for the reason the
+ * branch is not: a registry entry is a fact this machine persists, and what a
+ * project is wired for is a fact of the working tree that a `git clone`, a
+ * hand-deleted folder or somebody else's `shall init` moves underneath it. The
+ * files are the record; this is what they said at the moment of the answer.
+ */
+export interface WiredProject extends RegistryProject {
+  agents: AgentId[];
+}
+
+/**
+ * Wires a project for the union of what was asked for and what is already
+ * there, and answers with the set that was written — see `agentsToWire` for
+ * why the union and why the Claude fallback.
+ */
+async function wireAgents(
+  absolutePath: string,
+  requested: readonly AgentId[] | undefined,
+): Promise<AgentId[]> {
+  const wired = agentsToWire(
+    requested ?? [],
+    await detectWiredAgents(absolutePath),
+  );
+  await Promise.all(wired.map((id) => adapterOf(id).wire(absolutePath)));
+  return wired;
+}
+
 export async function createProject(
   projectPath: string,
-  options: { initGit?: boolean | undefined } = {},
-): Promise<RegistryProject> {
+  options: {
+    initGit?: boolean | undefined;
+    agents?: readonly AgentId[] | undefined;
+  } = {},
+): Promise<WiredProject> {
   const absolutePath = normalizeProjectPath(projectPath);
   await assertDirectory(absolutePath);
 
   if (await pathExists(getProjectShallPath(absolutePath))) {
-    return openProject(absolutePath);
+    return openProject(absolutePath, { agents: options.agents });
   }
 
   const metadata = createProjectMetadata(absolutePath);
@@ -55,14 +93,10 @@ export async function createProject(
     await initRepository(absolutePath);
   }
   // The same conveniences an open runs — see openProject for why they are quiet.
-  await Promise.all([
-    writeAgentDenyRules(absolutePath),
-    writeAgentRules(absolutePath),
-    writeAgentKit(absolutePath),
-  ]);
+  const agents = await wireAgents(absolutePath, options.agents);
   const project = toRegistryProject(absolutePath, metadata);
   await upsertRegistryProject(project);
-  return project;
+  return { ...project, agents };
 }
 
 /**
@@ -88,7 +122,8 @@ async function assertOpenable(absolutePath: string): Promise<void> {
 
 export async function openProject(
   projectPath: string,
-): Promise<RegistryProject> {
+  options: { agents?: readonly AgentId[] | undefined } = {},
+): Promise<WiredProject> {
   const absolutePath = normalizeProjectPath(projectPath);
   await assertDirectory(absolutePath);
   await assertOpenable(absolutePath);
@@ -98,34 +133,33 @@ export async function openProject(
   }
 
   // A project arrives here from a git clone as often as from this machine's own
-  // `create`. Five tidyings are cheap and quiet when there is nothing to do:
+  // `create`. Four tidyings are cheap and quiet when there is nothing to do:
   // the spec folder is made if it is not there, the machine's reference
   // templates under `~/.shall/templates` are brought current, a template set
   // an older Shall committed into this project is removed — templates live
   // with Shall now, and a stale copy in the repository would teach an agent a
-  // format the daemon no longer writes — the agent settings gain the two deny
-  // rules that keep Shall's own home out of an agent's reading and the ledgers
-  // out of its pen, and the page under `.claude/rules` is brought current the
-  // way the templates are: half a page saying what this project is and which
-  // doors are not an agent's.
+  // format the daemon no longer writes — and every agent this project is wired
+  // for is wired again: the generated commands and skills, the compile hook,
+  // the rules an agent reads before it does anything, and the two deny rules
+  // that keep Shall's own home out of its reading and the ledgers out of its
+  // pen. Which agents those are is the union of what the caller asked for and
+  // what the files already show, and `agentsToWire` says why.
   //
-  // NONE IS A CONDITION OF OPENING. All five are conveniences — so a folder
+  // NONE IS A CONDITION OF OPENING. All four are conveniences — so a folder
   // Shall may read but not write into (a read-only mount, a checkout owned by
   // somebody else) opens and serves its graph rather than failing the click
   // with an errno. Reading a project should never require the right to write
   // to it.
-  await Promise.all([
+  const [, , , agents] = await Promise.all([
     ensureProjectSpec(absolutePath).catch(() => undefined),
     writeSharedTemplates().catch(() => undefined),
     removeProjectTemplates(absolutePath).catch(() => undefined),
-    writeAgentDenyRules(absolutePath),
-    writeAgentRules(absolutePath),
-    writeAgentKit(absolutePath),
+    wireAgents(absolutePath, options.agents),
   ]);
 
   const project = toRegistryProject(absolutePath, metadata);
   await upsertRegistryProject(project);
-  return project;
+  return { ...project, agents };
 }
 
 /**
@@ -139,20 +173,25 @@ export async function openProject(
  * swaps the binary and restarts the daemon; this sweep is the other half, and
  * together they are an upgrade nobody has to click through project by project.
  *
- * IT IS DELIBERATELY THE SAME PAIR AN OPEN WRITES, and not the whole of what an
- * open does. The agent settings are somebody else's file and are merged into
- * only when a project is actually opened; the spec folder and the shared
- * templates are made where they are needed. What this sweep owns is the prose
- * Shall generates and re-generates, which is exactly the prose a new version
- * changes.
+ * IT IS `refresh` AND NOT `wire`, and not the whole of what an open does. An
+ * adapter's `refresh` is the prose Shall generates and regenerates; its `wire`
+ * additionally merges into files that are somebody else's — the deny rules
+ * above all — and those are merged into only when a person actually opens
+ * their project. The spec folder and the shared templates are made where they
+ * are needed. What this sweep owns is exactly the prose a new version changes.
+ *
+ * IT REFRESHES WHAT EACH PROJECT IS WIRED FOR AND NEVER WIDENS IT. A Codex-only
+ * project is swept as a Codex-only project; a project wired for neither — a
+ * kit somebody deleted — falls back to Claude, which is the standing policy and
+ * is argued over `agentsToWire`.
  *
  * NOTHING HERE IS A CONDITION OF STARTING, and nothing here throws. A registry
  * that will not read, a folder somebody deleted, a checkout mounted read-only:
  * each is skipped in silence, for the same reason an open's conveniences are —
  * the right to write into a project is not the price of running Shall. A PATH
  * WHOSE `.shall` IS GONE IS NO LONGER A PROJECT and is skipped too, because a
- * `.claude` kit written into a folder that stopped being one is litter left by a
- * daemon nobody asked to visit.
+ * kit written into a folder that stopped being one is litter left by a daemon
+ * nobody asked to visit.
  */
 export async function refreshRegisteredKits(): Promise<void> {
   const registry = await readRegistry().catch(() => null);
@@ -164,12 +203,40 @@ export async function refreshRegisteredKits(): Promise<void> {
       if (!(await pathExists(getProjectShallPath(project.path)))) {
         return;
       }
-      await Promise.all([
-        writeAgentRules(project.path),
-        writeAgentKit(project.path),
-      ]);
+      const wired = agentsToWire([], await detectWiredAgents(project.path));
+      await Promise.all(
+        wired.map((id) => adapterOf(id).refresh(project.path)),
+      );
     }),
   );
+}
+
+/**
+ * WHAT A FOLDER IS, AND WHAT IT IS WIRED FOR — the question `shall init` asks
+ * before it asks a person anything.
+ *
+ * IT IS A READING AND NOT A DOOR. Nothing is made, nothing is written and
+ * nothing is registered: a terminal standing in an unknown folder needs to know
+ * whether it is about to make a project or refresh one, and whether the agent
+ * picker should offer everything or only what is missing.
+ *
+ * `isProject` WALKS UP, the way `shall check` does, because a person runs
+ * `init` from wherever they are standing. `wired` does NOT walk up: a kit is
+ * written into the project root and the answer is about that root, so it is
+ * read there — and it is the RAW detection, with no Claude fallback in it,
+ * because the caller is about to decide what to ask for and a fallback would
+ * put words in the files' mouth.
+ */
+export async function projectWiring(
+  projectPath: string,
+): Promise<{ isProject: boolean; wired: AgentId[] }> {
+  const root = await findProjectRootAbove(
+    normalizeProjectPath(projectPath),
+  ).catch(() => null);
+  if (root === null) {
+    return { isProject: false, wired: [] };
+  }
+  return { isProject: true, wired: await detectWiredAgents(root) };
 }
 
 /**

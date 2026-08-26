@@ -38,8 +38,12 @@ import { writeByRename } from "./atomic-write.js";
  * which way round — one may not be read, the other may not be written — which
  * is the part a silent convention never gets to say.
  *
- * Only the Claude adapter exists today. Agents with no deny mechanism at all are
- * simply not covered, and this module does not pretend otherwise.
+ * THIS FILE IS CLAUDE'S ALONE, and that is not an oversight. An agent with no
+ * per-path deny mechanism cannot be given one from here, so Codex is not
+ * covered by it — and the codex prose says outright, in the block it puts in a
+ * project's `AGENTS.md`, that nothing will stop an agent writing the ledger and
+ * that the rule is kept because it is a rule. A guard that implied a mechanism
+ * it did not have would be worse than none: a session would act on it.
  */
 export const AGENT_DENY_RULES = [
   "Read(~/.shall/**)",

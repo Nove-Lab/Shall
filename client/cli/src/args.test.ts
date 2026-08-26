@@ -49,7 +49,11 @@ describe("the commands", () => {
   });
 
   test("init, check, status and board are themselves", () => {
-    assert.deepEqual(invocation("init"), { command: "init", json: false });
+    assert.deepEqual(invocation("init"), {
+      command: "init",
+      json: false,
+      agent: null,
+    });
     assert.deepEqual(invocation("check"), {
       command: "check",
       json: false,
@@ -292,10 +296,76 @@ describe("--refs", () => {
   });
 });
 
+describe("--agent", () => {
+  test("takes its agent in either spelling, and carries the word as typed", () => {
+    for (const argv of [
+      ["init", "--agent", "codex"],
+      ["init", "--agent=codex"],
+    ]) {
+      assert.deepEqual(invocation(...argv), {
+        command: "init",
+        json: false,
+        agent: "codex",
+      });
+    }
+    // Which words name an agent is the daemon package's list, and this file
+    // imports nothing: a word nobody recognises is `main.ts`'s sentence, not a
+    // usage error with a shape.
+    assert.deepEqual(invocation("init", "--agent", "nonesuch"), {
+      command: "init",
+      json: false,
+      agent: "nonesuch",
+    });
+  });
+
+  test("the last one typed wins, because there is a spelling for meaning both", () => {
+    assert.deepEqual(invocation("init", "--agent", "claude", "--agent=codex"), {
+      command: "init",
+      json: false,
+      agent: "codex",
+    });
+    assert.deepEqual(invocation("init", "--agent", "all"), {
+      command: "init",
+      json: false,
+      agent: "all",
+    });
+  });
+
+  test("an agent nobody named is the same miss as a path nobody named", () => {
+    assert.equal(
+      refusalOf("init", "--agent"),
+      "shall init needs an agent after --agent — shall init [--agent <claude|codex|all>] [--json]",
+    );
+    // An option is never a value: `--agent --json` is somebody asking for JSON.
+    assert.match(
+      refusalOf("init", "--agent", "--json"),
+      /^shall init needs an agent after --agent — /,
+    );
+    assert.match(refusalOf("init", "--agent="), /^shall init needs an agent/);
+  });
+
+  test("is not a question the other commands have", () => {
+    assert.match(
+      refusalOf("board", "--agent", "codex"),
+      /^shall board does not take --agent — /,
+    );
+    assert.match(
+      refusalOf("check", "--agent=codex"),
+      /^shall check does not take --agent=codex — /,
+    );
+  });
+
+  test("--json without it is refused, because --json promises no questions", () => {
+    assert.equal(
+      refusalOf("init", "--json"),
+      "shall init --json needs --agent <claude|codex|all> — shall init [--agent <claude|codex|all>] [--json]",
+    );
+  });
+});
+
 describe("--json", () => {
   test("is taken by every command that answers with something", () => {
     for (const [command, expected] of [
-      ["init", { command: "init", json: true }],
       ["check", { command: "check", json: true, scope: [] }],
       ["status", { command: "status", json: true, scope: [] }],
       ["board", { command: "board", json: true }],
@@ -303,6 +373,13 @@ describe("--json", () => {
     ] as const) {
       assert.deepEqual(invocation(command, "--json"), expected);
     }
+    // `init` takes it too, and takes an agent with it — see the block below for
+    // why the flag alone is not enough there.
+    assert.deepEqual(invocation("init", "--json", "--agent", "claude"), {
+      command: "init",
+      json: true,
+      agent: "claude",
+    });
     assert.deepEqual(invocation("add-spec-node", "--json", "--type=Goal"), {
       command: "add-spec-node",
       json: true,
@@ -504,6 +581,8 @@ describe("what a person is told when the words are wrong", () => {
       refusalOf("status", "--type"),
       refusalOf("board", "--scope", "intent"),
       refusalOf("init", "--json=yes"),
+      refusalOf("init", "--json"),
+      refusalOf("init", "--agent"),
       refusalOf("add-spec-node"),
       refusalOf("--host", "--json"),
       refusalOf("log"),
@@ -532,7 +611,7 @@ describe("the help screen", () => {
   test("names every command exactly once", () => {
     for (const shape of [
       "shall [--host]",
-      "shall init [--json]",
+      "shall init [--agent <claude|codex|all>] [--json]",
       "shall check [--scope <path>]... [--json]",
       "shall status [--scope <path>]... [--json]",
       "shall board [--json]",

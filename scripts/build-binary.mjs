@@ -9,21 +9,25 @@ import { fileURLToPath } from "node:url";
  * `bun build --compile` run over the entry that hands them in.
  *
  * WHAT IS EMBEDDED IS WHAT IS READ FROM THE CHECKOUT AND NOTHING ELSE. The
- * daemon opens exactly two folders it did not make — `apps/web/dist` for the
- * pages and `agents/dist/claude` for the agent kit — so those two are carried
- * and every other read stays a read of the machine the binary runs on. Anything
- * added to that list has to be added here, or it works in a checkout and is
- * missing in the release.
+ * daemon opens exactly three folders it did not make — `apps/web/dist` for the
+ * pages, and one generated tree per agent under `agents/dist` for the kits — so
+ * those are carried and every other read stays a read of the machine the binary
+ * runs on. Anything added to that list has to be added here, or it works in a
+ * checkout and is missing in the release.
  *
- * BOTH FOLDERS ARE BUILT BEFORE THEY ARE READ. `bun run build` below is what
- * makes them: it runs `build:agents` first, so the agent tree is generated from
+ * EVERY FOLDER IS BUILT BEFORE IT IS READ. `bun run build` below is what makes
+ * them: it runs `build:agents` first, so the agent trees are generated from
  * `agents/core` and `agents/profiles` in the same breath as the web app, and a
  * release can never carry last generation's prose.
  *
- * THE KIT IS FILTERED, NOT COPIED WHOLE. `agent-kit.ts` walks the plugin for
- * the commands, the skills and the one hook; embedding the same set keeps the
- * two sources answering identically, and keeps the plugin's manifest — which no
- * project ever receives — out of the executable.
+ * THE KITS ARE FILTERED, NOT COPIED WHOLE, and each agent's filter is its
+ * adapter's walk said again here. Claude's kit is the commands, the skills and
+ * the one hook script — its `hooks.json` is plugin-folder wiring that no
+ * project ever receives, and its manifest is not a project's either. Codex's is
+ * the skills, the hook script, the hook wiring it merges from and the always-on
+ * `AGENTS.md` block: the last two are inputs the adapter reads by name rather
+ * than files a project is given, and a binary that did not carry them could
+ * write the prose and not the wiring.
  *
  * `--local` BUILDS ONLY THIS MACHINE'S TARGET, because the other three make bun
  * fetch a runtime it does not have yet and that is a download nobody wants in
@@ -84,20 +88,25 @@ async function filesUnder(folder, prefix = "") {
   return found;
 }
 
-/** The plugin files the agent kit is made of — see the note above. */
-async function kitFiles(pluginRoot) {
-  const wanted = [];
-  for (const relative of await filesUnder(pluginRoot)) {
-    const [folder] = relative.split("/");
-    if (folder === "commands" && relative.endsWith(".md")) {
-      wanted.push(relative);
-    } else if (folder === "skills" && relative.endsWith(".md")) {
-      wanted.push(relative);
-    } else if (relative === "hooks/check-spec.mjs") {
-      wanted.push(relative);
-    }
-  }
-  return wanted;
+/**
+ * Which files of one agent's generated tree the kit is made of — one predicate
+ * per agent, and the agent's own folder name is the key. See the note above.
+ */
+const KIT_FILES = {
+  claude: (relative) =>
+    (relative.startsWith("commands/") && relative.endsWith(".md")) ||
+    (relative.startsWith("skills/") && relative.endsWith(".md")) ||
+    relative === "hooks/check-spec.mjs",
+  codex: (relative) =>
+    (relative.startsWith("skills/") && relative.endsWith(".md")) ||
+    relative === "hooks/check-spec.mjs" ||
+    relative === "hooks/hooks.json" ||
+    relative === "AGENTS.md.block",
+};
+
+async function kitFiles(agentRoot, agent) {
+  const wanted = KIT_FILES[agent];
+  return (await filesUnder(agentRoot)).filter((relative) => wanted(relative));
 }
 
 async function carry(files, folder, relatives, prefix) {
@@ -109,10 +118,19 @@ async function carry(files, folder, relatives, prefix) {
 
 async function generateAssets() {
   const webRoot = path.join(root, "apps", "web", "dist");
-  const pluginRoot = path.join(root, "agents", "dist", "claude");
   const files = new Map();
   await carry(files, webRoot, await filesUnder(webRoot), "web/");
-  await carry(files, pluginRoot, await kitFiles(pluginRoot), "kit/");
+  // One prefix per agent, which is the name the daemon's layouts read under:
+  // `kit/claude/` and `kit/codex/`.
+  for (const agent of Object.keys(KIT_FILES)) {
+    const agentRoot = path.join(root, "agents", "dist", agent);
+    await carry(
+      files,
+      agentRoot,
+      await kitFiles(agentRoot, agent),
+      `kit/${agent}/`,
+    );
+  }
 
   const entries = [...files.keys()]
     .sort()
@@ -122,7 +140,7 @@ async function generateAssets() {
     GENERATED,
     [
       "// Written by scripts/build-binary.mjs from apps/web/dist and",
-      "// agents/dist/claude. Git ignores it and every build replaces it; editing",
+      "// agents/dist/*. Git ignores it and every build replaces it; editing",
       "// it edits nothing, because the next build reads the folders again.",
       "export const EMBEDDED_FILES: Readonly<Record<string, string>> = {",
       entries,
