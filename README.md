@@ -17,6 +17,11 @@
 Shall keeps your project's specification as a living graph of markdown files inside your own repository, with a local app over it where every judgement — approve, reject, close — stays yours.
 Your agents read the same graph through their own commands, so what they build is always the spec you approved.
 
+<p align="center">
+  <!-- left screenshot lands here -->
+  <img src="./docs/assets/spec-plane.png" width="49.5%" alt="The Spec plane — the whole specification as a graph, every node wearing its state">
+</p>
+
 ---
 
 ## 🧭 Principles Shall stands on
