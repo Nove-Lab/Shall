@@ -28,7 +28,7 @@ Your agents read the same graph through their own commands, so what they build i
 
 **1. Intent engineering is the last work you'll never delegate.**
 
-We unified the methods, tools, and interfaces — so even a beginner does professional intent engineering, with agents at their side.
+We unified the methods, tools, and interfaces — so your project stands on professional intent engineering.
 
 **2. A spec is not a pile of flat documents.**
 
