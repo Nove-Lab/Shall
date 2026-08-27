@@ -3,7 +3,7 @@
 Every release lists what changed; a release that changes the spec schema — node types, edge grammar, file format — must additionally carry a **Migrating** section saying what an existing `.shall/` tree needs.
 Shall never migrates a spec by itself: old nodes read as red, and the notes here say what to do about them.
 
-## Unreleased
+## 0.1.3 — 2026-08-27
 
 - **The board keeps a work item off the Implement list while its report is judged.** A completion report puts the item `in_review` until a person closes it or refuses the report; a work log alone leaves it ready, so a turn that stopped part-way is carried on rather than begun again. `shall status` and the Spec plane wear the new word.
 - **`shall context --work-item <id>`** — the look back before a turn: the files to open, computed by the daemon — the module's siblings and their logs, the reports, findings and every decision whose lines reach them, the criteria with their closure, the newest turns in the feed's order, and what finishing the item would let start. `/shall:work` reads it before stop 1, holds the code to the module's contracts and re-runs the closed criteria on the way back, and routes a person's rejection of a spec node to the process that owns its band.
