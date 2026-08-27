@@ -82,7 +82,7 @@ What Shall asks of the stretch is its two ends and nothing between them: one lin
 "Done" is a comparison, not a feeling. For each item you judge finished:
 
 1. **Open its definition of done and compare, by running and calling.** A definition of done is observable by construction — what runs, what answers — so observe it: run what it says runs, call what it says answers, and write down what you saw. A part that does not hold sends you back into the stretch; the item is not finished until it holds.
-2. **For each criterion the item targets, run the evaluation process the criterion's own file describes**, and keep the result. That result is what the evidence will point at.
+2. **For each criterion the item targets, run the evaluation process the criterion's own file describes**, and keep the result. That result is what the evidence will point at. A process that cannot be run here — it names a screen, a control, a page that this item and its waits did not build — is a fault in the aim and not in the work: the item can still pass on its definition of done, no evidence is written for that criterion, and the aim is a finding for the write-up unless one already says so.
 3. **Hold the code to the module.** What the module's Contracts section says at signature level, the code answers as written; a departure the code needed is a finding, never a quiet difference.
 4. **Re-run the closed criteria the look back named** — the `criteria` rows with `closure: closed`. One that no longer holds is a finding marked as blocking: a closure that lapsed in the code and not in the graph is the one regression nothing else will show.
 5. **If a part of the definition of done cannot be made to hold** — the specification is wrong about something, the work depends on what is not there — stop comparing. The item is unfinished, the reason is a finding for the write-up, and whether it is blocking the work is yours to judge and mark; nothing computed reads the mark.
@@ -107,6 +107,7 @@ One journal, a work log per item, and under those only what is true:
 - **A completion report only for a work item that passed the self-check**, claiming that one work item.
 - **One evidence per criterion you judge closable**, claiming that criterion. Never two criteria in one evidence.
 - **A finding only past the threshold in `shall-authoring` §6, "A finding needs a reader"** — that page is where the two conditions live, and this one does not restate them. A finding made during the turn is recorded by the log that made it.
+- **A criterion whose aims are spent is a finding, once.** The status says `aims: spent` when every work item aiming at a criterion is done and it is still open; the plan has no item left that can judge it, and the answer is a person's, through `/shall:raise` and `/shall:plan`. Never a log addressing a done item so that evidence can be filed under it — and no second finding when one already says so.
 - **Commits are a list of shas in the work log's own frontmatter**, in the order they were made. There is no node for a commit.
 
 Adding evidence to a criterion a person has already closed, or a report to a work item already called done, reopens it — `shall-authoring` §7 is the rule and it says to ask first.
@@ -151,7 +152,7 @@ Read a part's file when you enter that part, and not before.
 
 | Part | What it does | Read |
 |---|---|---|
-| survey | what needs doing, in four readings, writing nothing | [references/todo.md](references/todo.md) |
+| survey | what needs doing, in five readings, writing nothing | [references/todo.md](references/todo.md) |
 | look back | the module's past and the recent turns, read before stop 1, writing nothing | [references/lookback.md](references/lookback.md) |
 | develop | the handover, the stretch outside Shall, and the self-check on the way back | [references/develop.md](references/develop.md) |
 | record | the turn written up, from notes or from git | [references/report.md](references/report.md) |
@@ -164,6 +165,6 @@ Read a part's file when you enter that part, and not before.
 - **The cycle, and the write-up alone**: name the journal and its logs, say everything written is yellow, say a Work report card is waiting (and a Spec approval card for each spec file this turn edited), and say that running `shall` with no arguments opens the queue — say it, do not run it. For each item reported finished, say what its closing would let start — the look back's `unblocks` — so the person knows what their judgment opens. The record's procedure has already logged the turn to the Activity Feed — once, and only there; if that log failed, the one line saying so belongs here, and nothing else changes. Then stop. You are not waiting for the review.
 - **`--auto`**: the same, with the summary above.
 - **`--dry`**: the forecast's own closing line, and nothing written — and nothing logged: a forecast is not a turn, and the feed records turns.
-- **The survey**: the four readings and at most one line of suggestion. Nothing is logged here either; a reading is not a doing.
+- **The survey**: the five readings and at most one line of suggestion. Nothing is logged here either; a reading is not a doing.
 
 A change to the specification this turn argued for comes back through `/shall:raise <question>` — not through this process.

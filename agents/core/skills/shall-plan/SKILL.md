@@ -45,7 +45,7 @@ Six more are this plane's own:
 
 **Decisions and contracts in the spec, bodies in the repo.** That is the whole of what "code detail lives in the repository" means, and it has two halves that pull opposite ways. A module **names** its technology — runtime, language, storage, the core libraries — by the names the world uses, and writes its contracts at signature level: a name, its inputs, its outputs, its errors. localStorage is localStorage, setInterval is setInterval, a table is a table with its columns; a figure of speech standing where a technology should be is a decision somebody will have to make again, unrecorded, on the day the work starts. What a module does **not** carry is the function body, the pseudocode and the list of files — those are what a turn of work turns up, and written into a plan they are wrong before the first turn ends. A work item carries its scope, the criteria it targets, what it waits on and its definition of done, and **no method at all**: no files, no function design, no procedure — the agent who picks it up reads the code first and plans the method then. One exception, and it is the user's: if the direction asks for paths in so many words, confirm it once, record them in the work item's Notes, and say in the plan you present that the rule was relaxed on request.
 
-**Nothing is planned that the specification does not ask for.** Every work item belongs to a module, and `shall check` now says so when one does not. There is no closing pass collecting cross-cutting chores, no list parked for later, and no work item standing on its own. A verification scenario is an acceptance criterion's job, and an end-to-end proof is evidence the execution plane records — neither is a work item you invent here.
+**Nothing is planned that the specification does not ask for.** Every work item belongs to a module, and `shall check` now says so when one does not. There is no closing pass collecting cross-cutting chores, no list parked for later, and no work item standing on its own. A verification scenario is an acceptance criterion's job, and an end-to-end proof is evidence the execution plane records — neither is a work item you invent here. One thing looks like that proof and is not: a criterion whose evaluation process only the assembled whole can run. The specification asks for that run in so many words, and when no building item can make it, the acceptance pass that does is a work item cut in stage 1 like any other — work-items.md says what it is and where it belongs.
 
 **A gap in the specification is the normal path, not an error.** Planning is where a missing responsibility or an unjudgeable criterion is discovered, because planning is the first time anybody reads the specification closely enough to build from it. Take it to `/shall:specify` in revision mode, let it be approved, and resume at the step you left.
 
@@ -99,7 +99,7 @@ Every relation this process uses, and the file each one is written in.
 | a schema comes from a concept | `DataSchema —REPRESENTS→ DomainEntity` | the schema's file |
 | a module is given a piece of work | `Module —ALLOCATES→ WorkItem` — the one relation that holds a work item | the module's file |
 | a work item waits on another | `WorkItem —DEPENDS_ON→ WorkItem` | the **waiting** work item's file |
-| a work item aims at criteria | `WorkItem —TARGETS→ AcceptanceCriterion` — none, one or several | the **work item's** file |
+| a work item aims at criteria | `WorkItem —TARGETS→ AcceptanceCriterion` — none, one or several, each a verdict this item reaches | the **work item's** file |
 | the stack binds a module | `Decision —AFFECTS→ Module` — the technology decision, and the one decision this process writes | the decision's file |
 | a default recorded as an assumption | `Module —ASSUMES→ Assumption` — the plan band's one assuming type | the module's file |
 | a term used in prose | `MENTIONS → Term` | the mentioning node's file |
@@ -131,7 +131,7 @@ Read a file when you enter the stretch it serves, and not before.
 | stage 1 | the planning stage as a procedure: survey, code, stack, drivers, boundaries, contracts, the cut, the self-check of the draft, the presentation | [references/stage-1.md](references/stage-1.md) |
 | modules | the criteria for a module: responsibility first, the boundary test, what each of its sections is for, the world's names | [references/modules.md](references/modules.md) — at the boundaries step |
 | contracts | the criteria for interfaces and schemas, and how the module's Contracts section and the Interface node divide the work | [references/contracts.md](references/contracts.md) — at the contracts step |
-| work items | the criteria for work items: what one is, the tests it passes, aiming, order, spanning work, declaring what is visible | [references/work-items.md](references/work-items.md) — at the cut |
+| work items | the criteria for work items: what one is, the tests it passes, aiming, the acceptance pass, order, spanning work, declaring what is visible | [references/work-items.md](references/work-items.md) — at the cut |
 | stage 2 | transcription: the order of writing, the mechanics, the check, the cards, the wait | [references/stage-2.md](references/stage-2.md) |
 
 **Where to enter is settled before this skill runs.** `commands/plan.md` step 2 decides new mode or revision mode and what revision mode's stage 1 opens with. Take what you were handed; do not re-derive it. Both modes run stage 1 whole and then stage 2 whole; in revision mode stage 1 is bounded to the reach the command worked out, and stage 2 edits the files that are there, keeping their ids.
@@ -142,7 +142,8 @@ Stage 2's wait closes `/plan`. Check the final gate — every line is answerable
 
 | Gate | How you answer it |
 |---|---|
-| Every criterion in scope is targeted by some work item | `shall status --json` — join each criterion against the `TARGETS` the work items write. `shall check` does not file this: a criterion nobody plans to close is legal in the graph and unfinished in the plan |
+| Every criterion in scope is targeted by some work item that can judge it | `shall status --json` — no `AcceptanceCriterion` row wears `aims: none`; whether an aim can be kept you read in stage 1, since no command reads a sentence. `shall check` does not file this: a criterion nobody plans to close is legal in the graph and unfinished in the plan |
+| No criterion's aims are spent | `shall status --json` — no `AcceptanceCriterion` row wears `aims: spent`. A new plan has nothing done yet and the row is empty; in revision mode it is the list of criteria this revision exists to re-aim |
 | Every module has at least one work item, or the plan said its work is not visible yet | `shall status --json` — every `Module`'s relations include an `ALLOCATES`, or the plan you presented named that module as having no visible work yet |
 | Nothing is red | `shall check` — exits 1 on a hole, on a loop, and on a work item no module allocates |
 | Something can actually be started | `shall board --json` — the Implement half is not empty |

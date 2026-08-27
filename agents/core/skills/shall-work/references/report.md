@@ -45,7 +45,7 @@ Three ways a record is refused, worth knowing before you write rather than after
 - **A log on work whose turn had not come.** A log addressing a work item that is still waiting is refused until the work item is ready, and then turns yellow by itself with nobody told. Inside the cycle this cannot happen — the board only offers ready work items. In a reconstruction it can: say so and ask.
 - **A claim on something already closed.** Evidence on a closed criterion, or a report on a work item called done, reopens it and puts somebody's settled judgment back in the queue. `shall-authoring` §7 is the rule: ask first, and if the answer is yes, say plainly that the closure will have to be made again.
 
-Partial progress is written as a narrative and no completion report. A turn that finished nothing still has a journal.
+Partial progress is written as a narrative and no completion report. A turn that finished nothing still has a journal. A targeted criterion whose process could not be run here gets no evidence: the report's coverage says so in a sentence and names where the verdict is planned, and the aim itself is a finding once, never a paragraph rewritten each turn.
 
 ## The questions
 

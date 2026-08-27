@@ -47,7 +47,7 @@ Every item stopping is still a turn. Go to the write-up and say what is unfinish
 For each item you judge finished, the spine's comparison, in order:
 
 1. **Open its definition of done and compare, by running and calling.** Run what it says runs, call what it says answers, and write down what you saw. A part that does not hold sends you back into the stretch; the item is not finished until it holds.
-2. **For each criterion the item targets, run the evaluation process the criterion's own file describes**, and keep the result — it is what the evidence will point at.
+2. **For each criterion the item targets, run the evaluation process the criterion's own file describes**, and keep the result — it is what the evidence will point at. A process that cannot be run here — it names a screen, a control, a page that this item and its waits did not build — is a fault in the aim and not in the work: the item can still pass on its definition of done, no evidence is written for that criterion, and the aim is a finding for the write-up unless one already says so.
 3. **Hold the code to the module's Contracts section**, signature for signature; a departure is a finding.
 4. **Re-run the closed criteria the look back named**; one that no longer holds is a finding marked as blocking.
 5. **If a part of the definition of done cannot be made to hold**, stop comparing. The item is unfinished, the reason is a finding for the write-up, and whether it is blocking the work is yours to judge and mark.

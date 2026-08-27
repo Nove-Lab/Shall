@@ -20,15 +20,17 @@ Steps 1 to 9 happen **in the conversation**. Nothing reaches disk until stage 2.
 4. **Collect the drivers**: every green responsibility in scope, plus the non-functional requirements and the constraints that bind them. A structure cut from functional responsibilities alone splits again the first time a quality requirement is put to it.
 5. **Draw the module boundaries** — open [modules.md](modules.md) here. Responsibilities first, structure second; the boundary test on every candidate; the two assignment tests; a contested responsibility settled by information; a purely technical module allowed to stand; one term meaning two things stops you. Mark every hand-over between modules as you walk the scenarios through — the contracts are harvested from those marks.
 6. **Harvest the contracts** — open [contracts.md](contracts.md) here. Interfaces from the hand-overs, schemas from the data that crosses, the minimum published, every published item with a named consumer; the module's Contracts section written at signature level, the Interface node written as obligations.
-7. **Cut the work** — open [work-items.md](work-items.md) here. Every module gets the work items you can see now, or the plan says its work is not visible yet; every work item belongs to a module; every one carries a definition of done; each targets none, one or several criteria; what waits on what is written as `DEPENDS_ON`, and no loop.
+7. **Cut the work** — open [work-items.md](work-items.md) here. Every module gets the work items you can see now, or the plan says its work is not visible yet; every work item belongs to a module; every one carries a definition of done; each targets none, one or several criteria it can judge, and a criterion no building item can judge gets its acceptance pass here; what waits on what is written as `DEPENDS_ON`, and no loop.
 8. **Check the draft against itself**, before anybody is asked to read it:
    - every responsibility in scope reaches at least one module, and no module realizes no responsibility;
    - no module dependency comes back round through consumed contracts;
    - nothing breaks a constraint;
    - every criterion in scope is targeted by at least one work item;
+   - every aim can be kept: each targeted criterion's evaluation process runs whole on what the item and its waits supply, and no criterion is aimed at only by items that cannot run its process;
    - every work item belongs to a module;
    - no work item names a path, a class, a function or a procedure;
    - no definition of done repeats a criterion's sentence;
+   - no definition of done names what another work item builds unless this one waits on it;
    - no figure of speech stands where a technology should — every module's Technology names what it is built of;
    - the stack is said, and when it is project-wide, it is named as the decision stage 2 will write.
 9. **Present the whole plan and get the yes** — the spine's agreement. The stack and what it binds; every module with the responsibilities it realizes, its technology, its components, its contracts, its behaviour and what it refused; every interface and schema; every work item with its module, the criteria it targets, what it waits on and its definition of done; and, where grounds decided something, which decision followed which grounds. In plain sentences, once, whole. On a no, take the objection back to the step it names and present again. Under `--auto` the plan is written out in full and not waited on.
@@ -51,7 +53,7 @@ Steps 1 to 9 happen **in the conversation**. Nothing reaches disk until stage 2.
 | two pieces of data travel together | is this one thing or two? | one bundle kept consistent / two, related | `One unit?` |
 | two schemas describe the same data differently | which definition stands? | the two definitions / a third that covers both | `Definition` |
 | work touches several modules | is this one job across them, or a piece of shared machinery? | one job, allocated to all of them / machinery, which is a module we have not drawn | `Spanning` |
-| a work item could close any of several criteria | which criteria does finishing this make judgeable? | the candidate criteria / none — it is structure | `Aim` |
+| a work item could close any of several criteria | which criteria does finishing this make judgeable? | the candidate criteria / none — it is structure / none here — the acceptance pass judges them | `Aim` |
 | a work item will not fit one turn of work | where does it split? | 2–4 splits | `Split` |
 | an order is implied but not obvious | does this really have to wait for that? | yes, it cannot start until then / no, they are independent | `Waits?` |
 | the direction asks for file paths | should the work items name paths? | no — a path is found while working `(Recommended)` / yes, name them | `Paths?` |
@@ -79,6 +81,8 @@ An ambiguity a sensible default carries is not asked about. Write the default as
 | a hand-over no contract absorbed | step 6 against the walkthroughs |
 | work spans nearly every module | step 5 — a module is missing, and this is what its absence looks like |
 | a criterion nothing targets | step 7 — derive the work item that makes it judgeable |
+| a work item aims at a criterion it cannot judge | step 7 — move the aim to the item that can run the process, or cut the acceptance pass that will |
 | a work item names a path, a function or a procedure | step 7 — say the scope and the definition of done, and leave the method to the work |
 | a definition of done repeats the criterion | step 7 — say what is built and what it does, not what the verdict is |
+| a definition of done names what another item builds | step 7 — write the wait, or move that observation to an item that waits |
 | the yes is refused | the step the objection names — a boundary to step 5, a contract to step 6, a work item to step 7, the stack to step 3 |

@@ -8,9 +8,9 @@ Two uses, and both are about looking before starting. Somebody learning the cycl
 
 ## Steps
 
-1. **Run the survey** — [`todo.md`](todo.md), all four readings.
+1. **Run the survey** — [`todo.md`](todo.md), all five readings.
 2. **Pick the bundle** exactly as the spine would have, after the look back — [`lookback.md`](lookback.md), read the same — and say which items, why, and the one line of approach you would have given for each. Nothing is confirmed and nobody is asked: this is the pick the cycle would have put at stop 1.
-3. **Predict the record, per item.** One journal, a work log for each item, and under each log: a completion report if finishing the item would make its definition of done hold, and an evidence candidate for each criterion the item targets. Read that off the specification and nowhere else — the work item's own file, the module that allocates it, the requirements carrying its criteria, and the criteria themselves with their marks. **Say when a criterion is already closed**: evidence against one reopens it, which is a cost worth knowing before the turn rather than after.
+3. **Predict the record, per item.** One journal, a work log for each item, and under each log: a completion report if finishing the item would make its definition of done hold, and an evidence candidate for each criterion the item targets whose process the item can run — and say when it cannot, since that is the plan's fault and not the turn's. Read that off the specification and nowhere else — the work item's own file, the module that allocates it, the requirements carrying its criteria, and the criteria themselves with their marks. **Say when a criterion is already closed**: evidence against one reopens it, which is a cost worth knowing before the turn rather than after.
 4. **Every line of output carries the prefix** `[DRY]`, including the survey's.
 5. **Close with the line**: `[DRY] Forecast only — nothing was recorded.` When the conversation is not in English, say that sentence in the conversation's language and keep the prefix as it is.
 
