@@ -3,7 +3,7 @@
 Every release lists what changed; a release that changes the spec schema — node types, edge grammar, file format — must additionally carry a **Migrating** section saying what an existing `.shall/` tree needs.
 Shall never migrates a spec by itself: old nodes read as red, and the notes here say what to do about them.
 
-## Unreleased
+## 0.1.4 — 2026-08-27
 
 - **`shall` works from inside Codex's sandbox without anybody editing a config.** `shall init --agent codex` writes `network_access = true` and a `writable_roots` naming Shall's home into the project's own `.codex/config.toml` — merged into what is there, never over a line a person set. And the CLI no longer mistakes a daemon it may not signal for a dead one: from inside a sandbox it adopts the running daemon when it answers, and otherwise says which process it is and why it cannot be reached, instead of trying to stop it and failing on `rm ~/.shall/daemon.json` with a sentence about nothing.
 
