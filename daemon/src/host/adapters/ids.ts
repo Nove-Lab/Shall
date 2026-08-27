@@ -55,11 +55,12 @@ export const AGENT_CHOICES: readonly AgentChoice[] = [
     name: "Codex",
     hint: "run codex here, then use the $shall:help skill",
     // MEASURED, NOT FEARED. Codex's default sandbox is workspace-write, and
-    // every `shall` call is a loopback connection to the daemon — which that
-    // sandbox refuses. A person who is not told this meets it as the first act
-    // of the first process they run, reported as a CLI that will not start.
+    // every `shall` call is a loopback connection to the daemon that reads
+    // `~/.shall` — both of which that sandbox refuses. `shall init` writes the
+    // two lines that allow them into the project's own `.codex/config.toml`;
+    // this says so, because a config file that appeared is worth one line.
     notice:
-      "Codex's default sandbox blocks the daemon at localhost — approve shall's commands when Codex asks, or add an execpolicy allow rule, or Shall's processes cannot read this project.",
+      "Wrote .codex/config.toml so shall can reach its daemon from inside Codex's sandbox (network_access, and ~/.shall writable). If Codex still asks, approve shall's commands.",
   },
 ];
 

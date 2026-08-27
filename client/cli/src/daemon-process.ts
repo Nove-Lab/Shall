@@ -58,13 +58,27 @@ export async function healthOf(url: string): Promise<DaemonHealth | null> {
   }
 }
 
-export function isProcessAlive(pid: number): boolean {
+/**
+ * Where a process stands, as far as this one may know: `alive`, `gone`, or
+ * `untouchable` — there, and not this process's to signal.
+ *
+ * `EPERM` IS AN ANSWER AND NOT A FAILURE. Signal zero is refused for a process
+ * that exists and belongs to somebody else — or, inside a sandbox, for every
+ * process outside it — and a refusal says the pid is taken. Reading it as
+ * "gone" is how a sandboxed CLI came to forget, and try to stop, a daemon that
+ * was running perfectly well outside its walls.
+ */
+export function processStanding(pid: number): "alive" | "gone" | "untouchable" {
   try {
     process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
+    return "alive";
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === "EPERM" ? "untouchable" : "gone";
   }
+}
+
+export function isProcessAlive(pid: number): boolean {
+  return processStanding(pid) !== "gone";
 }
 
 export async function stopProcess(pid: number): Promise<void> {

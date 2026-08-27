@@ -292,3 +292,49 @@ describe("the codex hook wiring", () => {
     assert.equal(hooks.hooks.PreToolUse.length, 1);
   });
 });
+
+describe("the codex sandbox config", () => {
+  const CONFIG = ".codex/config.toml";
+  const root = () => JSON.stringify(path.join(process.env.HOME ?? "", ".shall"));
+
+  test("a fresh project gets the two lines, and a refresh does not write them", async () => {
+    const project = await newProject();
+    await codexAdapter.refresh(project);
+    assert.equal(await exists(at(project, CONFIG)), false);
+    await codexAdapter.wire(project);
+    const text = await readFile(at(project, CONFIG), "utf8");
+    assert.match(text, /^\[sandbox_workspace_write\]$/m);
+    assert.match(text, /^network_access = true$/m);
+    assert.ok(text.includes(`writable_roots = [${root()}]`), text);
+    // A second wire changes nothing that already stands.
+    await codexAdapter.wire(project);
+    assert.equal(await readFile(at(project, CONFIG), "utf8"), text);
+  });
+
+  test("a person's config gains the table at its end, and keeps everything else", async () => {
+    const project = await newProject();
+    await mkdir(at(project, ".codex"), { recursive: true });
+    const theirs = 'model = "gpt-5"\n\n[projects."/x"]\ntrust_level = "trusted"\n';
+    await writeFile(at(project, CONFIG), theirs, "utf8");
+    await codexAdapter.wire(project);
+    const text = await readFile(at(project, CONFIG), "utf8");
+    assert.ok(text.startsWith(theirs), text);
+    assert.match(text, /\[sandbox_workspace_write\]\nnetwork_access = true\nwritable_roots = /);
+  });
+
+  test("a table already there gains only the key it lacks, and a key somebody set is left as they set it", async () => {
+    const project = await newProject();
+    await mkdir(at(project, ".codex"), { recursive: true });
+    await writeFile(
+      at(project, CONFIG),
+      '[sandbox_workspace_write]\nnetwork_access = false\n\n[other]\nk = 1\n',
+      "utf8",
+    );
+    await codexAdapter.wire(project);
+    const text = await readFile(at(project, CONFIG), "utf8");
+    assert.match(text, /^network_access = false$/m);
+    assert.doesNotMatch(text, /network_access = true/);
+    assert.match(text, /^\[sandbox_workspace_write\]\nwritable_roots = /m);
+    assert.match(text, /\[other\]\nk = 1/);
+  });
+});

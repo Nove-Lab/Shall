@@ -1046,7 +1046,7 @@ describe("shall init --agent", () => {
       "Open the app:  shall",
       "Or ask your agent: run codex here, then use the $shall:help skill",
     ]);
-    assert.match(ran.err, /sandbox blocks the daemon at localhost/);
+    assert.match(ran.err, /Wrote \.codex\/config\.toml so shall can reach its daemon/);
   });
 
   test("all is every agent there is, and the line names both ways in", async () => {
@@ -1649,5 +1649,35 @@ describe("shall board", () => {
       "Fix Spec — nothing to fix.",
       "Implement — nothing is ready to start.",
     ]);
+  });
+});
+
+describe("a daemon this process may not touch", () => {
+  // pid 1 belongs to root, so signal zero is refused with EPERM for everybody
+  // else — exactly what a sandbox answers for every process outside it.
+  test("is adopted when it answers, and its record is left alone", async () => {
+    const ran = await running(["board", "--json"], {
+      state: { pid: 1, at: "the port" },
+      health: [READY, READY],
+      answers: { "spec.board": { fixSpec: [], implement: [] } },
+    });
+    assert.equal(ran.code, 0, ran.err);
+    assert.equal(ran.err, "");
+    assert.ok(ran.onRecord, "the record of a daemon nobody may stop was thrown away");
+  });
+
+  test("is named, never stopped or forgotten, when it cannot be reached", async () => {
+    const ran = await running(["board", "--json"], {
+      state: { pid: 1, at: "the port" },
+      health: ["unreadable", "unreadable"],
+    });
+    assert.equal(ran.code, 1);
+    const said = JSON.parse(ran.out) as { error: string };
+    assert.match(said.error, /cannot reach its daemon from this process/);
+    assert.match(said.error, /pid 1 /);
+    assert.match(said.error, /sandbox/);
+    assert.ok(ran.onRecord, "the record was thrown away from inside a sandbox");
+    // Nothing was spawned in its place: the knocks are the two probes and no more.
+    assert.equal(ran.knocks, 1);
   });
 });

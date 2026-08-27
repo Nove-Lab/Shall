@@ -77,7 +77,7 @@ bun run build:agents
 cp -R ./agents/dist/codex/skills/. <project>/.agents/skills/
 ```
 
-That much makes the seven commands invocable as `$shall:specify` and the rest — a Codex skill is a folder under the project's own skills root, and the mention is its frontmatter name. **And `shall` itself must run outside the sandbox**: `workspace-write` blocks the loopback connection to the daemon, so every `shall` call fails until the project allows it — `docs/Codex_Terrain_Survey.md` has the measurements and the escalation path, and `shall init` says so in a line on the way past.
+That much makes the seven commands invocable as `$shall:specify` and the rest — a Codex skill is a folder under the project's own skills root, and the mention is its frontmatter name. **And the sandbox has to let `shall` through**: `workspace-write` blocks the loopback connection to the daemon and the writes under `~/.shall`, so `shall init --agent codex` writes `network_access = true` and a `writable_roots` naming Shall's home into the project's `.codex/config.toml`, and says so in a line. A CLI that still cannot reach its daemon says which process it is and why, rather than trying to stop it.
 
 Before committing a change to the prose:
 
@@ -155,7 +155,7 @@ And they never decide. A `Decision` is a person's judgment, so the place one is 
 
 ## Not yet
 
-**Codex cannot reach the daemon from inside its sandbox.** `workspace-write` blocks the loopback connection every `shall` call needs, so the first act of every one of these processes fails unless the project runs `shall` escalated — a rule the user allows once. That is measured and unfixed, and it is the reason a Codex run of any of the seven commands has not been tried end to end. `shall init --agent codex` prints one line saying so, which is the whole of what Shall can do about it.
+**A Codex run of the seven commands has not been tried end to end.** The sandbox used to block the loopback connection every `shall` call needs; `shall init --agent codex` now writes the two config lines that open it, and the CLI names a daemon it may not touch instead of trying to stop it. What remains untried is the whole cycle under `$shall:work`.
 
 **Nothing locks on a finding marked as blocking, and nothing is going to.** The mark is the author agent's judgment, written so the next person or session sees it; no gate reads it, the queue does not order by it, and no work item is blocked or freed by one. What happens because of one happens in `shall-work` — the agent stops that item and says so — which is process rather than arithmetic, and deliberately so.
 

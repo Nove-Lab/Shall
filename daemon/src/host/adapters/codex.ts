@@ -12,6 +12,7 @@ import {
   writeKit,
 } from "../agent-kit.js";
 import { writeAgentsMdBlock } from "../agents-md.js";
+import { writeCodexSandboxConfig } from "../codex-config.js";
 
 /**
  * CODEX, WIRED — the same prose, in the three places Codex reads.
@@ -88,13 +89,10 @@ export const codexLayout: KitLayout = {
 };
 
 /**
- * CODEX'S `wire` AND `refresh` ARE THE SAME ACT, and that is a fact about Codex
- * rather than an oversight. Nothing Shall writes for it is a merge into a file
- * whose other contents are a person's judgement — the hooks file is merged with
- * the same restraint Claude's settings file is, and the `AGENTS.md` block is
- * fenced — so there is no half of this that a daemon's start sweep should be
- * kept out of. The day Codex grows a permission layer, that is the day these
- * two stop being one line.
+ * The generated half: the skills, the hooks and the fenced block. The hooks
+ * file is merged with the same restraint Claude's settings file is, and the
+ * `AGENTS.md` block is fenced, so the daemon's start sweep may rewrite all of
+ * it.
  */
 async function writeCodexKit(projectPath: string): Promise<void> {
   const body = await readKitFile(codexLayout, "AGENTS.md.block").catch(
@@ -103,6 +101,19 @@ async function writeCodexKit(projectPath: string): Promise<void> {
   await Promise.all([
     writeKit(projectPath, codexLayout),
     body === null ? Promise.resolve() : writeAgentsMdBlock(projectPath, body),
+  ]);
+}
+
+/**
+ * `wire` IS `refresh` PLUS THE SANDBOX CONFIG, and that is the split the
+ * interface asks for: the two lines in `.codex/config.toml` are a merge into
+ * a person's file, so a create or an open writes them and the daemon's start
+ * sweep does not.
+ */
+async function wireCodex(projectPath: string): Promise<void> {
+  await Promise.all([
+    writeCodexKit(projectPath),
+    writeCodexSandboxConfig(projectPath),
   ]);
 }
 
@@ -119,5 +130,5 @@ export const codexAdapter: AgentAdapter = {
   },
 
   refresh: writeCodexKit,
-  wire: writeCodexKit,
+  wire: wireCodex,
 };

@@ -14,6 +14,7 @@ import { SHALL_VERSION } from "@shall/core/version";
 // port to talk to, and nothing else.
 import {
   ensureShallHome,
+  getShallHome,
   readConfig,
   readDaemonState,
   removeDaemonState,
@@ -38,6 +39,7 @@ import { connect } from "./client.js";
 import {
   healthOf,
   isProcessAlive,
+  processStanding,
   startDaemon,
   stopProcess,
   waitForDaemon,
@@ -178,8 +180,23 @@ async function ensureDaemon(bindHost: string): Promise<string> {
   const url = `http://localhost:${config.port}`;
   let daemonState = await readDaemonState();
 
+  // THE WALL. A daemon on record that this process may not signal is a daemon
+  // on the other side of a sandbox: it is running, and nothing here may stop
+  // it, forget it or start another beside it. It is adopted if it answers, and
+  // named if it does not — never treated as dead, which is the mistake that
+  // ends in `rm ~/.shall/daemon.json` refused with a sentence about nothing.
+  if (daemonState !== null && processStanding(daemonState.pid) === "untouchable") {
+    const held = `http://localhost:${daemonState.port}`;
+    if ((await getRunningHost(held)) === bindHost) {
+      return held;
+    }
+    throw new Error(
+      `Shall cannot reach its daemon from this process: pid ${daemonState.pid} is running at ${held}, and this process may neither connect to it nor signal it — which is what a sandbox does. Run shall outside the sandbox, or let this process reach localhost and write under ${getShallHome().root}; shall init writes that into .codex/config.toml for Codex.`,
+    );
+  }
+
   if (daemonState !== null && !isProcessAlive(daemonState.pid)) {
-    await removeDaemonState(daemonState.pid);
+    await forget(daemonState.pid);
     daemonState = null;
   }
 
@@ -190,7 +207,7 @@ async function ensureDaemon(bindHost: string): Promise<string> {
         bindHost)
   ) {
     await stopProcess(daemonState.pid);
-    await removeDaemonState(daemonState.pid);
+    await forget(daemonState.pid);
     daemonState = null;
   }
 
@@ -205,7 +222,7 @@ async function ensureDaemon(bindHost: string): Promise<string> {
         "Restarting the Shall daemon: the one running is a different Shall from this CLI.",
       );
       await stopProcess(daemonState.pid);
-      await removeDaemonState(daemonState.pid);
+      await forget(daemonState.pid);
       daemonState = null;
     }
   }
@@ -240,6 +257,22 @@ async function ensureDaemon(bindHost: string): Promise<string> {
   }
 
   return url;
+}
+
+/**
+ * Forgets a daemon record, and says what it means when the record cannot be
+ * forgotten: a `~/.shall` this process may not write to is a sandbox, and the
+ * filesystem's own word for that — `EFAULT`, on some runtimes — names nothing
+ * a person can act on.
+ */
+async function forget(pid: number): Promise<void> {
+  try {
+    await removeDaemonState(pid);
+  } catch (error) {
+    throw new Error(
+      `Shall could not update its own record at ${getShallHome().daemonPath}: ${sentenceOf(error)}. A process that may not write there is inside a sandbox — run shall outside it, or let it write under ${getShallHome().root}.`,
+    );
+  }
 }
 
 /** The app is the browser; when it cannot be opened, the URL is the app. */
