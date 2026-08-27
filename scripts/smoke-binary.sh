@@ -97,6 +97,10 @@ echo "== the codex kit reached the project"
 test -f .agents/skills/shall-help/SKILL.md
 python3 -m json.tool .codex/hooks.json > /dev/null
 test -f .codex/hooks/shall/check-spec.mjs
+test -f .codex/hooks/shall/guard-paths.mjs
+# The two lines that let shall through the sandbox, written on the FIRST init.
+grep -q "^network_access = true" .codex/config.toml
+grep -q "^writable_roots = " .codex/config.toml
 grep -q "BEGIN SHALL" AGENTS.md
 # Nothing of the other agent's, in a project that asked for this one.
 test ! -d .claude

@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { writeByRename } from "./atomic-write.js";
 import { getShallHome } from "./shall-home.js";
@@ -98,6 +98,9 @@ export async function writeCodexSandboxConfig(projectPath: string): Promise<void
     );
     const wanted = withSandboxConfig(current);
     if (wanted !== null) {
+      // The kit writer makes `.codex/` beside this, and the two run at once:
+      // a rename into a folder that is not there yet is a config nobody wrote.
+      await mkdir(path.dirname(target), { recursive: true });
       await writeByRename(target, wanted);
     }
   } catch {
