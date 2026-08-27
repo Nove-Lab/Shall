@@ -6,9 +6,9 @@
 
 ### Spec as the control plane for your agents.
 
-[![Agents: Claude Code · Codex](https://img.shields.io/badge/agents-Claude%20Code%20%C2%B7%20Codex-D97757.svg)](./docs/Shall_Agent_Commands.md)
-[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](./LICENSE)
-[![Runtime: Bun](https://img.shields.io/badge/runtime-Bun-black.svg)](https://bun.sh)
+![Agents: Claude Code · Codex](https://img.shields.io/badge/agents-Claude%20Code%20%C2%B7%20Codex-D97757.svg)
+![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)
+![Runtime: Bun](https://img.shields.io/badge/runtime-Bun-black.svg)
 
 [**Getting started**](#-getting-started) · [**Working with Shall**](#-working-with-shall) · [**Docs**](./docs)
 
@@ -18,8 +18,11 @@ Shall keeps your project's specification as a living graph of markdown files ins
 Your agents read the same graph through their own commands, so what they build is always the spec you approved.
 
 <p align="center">
+
   <img src="./docs/assets/control-plane.png" width="49.5%" alt="The Control plane — review queue, board, feed and vitals in one place">
+
   <img src="./docs/assets/spec-plane.png" width="49.5%" alt="The Spec plane — the whole specification as a graph, every node wearing its state">
+
 </p>
 
 ---
@@ -41,6 +44,8 @@ Change is the normal case, not waterfall reborn — every revision reaches both 
 **4. Your intent is what holds your agents steady.**
 
 We built the daily control surface on top of it — agents pull approved work and run; you review, decide, and steer.
+
+---
 
 ## ✨ What you get, working with Shall
 
@@ -114,15 +119,17 @@ It says what Shall is in a screen, reads where this project stands, and names th
 Seven processes, each written as prose — everything they write lands in the Review Queue for your yes.
 The process is the same in every agent; only the call wears the agent's own grammar: `/shall.specify` in Claude Code is `$shall:specify` in Codex, and a dotted name like `work.todo` becomes `$shall:work:todo`.
 
-| Process | In one line |
-| --- | --- |
-| `specify` | interviews you and writes the spec, phase by phase |
-| `plan` | designs the layer below — modules, contracts, work items — for one yes |
-| `work` | takes one turn of work off the board and writes it up |
-| `work.todo` | surveys what the project needs, writes nothing |
-| `work.report` | writes up work already done, reconstructed from git |
-| `raise` | brings a doubt, lands a finding or a decision — or nothing |
-| `help` | says what Shall is and what to run next |
+
+| Process       | In one line                                                            |
+| ------------- | ---------------------------------------------------------------------- |
+| `specify`     | interviews you and writes the spec, phase by phase                     |
+| `plan`        | designs the layer below — modules, contracts, work items — for one yes |
+| `work`        | takes one turn of work off the board and writes it up                  |
+| `work.todo`   | surveys what the project needs, writes nothing                         |
+| `work.report` | writes up work already done, reconstructed from git                    |
+| `raise`       | brings a doubt, lands a finding or a decision — or nothing             |
+| `help`        | says what Shall is and what to run next                                |
+
 
 #### 1.1. Specify
 
@@ -159,7 +166,7 @@ It explores, says what it found, and leaves behind a finding, a decision you dic
 Everything below lives in the app — run `shall` and it opens in your browser at `http://localhost:9461`.
 Judgements are yours and are made there; no command approves, rejects or closes anything.
 
-#### 2.1. Review & approve
+#### 2.1. Review &amp; approve
 
 The Review Queue holds everything waiting on you as cards — spec approvals, work reports, criterion closures, work item completions, standing findings — each with diffs, evidence and context in front.
 Approve, reject with a rationale that becomes the agent's work order, close a criterion over its evidence or leave it open with your reason.
@@ -189,3 +196,4 @@ Contributions are welcome — first-time contributors are asked to sign a short 
 - [`docs/Shall_CLI_Commands.md`](./docs/Shall_CLI_Commands.md) — the `shall` CLI, command by command
 - [`docs/Shall_Agent_Commands.md`](./docs/Shall_Agent_Commands.md) — the agent processes, with each agent's spelling
 - [`agents/README.md`](./agents/README.md) — the agent-side processes, and how one prose core becomes a plugin per agent
+
