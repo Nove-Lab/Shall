@@ -6,9 +6,9 @@
 
 ### Spec as the control plane for your agents.
 
-![Agents: Claude Code · Codex](https://img.shields.io/badge/agents-Claude%20Code%20%C2%B7%20Codex-D97757.svg)
-![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)
-![Runtime: Bun](https://img.shields.io/badge/runtime-Bun-black.svg)
+[![Agents: Claude Code · Codex](https://img.shields.io/badge/agents-Claude%20Code%20%C2%B7%20Codex-D97757.svg)](./docs/Shall_Agent_Commands.md)
+[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](./LICENSE)
+[![Runtime: Bun](https://img.shields.io/badge/runtime-Bun-black.svg)](https://bun.sh)
 
 [**Getting started**](#-getting-started) · [**Working with Shall**](#-working-with-shall) · [**Docs**](./docs)
 
@@ -166,7 +166,7 @@ It explores, says what it found, and leaves behind a finding, a decision you dic
 Everything below lives in the app — run `shall` and it opens in your browser at `http://localhost:9461`.
 Judgements are yours and are made there; no command approves, rejects or closes anything.
 
-#### 2.1. Review &amp; approve
+#### 2.1. Review & approve
 
 The Review Queue holds everything waiting on you as cards — spec approvals, work reports, criterion closures, work item completions, standing findings — each with diffs, evidence and context in front.
 Approve, reject with a rationale that becomes the agent's work order, close a criterion over its evidence or leave it open with your reason.
