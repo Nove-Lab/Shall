@@ -49,6 +49,7 @@ import {
   restoreSpecNode,
   reviewSpec,
 } from "../service/spec-review.js";
+import { contextAt } from "../service/spec-context.js";
 import { boardAt, statusSpec } from "../service/spec-status.js";
 
 const t = initTRPC.create();
@@ -271,6 +272,18 @@ export const appRouter = t.router({
     board: procedure
       .input(z.object({ path: z.string().min(1) }))
       .query(({ input }) => boardAt(input.path)),
+    // The look back for one work item: the files a turn reads before it starts.
+    // The one procedure that reads the feed on an agent's behalf, and it hands
+    // back journals in the feed's order and never a line of the feed itself.
+    context: procedure
+      .input(
+        z.object({
+          path: z.string().min(1),
+          workItem: z.string().min(1),
+          recent: z.number().int().min(1).max(20).optional(),
+        }),
+      )
+      .query(({ input }) => contextAt(input.path, input.workItem, input.recent)),
     // A mutation and not a query, because it writes — the report files under
     // the project's own `shall/`, never a byte of `.shall/`. The path form is
     // the CLI's; `generateReport` below is the same act for the web, which

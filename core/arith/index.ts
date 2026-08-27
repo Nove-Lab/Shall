@@ -78,7 +78,7 @@ export {
   workItemStateOf,
   upwardChainOf,
 } from "./work-item-state.js";
-export type { ColorAt } from "./work-item-state.js";
+export type { ColorAt, WorkItemState } from "./work-item-state.js";
 export {
   criteriaOf,
   isCriteriaCarrier,
@@ -114,3 +114,10 @@ export type {
   UnchangedNode,
   WorkReportBundle,
 } from "./bundles.js";
+export { workContextOf } from "./context.js";
+export type {
+  ContextRef,
+  WorkContext,
+  WorkContextOptions,
+  WorkItemRef,
+} from "./context.js";

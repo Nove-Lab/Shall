@@ -52,6 +52,28 @@ setEmbeddedFiles({
     "An invented Codex reference.\n",
   ),
   "kit/codex/hooks/check-spec.mjs": encode("// an invented codex hook\n"),
+  "kit/claude/hooks/hooks.json": encode(
+    `${JSON.stringify(
+      {
+        hooks: {
+          PostToolUse: [
+            {
+              matcher: "Write|Edit|MultiEdit",
+              hooks: [
+                {
+                  type: "command",
+                  command: 'node "${CLAUDE_PLUGIN_ROOT}/hooks/check-spec.mjs"',
+                  timeout: 90,
+                },
+              ],
+            },
+          ],
+        },
+      },
+      null,
+      2,
+    )}\n`,
+  ),
   "kit/codex/hooks/hooks.json": encode(
     `${JSON.stringify(
       {

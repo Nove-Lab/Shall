@@ -447,8 +447,76 @@ describe("whether a work item can be picked up", () => {
     ];
     const ledgers = booksOf({
       approvals: nodes.map((held) => approve(held, edges)),
-      rejections: [leaveOpen(workItem, [workLog], edges)],
+      rejections: [leaveOpen(workItem, [report], edges)],
     });
+    const context = colorContextOf(graphOf(nodes, edges), ledgers);
+    assert.equal(
+      workItemStateOf(workItem, context, colorsOf(nodes, edges, ledgers)),
+      "ready",
+    );
+  });
+
+  test("is in review from the report's claim until a person answers it", () => {
+    // A second turn picking this up would build the same thing twice, so the
+    // word keeps it off the board — approved report or not, until it is closed.
+    const nodes = [...SPINE_NODES, journal, workLog, report];
+    const edges = [
+      ...SPINE,
+      edge("J-0001", "LOGS", "WL-0001"),
+      edge("WL-0001", "ADDRESSES", "WI-0001"),
+      edge("WL-0001", "SUBMITS", "CR-0001"),
+      edge("CR-0001", "CLAIMS", "WI-0001"),
+    ];
+    const unread = settled(SPINE_NODES, edges);
+    assert.equal(
+      workItemStateOf(
+        workItem,
+        colorContextOf(graphOf(nodes, edges), unread),
+        colorsOf(nodes, edges, unread),
+      ),
+      "in_review",
+    );
+    const approved = settled(nodes, edges);
+    assert.equal(
+      workItemStateOf(
+        workItem,
+        colorContextOf(graphOf(nodes, edges), approved),
+        colorsOf(nodes, edges, approved),
+      ),
+      "in_review",
+    );
+  });
+
+  test("comes back to ready when the report itself is refused", () => {
+    const nodes = [...SPINE_NODES, journal, workLog, report];
+    const edges = [
+      ...SPINE,
+      edge("J-0001", "LOGS", "WL-0001"),
+      edge("WL-0001", "ADDRESSES", "WI-0001"),
+      edge("WL-0001", "SUBMITS", "CR-0001"),
+      edge("CR-0001", "CLAIMS", "WI-0001"),
+    ];
+    const ledgers = booksOf({
+      approvals: [...SPINE_NODES, journal, workLog].map((held) =>
+        approve(held, edges),
+      ),
+      rejections: [reject(report, edges)],
+    });
+    const context = colorContextOf(graphOf(nodes, edges), ledgers);
+    assert.equal(
+      workItemStateOf(workItem, context, colorsOf(nodes, edges, ledgers)),
+      "ready",
+    );
+  });
+
+  test("stays ready under a log that claims nothing — a turn that stopped part-way", () => {
+    const nodes = [...SPINE_NODES, journal, workLog];
+    const edges = [
+      ...SPINE,
+      edge("J-0001", "LOGS", "WL-0001"),
+      edge("WL-0001", "ADDRESSES", "WI-0001"),
+    ];
+    const ledgers = settled(SPINE_NODES, edges);
     const context = colorContextOf(graphOf(nodes, edges), ledgers);
     assert.equal(
       workItemStateOf(workItem, context, colorsOf(nodes, edges, ledgers)),
@@ -1001,10 +1069,10 @@ describe("work logged before its turn", () => {
 });
 
 describe("the board and the queue", () => {
-  test("a work item waiting on a person is on the board and in the queue at once", () => {
-    // The two surfaces answer two questions: the queue asks whether the work
-    // shown is enough, the board says the work item is not closed yet. Until a
-    // person says one of the two words, both are true.
+  test("a work item waiting on a person is in the queue and off the board", () => {
+    // The queue asks whether the work shown is enough; the board, which offers
+    // work to start, must not offer this one again while that is being asked —
+    // a second turn would build the same thing twice. Its word is `in_review`.
     const nodes = [...SPINE_NODES, journal, workLog, report];
     const edges = [
       ...SPINE,
@@ -1019,9 +1087,11 @@ describe("the board and the queue", () => {
       reviewBundles(graph, ledgers).bundles.map((bundle) => bundle.id),
       ["completion:WI-0001"],
     );
-    assert.deepEqual(
-      workBoardOf(graph, ledgers).implement.map((row) => row.id),
-      ["WI-0001"],
+    assert.deepEqual(workBoardOf(graph, ledgers).implement, []);
+    assert.equal(
+      reviewGraph(graph, ledgers).statuses.find((row) => row.id === "WI-0001")
+        ?.workItemState,
+      "in_review",
     );
   });
 });

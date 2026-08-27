@@ -29,7 +29,7 @@ Shall keeps a project's specification as a graph of markdown files — one file 
 | yellow | written and not yet judged — waiting on a person in the Review Queue |
 | green | approved as it stands |
 | open, closed | a criterion or a work item: closed once a person accepts the claims made on it |
-| blocked, ready, done | a work item's standing: ready is what `/shall:work` can take today |
+| blocked, ready, in review, done | a work item's standing: ready is what `/shall:work` can take today; in review is reported finished and waiting on a person |
 
 ## Part 2 — where this project stands
 

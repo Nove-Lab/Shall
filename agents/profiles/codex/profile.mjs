@@ -7,8 +7,9 @@
  * commands, so a command is a skill; there is no `$ARGUMENTS`, so the user's
  * words are whatever the message says after the mention; there is no question
  * tool outside Plan mode, so a question is plain options and a turn that ends;
- * there is no per-skill tool list and no deny rule Shall writes, so two guards
- * that are mechanical next door are carried here by the sentence alone.
+ * there is no per-skill tool list and no deny rule Shall writes, so the
+ * read-only guard is carried by the sentence alone and the ledger guard by the
+ * pre-tool hook Shall wires beside the compile hook.
  *
  * WHAT IT WAS MEASURED AGAINST. `docs/Codex_Terrain_Survey.md` is the ground,
  * and every shape below traces to a line in it: codex-cli 0.149.1, project
@@ -147,19 +148,17 @@ export const vocabulary = {
     "**Ask in options, and end the turn on the question.** There is no question tool here: a question is plain text at the end of your message. Ask one question, number its options, put the one you recommend first with `(Recommended)` suffixed to its label — then stop and wait, because the user's next message is the answer. Never answer the question yourself, and never carry on past one you asked.",
 
   /**
-   * The ledger is the daemon's alone. DEPARTURE: under Claude the refusal is
-   * mechanical, a deny rule Shall writes into the project's settings; Shall
-   * wires no per-path deny for Codex, so the wall is the sentence and nothing
-   * else. That is a weaker guarantee said in stronger words on purpose — the
-   * two sites are the only warning a session gets, and a forged judgment is not
-   * a mistake anybody can see afterwards. Two spellings because the two sites
-   * say it at two depths: the skill states the refusal, its layout reference
-   * names what the refusal covers.
+   * The ledger is the daemon's alone. Under Claude the refusal is a deny rule
+   * in the project's settings; under Codex it is the `PreToolUse` hook Shall
+   * wires from `hooks/hooks.json` — `guard-paths.mjs`, which exits 2 on a
+   * write, a patch or a shell line under the folder. A hook is a wall only
+   * while it runs, so the sentence still says the rule outright. Two spellings
+   * because the two sites say it at two depths.
    */
   "ledger-guard":
-    "nothing here refuses the write for you — a ledger an agent touched is a judgment forged rather than a file fixed, so the refusal is yours to keep: NEVER write, create or repair anything under `.shall/ledger/**`",
+    "a hook in `.codex/hooks.json` refuses the write before it happens, and the rule holds where the hook does not reach: NEVER write, create or repair anything under `.shall/ledger/**`",
   "ledger-guard-layout":
-    "the refusal is a rule and not a lock — nothing in this session will stop you, so `.shall/ledger/**` is a glob you keep by hand",
+    "a pre-tool hook Shall wired refuses a write, a patch or a shell line that touches `.shall/ledger/**`, and the rule is yours to keep wherever a hook is not running",
 
   /**
    * The read-only commands' other half. DEPARTURE: Claude refuses the writing

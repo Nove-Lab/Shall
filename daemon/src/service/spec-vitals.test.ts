@@ -211,7 +211,7 @@ describe("what the vitals say", () => {
     assert.equal(before.progress.requirements.numerator, 0);
     assert.deepEqual(
       before.progress.workItems.open.map((held) => [held.id, held.workItemState]),
-      [["WI-0001", "ready"]],
+      [["WI-0001", "in_review"]],
     );
 
     await acceptSpecClosure({ projectId: project.id, id: "AC-0001" });

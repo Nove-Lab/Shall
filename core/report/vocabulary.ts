@@ -61,6 +61,8 @@ export function workOf(status: ReviewStatus): Badge | null {
       return { label: "Done", tone: "good" };
     case "ready":
       return { label: "Ready", tone: "pending" };
+    case "in_review":
+      return { label: "In review", tone: "pending" };
     case "blocked":
       return { label: "Blocked", tone: "attention" };
     case null:

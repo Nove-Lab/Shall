@@ -138,7 +138,7 @@ function refOf(node: SpecNode): Ref {
 }
 
 /** The nodes one relation reaches from this one, living only, in id order. */
-function reach(
+export function reach(
   id: string,
   type: string,
   direction: "in" | "out",

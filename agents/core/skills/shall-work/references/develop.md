@@ -8,13 +8,13 @@ Do the work. Shall asks nothing about how — only that you read the specificati
 
 ## What it needs from above
 
-The bundle, confirmed at stop 1 — or picked alone, under `--auto` — with one line of approach per item.
+The bundle, confirmed at stop 1 — or picked alone, under `--auto` — with one line of approach per item, and what the look back found per item, in words.
 
 ## Going in
 
 Per item, before touching anything:
 
-- **A work item**: its own file — its scope and its definition of done above all — the module or modules that allocate it, the requirements carrying the criteria it targets, and those criteria with their open or closed marks and the evaluation process each one describes. `shall status --json` gives you the relations to walk and the marks; the bodies are in the files, so read the files.
+- **A work item**: its own file — its scope and its definition of done above all — the module or modules that allocate it, the requirements carrying the criteria it targets, and those criteria with their open or closed marks and the evaluation process each one describes. `shall status --json` gives you the relations to walk and the marks; the bodies are in the files, so read the files. The module's own past — its siblings' logs, findings, decisions and reports, and the last turns of the project — was read in the look back and is not read again here: what it found is the context you carry in, and a log or a decision is reopened only when the code turns out to ask for it.
 - **A Fix Spec item**: the rationale a person wrote, whole, or the sentence the grammar wrote — the board carries it complete for exactly this reason. Fixing the wrong thing because you read a summary is the failure this rule exists to prevent.
 - **The approach line** you gave at stop 1 is the promise you go in with. A different approach is fine when the code turns out to ask for one, and the change is said in the work log's opening section.
 
@@ -48,7 +48,9 @@ For each item you judge finished, the spine's comparison, in order:
 
 1. **Open its definition of done and compare, by running and calling.** Run what it says runs, call what it says answers, and write down what you saw. A part that does not hold sends you back into the stretch; the item is not finished until it holds.
 2. **For each criterion the item targets, run the evaluation process the criterion's own file describes**, and keep the result — it is what the evidence will point at.
-3. **If a part of the definition of done cannot be made to hold**, stop comparing. The item is unfinished, the reason is a finding for the write-up, and whether it is blocking the work is yours to judge and mark.
+3. **Hold the code to the module's Contracts section**, signature for signature; a departure is a finding.
+4. **Re-run the closed criteria the look back named**; one that no longer holds is a finding marked as blocking.
+5. **If a part of the definition of done cannot be made to hold**, stop comparing. The item is unfinished, the reason is a finding for the write-up, and whether it is blocking the work is yours to judge and mark.
 
 Then, per item, in hand:
 

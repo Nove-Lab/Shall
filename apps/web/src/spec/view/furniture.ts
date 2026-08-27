@@ -77,7 +77,7 @@ export type Closure = "open" | "closed";
  * and agreed to; this says whether the work it names can be picked up now. Only
  * `WorkItem` has one at all.
  */
-export type WorkItemState = "blocked" | "ready" | "done";
+export type WorkItemState = "blocked" | "ready" | "in_review" | "done";
 
 /**
  * WHETHER WHAT A CARRIER DEMANDS IS SHOWN MET, AS A WORD — the fourth thing a

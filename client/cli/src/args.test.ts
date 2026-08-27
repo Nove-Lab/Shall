@@ -615,6 +615,7 @@ describe("the help screen", () => {
       "shall check [--scope <path>]... [--json]",
       "shall status [--scope <path>]... [--json]",
       "shall board [--json]",
+      "shall context --work-item <id> [--json]",
       "shall report [--json]",
       "shall add-spec-node --type <Type> [--json]",
       "shall log <kind> <summary> [--refs <id,id>] [--json]",
@@ -633,5 +634,30 @@ describe("the help screen", () => {
     assert.match(USAGE, /--scope may be given more than once/);
     assert.match(USAGE, /--json writes the answer as one JSON object/);
     assert.match(USAGE, /--refs names the nodes a log line is about/);
+    assert.match(USAGE, /--work-item names the work item a look back is for/);
+  });
+});
+
+describe("shall context", () => {
+  test("takes the work item and --json, and refuses everything else", () => {
+    assert.deepEqual(invocation("context", "--work-item", "WI-0001"), {
+      command: "context",
+      json: false,
+      workItem: "WI-0001",
+    });
+    assert.deepEqual(invocation("context", "--work-item=WI-0001", "--json"), {
+      command: "context",
+      json: true,
+      workItem: "WI-0001",
+    });
+    assert.equal(
+      refusalOf("context"),
+      "shall context needs a work item id — shall context --work-item <id> [--json]",
+    );
+    assert.equal(
+      refusalOf("context", "--work-item"),
+      "shall context needs an id after --work-item — shall context --work-item <id> [--json]",
+    );
+    assert.match(refusalOf("context", "--work-item", "WI-0001", "--scope", "x"), /--scope/);
   });
 });

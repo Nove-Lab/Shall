@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { execFile } from "node:child_process";
-import { access } from "node:fs/promises";
+import { access, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -430,6 +430,21 @@ async function init(
     const notice = choiceOf(id).notice;
     if (notice !== null) {
       console.error(notice);
+    }
+  }
+  // Codex reads AGENTS.md against a budget of 32 KiB by default
+  // (`project_doc_max_bytes`), and Shall's block sits at the end of a file
+  // that was somebody's first — so a file past the budget is a block Codex
+  // may never see, and that is worth one line here.
+  if (wired.includes("codex")) {
+    const size = await stat(path.join(project.path, "AGENTS.md")).then(
+      (held) => held.size,
+      () => 0,
+    );
+    if (size > 32 * 1024) {
+      console.error(
+        `AGENTS.md is ${Math.round(size / 1024)} KiB, past the 32 KiB Codex reads by default — raise project_doc_max_bytes in .codex/config.toml, or Shall's block at its end may be cut off.`,
+      );
     }
   }
 
@@ -1034,6 +1049,100 @@ async function generateReport(url: string): Promise<Said> {
   };
 }
 
+/**
+ * `shall context` — the look back for one work item, as a list of files to
+ * open: its module's siblings and their logs, the reports and findings and
+ * decisions around them, the criteria it and they target, the newest turns by
+ * the feed's clock, and what finishing it would let start.
+ *
+ * FILES AND NEVER BODIES. The bodies are the point, and the agent opens them;
+ * this prints the map. A cap the daemon applied is said as a count, because a
+ * list that was quietly cut reads as the whole past.
+ */
+async function context(url: string, workItem: string): Promise<Said> {
+  const result = await connect(url).spec.context.query({
+    path: process.cwd(),
+    workItem,
+  });
+  const file = (row: { file: string }) => `.shall/spec/${row.file}`;
+  const prose = [
+    `The look back for ${result.item.id} ${result.item.name} (${result.item.state}) under ${result.root}.`,
+    `Modules — ${result.modules.map((row) => `${row.id} ${file(row)}`).join(", ")}.`,
+  ];
+  const section = (title: string, rows: string[]) => {
+    prose.push(rows.length === 0 ? `${title} — none.` : `${title} —`);
+    for (const row of rows) {
+      prose.push(`  ${row}`);
+    }
+  };
+  section(
+    "Siblings",
+    result.siblings.map((row) => `${row.id} (${row.state}) ${file(row)}`),
+  );
+  section(
+    "Upstream",
+    result.upstream.map(
+      (row) =>
+        `${row.module.id} exposes ${row.interfaces.map((held) => held.id).join(", ")} — worked on: ${
+          row.workItems.map((held) => `${held.id} ${file(held)}`).join(", ") || "nothing"
+        }`,
+    ),
+  );
+  section(
+    "Logs",
+    result.logs.map(
+      (row) =>
+        `${row.log.id} for ${row.addresses.join(", ")} ${file(row.log)}${
+          row.journal === null ? "" : ` — in ${row.journal.id} ${file(row.journal)}`
+        }`,
+    ),
+  );
+  if (result.omitted > 0) {
+    prose.push(`  and ${count(result.omitted, "older log", "older logs")} left out.`);
+  }
+  section(
+    "Reports",
+    result.reports.map(
+      (row) => `${row.report.id} claims ${row.claims} (${row.color ?? "unread"}) ${file(row.report)}`,
+    ),
+  );
+  section(
+    "Findings",
+    result.findings.map(
+      (row) =>
+        `${row.finding.id} by ${row.recordedBy} (${row.resolved ? "resolved" : "unresolved"}) ${file(row.finding)}`,
+    ),
+  );
+  section(
+    "Decisions",
+    result.decisions.map(
+      (row) =>
+        `${row.decision.id} affects ${[...row.affects, ...row.resolves].join(", ")} ${file(row.decision)}`,
+    ),
+  );
+  section(
+    "Criteria",
+    result.criteria.map(
+      (row) =>
+        `${row.criterion.id} (${row.closure ?? "no closure"}) targeted by ${row.targetedBy.join(", ")} ${file(row.criterion)}`,
+    ),
+  );
+  section(
+    `Recent turns (by ${result.recentBy})`,
+    result.recentTurns.map(
+      (row) =>
+        `${row.journal.id}${row.at === null ? "" : ` at ${row.at}`} ${file(row.journal)} — ${
+          row.logs.map((held) => held.id).join(", ") || "no logs"
+        }`,
+    ),
+  );
+  section(
+    "Unblocks",
+    result.unblocks.map((row) => `${row.id} (${row.state}) ${file(row)}`),
+  );
+  return { answer: result, prose, failed: false };
+}
+
 function answerFor(url: string, asked: Answering): Promise<Said> {
   switch (asked.command) {
     case "init":
@@ -1044,6 +1153,8 @@ function answerFor(url: string, asked: Answering): Promise<Said> {
       return status(url, asked.scope);
     case "board":
       return board(url);
+    case "context":
+      return context(url, asked.workItem);
     case "report":
       return generateReport(url);
     case "add-spec-node":

@@ -4,10 +4,11 @@ import type { AgentAdapter, KitLayout } from "./adapter.js";
 import {
   KIT_MARKER,
   generatedRoot,
-  mergeHookEntry,
+  hookScripts,
   readKitFile,
   removeStaleSkills,
   skillFiles,
+  wireDeclaredHooks,
   writeKit,
 } from "../agent-kit.js";
 import { writeAgentsMdBlock } from "../agents-md.js";
@@ -32,8 +33,9 @@ import { writeAgentsMdBlock } from "../agents-md.js";
  * a guard that implied a mechanism would be a lie a session acts on.
  *
  * TWO OF THE FILES IT CARRIES ARE INPUTS AND NOT COPIES. `hooks/hooks.json` is
- * the wiring Codex would read if the tree were installed whole, and it is
- * merged into the project's own hooks file instead of overwriting it;
+ * the wiring Codex would read if the tree were installed whole — the compile
+ * hook after a write, and the guard before one — and it is merged into the
+ * project's own hooks file instead of overwriting it;
  * `AGENTS.md.block` is the body of the managed span. Both are read by name and
  * neither is ever written into a project as a file of its own, which is why
  * `targetOf` refuses them.
@@ -42,64 +44,12 @@ import { writeAgentsMdBlock } from "../agents-md.js";
 /** Where the skills land: the project's own skills root, one folder per skill. */
 const SKILLS_ROOT = ".agents/skills";
 
-/** Where the hook script lands, and where its wiring is merged. */
-const HOOK_SCRIPT = ".codex/hooks/shall/check-spec.mjs";
+/** Where the hook scripts land, and where their wiring is merged. */
+const HOOKS_ROOT = ".codex/hooks/shall";
 const HOOKS_FILE = ".codex/hooks.json";
 
 /** The page that proves this project was wired for Codex by Shall. */
 const DETECT_PAGE = `${SKILLS_ROOT}/shall-help/SKILL.md`;
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-/**
- * The one hook entry the generated tree declares, read out of the tree rather
- * than retyped here.
- *
- * THE PROFILE IS WHERE THE MATCHER LIVES. `apply_patch` is the tool name Codex
- * reports and the payload it carries is a patch rather than a path, which is a
- * fact about Codex that `profiles/codex/static/hooks/hooks.json` already
- * states; a copy of it in the daemon would be a second answer to keep in step.
- * Anything unreadable there answers null and the wiring is skipped in silence,
- * because a hook nobody could describe is not one to invent.
- */
-async function declaredHook(): Promise<{
-  matcher: string;
-  command: string;
-  timeout: number;
-} | null> {
-  const text = await readKitFile(codexLayout, "hooks/hooks.json").catch(
-    () => null,
-  );
-  if (text === null) {
-    return null;
-  }
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(text) as unknown;
-  } catch {
-    return null;
-  }
-  if (!isPlainObject(parsed) || !isPlainObject(parsed.hooks)) {
-    return null;
-  }
-  const post = parsed.hooks.PostToolUse;
-  const entry = Array.isArray(post) ? (post[0] as unknown) : null;
-  if (!isPlainObject(entry) || typeof entry.matcher !== "string") {
-    return null;
-  }
-  const hooks = entry.hooks;
-  const first = Array.isArray(hooks) ? (hooks[0] as unknown) : null;
-  if (!isPlainObject(first) || typeof first.command !== "string") {
-    return null;
-  }
-  return {
-    matcher: entry.matcher,
-    command: first.command,
-    timeout: typeof first.timeout === "number" ? first.timeout : 90,
-  };
-}
 
 export const codexLayout: KitLayout = {
   agent: "codex",
@@ -109,7 +59,7 @@ export const codexLayout: KitLayout = {
   async walk(root: string): Promise<string[]> {
     return [
       ...(await skillFiles(root)),
-      "hooks/check-spec.mjs",
+      ...(await hookScripts(root)),
       "hooks/hooks.json",
       "AGENTS.md.block",
     ];
@@ -120,8 +70,8 @@ export const codexLayout: KitLayout = {
     if (folder === "skills" && rest.length > 1 && relative.endsWith(".md")) {
       return `${SKILLS_ROOT}/${rest.join("/")}`;
     }
-    if (relative === "hooks/check-spec.mjs") {
-      return HOOK_SCRIPT;
+    if (relative.startsWith("hooks/") && relative.endsWith(".mjs")) {
+      return `${HOOKS_ROOT}/${relative.slice("hooks/".length)}`;
     }
     // The wiring and the block are inputs, and are read by name.
     return null;
@@ -133,18 +83,8 @@ export const codexLayout: KitLayout = {
   removeStale: (projectPath, written) =>
     removeStaleSkills(projectPath, written, SKILLS_ROOT),
 
-  async wireHooks(projectPath: string): Promise<void> {
-    const declared = await declaredHook();
-    if (declared === null) {
-      return;
-    }
-    await mergeHookEntry(
-      path.join(projectPath, ...HOOKS_FILE.split("/")),
-      declared.matcher,
-      declared.command,
-      declared.timeout,
-    );
-  },
+  wireHooks: (projectPath) =>
+    wireDeclaredHooks(codexLayout, path.join(projectPath, ...HOOKS_FILE.split("/"))),
 };
 
 /**

@@ -59,8 +59,8 @@ export function StatusDot({ color }: { color: Signal }) {
  * THE SECOND-AXIS MARKS SHARE ONE VOCABULARY, and it is two words wide:
  * NOT YET, and DONE.
  *
- * A criterion is open or closed; a work item is blocked, ready or done; a
- * requirement or scenario is sat or unsat. Seven words,
+ * A criterion is open or closed; a work item is blocked, ready, in review or
+ * done; a requirement or scenario is sat or unsat. Eight words,
  * but only two STATES a person scans for — the thing has been shown to be met,
  * or it has not — so there are two paints and not seven, and every mark uses
  * them. Before this they disagreed: an open criterion wore red while a blocked
@@ -113,6 +113,7 @@ const MARK: Record<
   closed: { variant: "default", className: MET_CLASS, label: "Closed" },
   blocked: { variant: "secondary", className: "", label: "Blocked" },
   ready: { variant: "secondary", className: "", label: "Ready" },
+  in_review: { variant: "secondary", className: "", label: "In review" },
   done: { variant: "default", className: MET_CLASS, label: "Done" },
   sat: { variant: "default", className: MET_CLASS, label: "Sat" },
   unsat: { variant: "secondary", className: "", label: "Unsat" },

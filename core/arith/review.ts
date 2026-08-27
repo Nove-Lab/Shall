@@ -18,6 +18,7 @@ import {
   prematureSentence,
   workItemStateOf,
   type ColorAt,
+  type WorkItemState,
 } from "./work-item-state.js";
 import {
   type ColorContext,
@@ -128,7 +129,7 @@ export interface ReviewStatus {
    */
   leftOpen: { by: string; at: string; rationale: string } | null;
   /**
-   * WHETHER THIS IMPLEMENTATION WORK ITEM CAN BE PICKED UP — blocked, ready or done
+   * WHETHER THIS IMPLEMENTATION WORK ITEM CAN BE PICKED UP — blocked, ready, in review or done
    * — and null for every type that is not one, because the question does not
    * apply to them.
    *
@@ -139,7 +140,7 @@ export interface ReviewStatus {
    *
    * REQUIRED AND NULLABLE, NEVER OPTIONAL, for the reason written above.
    */
-  workItemState: "blocked" | "ready" | "done" | null;
+  workItemState: WorkItemState | null;
   /**
    * WHETHER EVERYTHING THIS CARRIER DEMANDS IS SHOWN MET — sat or unsat — for
    * the two types the canon lets carry criteria, a Requirement and a Scenario,

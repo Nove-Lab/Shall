@@ -88,10 +88,22 @@ describe("the codex kit", () => {
 
     const hooks = JSON.parse(
       await readFile(at(project, HOOKS_FILE), "utf8"),
-    ) as { hooks: { PostToolUse: { matcher: string; hooks: unknown[] }[] } };
+    ) as {
+      hooks: {
+        PreToolUse: { matcher: string; hooks: { command: string }[] }[];
+        PostToolUse: { matcher: string; hooks: unknown[] }[];
+      };
+    };
     // `apply_patch` is the tool name Codex reports; the matcher is read out of
     // the generated tree rather than retyped in the daemon.
     assert.equal(hooks.hooks.PostToolUse[0]?.matcher, "apply_patch|Edit|Write");
+    // The guard fires before a tool — the wall the prose used to be alone in.
+    assert.equal(hooks.hooks.PreToolUse[0]?.matcher, "Bash|apply_patch|Edit|Write");
+    assert.equal(
+      hooks.hooks.PreToolUse[0]?.hooks[0]?.command,
+      "node .codex/hooks/shall/guard-paths.mjs",
+    );
+    assert.ok(await exists(at(project, ".codex/hooks/shall/guard-paths.mjs")));
   });
 
   test("every generated page says which Shall wrote it, once", async () => {
@@ -265,12 +277,18 @@ describe("the codex hook wiring", () => {
         2,
       )}\n`,
     );
-    const before = await readFile(at(project, HOOKS_FILE), "utf8");
-
     await codexAdapter.wire(project);
 
     // The person's own matcher and flags are the wiring; a second entry would
-    // run the compile twice on every write.
-    assert.equal(await readFile(at(project, HOOKS_FILE), "utf8"), before);
+    // run the compile twice on every write. The guard is a hook they did not
+    // wire, and it arrives under its own event beside theirs.
+    const hooks = JSON.parse(await readFile(at(project, HOOKS_FILE), "utf8")) as {
+      hooks: { PreToolUse: unknown[]; PostToolUse: { matcher: string }[] };
+    };
+    assert.deepEqual(
+      hooks.hooks.PostToolUse.map((held) => held.matcher),
+      ["Write"],
+    );
+    assert.equal(hooks.hooks.PreToolUse.length, 1);
   });
 });

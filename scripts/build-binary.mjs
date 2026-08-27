@@ -96,10 +96,11 @@ const KIT_FILES = {
   claude: (relative) =>
     (relative.startsWith("commands/") && relative.endsWith(".md")) ||
     (relative.startsWith("skills/") && relative.endsWith(".md")) ||
-    relative === "hooks/check-spec.mjs",
+    (relative.startsWith("hooks/") && relative.endsWith(".mjs")) ||
+    relative === "hooks/hooks.json",
   codex: (relative) =>
     (relative.startsWith("skills/") && relative.endsWith(".md")) ||
-    relative === "hooks/check-spec.mjs" ||
+    (relative.startsWith("hooks/") && relative.endsWith(".mjs")) ||
     relative === "hooks/hooks.json" ||
     relative === "AGENTS.md.block",
 };

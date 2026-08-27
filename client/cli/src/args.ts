@@ -58,6 +58,10 @@ const SHAPES = {
     shape: "shall board [--json]",
     says: "What the spec needs fixed, and what is ready to be implemented.",
   },
+  context: {
+    shape: "shall context --work-item <id> [--json]",
+    says: "The files to read before starting a work item: its module's past, and the last turns.",
+  },
   report: {
     shape: "shall report [--json]",
     says: "Assemble the spec into a readable report under shall/report/.",
@@ -109,6 +113,7 @@ export const USAGE = [
   "--agent says which coding agent to wire this project for; all wires every one there is.",
   "--json writes the answer as one JSON object on stdout and nothing else.",
   "--refs names the nodes a log line is about, as ids separated by commas.",
+  "--work-item names the work item a look back is for.",
 ].join("\n");
 
 /**
@@ -141,6 +146,7 @@ export type Invocation =
   | { command: "check"; json: boolean; scope: string[] }
   | { command: "status"; json: boolean; scope: string[] }
   | { command: "board"; json: boolean }
+  | { command: "context"; json: boolean; workItem: string }
   | { command: "report"; json: boolean }
   | { command: "add-spec-node"; json: boolean; type: string }
   | {
@@ -224,6 +230,7 @@ interface Options {
   type: string | null;
   agent: string | null;
   refs: string[];
+  workItem: string | null;
   /** The words that began with no dash, in the order they were typed. */
   words: string[];
 }
@@ -260,6 +267,7 @@ function optionsOf(
     type: boolean;
     agent: boolean;
     refs: boolean;
+    workItem: boolean;
     words: boolean;
   },
 ): Options | UsageError {
@@ -268,6 +276,7 @@ function optionsOf(
   let type: string | null = null;
   let agent: string | null = null;
   const refs: string[] = [];
+  let workItem: string | null = null;
   const positional: string[] = [];
   // Shifted rather than indexed, because an option that carries a value eats the
   // word after it and a `for` over the array would have to be told it did.
@@ -317,13 +326,21 @@ function optionsOf(
       refs.push(...ids);
       continue;
     }
+    if (takes.workItem && isOption("--work-item", word)) {
+      const value = valueOf("--work-item", word, words);
+      if (value === undefined) {
+        return needs(command, "an id after --work-item");
+      }
+      workItem = value;
+      continue;
+    }
     if (takes.words && !word.startsWith("-")) {
       positional.push(word);
       continue;
     }
     return unexpected(command, word);
   }
-  return { json, scope, type, agent, refs, words: positional };
+  return { json, scope, type, agent, refs, workItem, words: positional };
 }
 
 /**
@@ -389,6 +406,7 @@ export function parseArguments(
       type: false,
       agent: true,
       refs: false,
+      workItem: false,
       words: false,
     });
     if ("usage" in read) {
@@ -414,9 +432,29 @@ export function parseArguments(
       type: false,
       agent: false,
       refs: false,
+      workItem: false,
       words: false,
     });
     return "usage" in read ? read : { command: "board", json: read.json };
+  }
+
+  if (word === "context") {
+    const read = optionsOf("context", rest, {
+      scope: false,
+      type: false,
+      agent: false,
+      refs: false,
+      workItem: true,
+      words: false,
+    });
+    if ("usage" in read) {
+      return read;
+    }
+    // The work item is the whole of this command: a look back is one item's.
+    if (read.workItem === null) {
+      return needs("context", "a work item id");
+    }
+    return { command: "context", json: read.json, workItem: read.workItem };
   }
 
   if (word === "report") {
@@ -425,6 +463,7 @@ export function parseArguments(
       type: false,
       agent: false,
       refs: false,
+      workItem: false,
       words: false,
     });
     return "usage" in read ? read : { command: "report", json: read.json };
@@ -436,6 +475,7 @@ export function parseArguments(
       type: false,
       agent: false,
       refs: false,
+      workItem: false,
       words: false,
     });
     if ("usage" in read) {
@@ -452,6 +492,7 @@ export function parseArguments(
       type: true,
       agent: false,
       refs: false,
+      workItem: false,
       words: false,
     });
     if ("usage" in read) {
@@ -471,6 +512,7 @@ export function parseArguments(
       type: false,
       agent: false,
       refs: true,
+      workItem: false,
       words: true,
     });
     if ("usage" in read) {

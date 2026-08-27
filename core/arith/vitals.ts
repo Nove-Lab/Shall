@@ -16,7 +16,7 @@ import {
 } from "./color.js";
 import { reviewGraph, type ReviewStatus } from "./review.js";
 import { criteriaOf } from "./satisfaction.js";
-import { isClosableWorkItem } from "./work-item-state.js";
+import { isClosableWorkItem, type WorkItemState } from "./work-item-state.js";
 
 /**
  * THE VITALS: how far the specification has come, and what it still lacks. Two
@@ -124,15 +124,15 @@ export interface CompletionRow {
   /**
    * Every work item not yet done, id order, each with the word it wears — the
    * same flat list the other rows keep, so the four drill-downs read alike.
-   * The word is the review's own (`ready` or `blocked`, never `done` here);
-   * what blocks a blocked one is not repeated on this surface — the work
-   * item's own page and the board's ordering already answer that.
+   * The word is the review's own (`ready`, `blocked` or `in_review`, never
+   * `done` here); what blocks a blocked one is not repeated on this surface —
+   * the work item's own page and the board's ordering already answer that.
    */
   open: OpenWorkItem[];
 }
 
 export interface OpenWorkItem extends Ref {
-  workItemState: "blocked" | "ready";
+  workItemState: Exclude<WorkItemState, "done">;
 }
 
 export interface Progress {

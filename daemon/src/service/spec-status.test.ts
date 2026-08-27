@@ -329,9 +329,10 @@ describe("what one node's row carries", () => {
     const open = await statusOf(project, "AC-0001");
     assert.equal(open.closure, "open");
     assert.equal(open.workItemState, null);
-    const ready = await statusOf(project, "WI-0001");
-    assert.equal(ready.closure, "open");
-    assert.equal(ready.workItemState, "ready");
+    // A report claims it and nobody has answered: open, and in review.
+    const claimed = await statusOf(project, "WI-0001");
+    assert.equal(claimed.closure, "open");
+    assert.equal(claimed.workItemState, "in_review");
     // A type that is no closure subject says so with its own nulls.
     assert.equal((await statusOf(project, "G-0001")).closure, null);
 
@@ -627,10 +628,9 @@ describe("the board, reached by path", () => {
     const project = await greenProject();
     const board = await boardAt(project.path);
     assert.equal(board.root, project.path);
-    assert.deepEqual(
-      board.implement.map((row) => row.id),
-      ["WI-0001"],
-    );
+    // WI-0001 is in review — its report is waiting on a person — so the panel's
+    // board and this one both leave the Implement half empty.
+    assert.deepEqual(board.implement, []);
     assert.deepEqual(board.fixSpec, []);
   });
 

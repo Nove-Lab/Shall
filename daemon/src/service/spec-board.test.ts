@@ -135,8 +135,16 @@ async function refused(work: Promise<unknown>): Promise<Refusal> {
 }
 
 describe("the Implement half", () => {
-  test("offers the work item once its whole chain is read", async () => {
+  test("offers the work item once its whole chain is read and its report is answered", async () => {
     const project = await greenProject();
+    // The report claiming WI-0001 keeps it in review; a person leaving it open
+    // says more work is owed, which is when the board offers it again.
+    assert.deepEqual((await workBoard(project.id)).implement, []);
+    await leaveSpecOpen({
+      projectId: project.id,
+      id: "WI-0001",
+      rationale: "WL-0001 stops at the happy path; the retry is not shown.",
+    });
     const board = await workBoard(project.id);
     assert.deepEqual(
       board.implement.map((row) => row.id),
@@ -164,6 +172,11 @@ describe("the Implement half", () => {
 
   test("hides it while one node above it is refused, and offers it again once fixed", async () => {
     const project = await greenProject();
+    await leaveSpecOpen({
+      projectId: project.id,
+      id: "WI-0001",
+      rationale: "WL-0001 stops at the happy path; the retry is not shown.",
+    });
     await rejectSpecNode({
       projectId: project.id,
       id: "R-0001",
@@ -237,12 +250,24 @@ describe("the Implement half", () => {
     // the demo's own situation — and it comes back green by itself the moment
     // the prerequisite closes, because its approval never lapsed.
 
-    // WI-0001 waits on WI-0002, so only the second is on the board.
+    // WI-0001 waits on WI-0002, so only the second can be on the board — and
+    // it is there once a person has answered the report claiming it.
+    assert.deepEqual((await workBoard(project.id)).implement, []);
+    await leaveSpecOpen({
+      projectId: project.id,
+      id: "WI-0002",
+      rationale: "More to do.",
+    });
     assert.deepEqual(
       (await workBoard(project.id)).implement.map((row) => row.id),
       ["WI-0002"],
     );
     await acceptSpecClosure({ projectId: project.id, id: "WI-0002" });
+    await leaveSpecOpen({
+      projectId: project.id,
+      id: "WI-0001",
+      rationale: "More to do.",
+    });
     const board = await workBoard(project.id);
     assert.deepEqual(
       board.implement.map((row) => row.id),
@@ -285,10 +310,10 @@ describe("the Implement half", () => {
     );
   });
 
-  test("shows a work item the queue is also asking about", async () => {
-    // The two surfaces answer two questions and both are true at once: the
-    // queue asks whether the work shown is enough, the board says the work item is
-    // not closed yet.
+  test("keeps a work item off the board while the queue asks about it", async () => {
+    // The queue asks whether the work shown is enough; the board, which offers
+    // work to start, does not offer this one again until that is answered — a
+    // second turn would build the same thing twice.
     const project = await greenProject();
     assert.equal(
       (await reviewQueue(project.id)).bundles.some(
@@ -296,10 +321,7 @@ describe("the Implement half", () => {
       ),
       true,
     );
-    assert.deepEqual(
-      (await workBoard(project.id)).implement.map((row) => row.id),
-      ["WI-0001"],
-    );
+    assert.deepEqual((await workBoard(project.id)).implement, []);
   });
 });
 

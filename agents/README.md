@@ -10,7 +10,7 @@ So a change to a procedure is a change to one file under `core/`, and a new agen
 core/
   entries/          one file per command — the gate, the dispatch, the handover
   skills/           one folder per process — the spine, and its reference pages
-  hooks/            check-spec.mjs, which is script rather than prose
+  hooks/            check-spec.mjs and guard-paths.mjs, which are script rather than prose
 profiles/
   claude/
     profile.mjs     the vocabulary, the blocks, the frontmatter, the layout
@@ -57,7 +57,7 @@ Today's vocabulary:
 
 **A profile value that is not a plain translation carries a comment saying why.** Rendering `{{Ask}}` as Claude's own tool name needs no defence. Emitting a key core never wrote, dropping one it did, or ending a shared sentence somewhere core did not, is a decision about the process rather than about spelling — and the next person to read the profile has no other way to tell the two apart. The claude profile has three such comments today: `disable-model-invocation`, which it adds to every entry; `summary`, which it drops because Claude's frontmatter has no key for it; and `process: false`, which it spells as the absence of a key.
 
-The codex profile has five, and they are all one kind: a promise that was kept by a permission layer next door and is kept by a sentence here. `{{no-write-guard}}` and the two ledger guards say outright that nothing will stop the agent, because Shall wires no per-path deny for Codex and a guard that implied one would be a lie a session acts on. Core's `description` is dropped for its `summary` — Codex reads every skill's description into a startup catalog on a small budget, and seven paragraphs there would be spent on prose nobody asked for — and core's `tools` is dropped altogether, because a Codex skill's frontmatter takes a name and a description and nothing else.
+The codex profile has five, and they are all one kind: a promise that is kept by a permission layer next door and by a hook or a sentence here. `{{no-write-guard}}` says outright that nothing will stop the agent, because Codex has no per-command tool list; the two ledger guards name the pre-tool hook Shall wires and keep the rule in words for wherever a hook is not running. Core's `description` is dropped for its `summary` — Codex reads every skill's description into a startup catalog on a small budget, and seven paragraphs there would be spent on prose nobody asked for — and core's `tools` is dropped altogether, because a Codex skill's frontmatter takes a name and a description and nothing else.
 
 ## Running it without installing
 
@@ -70,7 +70,7 @@ The path is resolved against wherever `claude` was started — which is the proj
 
 After editing any file under `core/` or `profiles/`, regenerate and then `/reload-plugins` in the running session picks the change up; there is no need to restart Claude Code. A change to the canon needs `bun run build:core` first, or the prose is linted against a stale copy of it.
 
-Codex has no plugin folder and no flag that points at one, so the codex tree is written into the project it is meant to run in — which `shall init --agent codex` now does, all three pieces of it: the skills under the project's own `.agents/skills/`, the hook under `.codex/` and wired from `.codex/hooks.json`, and `AGENTS.md.block` as a fenced span inside the project's `AGENTS.md`. To try a change to the prose without a daemon in the way, the skills alone are a copy:
+Codex has no plugin folder and no flag that points at one, so the codex tree is written into the project it is meant to run in — which `shall init --agent codex` now does, all three pieces of it: the skills under the project's own `.agents/skills/`, the two hooks under `.codex/` and wired from `.codex/hooks.json`, and `AGENTS.md.block` as a fenced span inside the project's `AGENTS.md`. To try a change to the prose without a daemon in the way, the skills alone are a copy:
 
 ```bash
 bun run build:agents
@@ -122,15 +122,16 @@ The folder you run in must already be a Shall project. `shall init` makes one.
 | `core/skills/shall-authoring/` | how a spec node file is written: the path, the id, the frontmatter, the relation lines, what to do when a check refuses one, and when something you noticed is worth a finding |
 | `core/skills/shall-specify/` | the elicitation process itself, one file per phase |
 | `core/skills/shall-plan/` | the design process: the planning stage, its three criteria files — modules, contracts, work items — and the transcription stage |
-| `core/skills/shall-work/` | the work cycle: the survey, the handover into the stretch outside Shall and the self-check on the way back, the record, and the forecast — one file per part |
+| `core/skills/shall-work/` | the work cycle: the survey, the look back over the module's past and the recent turns, the handover into the stretch outside Shall and the self-check on the way back, the record, and the forecast — one file per part |
 | `core/skills/shall-raise/` | the question process, and the mechanics of its four landings |
 | `core/skills/shall-help/` | the guide's own words: what Shall is in a screen, how the project's standing is read out of status and board, and the tree that turns it into a next step |
 | `core/hooks/check-spec.mjs` | runs `shall check --scope <file>` after any write under `.shall/spec/`, and hands the findings back to the agent by exiting 2. One script for every agent: it reads a payload that names one file, a payload whose command is a patch envelope naming several, or a path passed as its own first argument |
 | `profiles/claude/profile.mjs` | the Claude spelling of all of it — and the one file a second agent's folder has to answer |
 | `profiles/claude/static/.claude-plugin/plugin.json` | the manifest. `name` is `shall`, which is what puts every command under `/shall:` |
-| `profiles/claude/static/hooks/hooks.json` | wires the hook to `Write`, `Edit` and `MultiEdit` |
+| `core/hooks/guard-paths.mjs` | refuses, before the tool runs, a write under `.shall/ledger/` and the removal of a file under `.shall/spec/` — exit 2 with one sentence. Same three payload shapes as the check; a read over the same paths passes in silence |
+| `profiles/claude/static/hooks/hooks.json` | wires the check after `Write`, `Edit` and `MultiEdit`, and the guard before `Bash` and those three |
 | `profiles/codex/profile.mjs` | the Codex spelling. Seven commands become seven skills, the five process pages become the `references/spine.md` of the command that hands over to them, and the always-on block is assembled here from what the entries declare |
-| `profiles/codex/static/hooks/hooks.json` | wires the hook to `apply_patch`, `Edit` and `Write` — `apply_patch` is the tool name Codex reports, and its payload carries the patch rather than a path |
+| `profiles/codex/static/hooks/hooks.json` | wires the check after `apply_patch`, `Edit` and `Write`, and the guard before `Bash` and those three — `apply_patch` is the tool name Codex reports, and its payload carries the patch rather than a path |
 
 An entry carries no process. It dispatches and delegates, so a change to how a phase or a stage runs is a change to one skill file and to nothing else — with one stated exception: `shall-help` carries its own part 1 in its body, because for a guide the words are the process.
 

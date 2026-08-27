@@ -107,11 +107,24 @@ describe("the agent kit", () => {
 
     const settings = JSON.parse(
       await readFile(at(project, ".claude/settings.json"), "utf8"),
-    ) as { hooks: { PostToolUse: { hooks: { command: string }[] }[] } };
+    ) as {
+      hooks: {
+        PreToolUse: { matcher: string; hooks: { command: string }[] }[];
+        PostToolUse: { hooks: { command: string }[] }[];
+      };
+    };
     assert.match(
       settings.hooks.PostToolUse[0]?.hooks[0]?.command ?? "",
       /\$CLAUDE_PROJECT_DIR\/\.claude\/hooks\/shall\/check-spec\.mjs/,
     );
+    // The guard fires before a tool, and it is the same script the Codex kit
+    // carries — read out of the generated wiring, in the project dialect.
+    assert.equal(settings.hooks.PreToolUse[0]?.matcher, "Bash|Write|Edit|MultiEdit");
+    assert.match(
+      settings.hooks.PreToolUse[0]?.hooks[0]?.command ?? "",
+      /\$CLAUDE_PROJECT_DIR\/\.claude\/hooks\/shall\/guard-paths\.mjs/,
+    );
+    assert.ok(await exists(at(project, ".claude/hooks/shall/guard-paths.mjs")));
   });
 
   test("every generated page says which Shall wrote it, on the line under the marker", async () => {
@@ -352,12 +365,18 @@ describe("the hook wiring", () => {
         2,
       )}\n`,
     );
-    const before = await readFile(settingsOf(project), "utf8");
-
     await writeAgentKit(project);
     // The person's own matcher and flags are the wiring; a second entry would
-    // run the compile twice on every write.
-    assert.equal(await readFile(settingsOf(project), "utf8"), before);
+    // run the compile twice on every write. The guard is a hook they did not
+    // wire, and it arrives under its own event beside theirs.
+    const settings = JSON.parse(await readFile(settingsOf(project), "utf8")) as {
+      hooks: { PreToolUse: unknown[]; PostToolUse: { matcher: string }[] };
+    };
+    assert.deepEqual(
+      settings.hooks.PostToolUse.map((held) => held.matcher),
+      ["Write"],
+    );
+    assert.equal(settings.hooks.PreToolUse.length, 1);
   });
 
   test("a settings file that cannot be read is silence, not a failure", async () => {

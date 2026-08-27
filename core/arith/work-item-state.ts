@@ -4,18 +4,28 @@ import {
   type NodeTypeName,
   type SpecNode,
 } from "../graph/index.js";
-import { closureOf } from "./closure.js";
+import { claimantsOf, closureOf, closureVerdictOf } from "./closure.js";
 import type { ColorContext } from "./color.js";
 
 /**
- * WHETHER A WORK ITEM CAN BE PICKED UP — blocked, ready, or done.
+ * WHETHER A WORK ITEM CAN BE PICKED UP — blocked, ready, in review, or done.
  *
- * THREE WORDS, MUTUALLY EXCLUSIVE, AND EVERY WORK ITEM HAS EXACTLY ONE. `done` is
+ * FOUR WORDS, MUTUALLY EXCLUSIVE, AND EVERY WORK ITEM HAS EXACTLY ONE. `done` is
  * the closure axis: a person said the completion reports claiming this work item
- * satisfy it. `ready` is everything the board's Implement column asks for — nothing
- * above it is unread or refused, and everything it waits on is finished.
- * `blocked` is the rest, which is not a defect and not a warning: it is simply
- * a work item whose turn has not come.
+ * satisfy it. `in_review` is the stretch between a report and that word: somebody
+ * has called the work finished and nobody has judged it yet, so a second turn
+ * picking it up would build the same thing twice — the board keeps it off the
+ * Implement column for exactly that reason. `ready` is everything the column
+ * asks for — nothing above it is unread or refused, and everything it waits on
+ * is finished. `blocked` is the rest, which is not a defect and not a warning:
+ * it is simply a work item whose turn has not come.
+ *
+ * WHAT ENDS A REVIEW WITHOUT ENDING THE WORK: a report a person REFUSED is red
+ * and claims nothing here, and a list a person LEFT OPEN is a judgment already
+ * made — both send the work item back to `ready`, because both say more work is
+ * owed. A work log alone never puts a work item in review: a log is how the work
+ * was done, not a claim that it is finished, so a turn that stopped part-way
+ * leaves the item ready for the next one to carry on.
  *
  * IT IS ONE PREDICATE SET WITH TWO READERS, WHICH IS WHY IT IS ITS OWN MODULE.
  * The board (`board.ts`) lists the ready ones; the review (`review.ts`) puts
@@ -105,6 +115,24 @@ const UPWARD: Partial<
  */
 export function isCompleted(workItem: SpecNode, context: ColorContext): boolean {
   return closureOf(workItem, context) === "closed";
+}
+
+/**
+ * Whether somebody has called this work item finished and nobody has answered
+ * yet — a completion report claiming it that is not refused, and no standing
+ * word from a person over the list.
+ */
+export function isInReview(
+  workItem: SpecNode,
+  context: ColorContext,
+  colorAt: ColorAt,
+): boolean {
+  if (closureVerdictOf(workItem, context)?.kind === "left-open") {
+    return false;
+  }
+  return claimantsOf(workItem.id, context).some(
+    (claimant) => colorAt(claimant.id) !== "red",
+  );
 }
 
 /**
@@ -200,20 +228,30 @@ export function chainGreen(
   return upwardChainOf(workItem, context).every((id) => colorAt(id) === "green");
 }
 
+/** The word a work item wears — see the module's doc comment for the four. */
+export type WorkItemState = "blocked" | "ready" | "in_review" | "done";
+
 /**
- * The word for this work item: `done`, `ready`, or `blocked`. Exactly one, always.
+ * The word for this work item: `done`, `blocked`, `in_review`, or `ready`.
+ * Exactly one, always, asked in that order — a closed item is done whatever
+ * else is true of it; an item whose turn has not come is blocked whatever has
+ * been claimed about it, because `blocked` is the word the premature rule
+ * reads and a log under an unread chain is early whether or not a report
+ * followed it; and only a startable item can be in review, which is what keeps
+ * `in_review` a fact about the board's own list.
  */
 export function workItemStateOf(
   workItem: SpecNode,
   context: ColorContext,
   colorAt: ColorAt,
-): "blocked" | "ready" | "done" {
+): WorkItemState {
   if (isCompleted(workItem, context)) {
     return "done";
   }
-  return prerequisitesMet(workItem, context) && chainGreen(workItem, context, colorAt)
-    ? "ready"
-    : "blocked";
+  if (!prerequisitesMet(workItem, context) || !chainGreen(workItem, context, colorAt)) {
+    return "blocked";
+  }
+  return isInReview(workItem, context, colorAt) ? "in_review" : "ready";
 }
 
 /**

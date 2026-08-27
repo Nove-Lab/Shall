@@ -213,3 +213,55 @@ export async function activityFeed(input: {
   }
   return { months, month, entries: [...reading.records].reverse() };
 }
+
+/**
+ * The newest records of one kind, newest first, read from as many months back
+ * as it takes to find `limit` of them — the look back's clock, and the one
+ * reading of the feed that is not the web's.
+ *
+ * WHAT COMES BACK IS RECORDS AND NOT THE FEED. The caller is `contextAt`, which
+ * hands an agent the journals those records name and nothing the records say;
+ * the rule that no procedure hands the feed to an agent is kept here by shape.
+ * A month that will not read refuses like the panel's reading does, because a
+ * clock with a month missing from it orders the wrong turns first.
+ */
+export async function recentActivity(
+  feedDir: string,
+  kind: ActivityRecord["kind"],
+  limit: number,
+): Promise<ActivityRecord[]> {
+  let names: string[];
+  try {
+    names = await readdir(feedDir);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "ENOENT" || code === "ENOTDIR") {
+      return [];
+    }
+    throw conflict(
+      `The activity feed folder at ${feedDir} could not be listed: ${describeFileFailure(error)}.`,
+    );
+  }
+  const months = names
+    .filter((name) => MONTH_FILE.test(name))
+    .sort((a, b) => compare(b, a));
+  const found: ActivityRecord[] = [];
+  for (const name of months) {
+    const file = path.join(feedDir, name);
+    const reading = await readActivity(file);
+    if (reading.problem !== null) {
+      throw conflict(
+        `Shall could not read the activity feed at ${file} — ${reading.problem} ${RESTORE_THE_BOOK}`,
+      );
+    }
+    for (const record of [...reading.records].reverse()) {
+      if (record.kind === kind) {
+        found.push(record);
+        if (found.length >= limit) {
+          return found;
+        }
+      }
+    }
+  }
+  return found;
+}

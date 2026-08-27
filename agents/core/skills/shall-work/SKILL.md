@@ -13,7 +13,7 @@ process: true
 
 One turn of work, end to end:
 
-survey → **stop 1**, the pick → the stretch outside Shall → the self-check → **stop 2**, the write-up → the record → done.
+survey → the look back → **stop 1**, the pick → the stretch outside Shall → the self-check → **stop 2**, the write-up → the record → done.
 
 One turn is one journal. One item is one work log. Three commands come in here — `/shall:work` runs the whole cycle, `/shall:work.todo` runs the survey alone, `/shall:work.report` runs the write-up alone — and they are the same parts assembled or loose, which is why they share one page.
 
@@ -39,26 +39,35 @@ Nothing in this skill or in its part files lists a type's fields, its body headi
 
 **A record is never revised.** An execution node a person has approved is what happened, and what happened does not change. A correction is a new record in a new turn, saying what was found and what is true now.
 
-**Fix Spec is a debt, not a choice.** Whatever the board's Fix Spec half holds is somebody's turn right now and that somebody is you. It comes before new work: writing on top of a red graph buries the red and hands a person a card they cannot judge.
+**Fix Spec is a debt, not a choice.** Whatever the board's Fix Spec half holds comes before new work: writing on top of a red graph buries the red and hands a person a card they cannot judge. Which door it is fixed through is the row's `kind`, and for a rejection the node's `band` in `shall status --json`:
+
+| The row | Who fixes it |
+|---|---|
+| grammar — a seam, an orphan, an id nothing answers to, a file that will not read | you, here, in this turn |
+| a person's rejection of an intent or domain node | `/shall:specify <the rationale>` — a change up there stales what hangs under it, and that process walks the reach and reruns the layers below; say so and stop |
+| a person's rejection of a plan node | `/shall:plan <the rationale>`, for the same reason; say so and stop |
+| a person's rejection of an execution record | nobody edits it — a record is never revised. The item is ready again; a new turn writes a new record |
 
 ## The cycle and its two stops
 
 | Stop | What you put to the user | What a "no" means |
 |---|---|---|
-| 1 — the pick | the ids you mean to take this turn, one line each on why, and one line each on how you mean to approach it | they adjust the list or the approach; follow it and go on |
+| 1 — the pick | the ids you mean to take this turn, one line each on why, and one line each on how you mean to approach it, drawn from the look back — and, where you cannot see it finishing this turn, that `/shall:plan` should split it first | they adjust the list or the approach; follow it and go on |
 | 2 — the write-up | the record you mean to write, in full: a log per item, and each report, evidence and finding with what it points at | take the objection back into the draft and put it again |
 
 Nothing else stops. Everything up to stop 2 is held in the conversation — no part of the record reaches disk before it passes.
 
-The approach line is the one thing Shall asks about the doing before it starts — enough that the person can redirect you, not a plan. Under `--auto` it is written into the journal instead.
+The approach line is the one thing Shall asks about the doing before it starts — enough that the person can redirect you, not a plan. It stands on what the look back showed: the conventions this module's earlier logs settled on, what those logs left behind, and what a person decided. Under `--auto` it is written into the journal instead.
 
 ## Picking the bundle
 
-**Fix Spec first, then the ready work items from the top of the board's own order.** The rows there have already been judged startable — a work item is on that list only if its prerequisites are closed and everything above it is agreed — so do not re-check a chain or a wait. A Fix Spec row carries the rationale a person wrote, whole, because it is a work order.
+**Fix Spec first, then the ready work items — the board's Implement list is the whole pool.** Every row there has already been judged startable, and an item somebody has reported finished is not on it while a person judges the report — so do not re-check a chain, a wait or a review. A Fix Spec row carries the rationale a person wrote, whole, because it is a work order.
 
-**Three at most, and one is a fine answer.** The count is what this page governs and the only thing it governs about the doing: in what order you take them, and how, is yours. More than three only when the user asks for more in so many words — and then say once that three is the recommended maximum, and follow them.
+**Three at most, and one is a fine answer.** Which three: an item with a log already against it (`addressedBy`) first — a turn that stopped part-way is carried on before anything new is begun — then the board's own order, then what the look back gives a reason to take together. In what order you do them, and how, is yours. More than three only when the user asks for more in so many words — and then say once that three is the recommended maximum, and follow them.
 
 The user's steering words narrow the candidates and never overrule taking Fix Spec first. If a finding nobody has answered names one of the candidates, say so at stop 1: it may change what is worth starting. That is a reason to look, not a rule that stops anything.
+
+**Once the candidates are chosen, look back before you stand at stop 1** — [references/lookback.md](references/lookback.md). It changes the bundle's shape and your approach, never its eligibility.
 
 ## Out of Shall's scope — the handover
 
@@ -74,7 +83,9 @@ What Shall asks of the stretch is its two ends and nothing between them: one lin
 
 1. **Open its definition of done and compare, by running and calling.** A definition of done is observable by construction — what runs, what answers — so observe it: run what it says runs, call what it says answers, and write down what you saw. A part that does not hold sends you back into the stretch; the item is not finished until it holds.
 2. **For each criterion the item targets, run the evaluation process the criterion's own file describes**, and keep the result. That result is what the evidence will point at.
-3. **If a part of the definition of done cannot be made to hold** — the specification is wrong about something, the work depends on what is not there — stop comparing. The item is unfinished, the reason is a finding for the write-up, and whether it is blocking the work is yours to judge and mark; nothing computed reads the mark.
+3. **Hold the code to the module.** What the module's Contracts section says at signature level, the code answers as written; a departure the code needed is a finding, never a quiet difference.
+4. **Re-run the closed criteria the look back named** — the `criteria` rows with `closure: closed`. One that no longer holds is a finding marked as blocking: a closure that lapsed in the code and not in the graph is the one regression nothing else will show.
+5. **If a part of the definition of done cannot be made to hold** — the specification is wrong about something, the work depends on what is not there — stop comparing. The item is unfinished, the reason is a finding for the write-up, and whether it is blocking the work is yours to judge and mark; nothing computed reads the mark.
 
 Only an item that passed this comparison is reported finished, and only that item gets a completion report: the report's claim rests on the comparison, not on the sense that the work went well. Under `--auto` the comparison runs the same; what it finds is written, never asked about.
 
@@ -141,6 +152,7 @@ Read a part's file when you enter that part, and not before.
 | Part | What it does | Read |
 |---|---|---|
 | survey | what needs doing, in four readings, writing nothing | [references/todo.md](references/todo.md) |
+| look back | the module's past and the recent turns, read before stop 1, writing nothing | [references/lookback.md](references/lookback.md) |
 | develop | the handover, the stretch outside Shall, and the self-check on the way back | [references/develop.md](references/develop.md) |
 | record | the turn written up, from notes or from git | [references/report.md](references/report.md) |
 | forecast | `--dry`: the turn predicted and nothing written | [references/forecast.md](references/forecast.md) |
@@ -149,7 +161,7 @@ Read a part's file when you enter that part, and not before.
 
 ## The end
 
-- **The cycle, and the write-up alone**: name the journal and its logs, say everything written is yellow, say a Work report card is waiting (and a Spec approval card for each spec file this turn edited), and say that running `shall` with no arguments opens the queue — say it, do not run it. The record's procedure has already logged the turn to the Activity Feed — once, and only there; if that log failed, the one line saying so belongs here, and nothing else changes. Then stop. You are not waiting for the review.
+- **The cycle, and the write-up alone**: name the journal and its logs, say everything written is yellow, say a Work report card is waiting (and a Spec approval card for each spec file this turn edited), and say that running `shall` with no arguments opens the queue — say it, do not run it. For each item reported finished, say what its closing would let start — the look back's `unblocks` — so the person knows what their judgment opens. The record's procedure has already logged the turn to the Activity Feed — once, and only there; if that log failed, the one line saying so belongs here, and nothing else changes. Then stop. You are not waiting for the review.
 - **`--auto`**: the same, with the summary above.
 - **`--dry`**: the forecast's own closing line, and nothing written — and nothing logged: a forecast is not a turn, and the feed records turns.
 - **The survey**: the four readings and at most one line of suggestion. Nothing is logged here either; a reading is not a doing.

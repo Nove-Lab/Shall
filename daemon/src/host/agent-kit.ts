@@ -130,8 +130,8 @@ function claudeTargetOf(relative: string): string | null {
   if (folder === "skills" && rest.length > 1 && relative.endsWith(".md")) {
     return `.claude/skills/${rest.join("/")}`;
   }
-  if (relative === "hooks/check-spec.mjs") {
-    return ".claude/hooks/shall/check-spec.mjs";
+  if (relative.startsWith("hooks/") && relative.endsWith(".mjs")) {
+    return `.claude/hooks/shall/${relative.slice("hooks/".length)}`;
   }
   return null;
 }
@@ -143,8 +143,17 @@ async function claudeWalk(root: string): Promise<string[]> {
     found.push(`commands/${entry}`);
   }
   found.push(...(await skillFiles(root)));
-  found.push("hooks/check-spec.mjs");
+  found.push(...(await hookScripts(root)));
   return found;
+}
+
+/** Every `.mjs` under a tree's `hooks/`, "/"-separated from the tree's root. */
+export async function hookScripts(root: string): Promise<string[]> {
+  const entries = await readdir(path.join(root, "hooks")).catch(() => []);
+  return entries
+    .filter((entry) => entry.endsWith(".mjs"))
+    .sort()
+    .map((entry) => `hooks/${entry}`);
 }
 
 /** Every `.md` under a tree's `skills/`, "/"-separated from the tree's root. */
@@ -315,22 +324,85 @@ async function claudeRemoveStale(
   await removeStaleSkills(projectPath, written, ".claude/skills");
 }
 
-/** The hook entry Claude's settings file should hold — the compile-on-write loop. */
-const CLAUDE_HOOK_COMMAND =
-  'node "$CLAUDE_PROJECT_DIR/.claude/hooks/shall/check-spec.mjs"';
-
-/** Which tools Claude fires the hook after. */
-const CLAUDE_HOOK_MATCHER = "Write|Edit|MultiEdit";
-
-/** How long either agent may wait for the compile before giving up on it. */
+/** How long either agent may wait for a hook before giving up on it, when the wiring names no time. */
 export const HOOK_TIMEOUT = 90;
+
+/** One hook as the generated wiring declares it: the event it fires on, and the entry. */
+export interface DeclaredHook {
+  event: string;
+  matcher: string;
+  command: string;
+  timeout: number;
+}
+
+/**
+ * Every hook the generated tree declares, read out of its `hooks/hooks.json`
+ * rather than retyped here.
+ *
+ * THE PROFILE IS WHERE THE EVENT AND THE MATCHER LIVE. Which tool names an
+ * agent reports, and whether it fires a hook before a tool or after, are facts
+ * about that agent the profile already states; a copy of them in the daemon
+ * would be a second answer to keep in step. Anything unreadable answers an
+ * empty list and the wiring is skipped in silence, because a hook nobody could
+ * describe is not one to invent.
+ */
+export async function declaredHooks(layout: KitLayout): Promise<DeclaredHook[]> {
+  const text = await readKitFile(layout, "hooks/hooks.json").catch(() => null);
+  if (text === null) {
+    return [];
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text) as unknown;
+  } catch {
+    return [];
+  }
+  if (!isPlainObject(parsed) || !isPlainObject(parsed.hooks)) {
+    return [];
+  }
+  const found: DeclaredHook[] = [];
+  for (const [event, entries] of Object.entries(parsed.hooks)) {
+    if (!Array.isArray(entries)) {
+      continue;
+    }
+    for (const entry of entries as unknown[]) {
+      if (!isPlainObject(entry) || typeof entry.matcher !== "string") {
+        continue;
+      }
+      const hooks = Array.isArray(entry.hooks) ? (entry.hooks as unknown[]) : [];
+      for (const hook of hooks) {
+        if (!isPlainObject(hook) || typeof hook.command !== "string") {
+          continue;
+        }
+        found.push({
+          event,
+          matcher: entry.matcher,
+          command: hook.command,
+          timeout: typeof hook.timeout === "number" ? hook.timeout : HOOK_TIMEOUT,
+        });
+      }
+    }
+  }
+  return found;
+}
+
+/** Every declared hook, merged into one file — the command said in the layout's own grammar. */
+export async function wireDeclaredHooks(
+  layout: KitLayout,
+  filePath: string,
+  commandOf: (declared: string) => string = (declared) => declared,
+): Promise<void> {
+  for (const hook of await declaredHooks(layout)) {
+    await mergeHookEntry(filePath, hook.matcher, commandOf(hook.command), hook.timeout, hook.event);
+  }
+}
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 /**
- * Merges one compile-hook entry into a `PostToolUse` list, with the deny rules'
+ * Merges one hook entry into one event's list, with the deny rules'
  * own restraint: a missing file is written fresh, an unparseable or
  * wrong-shaped one is left alone, a present entry is not rewritten, and only
  * the missing entry is appended.
@@ -349,6 +421,7 @@ export async function mergeHookEntry(
   matcher: string,
   command: string,
   timeout: number,
+  event = "PostToolUse",
 ): Promise<void> {
   const entry = {
     matcher,
@@ -368,7 +441,7 @@ export async function mergeHookEntry(
     await mkdir(path.dirname(filePath), { recursive: true });
     await writeByRename(
       filePath,
-      `${JSON.stringify({ hooks: { PostToolUse: [entry] } }, null, 2)}\n`,
+      `${JSON.stringify({ hooks: { [event]: [entry] } }, null, 2)}\n`,
     );
     return;
   }
@@ -387,16 +460,19 @@ export async function mergeHookEntry(
     return;
   }
   const block: Record<string, unknown> = hooks ?? {};
-  const post = block.PostToolUse;
-  if (post !== undefined && !Array.isArray(post)) {
+  // ANY EVENT OF THE WRONG SHAPE LEAVES THE WHOLE FILE ALONE, not only the one
+  // being written to: a file whose `PostToolUse` is not a list is a file whose
+  // shape Shall does not understand, and adding a well-formed `PreToolUse`
+  // beside it would be deciding what the rest meant.
+  if (Object.values(block).some((held) => held !== undefined && !Array.isArray(held))) {
     return;
   }
-  const entries: unknown[] = post ?? [];
+  const entries: unknown[] = (block[event] as unknown[] | undefined) ?? [];
   const present = entries.some((held) => JSON.stringify(held).includes(wired));
   if (present) {
     return;
   }
-  block.PostToolUse = [...entries, entry];
+  block[event] = [...entries, entry];
   parsed.hooks = block;
   await writeByRename(filePath, `${JSON.stringify(parsed, null, 2)}\n`);
 }
@@ -413,12 +489,11 @@ export const CLAUDE_LAYOUT: KitLayout = {
   targetOf: claudeTargetOf,
   transform: claudeDialect,
   removeStale: claudeRemoveStale,
+  // The plugin's own root becomes the project's folder — the one place the
+  // hook command is said in the project dialect rather than the plugin's.
   wireHooks: (projectPath) =>
-    mergeHookEntry(
-      getAgentSettingsPath(projectPath),
-      CLAUDE_HOOK_MATCHER,
-      CLAUDE_HOOK_COMMAND,
-      HOOK_TIMEOUT,
+    wireDeclaredHooks(CLAUDE_LAYOUT, getAgentSettingsPath(projectPath), (command) =>
+      command.replaceAll("${CLAUDE_PLUGIN_ROOT}/hooks/", "$CLAUDE_PROJECT_DIR/.claude/hooks/shall/"),
     ),
 };
 

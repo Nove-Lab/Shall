@@ -56,7 +56,7 @@ Stop in every case. Do not work around any of them by reading the spec folder yo
 Two things the survey may turn up, and what each means here:
 
 - **Both halves of the board are empty → this turn is over before it starts.** Say so, say how many nodes are waiting in the Review Queue, and stop. It is not an error and not something to work around: what unblocks the board is a person judging what is waiting, or `/shall:plan` cutting more work — neither is this command's to do.
-- **Yellow execution records from earlier turns are not this run's business.** The queue is asynchronous by design: a report is written and the command stops, so records waiting on a person are the ordinary state of a healthy project. Do not offer to carry them, and do not treat them as unfinished work.
+- **Records waiting on a person are the ordinary state of a healthy project**, and the board already keeps an item off the Implement list while its report is judged. An item with a log and no report is on the list still, and it is picked first: a turn that stopped part-way is carried on, not begun again.
 
 ## Step 3 — hand over
 
