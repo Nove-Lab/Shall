@@ -1129,7 +1129,12 @@ if ("usage" in asked) {
     process.exitCode = 1;
   } else {
     try {
-      console.log((await upgradeShall()).join("\n"));
+      // The steps as they happen go to stderr — they are commentary for the
+      // person waiting through the download, not part of the answer — and the
+      // answer itself lands on stdout once there is one.
+      console.log(
+        (await upgradeShall((line) => console.error(line))).join("\n"),
+      );
     } catch (error) {
       console.error(sentenceOf(error));
       process.exitCode = 1;

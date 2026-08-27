@@ -37,7 +37,20 @@ import { isNewer, latestRelease, releasesBase, type Release } from "./release.js
  * executable is refused outright on some systems and is a torn file on the rest;
  * a rename swaps the name over to a finished file in one step, and the process
  * doing the renaming goes on running out of the old inode until it exits.
+ *
+ * THE WORK SAYS WHAT IT IS DOING WHILE IT DOES IT. The download is tens of
+ * megabytes and the machine fetching it is on whatever network it is on, so a
+ * command that said nothing until the end read as a command that had hung. Each
+ * step tells one sentence through `say` as it starts, and the download tells its
+ * bytes as they arrive — commentary for a person watching, which is why `main.ts`
+ * puts it on stderr and the answer alone on stdout.
  */
+
+/** How progress is told while the upgrade works: one sentence at a time. */
+export type Say = (line: string) => void;
+
+/** The `say` of a caller that did not bring one — every word kept. */
+const QUIET: Say = () => undefined;
 
 /** How long the release itself is waited for — this command was typed for it. */
 const ASKING = 5_000;
@@ -67,15 +80,77 @@ export function assetFor(platform: string, arch: string): string | null {
   return shipped.has(target) ? `shall-${target}` : null;
 }
 
-/** One file off the release, whole. A refusal arrives as a sentence, not a code. */
-async function download(what: string, from: string): Promise<Buffer> {
+/**
+ * One file off the release, whole. A refusal arrives as a sentence, not a code.
+ *
+ * A caller that brought `progress` gets the bytes counted as they arrive —
+ * against the length the server named, or against nothing when it named none —
+ * which is how the one long stretch of this command stays visibly moving.
+ */
+async function download(
+  what: string,
+  from: string,
+  progress?: (got: number, total: number | null) => void,
+): Promise<Buffer> {
   const response = await fetch(from).catch(() => null);
   if (response === null || !response.ok) {
     throw new Error(
       `Could not download ${what} from ${from} — nothing was replaced.`,
     );
   }
-  return Buffer.from(await response.arrayBuffer());
+  if (progress === undefined || response.body === null) {
+    return Buffer.from(await response.arrayBuffer());
+  }
+  const named = Number(response.headers.get("content-length"));
+  const total = Number.isFinite(named) && named > 0 ? named : null;
+  const reader = response.body.getReader();
+  const held: Buffer[] = [];
+  let got = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+      held.push(Buffer.from(value));
+      got += value.byteLength;
+      progress(got, total);
+    }
+  } catch {
+    // A connection that died mid-body is the same refusal as one that never
+    // answered: said as a sentence, with nothing replaced.
+    throw new Error(
+      `Could not download ${what} from ${from} — nothing was replaced.`,
+    );
+  }
+  return Buffer.concat(held);
+}
+
+/** Bytes the way a person reads a download: whole megabytes. */
+function inMegabytes(bytes: number): string {
+  return `${Math.max(1, Math.round(bytes / 1_000_000))} MB`;
+}
+
+/**
+ * A `progress` for `download` that speaks at milestones rather than at every
+ * chunk: each quarter when the size is known, every 8 MB when it is not. Chunks
+ * arrive by the thousand, and a line per chunk is the same silence as none —
+ * nobody reads a wall.
+ */
+function milestones(what: string, say: Say): (got: number, total: number | null) => void {
+  let told = 0;
+  return (got, total) => {
+    const step = total === null ? 8_000_000 : Math.ceil(total / 4);
+    if (got - told < step && got !== total) {
+      return;
+    }
+    told = got;
+    say(
+      total === null
+        ? `${what}: ${inMegabytes(got)} so far…`
+        : `${what}: ${inMegabytes(got)} of ${inMegabytes(total)}…`,
+    );
+  };
 }
 
 /**
@@ -107,6 +182,7 @@ export async function install(
   release: Release,
   asset: string,
   binaryPath: string,
+  say: Say = QUIET,
 ): Promise<void> {
   const from = release.assets.get(asset);
   if (from === undefined) {
@@ -135,14 +211,16 @@ export async function install(
     // Hashed off the disk rather than out of the response, so that a body which
     // arrived short or a filesystem that took only some of it is caught by the
     // same check that catches the wrong file entirely.
+    say(`Downloading ${asset} for Shall ${release.version}…`);
     const held = path.join(temporary, asset);
-    await writeFile(held, await download(asset, from));
+    await writeFile(held, await download(asset, from, milestones(asset, say)));
     const got = createHash("sha256").update(await readFile(held)).digest("hex");
     if (got !== expected) {
       throw new Error(
         `${asset} did not match its checksum — nothing was replaced.`,
       );
     }
+    say(`${asset} matches its checksum — putting it in place…`);
 
     try {
       await copyFile(held, staging);
@@ -175,8 +253,9 @@ export async function install(
  * OVER from the daemon that was running, so an upgrade never quietly closes a
  * `--host` daemon's door to the network.
  */
-async function restartDaemon(version: string): Promise<string> {
+async function restartDaemon(version: string, say: Say = QUIET): Promise<string> {
   const url = `http://localhost:${(await readConfig()).port}`;
+  say(`Restarting the daemon at ${url} onto Shall ${version}…`);
   const bindHost = (await healthOf(url))?.host ?? LOOPBACK;
 
   const state = await readDaemonState();
@@ -208,8 +287,10 @@ async function restartDaemon(version: string): Promise<string> {
  * script or a scenario may run it twice and the second run is simply a sentence.
  */
 export async function upgradeShall(
+  say: Say = QUIET,
   base: string = releasesBase(),
 ): Promise<string[]> {
+  say("Asking which Shall is newest…");
   const release = await latestRelease(ASKING, base);
   if (release === null) {
     throw new Error(
@@ -219,15 +300,16 @@ export async function upgradeShall(
   if (!isNewer(release.version, SHALL_VERSION)) {
     return [`Shall ${SHALL_VERSION} is the newest there is.`];
   }
+  say(`Shall ${release.version} is out, and this is ${SHALL_VERSION}.`);
   const asset = assetFor(process.platform, process.arch);
   if (asset === null) {
     throw new Error(
       `Shall ships no binary for ${process.platform}-${process.arch}.`,
     );
   }
-  await install(release, asset, process.execPath);
+  await install(release, asset, process.execPath, say);
   return [
     `Shall ${release.version} replaced ${SHALL_VERSION} at ${process.execPath}.`,
-    await restartDaemon(release.version),
+    await restartDaemon(release.version, say),
   ];
 }

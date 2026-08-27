@@ -49,7 +49,12 @@ const server = createServer((request, response) => {
     response.writeHead(404).end();
     return;
   }
-  response.writeHead(200, { "content-type": "application/octet-stream" });
+  // The length is named the way the real release host names it, so the
+  // download's progress has a total to count against.
+  response.writeHead(200, {
+    "content-type": "application/octet-stream",
+    "content-length": Buffer.byteLength(held),
+  });
   response.end(held);
 });
 
@@ -216,21 +221,52 @@ describe("replacing the binary", () => {
   });
 });
 
+describe("what the work says while it works", () => {
+  test("a download tells its start, its quarters, and its checksum passing", async () => {
+    const { binary } = await installed();
+    const release = serve("9.9.2", NEW, sums([[sha256(NEW), ASSET]]));
+    const said: string[] = [];
+
+    await install(release, ASSET, binary, (line) => said.push(line));
+
+    // The body is one chunk here, so the quarters collapse into one arrival —
+    // what is claimed is the order: the start, the bytes, the verdict.
+    assert.equal(said[0], `Downloading ${ASSET} for Shall 9.9.2…`);
+    assert.match(said[1] ?? "", /^shall-darwin-arm64: 1 MB/);
+    assert.equal(
+      said[said.length - 1],
+      `${ASSET} matches its checksum — putting it in place…`,
+    );
+  });
+
+  test("a caller that brought no say is served in silence, as before", async () => {
+    const { binary } = await installed();
+    const release = serve("9.9.1", NEW, sums([[sha256(NEW), ASSET]]));
+
+    await install(release, ASSET, binary);
+
+    assert.equal(await readFile(binary, "utf8"), NEW);
+  });
+});
+
 describe("the command's own judgement", () => {
   test("the newest release being this one is a sentence and not an upgrade", async () => {
     serving.set("/repos/Nove-Lab/Shall/releases/latest", JSON.stringify({
       tag_name: `v${SHALL_VERSION}`,
       assets: [{ name: ASSET, browser_download_url: `${base}/never` }],
     }));
+    const said: string[] = [];
 
-    assert.deepEqual(await upgradeShall(base), [
+    assert.deepEqual(await upgradeShall((line) => said.push(line), base), [
       `Shall ${SHALL_VERSION} is the newest there is.`,
     ]);
+    // The one slow step before the answer said it was happening.
+    assert.deepEqual(said, ["Asking which Shall is newest…"]);
   });
 
   test("a release nobody could ask about is a refusal, and nothing is touched", async () => {
     assert.equal(
-      await refused(upgradeShall("http://127.0.0.1:1")),
+      await refused(upgradeShall(undefined, "http://127.0.0.1:1")),
       "Could not ask which Shall is newest — check the network, then try again.",
     );
   });
