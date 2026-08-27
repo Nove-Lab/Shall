@@ -386,15 +386,18 @@ describe("the four listing pages", () => {
       [
         "AC-0003",
         "AcceptanceCriterion AC-0003",
-        "Left open — left open by reviewer",
+        "Left open — left open by reviewer — no work item aims at it",
         "Approved Open",
       ],
     ]);
-    // The reason and the person are two inlines, the second only where a
-    // person's word is what holds it open.
+    // The reason, the person and what is still aimed at it are three inlines:
+    // the second only where a person's word is what holds it open, the third
+    // only where nothing is coming — AC-0003 has no work item aiming at it,
+    // while AC-0002's WI-0002 is not done yet and so says nothing.
     assert.deepEqual(cellOf(rowOf(table, 2), 2), [
       { kind: "text", text: "Left open" },
       { kind: "text", text: " — left open by reviewer" },
+      { kind: "text", text: " — no work item aims at it" },
     ]);
     assert.equal(
       VITALS.progress.criteria.open.find((held) => held.id === "AC-0003")?.reason,

@@ -27,6 +27,7 @@ import {
   type Ledgers,
   type PayloadHash,
 } from "./color.js";
+import { spentSentence } from "./aims.js";
 import { reviewGraph, type GraphReview, type ReviewStatus } from "./review.js";
 
 /**
@@ -175,6 +176,8 @@ function status(
   problem: ReviewStatus["problem"] = null,
   workItemState: ReviewStatus["workItemState"] = null,
   satisfaction: ReviewStatus["satisfaction"] = null,
+  aims: ReviewStatus["aims"] = null,
+  spentAim: ReviewStatus["spentAim"] = null,
 ): ReviewStatus {
   return {
     id,
@@ -186,6 +189,8 @@ function status(
     leftOpen,
     workItemState,
     satisfaction,
+    aims,
+    spentAim,
     problem,
   };
 }
@@ -1795,6 +1800,274 @@ describe("the blocked-address rule", () => {
       review.missing.map((hole) => hole.id),
       ["WI-9999"],
     );
+  });
+});
+
+describe("what is still aimed at a criterion", () => {
+  // The aim rule's spine again — a criterion, the work item aiming at it, the
+  // log addressing the work item and the report claiming it — plus a second
+  // criterion nothing aims at and a second work item that can aim too. The
+  // acceptance and the left-open word are the two books `aims.ts` never opens
+  // itself: it reads the verdict the review computed for the row.
+  const ACCEPTOR = { by: "t", at: "2026-08-17T00:00:00Z" };
+  const goal = node("Goal", "G-0001");
+  const actor = node("Actor", "A-0001");
+  const useCase = node("UseCase", "UC-0001");
+  const scenario = node("Scenario", "SC-0001");
+  const criterion = node("AcceptanceCriterion", "AC-0001");
+  const other = node("AcceptanceCriterion", "AC-0002");
+  const requirement = node("Requirement", "R-0001");
+  const responsibility = node("SystemResponsibility", "SR-0001");
+  const module_ = node("Module", "M-0001");
+  const workItem = node("WorkItem", "WI-0001");
+  const second = node("WorkItem", "WI-0002");
+  const journal = node("Journal", "J-0001");
+  const log = node("WorkLog", "WL-0001");
+  const report = node("CompletionReport", "CR-0001");
+  const evidence = node("Evidence", "EV-0001");
+  const SPINE = [
+    edge("G-0001", "PURSUED_BY", "A-0001"),
+    edge("A-0001", "PERFORMS", "UC-0001"),
+    edge("UC-0001", "DETAILS", "SC-0001"),
+    edge("SC-0001", "DERIVES_RESPONSIBILITY", "SR-0001"),
+    edge("SR-0001", "REQUIRES", "R-0001"),
+    edge("SR-0001", "IS_REALIZED_BY", "M-0001"),
+    edge("R-0001", "HAS_CRITERION", "AC-0001"),
+    edge("R-0001", "HAS_CRITERION", "AC-0002"),
+    edge("M-0001", "ALLOCATES", "WI-0001"),
+    edge("WI-0001", "TARGETS", "AC-0001"),
+    edge("J-0001", "LOGS", "WL-0001"),
+    edge("WL-0001", "ADDRESSES", "WI-0001"),
+    edge("WL-0001", "SUBMITS", "CR-0001"),
+    edge("CR-0001", "CLAIMS", "WI-0001"),
+  ];
+  const NODES = [
+    goal,
+    actor,
+    useCase,
+    scenario,
+    responsibility,
+    module_,
+    requirement,
+    criterion,
+    other,
+    workItem,
+    journal,
+    log,
+    report,
+  ];
+  /** The evidence the log submits at the criterion — added by the tests that want a claim. */
+  const CLAIM = [
+    edge("WL-0001", "SUBMITS", "EV-0001"),
+    edge("EV-0001", "CLAIMS", "AC-0001"),
+  ];
+
+  function accept(
+    subject: SpecNode,
+    kind: AcceptanceRecord["kind"],
+    claimants: readonly SpecNode[],
+    edges: readonly SpecEdge[],
+  ): [string, AcceptanceRecord] {
+    return [
+      subject.id,
+      {
+        kind,
+        subjectHash: hashOf(subject, edges),
+        claimants: new Map(
+          claimants.map((held) => [held.id, hashOf(held, edges)] as const),
+        ),
+        ...ACCEPTOR,
+      },
+    ];
+  }
+
+  function leaveOpen(
+    subject: SpecNode,
+    kind: AcceptanceRecord["kind"],
+    claimants: readonly SpecNode[],
+    edges: readonly SpecEdge[],
+  ): [string, RejectionRecord] {
+    return [
+      subject.id,
+      {
+        rejectedHash: hashOf(subject, edges),
+        leftOpen: {
+          kind,
+          claimants: new Map(
+            claimants.map((held) => [held.id, hashOf(held, edges)] as const),
+          ),
+        },
+        ...REFUSAL,
+      },
+    ];
+  }
+
+  function reviewOver(
+    nodes: readonly SpecNode[],
+    edges: readonly SpecEdge[],
+    books: {
+      acceptances?: [string, AcceptanceRecord][];
+      rejections?: [string, RejectionRecord][];
+    } = {},
+    refused: RefusedFile[] = [],
+  ): GraphReview {
+    return reviewGraph(
+      graphOf({ nodes: [...nodes], edges: [...edges], refused }),
+      booksOf({
+        approvals: nodes.map((held) => approve(held, edges)),
+        ...books,
+      }),
+    );
+  }
+
+  test("is pending while a work item aiming at it has not been done", () => {
+    const review = reviewOver(NODES, SPINE);
+    assert.notEqual(statusOf(review, "WI-0001")?.workItemState, "done");
+    assert.equal(statusOf(review, "AC-0001")?.aims, "pending");
+    assert.equal(statusOf(review, "AC-0001")?.spentAim, null);
+  });
+
+  test("is spent once every work item aiming at it is done and nothing claims it, and names them in the sentence", () => {
+    const review = reviewOver(NODES, SPINE, {
+      acceptances: [accept(workItem, "workItem", [report], SPINE)],
+    });
+    assert.equal(statusOf(review, "WI-0001")?.workItemState, "done");
+    assert.deepEqual(
+      statusOf(review, "AC-0001"),
+      status(
+        "AC-0001",
+        "green",
+        "approved",
+        APPROVER,
+        null,
+        "open",
+        null,
+        null,
+        null,
+        null,
+        "spent",
+        spentSentence("AC-0001", ["WI-0001"]),
+      ),
+    );
+    assert.match(
+      statusOf(review, "AC-0001")?.spentAim ?? "",
+      /^AC-0001 is open, and every work item aiming at it is done — WI-0001\./,
+    );
+  });
+
+  test("lists every finished work item when two aimed at it", () => {
+    const edges = [
+      ...SPINE,
+      edge("M-0001", "ALLOCATES", "WI-0002"),
+      edge("WI-0002", "TARGETS", "AC-0001"),
+    ];
+    const nodes = [...NODES, second];
+    // One of the two still to do: the aim is not spent, whatever the other says.
+    const half = reviewOver(nodes, edges, {
+      acceptances: [accept(workItem, "workItem", [report], edges)],
+    });
+    assert.equal(statusOf(half, "AC-0001")?.aims, "pending");
+    // Both done: spent, and the sentence names both in id order.
+    const whole = reviewOver(nodes, edges, {
+      acceptances: [
+        accept(workItem, "workItem", [report], edges),
+        accept(second, "workItem", [], edges),
+      ],
+    });
+    assert.equal(statusOf(whole, "AC-0001")?.aims, "spent");
+    assert.equal(
+      statusOf(whole, "AC-0001")?.spentAim,
+      spentSentence("AC-0001", ["WI-0001", "WI-0002"]),
+    );
+  });
+
+  test("is pending while evidence claims it, however finished the plan is", () => {
+    const edges = [...SPINE, ...CLAIM];
+    const nodes = [...NODES, evidence];
+    const review = reviewOver(nodes, edges, {
+      acceptances: [accept(workItem, "workItem", [report], edges)],
+    });
+    assert.equal(statusOf(review, "WI-0001")?.workItemState, "done");
+    assert.equal(statusOf(review, "AC-0001")?.closure, "open");
+    assert.equal(statusOf(review, "AC-0001")?.aims, "pending");
+  });
+
+  test("is spent when a person left it open and every work item aiming at it is done", () => {
+    // The evidence is there and a person said "not on this": the queue holds
+    // nothing ahead for the criterion, so the plan's half decides, and every
+    // work item aiming at it is done.
+    const edges = [...SPINE, ...CLAIM];
+    const nodes = [...NODES, evidence];
+    const review = reviewOver(nodes, edges, {
+      acceptances: [accept(workItem, "workItem", [report], edges)],
+      rejections: [leaveOpen(criterion, "criterion", [evidence], edges)],
+    });
+    assert.notEqual(statusOf(review, "AC-0001")?.leftOpen, null);
+    assert.equal(statusOf(review, "AC-0001")?.aims, "spent");
+  });
+
+  test("is none when no work item aims at it at all", () => {
+    const review = reviewOver(NODES, SPINE);
+    assert.equal(statusOf(review, "AC-0002")?.aims, "none");
+    assert.equal(statusOf(review, "AC-0002")?.spentAim, null);
+  });
+
+  test("is null for a criterion somebody closed, and for every type that is not one", () => {
+    const edges = [...SPINE, ...CLAIM];
+    const nodes = [...NODES, evidence];
+    const review = reviewOver(nodes, edges, {
+      acceptances: [accept(criterion, "criterion", [evidence], edges)],
+    });
+    assert.equal(statusOf(review, "AC-0001")?.closure, "closed");
+    assert.equal(statusOf(review, "AC-0001")?.aims, null);
+    for (const id of ["G-0001", "R-0001", "M-0001", "WI-0001", "WL-0001", "CR-0001", "EV-0001"]) {
+      assert.equal(statusOf(review, id)?.aims, null, id);
+      assert.equal(statusOf(review, id)?.spentAim, null, id);
+    }
+  });
+
+  test("counts a work item aiming from a file the loader refused as no aim at all", () => {
+    // The refused file contributes no edges, so nothing aims at AC-0001 — the
+    // same reading health rule 7 takes of the same index.
+    const nodes = NODES.filter((held) => held.id !== "WI-0001");
+    const edges = SPINE.filter((held) => held.fromId !== "WI-0001");
+    const review = reviewOver(nodes, edges, {}, [
+      refusal("plan/WorkItem/WI-0001.md", "WorkItem", "WI-0001"),
+    ]);
+    assert.equal(statusOf(review, "AC-0001")?.aims, "none");
+  });
+
+  test("reads a red work item nobody closed as work not yet done, so the criterion stays pending", () => {
+    // No ALLOCATES: the work item is an orphan, red, and blocked — and still
+    // aiming, so the plan has not spent its aim.
+    const edges = SPINE.filter((held) => held.type !== "ALLOCATES");
+    const review = reviewOver(NODES, edges);
+    assert.equal(statusOf(review, "WI-0001")?.reason, "orphan");
+    assert.equal(statusOf(review, "WI-0001")?.workItemState, "blocked");
+    assert.equal(statusOf(review, "AC-0001")?.aims, "pending");
+  });
+
+  test("takes a TARGETS line at an id no file names as no aim on this criterion", () => {
+    const edges = [...SPINE, edge("WI-0001", "TARGETS", "AC-9999")];
+    const review = reviewOver(NODES, edges, {
+      acceptances: [accept(workItem, "workItem", [report], edges)],
+    });
+    assert.equal(statusOf(review, "AC-0001")?.aims, "spent");
+    assert.equal(statusOf(review, "AC-9999"), undefined);
+    assert.deepEqual(review.missing.map((hole) => hole.id), ["AC-9999"]);
+  });
+
+  test("answers the same whichever of the two rows the pass reaches first", () => {
+    const books = { acceptances: [accept(workItem, "workItem", [report], SPINE)] };
+    const criterionFirst = reviewOver(NODES, SPINE, books);
+    const workItemFirst = reviewOver(
+      [workItem, ...NODES.filter((held) => held.id !== "WI-0001")],
+      SPINE,
+      books,
+    );
+    assert.equal(statusOf(criterionFirst, "AC-0001")?.aims, "spent");
+    assert.equal(statusOf(workItemFirst, "AC-0001")?.aims, "spent");
+    assert.equal(statusOf(workItemFirst, "WI-0001")?.workItemState, "done");
   });
 });
 

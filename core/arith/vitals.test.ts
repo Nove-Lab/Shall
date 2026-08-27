@@ -450,6 +450,7 @@ describe("the criteria row", () => {
         shortName: "AC-0001",
         name: "AcceptanceCriterion AC-0001",
         reason: "no-evidence",
+        aims: "pending",
         evidence: 0,
         bundleId: null,
         leftOpen: null,
@@ -468,6 +469,7 @@ describe("the criteria row", () => {
         shortName: "AC-0001",
         name: "AcceptanceCriterion AC-0001",
         reason: "awaiting-review",
+        aims: "pending",
         evidence: 1,
         bundleId: "closure:AC-0001",
         leftOpen: null,
@@ -524,12 +526,72 @@ describe("the criteria row", () => {
         shortName: "AC-0001",
         name: "AcceptanceCriterion AC-0001",
         reason: "left-open",
+        aims: "pending",
         evidence: 1,
         bundleId: null,
         leftOpen: { by: REFUSAL.by, at: REFUSAL.at, rationale: REFUSAL.rationale },
       },
     ]);
     assert.equal(vitals.progress.requirements.numerator, 0);
+  });
+
+  test("carries the review's own aim word on every open row, never a second one", () => {
+    const second = node("AcceptanceCriterion", "AC-0002");
+    const nodes = [...SPINE_NODES, ...WORK_NODES, second];
+    const edges = [...SPINE, ...WORK, edge("R-0001", "HAS_CRITERION", "AC-0002")];
+    const ledgers = booksOf({ approvals: settled(nodes, edges) });
+    const vitals = vitalsFor(nodes, edges, ledgers);
+    const review = reviewGraph(graphOf(nodes, edges), ledgers);
+    for (const open of vitals.progress.criteria.open) {
+      assert.equal(
+        open.aims,
+        review.statuses.find((held) => held.id === open.id)?.aims,
+        open.id,
+      );
+    }
+    // The claimed one has a verdict ahead through the queue; the other was
+    // never aimed at.
+    assert.deepEqual(
+      vitals.progress.criteria.open.map((open) => [open.id, open.aims]),
+      [
+        ["AC-0001", "pending"],
+        ["AC-0002", "none"],
+      ],
+    );
+  });
+
+  test("says spent for a criterion whose every work item is done with nothing claiming it", () => {
+    // The work under the spine without its evidence: the log addresses the
+    // work item and submits only the report, and a person closes the work
+    // item on it. The criterion it aimed at is open, and nothing left aims.
+    const nodes = [...SPINE_NODES, journal, workLog, report];
+    const edges = [
+      ...SPINE,
+      edge("J-0001", "LOGS", "WL-0001"),
+      edge("WL-0001", "ADDRESSES", "WI-0001"),
+      edge("WL-0001", "SUBMITS", "CR-0001"),
+      edge("CR-0001", "CLAIMS", "WI-0001"),
+    ];
+    const ledgers = booksOf({
+      approvals: settled(nodes, edges),
+      acceptances: [accept(workItem, [report], edges)],
+    });
+    const vitals = vitalsFor(nodes, edges, ledgers);
+    assert.equal(vitals.progress.workItems.numerator, 1);
+    assert.deepEqual(vitals.progress.criteria.open, [
+      {
+        id: "AC-0001",
+        shortName: "AC-0001",
+        name: "AcceptanceCriterion AC-0001",
+        reason: "no-evidence",
+        aims: "spent",
+        evidence: 0,
+        bundleId: null,
+        leftOpen: null,
+      },
+    ]);
+    // And no eighth rule: the seven rows are the seven rows.
+    assert.equal(vitals.health.length, 7);
   });
 
   test("the three reasons are disjoint and cover every open criterion", () => {

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import type { HealthRule, HealthRuleId, ReviewStatus } from "../arith/index.js";
 import {
+  aimsNoteOf,
   carrierOf,
   criterionOf,
   healthRuleLabelOf,
@@ -33,6 +34,8 @@ function statusOf(axes: Partial<ReviewStatus> = {}): ReviewStatus {
     leftOpen: null,
     workItemState: null,
     satisfaction: null,
+    aims: null,
+    spentAim: null,
     problem: null,
     ...axes,
   };
@@ -128,6 +131,15 @@ describe("openReasonOf", () => {
     assert.equal(openReasonOf("no-evidence"), "No evidence yet");
     assert.equal(openReasonOf("awaiting-review"), "Awaiting review");
     assert.equal(openReasonOf("left-open"), "Left open");
+  });
+});
+
+describe("aimsNoteOf", () => {
+  test("says what is still aimed at an open criterion, and nothing while a verdict is ahead", () => {
+    assert.equal(aimsNoteOf("spent"), "no work item left to judge it");
+    assert.equal(aimsNoteOf("none"), "no work item aims at it");
+    assert.equal(aimsNoteOf("pending"), null);
+    assert.equal(aimsNoteOf(null), null);
   });
 });
 

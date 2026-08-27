@@ -27,6 +27,8 @@ export type HealthRule = Vitals["health"][number];
 export type RuleId = HealthRule["id"];
 export type OpenCriterion = Vitals["progress"]["criteria"]["open"][number];
 export type OpenReason = OpenCriterion["reason"];
+/** Pending, spent or none — what is still aimed at an open criterion, the review's own word. */
+export type Aims = NonNullable<OpenCriterion["aims"]>;
 export type OpenWorkItem = Vitals["progress"]["workItems"]["open"][number];
 
 /** The four rows of Progress, in the specification's own order — the spec read downward. */
@@ -185,6 +187,27 @@ export const OPEN_REASON_LABEL: Record<OpenReason, string> = {
   "awaiting-review": "Awaiting review",
   "left-open": "Left open",
 };
+
+/**
+ * The three aim words in a person's, exhaustive over the wire's own union — so
+ * a fourth word in core is a compile error here and not a row with no label.
+ */
+export const AIMS_LABEL: Record<Aims, string> = {
+  pending: "work still aimed at it",
+  spent: "no work item left to judge it",
+  none: "no work item targets it",
+};
+
+/**
+ * What to say beside an open criterion about its aim, or nothing. `pending` is
+ * the ordinary case — a verdict is still ahead — and a note under every row
+ * would say nothing, so only the two that mean "nothing is coming" speak.
+ */
+export function aimsNoteOf(open: OpenCriterion): string | null {
+  return open.aims === null || open.aims === "pending"
+    ? null
+    : AIMS_LABEL[open.aims];
+}
 
 /** The open criteria grouped by reason — every reason a key, empty or not, each group in the wire's order. */
 export function openByReason(

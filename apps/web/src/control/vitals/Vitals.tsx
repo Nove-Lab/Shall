@@ -27,6 +27,7 @@ import {
   OPEN_REASON_LABEL,
   RULE_HINT,
   RULE_LABEL,
+  aimsNoteOf,
   isEmptySpec,
   isViolated,
   openByReason,
@@ -315,7 +316,9 @@ function Drilldown({
  * holds one; when it does not — the evidence is not all agreed yet — it says
  * so instead. A left-open criterion carries the person's word whole: line
  * breaks and all, because it is an argument somebody wrote for the agent and
- * not a document.
+ * not a document. And a criterion nothing is aimed at any more — every work
+ * item aiming at it done, or none ever — says so beside its id, whichever of
+ * the three groups it fell into.
  */
 function OpenCriteria({
   vitals,
@@ -362,6 +365,7 @@ function OpenRow({
   projectId: string;
   backPath: string;
 }) {
+  const note = aimsNoteOf(open);
   return (
     <div className="grid gap-1">
       <NodeRow
@@ -382,6 +386,7 @@ function OpenRow({
             </Link>
           )
         ) : null}
+        {note === null ? null : <span className={CAPTION}>{note}</span>}
       </NodeRow>
       {open.leftOpen === null ? null : (
         <>

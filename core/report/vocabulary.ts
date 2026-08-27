@@ -82,6 +82,23 @@ export function openReasonOf(reason: OpenCriterion["reason"]): string {
   }
 }
 
+/**
+ * What is still aimed at an open criterion, for a reader who has never seen a
+ * work item — and nothing at all while a verdict is ahead, because a note
+ * under every open row would say nothing.
+ */
+export function aimsNoteOf(aims: OpenCriterion["aims"]): string | null {
+  switch (aims) {
+    case "spent":
+      return "no work item left to judge it";
+    case "none":
+      return "no work item aims at it";
+    case "pending":
+    case null:
+      return null;
+  }
+}
+
 /** The seven coverage checks, named for a reader who never saw the rules. */
 export function healthRuleLabelOf(id: HealthRuleId): string {
   switch (id) {

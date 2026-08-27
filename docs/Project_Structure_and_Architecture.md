@@ -44,7 +44,7 @@ All of it pure functions over `(graph, ledgers)`; the sha256 arrives injected so
 
 - **Colour** — red (missing, malformed, orphan, off-target, cyclic, premature, rejected), yellow (unapproved, changed), green (approved at the current content hash). One priority chain, `colorOf`.
 - **Loops** (`seams.ts`) — strongly-connected components over three derived graphs: written DEPENDS_ON, the module graph (A CONSUMES what B EXPOSES), and Goal REFINES. Every node on a loop is red with the loop recited from its own file.
-- **The aim rule** — a work log's evidence claims only criteria its addressed work items target; a completion report claims exactly one addressed work item.
+- **The aim rule** — a work log's evidence claims only criteria its addressed work items target; a completion report claims exactly one addressed work item. Its consequence is a word of its own (`aims.ts`): per open criterion, whether the plan still holds a work item that can file evidence for it (`pending`), has none left because every one aiming at it is done (`spent`), or never had one (`none`).
 - **The premature rule** — work logged under a work item whose turn has not come is red.
 - **Closure** (`closure.ts`) — a criterion or work item is closed when a person's acceptance record still matches the subject's and every claimant's bytes; editing any of them reopens it.
 - **Work item state** (`work-item-state.ts`) — done (closed), ready (prerequisites closed and the whole upward chain green), blocked (the rest).

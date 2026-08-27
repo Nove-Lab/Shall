@@ -100,7 +100,9 @@ export interface ClosureRow {
 /**
  * Why a criterion is open — exactly one of three, asked in this order: a
  * person's standing word left it open; nothing claims it; something claims it
- * and nobody has judged the list.
+ * and nobody has judged the list. `aims` is the plan's side of the same
+ * question, and it is a different one: the reason says where the criterion
+ * stands now, the aim word says whether anything is still coming.
  *
  * EVERY FIELD IS REQUIRED AND NULLABLE, for the reason the board gives — this
  * crosses the wire as JSON. `bundleId` names the Review Queue card the
@@ -110,6 +112,14 @@ export interface ClosureRow {
  */
 export interface OpenCriterion extends Ref {
   reason: "no-evidence" | "awaiting-review" | "left-open";
+  /**
+   * Whether anything is still aimed at it — the review's own word, read back
+   * and never recomputed, like every other figure on this page. Null never
+   * arrives on this list: a living criterion the review left open always wears
+   * one of the three. The wire's own type is kept rather than a narrowed copy,
+   * because narrowing it would need a cast to build the row.
+   */
+  aims: ReviewStatus["aims"];
   /** Living evidence claiming it now. */
   evidence: number;
   bundleId: string | null;
@@ -386,6 +396,7 @@ function closureRowOf(
       open.push({
         ...refOf(node),
         reason: "left-open",
+        aims: held.aims,
         evidence,
         bundleId: null,
         leftOpen: held.leftOpen,
@@ -394,6 +405,7 @@ function closureRowOf(
       open.push({
         ...refOf(node),
         reason: "no-evidence",
+        aims: held.aims,
         evidence,
         bundleId: null,
         leftOpen: null,
@@ -402,6 +414,7 @@ function closureRowOf(
       open.push({
         ...refOf(node),
         reason: "awaiting-review",
+        aims: held.aims,
         evidence,
         // The card exists exactly when the queue would cut one — the same
         // question `bundles.ts` asks before building it.

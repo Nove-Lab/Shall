@@ -3,6 +3,10 @@
 Every release lists what changed; a release that changes the spec schema — node types, edge grammar, file format — must additionally carry a **Migrating** section saying what an existing `.shall/` tree needs.
 Shall never migrates a spec by itself: old nodes read as red, and the notes here say what to do about them.
 
+## Unreleased
+
+- **`shall status` says, per open criterion, whether the plan still holds a work item that can judge it.** Every criterion row carries `aims` — `pending` while a work item aiming at it is not yet done or evidence on it awaits a verdict, `spent` when every work item aiming at it is done and it is still open, `none` when nothing aims at it — and a spent aim carries its own sentence under the row, naming the finished work items: evidence is filed only under a work log addressing a work item that targets the criterion, so nothing left in the plan can reach a verdict on it. The Vitals page and the report say the same word beside each open criterion. `shall check` and `shall board` are unchanged: a spent aim is no red, and the board stays two lists.
+
 ## 0.1.4 — 2026-08-27
 
 - **`shall` works from inside Codex's sandbox without anybody editing a config.** `shall init --agent codex` writes `network_access = true` and a `writable_roots` naming Shall's home into the project's own `.codex/config.toml` — merged into what is there, never over a line a person set. And the CLI no longer mistakes a daemon it may not signal for a dead one: from inside a sandbox it adopts the running daemon when it answers, and otherwise says which process it is and why it cannot be reached, instead of trying to stop it and failing on `rm ~/.shall/daemon.json` with a sentence about nothing.

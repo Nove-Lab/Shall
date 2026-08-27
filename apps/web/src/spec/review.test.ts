@@ -46,6 +46,8 @@ function status(
     leftOpen: null,
     workItemState: null,
     satisfaction: null,
+    aims: null,
+    spentAim: null,
     problem: null,
     ...fields,
   };

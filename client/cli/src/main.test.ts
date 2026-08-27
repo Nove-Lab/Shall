@@ -1356,6 +1356,8 @@ describe("shall status", () => {
               },
               leftOpen: null,
               problem: null,
+              aims: null,
+              spentAim: null,
             },
             {
               id: "AC-0002",
@@ -1373,6 +1375,8 @@ describe("shall status", () => {
                 rationale: "The evidence names no run.",
               },
               problem: null,
+              aims: null,
+              spentAim: null,
             },
             {
               id: "WI-0003",
@@ -1386,6 +1390,8 @@ describe("shall status", () => {
               rejection: null,
               leftOpen: null,
               problem: "aims at AC-0002, which no requirement carries",
+              aims: null,
+              spentAim: null,
             },
             {
               id: "X-0004",
@@ -1399,6 +1405,8 @@ describe("shall status", () => {
               rejection: null,
               leftOpen: null,
               problem: null,
+              aims: null,
+              spentAim: null,
             },
           ],
           missing: [
@@ -1445,6 +1453,48 @@ describe("shall status", () => {
     ]);
   });
 
+  test("prints the sentence under a criterion nothing left in the plan will judge", async () => {
+    const spentAim =
+      "AC-0009 is open, and every work item aiming at it is done — WI-0004. Evidence is filed only under a work log addressing a work item that targets the criterion, so nothing left in the plan can reach a verdict on it. Aim a work item at it that can run its evaluation process.";
+    const ran = await running(["status"], {
+      answers: {
+        "spec.status": {
+          root: "/work/atlas",
+          scope: [],
+          nodes: [
+            {
+              id: "AC-0009",
+              type: "Acceptance criterion",
+              band: "Intent",
+              color: "green",
+              reason: "approved",
+              closure: "open",
+              workItemState: null,
+              name: "Remaining time tracks the clock",
+              rejection: null,
+              leftOpen: null,
+              problem: null,
+              aims: "spent",
+              spentAim,
+            },
+          ],
+          missing: [],
+          broken: [],
+        },
+      },
+    });
+
+    assert.equal(ran.code, 0);
+    // No red anywhere: the row is green and open, and the sentence under it is
+    // the plan's, carried whole like every other second line.
+    assert.deepEqual(lines(ran.out), [
+      "1 node under /work/atlas — 0 red, 0 yellow, 1 green.",
+      "Intent",
+      "  AC-0009  Acceptance criterion  green  open  Remaining time tracks the clock",
+      `    ${spentAim}`,
+    ]);
+  });
+
   test("a project nobody asked either question of has no state column", async () => {
     const ran = await running(["status"], {
       answers: {
@@ -1464,6 +1514,8 @@ describe("shall status", () => {
               rejection: null,
               leftOpen: null,
               problem: null,
+              aims: null,
+              spentAim: null,
             },
           ],
           missing: [],

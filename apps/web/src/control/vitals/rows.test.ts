@@ -2,10 +2,12 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 import {
+  AIMS_LABEL,
   OPEN_REASONS,
   OPEN_REASON_LABEL,
   RULE_HINT,
   RULE_LABEL,
+  aimsNoteOf,
   healthLine,
   isEmptySpec,
   openByReason,
@@ -41,12 +43,17 @@ function rule(
   };
 }
 
-function open(id: string, reason: OpenCriterion["reason"]): OpenCriterion {
+function open(
+  id: string,
+  reason: OpenCriterion["reason"],
+  aims: OpenCriterion["aims"] = "pending",
+): OpenCriterion {
   return {
     id,
     shortName: id,
     name: id,
     reason,
+    aims,
     evidence: reason === "no-evidence" ? 0 : 1,
     bundleId: null,
     leftOpen: null,
@@ -234,6 +241,25 @@ describe("the words", () => {
     for (const reason of OPEN_REASONS) {
       assert.ok(OPEN_REASON_LABEL[reason].length > 0, reason);
     }
+  });
+
+  test("every aim word the wire can say has a label", () => {
+    for (const aims of ["pending", "spent", "none"] as const) {
+      assert.ok(AIMS_LABEL[aims].length > 0, aims);
+    }
+  });
+
+  test("says nothing beside a criterion a verdict is still ahead of, and the aim's word beside the rest", () => {
+    assert.equal(aimsNoteOf(open("AC-0001", "awaiting-review")), null);
+    assert.equal(aimsNoteOf(open("AC-0002", "no-evidence", "pending")), null);
+    assert.equal(
+      aimsNoteOf(open("AC-0003", "no-evidence", "spent")),
+      "no work item left to judge it",
+    );
+    assert.equal(
+      aimsNoteOf(open("AC-0004", "left-open", "none")),
+      "no work item targets it",
+    );
   });
 
   test("emptiness is core's word and not a count", () => {

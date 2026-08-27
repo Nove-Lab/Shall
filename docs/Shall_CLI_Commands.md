@@ -67,7 +67,7 @@ shall report [--json]
 ```
 
 `check` reads the spec files and says what is wrong with them — files that will not parse, edges the grammar refuses, anchors that are missing.
-`status` lists every node with its colour, plus what is missing or will not read; with `--json` this is the full per-node judgement, satisfaction included.
+`status` lists every node with its colour, plus what is missing or will not read; with `--json` this is the full per-node judgement, satisfaction included — and, per open criterion, `aims`: whether the plan still holds a work item that can judge it (`pending`), has none left (`spent`, with the sentence naming the finished ones), or never had one (`none`).
 `board` answers the working question: what the spec needs fixed, and which work items are ready to be implemented.
 `context` is the look back before one work item is started: the files to open — its module's siblings and their logs, the reports, findings and decisions around them, the criteria they target, the newest turns by the feed's clock, and what finishing it would let start. Files and never bodies; the agent opens them.
 `report` assembles the whole spec into static HTML under the project's own `shall/report/` — a document for a reader who never opens Shall, printable straight to PDF. It prints the index path first and bare; the folder ignores itself in git, and regeneration replaces it whole. The same report is a button on the spec plane.

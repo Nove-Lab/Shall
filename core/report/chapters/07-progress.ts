@@ -10,7 +10,14 @@ import type {
   LinkTarget,
   ReportInput,
 } from "../model.js";
-import { carrierOf, criterionOf, openReasonOf, registrationOf, workOf } from "../vocabulary.js";
+import {
+  aimsNoteOf,
+  carrierOf,
+  criterionOf,
+  openReasonOf,
+  registrationOf,
+  workOf,
+} from "../vocabulary.js";
 import type { AssembledChapter, ChapterPage, ChapterRule } from "./rule.js";
 
 /**
@@ -316,7 +323,10 @@ function carrierRows(input: ReportInput, type: string): Cell[][] {
 
 /**
  * Why a criterion is open, in the vitals' own words — and the dash for one the
- * vitals did not list, which is the same as saying it is met.
+ * vitals did not list, which is the same as saying it is met. Where nothing is
+ * aimed at it any more, the clause that says so follows; it only ever lands on
+ * a row that reads no evidence or left open, since a criterion awaiting review
+ * is by definition one a verdict is still ahead of.
  */
 function whyOpenCell(open: OpenCriterion | undefined): Cell {
   if (open === undefined) {
@@ -325,6 +335,10 @@ function whyOpenCell(open: OpenCriterion | undefined): Cell {
   const cell: Cell = [text(openReasonOf(open.reason))];
   if (open.leftOpen !== null) {
     cell.push(text(` — left open by ${open.leftOpen.by}`));
+  }
+  const note = aimsNoteOf(open.aims);
+  if (note !== null) {
+    cell.push(text(` — ${note}`));
   }
   return cell;
 }

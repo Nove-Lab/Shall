@@ -880,9 +880,10 @@ const NO_BAND = "No band";
  * beside it read the same way down.
  *
  * A SECOND LINE IS FOR A SENTENCE SOMEBODY ELSE WROTE, and only for that: a rule
- * of the graph naming what is off target, a person refusing the node, a person
- * leaving a subject open. Each is printed whole, because each is the instruction
- * for putting the node right and a shortened instruction is a different one.
+ * of the graph naming what is off target or an aim the plan has spent, a person
+ * refusing the node, a person leaving a subject open. Each is printed whole,
+ * because each is the instruction for putting the node right and a shortened
+ * instruction is a different one.
  */
 async function status(url: string, scope: readonly string[]): Promise<Said> {
   const result = await connect(url).spec.status.query({
@@ -957,6 +958,11 @@ async function status(url: string, scope: readonly string[]): Promise<Said> {
     }
     if (node.problem !== null) {
       prose.push(indented(node.problem));
+    }
+    // A criterion whose aims are spent is no red, and still a sentence a rule
+    // wrote: every work item aiming at it is done and it is open.
+    if (node.spentAim !== null) {
+      prose.push(indented(node.spentAim));
     }
   }
 

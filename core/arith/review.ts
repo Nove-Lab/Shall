@@ -5,6 +5,13 @@ import {
   type SpecNode,
 } from "../graph/index.js";
 import type { RefusedFile, SpecGraph } from "../store/file-store.js";
+import {
+  aimingWorkItemsOf,
+  aimsOf,
+  spentSentence,
+  type Aims,
+  type StateAt,
+} from "./aims.js";
 import { closureVerdictOf, type ClosureVerdict } from "./closure.js";
 import { cyclicOf, cyclicSentence } from "./seams.js";
 import {
@@ -158,6 +165,41 @@ export interface ReviewStatus {
    */
   satisfaction: "sat" | "unsat" | null;
   /**
+   * WHETHER ANYTHING IS STILL AIMED AT THIS CRITERION — pending, spent or none
+   * — and null for every other type, and for a criterion already closed,
+   * because the question is about a verdict that has not been reached yet.
+   *
+   * IT IS THE PLAN'S COVERAGE AND NOT A THIRD AXIS. Green says a person agreed
+   * with what this criterion demands; closed says somebody showed the demand
+   * is met; this says whether the plan still holds a place where that showing
+   * can happen. `spent` — every work item aiming here finished, nothing filed
+   * — is a criterion no turn of work will ever reach again, and it is the one
+   * state of the three that nothing else on any surface says.
+   *
+   * IT IS THE AIMS' OWN ANSWER AND NOT A SECOND OPINION. `aims.ts` decides the
+   * word once, here, from the closure verdict this row already carries and the
+   * work items' words this pass already computed; the Vitals' drill-down and
+   * `shall status` read it back, so the row and the page cannot disagree.
+   *
+   * REQUIRED AND NULLABLE, NEVER OPTIONAL, for the reason written above — and
+   * here the null carries a fact of its own: this node is not an open
+   * criterion, so the question does not apply.
+   */
+  aims: Aims | null;
+  /**
+   * THE SPENT AIM AS ONE SENTENCE, exactly when `aims` is `spent` and null
+   * otherwise: the criterion, the finished work items by id, and why nothing
+   * left in the plan can file evidence for it. It is `problem`'s twin and not
+   * `problem` itself, for the reason `leftOpen` is not `rejection`: a spent aim
+   * is no red — the work items were finished and a person said so — and every
+   * reader of `problem` may go on taking a sentence there for a rule broken.
+   * Composed here rather than by a terminal, because the work items it names
+   * may sit outside the scope the criterion is inside.
+   *
+   * REQUIRED AND NULLABLE, NEVER OPTIONAL, for the reason written above.
+   */
+  spentAim: string | null;
+  /**
    * THE SENTENCE A RULE OF THE GRAPH WROTE AGAINST THIS NODE, when its red came
    * from one that names other nodes — the aim rule (`off-target`), which needs
    * the log, the work item and the claims spelled out to be acted on, the loop rule
@@ -251,6 +293,25 @@ export function reviewGraph(
     settled.set(id, answer);
     return answer;
   };
+  // The word a work item wears, computed once per work item. A criterion is
+  // pushed in `graph.nodes` order and may be visited before the work items
+  // aiming at it, so its own row has to be able to ask — and the row for the
+  // work item itself asks the same question later, which is exactly the second
+  // walk of the same chain the memo above exists to avoid.
+  const states = new Map<string, WorkItemState | null>();
+  const stateAt: StateAt = (id) => {
+    const held = states.get(id);
+    if (held !== undefined) {
+      return held;
+    }
+    const node = context.nodes.get(id);
+    const answer =
+      node === undefined || !isClosableWorkItem(node.type)
+        ? null
+        : workItemStateOf(node, context, colorAt);
+    states.set(id, answer);
+    return answer;
+  };
   // The closure word of any subject, computed once per id — a carrier asks
   // about each criterion it demands, and the criterion's own row asks again,
   // and hashing the criterion's bytes twice for one review would be the same
@@ -323,6 +384,9 @@ export function reviewGraph(
     // with their own nulls.
     const closable = closureKindOf(node.type) !== null;
     const word = closable ? wordAt(node.id) : null;
+    // ONE AIM WORD PER CRITERION, asked here so the word and the sentence under
+    // it are one answer read twice.
+    const aims = aimsOf(node, context, word, stateAt);
     statuses.push({
       id: node.id,
       color: verdict.color,
@@ -342,12 +406,18 @@ export function reviewGraph(
         word !== null && word.kind === "left-open"
           ? { by: word.by, at: word.at, rationale: word.rationale }
           : null,
-      workItemState: isClosableWorkItem(node.type)
-        ? workItemStateOf(node, context, colorAt)
-        : null,
+      workItemState: stateAt(node.id),
       satisfaction: isCriteriaCarrier(node.type)
         ? satisfactionOf(node, context, closureAt)
         : null,
+      aims,
+      spentAim:
+        aims === "spent"
+          ? spentSentence(
+              node.id,
+              aimingWorkItemsOf(node.id, context).map((held) => held.id),
+            )
+          : null,
       problem:
         blockedWorkItemId !== null
           ? prematureSentence(node.id, blockedWorkItemId)
