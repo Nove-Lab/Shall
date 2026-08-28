@@ -61,6 +61,17 @@ export const vocabulary = {
    * one is a survey — and core keeps both.
    */
   "no-write-guard": "The tools that write are refused for this command",
+
+  /**
+   * The plan before the code, in the work stretch. Claude's plan mode is the
+   * same `/plan` a person types, and the agent can enter it itself; leaving it
+   * is the user's approval, which is the one stop the stretch adds. Under
+   * `--auto` there is nobody to approve, so the plan stays in the conversation.
+   */
+  "plan-tool":
+    "Enter plan mode with EnterPlanMode — the same `/plan` a person would type — read the code, write the plan, and leave it with ExitPlanMode. The approval is the user's, and it is the one stop this stretch adds; a plan the user sends back is revised there, not argued with.",
+  "plan-tool-auto":
+    "do not enter plan mode — there is nobody to approve it. Write the plan out in your reply instead, in the same shape a plan file would have — the files, the functions, the order — as a message the person reads afterwards, and only then carry on",
 };
 
 /**
@@ -114,7 +125,7 @@ const TOOL_SETS = {
   },
   "spec-and-git": {
     allowed:
-      "Bash(shall:*), Bash(git:*), Read, Glob, Grep, Write, Edit, AskUserQuestion, Skill",
+      "Bash(shall:*), Bash(git:*), Read, Glob, Grep, Write, Edit, AskUserQuestion, Skill, EnterPlanMode, ExitPlanMode",
   },
 };
 

@@ -18,9 +18,22 @@ Per item, before touching anything:
 - **A Fix Spec item**: the rationale a person wrote, whole, or the sentence the grammar wrote — the board carries it complete for exactly this reason. Fixing the wrong thing because you read a summary is the failure this rule exists to prevent.
 - **The approach line** you gave at stop 1 is the promise you go in with. A different approach is fine when the code turns out to ask for one, and the change is said in the work log's opening section.
 
+## Planning the stretch
+
+**A work item is a promise cut from the specification, not a plan read off this repository's code.** Its scope and its definition of done say what is to be true when the item is done; they do not say which files change, which functions are touched, or what the code that is already there will let you do. So the first thing in the stretch is a plan made against the code: read what is there, and set down, at the level of files and functions, what the item's scope asks and how its definition of done will be made to hold. **The plan is said, not thought: it is text in your reply, in front of the person, and nothing is written under the item until it is there.**
+
+Where the plan is made, in this order:
+
+1. **This project's own procedure, if it has one.** A project may already say how work is planned before it is built — a procedure its rules file names, or a skill or command that exists for that purpose. Read the rules file and the list of skills this session carries before you plan, and if one of them is that procedure, it is the one you use: it stands above the tool below, the way the project's conventions stand above this skill.
+2. **Your own planning tool, when the project names none.** {{plan-tool}}
+
+The plan is the approach line from stop 1 unfolded onto the code, bounded by the same premise as everything in the stretch: the items you picked, their scope and their definition of done, and nothing else. If the code turns the plan away from the approach line, that is allowed, and the change is said in the work log's opening section. If the plan shows a design choice the specification does not settle, or an item bigger than one turn, those are the questions at the end of this file — ask them from the plan, before the code, where they cost the least.
+
+Under `--auto`, {{plan-tool-auto}}. The plan is then written into the journal alongside the approach line, so the record still says how the item was going to be done before it says how it was.
+
 ## In the stretch
 
-**From here, planning the implementation and implementing it are outside Shall's scope. One premise does not move: everything done in this stretch is for the work items you picked — their scope and their definition of done — and for nothing else. Under that premise, go back to your own base prompt and to this project's conventions — its rules file, its coding standards, how it tests and how it commits — read them again closely, and take them as the standard above this skill. Reading the code, planning at the level of files and functions, writing the code, the method and the quality bar: all of that belongs to that world, and Shall's grammar and procedure do not enter it. An improvement you notice outside the work item, you do not make: note it, with what it concerns, and it is material for a finding at the write-up. When you judge the work done, come back to Shall for the self-check.**
+**From here, planning the implementation and implementing it are outside Shall's scope. One premise does not move: everything done in this stretch is for the work items you picked — their scope and their definition of done — and for nothing else. Under that premise, go back to your own base prompt and to this project's conventions — its rules file, its coding standards, how it tests and how it commits — read them again closely, and take them as the standard above this skill. The plan made above, the code written from it, the method and the quality bar: all of that belongs to that world, and Shall's grammar and procedure do not enter it. An improvement you notice outside the work item, you do not make: note it, with what it concerns, and it is material for a finding at the write-up. When you judge the work done, come back to Shall for the self-check.**
 
 Four things to keep while you work:
 
@@ -79,6 +92,7 @@ Under `--auto` none of these is asked: each becomes a stopped item with its reas
 | The line | What proves it |
 |---|---|
 | the approach was said | stop 1, or the journal under `--auto`, carries one line per item |
+| the plan was made before the code | you can name where it was made — the project's own procedure, your planning tool, or the journal under `--auto` — and the log's opening section carries it |
 | the notes are per item | you can name which log each note belongs to without re-reading it |
 | nothing under `.shall/spec/` moved | except a Fix Spec item's own edit, which is the work |
 | no node was written | the record is written in the next part, after its stop |

@@ -171,6 +171,17 @@ export const vocabulary = {
    */
   "no-write-guard":
     "Nothing here refuses a writing tool for you, so this refusal is yours to keep and you keep it absolutely — this command writes nothing at all, not a node, not a scratch file, not a note",
+
+  /**
+   * The plan before the code, in the work stretch. Codex has a plan mode, and
+   * it is the person's switch — `/plan`, or the mode key — not the agent's, so
+   * the sentence asks for what that mode would produce, written in the message
+   * and ended on as a question. Under `--auto` the same plan, and no stop.
+   */
+  "plan-tool":
+    "Plan mode here is the person's switch, not yours — so do in your message what that mode would do: read the code, write the plan at the level of files and functions, and end the turn on it as a question, with `Proceed (Recommended)` as the first option. The user's next message is the answer; a plan sent back is revised there, not argued with.",
+  "plan-tool-auto":
+    "write the plan out in your message in the same shape — the files, the functions, the order — as text the person reads afterwards, and only then carry on, without stopping",
 };
 
 /**
