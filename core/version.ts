@@ -12,4 +12,4 @@
  * against this constant, so the number here is what shipped and not what
  * somebody meant to ship.
  */
-export const SHALL_VERSION = "0.1.4";
+export const SHALL_VERSION = "0.1.5";
