@@ -1,0 +1,62 @@
+name: Tap
+
+# THE HOOK IS `published`, NOT THE TAG.
+#
+# release.yml cuts every release as a draft on purpose, because publishing is a
+# person's move — the notes want reading, and both readers of "latest"
+# (scripts/install.sh and `shall upgrade`) ask the API, which does not answer
+# with drafts. A tap bumped on tag push would hand Homebrew users a build
+# nobody had looked at, undoing that guarantee from the outside. So the formula
+# moves at exactly the moment a person presses publish, and not before.
+#
+# WHY THIS EXISTS AT ALL: the tap was bumped by hand, once per release, from
+# 0.1.0 to 0.1.5 — and then 0.1.6 shipped without it. For two days
+# `brew install nove-lab/tap/shall` installed 0.1.5 while the site's own hero
+# badge advertised 0.1.6. The curl installer cannot drift like that; it resolves
+# `releases/latest` on the user's machine every time. The formula carries its
+# own copy of the version and four checksums, so it can, and did.
+
+on:
+  release:
+    types: [published]
+  # For a release that predates this workflow, or one whose assets were fixed up
+  # after publishing. Same script, so the manual path cannot drift from the
+  # automatic one the way the hand-written bumps did.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to publish to the tap (blank = latest published)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # TAP_TOKEN, not GITHUB_TOKEN. The workflow's own token is scoped to this
+      # repository and cannot write to Nove-Lab/homebrew-tap; this needs a
+      # credential with contents:write there. The script says so and exits 1
+      # when it is unset, rather than half-running.
+      #
+      # The tag goes through the environment rather than into the `run:` string.
+      # A ${{ }} expansion is pasted into the shell before it runs, so a
+      # dispatch input interpolated there is somebody else's command.
+      - name: Point the tap at this release
+        env:
+          GITHUB_TOKEN: ${{ secrets.TAP_TOKEN }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          if [ -n "$TAG" ]; then
+            node scripts/update-tap.mjs "$TAG"
+          else
+            node scripts/update-tap.mjs
+          fi
