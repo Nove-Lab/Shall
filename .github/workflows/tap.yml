@@ -32,11 +32,26 @@ on:
 permissions:
   contents: read
 
+# Two publishes close together would otherwise race the read-then-write against
+# the formula's blob sha, and the loser would go red for no reason worth
+# reading. Queued rather than cancelled: each release still gets its turn, and
+# the monotonicity guard decides which one the tap ends up on.
+concurrency:
+  group: tap
+  cancel-in-progress: false
+
 jobs:
   bump:
     runs-on: ubuntu-latest
     steps:
+      # MAIN, NOT THE TAG. On a `release` event the default checkout is the
+      # tagged commit, so the automation would run the copy of itself frozen at
+      # that tag — a fix made here would not reach a release cut before it, and
+      # publishing an old draft would run a revision where this script does not
+      # exist at all. The automation is whatever main says it is.
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
 
       - uses: actions/setup-node@v4
         with:
@@ -47,13 +62,21 @@ jobs:
       # credential with contents:write there. The script says so and exits 1
       # when it is unset, rather than half-running.
       #
-      # The tag goes through the environment rather than into the `run:` string.
-      # A ${{ }} expansion is pasted into the shell before it runs, so a
-      # dispatch input interpolated there is somebody else's command.
+      # THE TAG IS THE RELEASE THAT TRIGGERED THIS, not "latest". They are not
+      # the same thing: /releases/latest is the most recently created release,
+      # so publishing a release cut before another one already published would
+      # leave the tap pointing somewhere other than the release just published
+      # — a green run that either moved the wrong version or moved nothing.
+      # Naming the tag makes the run act on the release a person just pressed
+      # publish on, and the script refuses to move the tap backwards.
+      #
+      # It goes through the environment rather than into the `run:` string. A
+      # ${{ }} expansion is pasted into the shell before it runs, so an input
+      # interpolated there is somebody else's command.
       - name: Point the tap at this release
         env:
           GITHUB_TOKEN: ${{ secrets.TAP_TOKEN }}
-          TAG: ${{ inputs.tag }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
         run: |
           if [ -n "$TAG" ]; then
             node scripts/update-tap.mjs "$TAG"

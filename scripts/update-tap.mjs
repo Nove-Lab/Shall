@@ -43,8 +43,11 @@ const TAP_REPO = 'Nove-Lab/homebrew-tap';
 const FORMULA_PATH = 'Formula/shall.rb';
 
 /* The four names release.yml uploads, against the two axes Homebrew branches
-   on. scripts/install.sh builds the same names from `uname` — if a platform is
-   ever added, it is added in three places or it is added in none. */
+   on. The same list is spelled out in five places across four files —
+   scripts/build-binary.mjs (what bun compiles), release.yml twice (the
+   sha256sum arguments and the upload list), here, and scripts/install.sh
+   builds the same names from `uname` — so a fifth platform is added in all of
+   them or the release is incomplete in a way only that platform sees. */
 const TARGETS = [
   { os: 'macos', cpu: 'arm', asset: 'shall-darwin-arm64' },
   { os: 'macos', cpu: 'intel', asset: 'shall-darwin-x64' },
@@ -53,8 +56,21 @@ const TARGETS = [
 ];
 
 const args = process.argv.slice(2);
+
+/* An unrecognised flag is a stop, not something to ignore. `--dry-run` is the
+   difference between printing a formula and publishing one, so a typo that
+   silently fell through to the live path — `--dryrun`, `--dry_run` — would
+   commit to the public tap while its author watched for output that never
+   came. */
+const FLAGS = ['--dry-run', '--allow-downgrade'];
+const unknown = args.filter((a) => a.startsWith('-') && !FLAGS.includes(a));
+if (unknown.length) {
+  console.error(`\nunknown option ${unknown.join(' ')} — expected one of ${FLAGS.join(', ')}, or a release tag.\n`);
+  process.exit(1);
+}
 const dryRun = args.includes('--dry-run');
-const wanted = args.find((a) => !a.startsWith('--'));
+const allowDowngrade = args.includes('--allow-downgrade');
+const wanted = args.find((a) => !a.startsWith('-'));
 
 const token = process.env.GITHUB_TOKEN;
 if (!token && !dryRun) {
@@ -120,7 +136,10 @@ for (const { asset } of TARGETS) {
 }
 
 // 3. The formula, written whole.
-const base = `https://github.com/${SOURCE_REPO}/releases/download/v${version}`;
+// The release's own tag, not `v${version}` rebuilt from it. A tag written
+// without the `v` would send every download URL to a release that does not
+// exist, and the formula would still look perfectly well formed.
+const base = `https://github.com/${SOURCE_REPO}/releases/download/${release.tag_name}`;
 const block = (cpu, asset) =>
   `    on_${cpu} do\n` +
   `      url "${base}/${asset}"\n` +
@@ -160,7 +179,33 @@ if (dryRun) {
 // 4. The commit. Read-then-write against the file's blob sha, so a tap somebody
 //    edited by hand in the meantime fails the write rather than losing it.
 const current = await api(`/repos/${TAP_REPO}/contents/${FORMULA_PATH}`);
-if (Buffer.from(current.content, 'base64').toString('utf8') === formula) {
+const currentText = Buffer.from(current.content, 'base64').toString('utf8');
+
+/*
+ * THE TAP ONLY EVER MOVES FORWARD.
+ *
+ * Every guard above asks whether a release is fit to publish; none asked
+ * whether it is NEWER than what the tap already serves. `update-tap.mjs v0.1.4`
+ * passes all of them — it is a real published release with all five assets —
+ * and would hand every `brew install` an older binary, which is the exact bug
+ * this script exists to end. A dispatch input is one mistyped tag away from it.
+ */
+const currentVersion = currentText.match(/^\s*version "([^"]+)"/m)?.[1];
+const rank = (v) => v.split('.').map(Number);
+const older = (a, b) => {
+  const [x, y] = [rank(a), rank(b)];
+  for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] < y[i];
+  return false;
+};
+if (currentVersion && older(version, currentVersion) && !allowDowngrade) {
+  die(
+    `the tap is at ${currentVersion} and this would take it back to ${version}.\n` +
+    '  Every `brew install` would get the older binary. Pass --allow-downgrade if\n' +
+    '  that is genuinely what you want — pulling a bad release, say.'
+  );
+}
+
+if (currentText === formula) {
   console.log(`${TAP_REPO} is already at ${version} — nothing to do.`);
   process.exit(0);
 }
