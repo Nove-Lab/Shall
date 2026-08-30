@@ -6,11 +6,13 @@
 
 ### Spec as the control plane for your agents.
 
+### 🌐 [**shall.sh**](https://shall.sh)
+
 [![Agents: Claude Code · Codex](https://img.shields.io/badge/agents-Claude%20Code%20%C2%B7%20Codex-D97757.svg)](./docs/Shall_Agent_Commands.md)
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](./LICENSE)
 [![Runtime: Bun](https://img.shields.io/badge/runtime-Bun-black.svg)](https://bun.sh)
 
-[**Getting started**](#-getting-started) · [**Working with Shall**](#-working-with-shall) · [**Docs**](./docs)
+[**Website**](https://shall.sh) · [**Getting started**](#-getting-started) · [**Working with Shall**](#-working-with-shall) · [**Docs**](./docs)
 
 </div>
 
